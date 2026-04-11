@@ -190,30 +190,62 @@ class FolderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def children(self, request):
-        """지정 폴더의 직접 자식 폴더 목록 반환 (지연 로드용)
-        ?parent_id=<id>  → 해당 폴더의 자식
-        ?parent_id=root  → 루트 폴더 목록
+        """지정 폴더의 직접 자식 폴더 목록 반환 — 파일시스템 기준 실시간 반영
+        ?parent_id=<id>  → 해당 폴더의 자식 (파일시스템 스캔)
+        ?parent_id=root  → 루트 폴더 목록 (파일시스템 스캔)
+        신규 디렉토리는 DB에 자동 등록
         """
+        nas_root = getattr(settings, 'NAS_MEDIA_ROOT', settings.MEDIA_ROOT)
         parent_id = request.query_params.get('parent_id', 'root')
-        if parent_id == 'root':
-            qs = Folder.objects.filter(parent__isnull=True).order_by('name')
+
+        if parent_id in ('root', '0', 'null', None):
+            fs_path = nas_root
+            fs_rel = ''
+            parent_folder = None
         else:
-            qs = Folder.objects.filter(parent_id=parent_id).order_by('name')
+            try:
+                parent_folder = Folder.objects.get(pk=parent_id)
+                fs_rel = parent_folder.full_path.lstrip('/')
+                fs_path = os.path.join(nas_root, fs_rel)
+            except Folder.DoesNotExist:
+                return Response([])
 
-        # 접근 권한 필터
-        qs = self._access_filter(qs)
+        if not os.path.isdir(fs_path):
+            return Response([])
 
-        data = [
-            {
-                'id': f.id,
-                'name': f.name,
-                'full_path': f.full_path,
-                'access_level': f.access_level,
-                'has_children': self._access_filter(f.children.all()).exists(),
-            }
-            for f in qs
-        ]
-        return Response(data)
+        result = []
+        try:
+            entries = sorted(os.listdir(fs_path))
+        except PermissionError:
+            return Response([])
+
+        for name in entries:
+            child_fs = os.path.join(fs_path, name)
+            if not os.path.isdir(child_fs):
+                continue
+            child_full_path = f'/{fs_rel}/{name}' if fs_rel else f'/{name}'
+            # DB 레코드 없으면 자동 생성
+            child_folder, _ = Folder.objects.get_or_create(
+                full_path=child_full_path,
+                defaults={'name': name, 'parent': parent_folder,
+                          'created_by': request.user, 'access_level': 'public'}
+            )
+            has_children = False
+            try:
+                has_children = any(
+                    os.path.isdir(os.path.join(child_fs, x))
+                    for x in os.listdir(child_fs)
+                )
+            except Exception:
+                pass
+            result.append({
+                'id': child_folder.id,
+                'name': child_folder.name,
+                'full_path': child_folder.full_path,
+                'access_level': child_folder.access_level,
+                'has_children': has_children,
+            })
+        return Response(result)
 
 
 class FileViewSet(viewsets.ModelViewSet):
@@ -228,6 +260,30 @@ class FileViewSet(viewsets.ModelViewSet):
         folder_id = self.request.query_params.get('folder_id')
         if folder_id:
             qs = qs.filter(folder_id=folder_id)
+            # 파일시스템 스캔: 신규 파일 자동 등록 + 없는 파일 자동 제거
+            try:
+                folder = Folder.objects.get(pk=folder_id)
+                nas_root = getattr(settings, 'NAS_MEDIA_ROOT', settings.MEDIA_ROOT)
+                fs_path = os.path.join(nas_root, folder.full_path.lstrip('/'))
+                if os.path.isdir(fs_path):
+                    existing_paths = set(qs.values_list('file_path', flat=True))
+                    for name in os.listdir(fs_path):
+                        full_path = os.path.join(fs_path, name)
+                        if os.path.isfile(full_path) and full_path not in existing_paths:
+                            mime_type = mimetypes.guess_type(name)[0] or 'application/octet-stream'
+                            File.objects.create(
+                                name=name, original_name=name,
+                                file_path=full_path,
+                                file_size=os.path.getsize(full_path),
+                                mime_type=mime_type, folder=folder,
+                            )
+                    # 없는 파일 DB에서 제거
+                    missing_ids = [f.id for f in qs if not os.path.exists(f.file_path)]
+                    if missing_ids:
+                        File.objects.filter(id__in=missing_ids).delete()
+                    qs = File.objects.select_related('folder', 'school', 'uploaded_by').filter(folder_id=folder_id)
+            except Exception:
+                pass
         school_id   = self.request.query_params.get('school_id')
         school_name = self.request.query_params.get('school_name')
         if school_id:
@@ -262,10 +318,6 @@ class FileViewSet(viewsets.ModelViewSet):
             qs = qs.exclude(excl)
         elif tab in TAB_KEYWORDS:
             qs = qs.filter(name__icontains=tab)
-        # 폴더 탐색 시 실제 파일 존재 여부 실시간 확인 (탐색기 모드)
-        if folder_id:
-            existing_ids = [f.id for f in qs if os.path.exists(f.file_path)]
-            qs = qs.filter(id__in=existing_ids)
         return qs
 
     def create(self, request, *args, **kwargs):
