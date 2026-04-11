@@ -262,6 +262,10 @@ class FileViewSet(viewsets.ModelViewSet):
             qs = qs.exclude(excl)
         elif tab in TAB_KEYWORDS:
             qs = qs.filter(name__icontains=tab)
+        # 폴더 탐색 시 실제 파일 존재 여부 실시간 확인 (탐색기 모드)
+        if folder_id:
+            existing_ids = [f.id for f in qs if os.path.exists(f.file_path)]
+            qs = qs.filter(id__in=existing_ids)
         return qs
 
     def create(self, request, *args, **kwargs):
