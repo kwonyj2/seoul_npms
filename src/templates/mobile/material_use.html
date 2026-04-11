@@ -1,0 +1,134 @@
+{% extends 'mobile/base.html' %}
+{% block title %}자재 사용{% endblock %}
+{% block header_title %}자재 사용 기록{% endblock %}
+{% block nav_material %}active{% endblock %}
+
+{% block extra_style %}
+<style>
+  .material-item { background:#fff; border-radius:12px; padding:14px 16px;
+    margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,.07); }
+  .qty-ctrl { display:flex; align-items:center; gap:8px; }
+  .qty-btn { width:36px; height:36px; border-radius:8px; border:1px solid #dee2e6;
+    background:#f8f9fa; font-size:18px; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .qty-val { width:50px; text-align:center; font-size:16px; font-weight:700; border:1px solid #dee2e6; border-radius:8px; padding:4px; }
+  .inv-badge { font-size:12px; color:#6c757d; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 장애 연결 -->
+<div class="mb-3">
+  <label class="form-label fw-semibold">관련 장애 <span class="text-muted small fw-normal">(선택)</span></label>
+  <select id="incident-sel" class="form-select">
+    <option value="">없음 (일반 사용)</option>
+  </select>
+</div>
+
+<!-- 내 보유 자재 -->
+<div class="fw-semibold mb-2" style="font-size:15px;"><i class="bi bi-box-seam me-1"></i>보유 자재</div>
+<div id="material-wrap">
+  <div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-1"></div> 불러오는 중...</div>
+</div>
+
+<button class="btn-checkin mt-3" style="background:#fd7e14;" onclick="submitUse()">
+  <i class="bi bi-check2-circle me-2"></i>사용 기록 저장
+</button>
+
+<div id="result" class="mt-3"></div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+let useMap = {}; // material_id → qty
+
+async function loadMyInventory() {
+  const wrap = document.getElementById('material-wrap');
+  try {
+    const res = await fetch(`${API_BASE}/materials/worker-inventory/?me=1`, {
+      headers: {'X-CSRFToken': CSRF_TOKEN}
+    });
+    const data = await res.json();
+    const items = data.results || data;
+    if (!items.length) {
+      wrap.innerHTML = '<div class="text-center py-4 text-muted"><i class="bi bi-inbox fs-2 d-block mb-2"></i>보유 자재 없음</div>';
+      return;
+    }
+    wrap.innerHTML = items.map(inv => {
+      useMap[inv.material_id] = 0;
+      return `<div class="material-item">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <div class="fw-semibold">${inv.material_name}</div>
+            <div class="inv-badge">보유: ${inv.quantity}${inv.unit || ''}</div>
+          </div>
+          <div class="qty-ctrl">
+            <div class="qty-btn" onclick="changeQty(${inv.material_id}, -1, ${inv.quantity})">−</div>
+            <input class="qty-val" id="qty-${inv.material_id}" type="number" value="0" min="0" max="${inv.quantity}"
+              onchange="useMap[${inv.material_id}]=Math.min(Number(this.value),${inv.quantity})">
+            <div class="qty-btn" onclick="changeQty(${inv.material_id}, 1, ${inv.quantity})">＋</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    wrap.innerHTML = '<div class="text-danger small text-center py-3">불러오기 실패</div>';
+  }
+}
+
+async function loadMyIncidents() {
+  const res = await fetch(`${API_BASE}/incidents/incidents/?status__in=assigned,moving,arrived,processing&page_size=20`, {
+    headers: {'X-CSRFToken': CSRF_TOKEN}
+  });
+  const data = await res.json();
+  const sel = document.getElementById('incident-sel');
+  (data.results || []).forEach(i => {
+    const opt = document.createElement('option');
+    opt.value = i.id;
+    opt.textContent = `${i.incident_number} - ${i.school_name}`;
+    sel.appendChild(opt);
+  });
+}
+
+function changeQty(matId, delta, max) {
+  const inp = document.getElementById(`qty-${matId}`);
+  let v = Number(inp.value) + delta;
+  v = Math.max(0, Math.min(v, max));
+  inp.value = v;
+  useMap[matId] = v;
+}
+
+async function submitUse() {
+  const entries = Object.entries(useMap).filter(([, qty]) => qty > 0);
+  if (!entries.length) { alert('사용 수량을 입력해주세요.'); return; }
+
+  const incidentId = document.getElementById('incident-sel').value;
+  const result = document.getElementById('result');
+  result.innerHTML = '<div class="text-center py-2"><div class="spinner-border spinner-border-sm"></div> 저장 중...</div>';
+
+  let ok = 0, fail = 0;
+  for (const [matId, qty] of entries) {
+    const body = { material: matId, quantity: qty, use_type: 'use' };
+    if (incidentId) body.incident = incidentId;
+    try {
+      const res = await fetch(`${API_BASE}/materials/material-use/`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+        body: JSON.stringify(body)
+      });
+      if (res.ok) ok++; else fail++;
+    } catch { fail++; }
+  }
+
+  if (fail === 0) {
+    result.innerHTML = `<div class="alert alert-success"><i class="bi bi-check-circle me-1"></i>${ok}건 기록 완료</div>`;
+    useMap = {};
+    loadMyInventory();
+  } else {
+    result.innerHTML = `<div class="alert alert-warning">성공 ${ok}건 / 실패 ${fail}건</div>`;
+  }
+}
+
+loadMyInventory();
+loadMyIncidents();
+</script>
+{% endblock %}

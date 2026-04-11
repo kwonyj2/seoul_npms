@@ -14,6 +14,11 @@ urlpatterns = [
     path('incidents/<int:pk>/', views.mobile_incident_detail, name='incident-detail'),
     path('reports/cable/',      views.mobile_report_cable,    name='report-cable'),
     path('reports/switch/',     views.mobile_report_switch,   name='report-switch'),
+    path('attendance/',         views.mobile_attendance,      name='attendance'),
+    path('photos/',             views.mobile_photo_upload,    name='photo-upload'),
+    path('schedule/',           views.mobile_schedule,        name='schedule'),
+    path('materials/',          views.mobile_material_use,    name='material-use'),
+    path('checklist/',          views.mobile_checklist,       name='checklist'),
     path('manifest.json',       views.mobile_manifest,        name='manifest'),
     path('sw.js',               views.mobile_sw,              name='sw'),
 ]

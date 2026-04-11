@@ -115,3 +115,28 @@ def mobile_report_switch(request):
         'template_name': tmpl.name if tmpl else '스위치 설치 확인서',
         'report_type': 'switch_install',
     })
+
+
+@login_required(login_url='/npms/accounts/login/')
+def mobile_attendance(request):
+    return render(request, 'mobile/attendance.html')
+
+
+@login_required(login_url='/npms/accounts/login/')
+def mobile_photo_upload(request):
+    return render(request, 'mobile/photo_upload.html')
+
+
+@login_required(login_url='/npms/accounts/login/')
+def mobile_schedule(request):
+    return render(request, 'mobile/schedule.html')
+
+
+@login_required(login_url='/npms/accounts/login/')
+def mobile_material_use(request):
+    return render(request, 'mobile/material_use.html')
+
+
+@login_required(login_url='/npms/accounts/login/')
+def mobile_checklist(request):
+    return render(request, 'mobile/checklist.html')

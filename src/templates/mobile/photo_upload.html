@@ -1,0 +1,213 @@
+{% extends 'mobile/base.html' %}
+{% block title %}사진 촬영{% endblock %}
+{% block header_title %}현장 사진{% endblock %}
+{% block nav_photo %}active{% endblock %}
+
+{% block extra_style %}
+<style>
+  .photo-preview {
+    width: 100%; border-radius: 12px; background: #e9ecef;
+    min-height: 200px; display: flex; align-items: center; justify-content: center;
+    overflow: hidden; position: relative; margin-bottom: 12px;
+  }
+  .photo-preview img { width: 100%; border-radius: 12px; object-fit: cover; }
+  .photo-preview .placeholder { color: #adb5bd; text-align: center; }
+  .stage-btn { flex: 1; padding: 10px; border-radius: 8px; border: 2px solid #dee2e6;
+    background: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .stage-btn.active { border-color: #1a5fa8; background: #1a5fa8; color: #fff; }
+  .thumb-wrap { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .thumb-wrap img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px;
+    border: 2px solid #dee2e6; }
+</style>
+{% endblock %}
+
+{% block content %}
+<form id="photo-form">
+  <!-- 작업 구분 -->
+  <div class="mb-3">
+    <label class="form-label fw-semibold">작업 구분 <span class="text-danger">*</span></label>
+    <select id="work-type" class="form-select" required>
+      <option value="">선택...</option>
+    </select>
+  </div>
+
+  <!-- 작업 단계 -->
+  <div class="mb-3">
+    <label class="form-label fw-semibold">작업 단계</label>
+    <div class="d-flex gap-2">
+      <button type="button" class="stage-btn active" data-stage="before" onclick="setStage(this,'before')">작업 전</button>
+      <button type="button" class="stage-btn" data-stage="after"  onclick="setStage(this,'after')">작업 후</button>
+      <button type="button" class="stage-btn" data-stage="other"  onclick="setStage(this,'other')">기타</button>
+    </div>
+    <input type="hidden" id="stage-val" value="before">
+  </div>
+
+  <!-- 장애 연결 (선택) -->
+  <div class="mb-3">
+    <label class="form-label fw-semibold">장애 연결 <span class="text-muted small fw-normal">(선택)</span></label>
+    <select id="incident-sel" class="form-select">
+      <option value="">없음</option>
+    </select>
+  </div>
+
+  <!-- 메모 -->
+  <div class="mb-3">
+    <label class="form-label fw-semibold">메모</label>
+    <input type="text" id="memo" class="form-control" placeholder="간단한 메모 (선택)">
+  </div>
+
+  <!-- 사진 촬영/선택 -->
+  <div class="mb-3">
+    <label class="form-label fw-semibold">사진 <span class="text-danger">*</span></label>
+    <div class="photo-preview" id="preview-wrap" onclick="document.getElementById('file-input').click()">
+      <div class="placeholder">
+        <i class="bi bi-camera fs-1 d-block mb-2"></i>
+        탭하여 촬영 또는 선택
+      </div>
+    </div>
+    <input type="file" id="file-input" accept="image/*" capture="environment" multiple style="display:none" onchange="previewFiles(this)">
+    <div class="thumb-wrap" id="thumb-wrap"></div>
+    <button type="button" class="btn btn-outline-secondary w-100 mt-2" onclick="document.getElementById('file-input').click()">
+      <i class="bi bi-camera me-1"></i>사진 추가
+    </button>
+  </div>
+
+  <button type="submit" class="btn-checkin" style="background:#28a745;">
+    <i class="bi bi-cloud-upload me-2"></i>업로드
+  </button>
+</form>
+
+<div id="upload-result" class="mt-3"></div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+let selectedFiles = [];
+let selectedStage = 'before';
+let gpsLat = null, gpsLng = null;
+
+// GPS 취득
+navigator.geolocation?.getCurrentPosition(pos => {
+  gpsLat = pos.coords.latitude;
+  gpsLng = pos.coords.longitude;
+}, () => {}, { enableHighAccuracy: true, timeout: 8000 });
+
+// 작업 구분 로드
+async function loadWorkTypes() {
+  const res = await fetch(`${API_BASE}/photos/work-types/?is_active=true`, {headers:{'X-CSRFToken':CSRF_TOKEN}});
+  const data = await res.json();
+  const sel = document.getElementById('work-type');
+  (data.results || data).forEach(wt => {
+    const opt = document.createElement('option');
+    opt.value = wt.id;
+    opt.textContent = wt.name;
+    sel.appendChild(opt);
+  });
+}
+
+// 내 담당 장애 로드 (처리 중인 것)
+async function loadMyIncidents() {
+  const res = await fetch(`${API_BASE}/incidents/incidents/?status__in=assigned,moving,arrived,processing&page_size=20`, {
+    headers:{'X-CSRFToken':CSRF_TOKEN}
+  });
+  const data = await res.json();
+  const sel = document.getElementById('incident-sel');
+  (data.results || []).forEach(i => {
+    const opt = document.createElement('option');
+    opt.value = i.id;
+    opt.textContent = `${i.incident_number} - ${i.school_name}`;
+    sel.appendChild(opt);
+  });
+}
+
+function setStage(btn, stage) {
+  document.querySelectorAll('.stage-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedStage = stage;
+  document.getElementById('stage-val').value = stage;
+}
+
+function previewFiles(input) {
+  const files = Array.from(input.files);
+  selectedFiles = [...selectedFiles, ...files];
+  renderThumbs();
+}
+
+function renderThumbs() {
+  const wrap = document.getElementById('thumb-wrap');
+  const preview = document.getElementById('preview-wrap');
+  if (!selectedFiles.length) {
+    preview.innerHTML = `<div class="placeholder"><i class="bi bi-camera fs-1 d-block mb-2"></i>탭하여 촬영 또는 선택</div>`;
+    wrap.innerHTML = '';
+    return;
+  }
+  // 첫 번째 사진 메인 미리보기
+  const reader = new FileReader();
+  reader.onload = e => {
+    preview.innerHTML = `<img src="${e.target.result}" onclick="document.getElementById('file-input').click()">`;
+  };
+  reader.readAsDataURL(selectedFiles[0]);
+
+  // 썸네일
+  wrap.innerHTML = '';
+  selectedFiles.forEach((f, idx) => {
+    const r2 = new FileReader();
+    r2.onload = e => {
+      const img = document.createElement('img');
+      img.src = e.target.result;
+      img.title = f.name;
+      img.onclick = () => { selectedFiles.splice(idx, 1); renderThumbs(); };
+      wrap.appendChild(img);
+    };
+    r2.readAsDataURL(f);
+  });
+}
+
+// 업로드
+document.getElementById('photo-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!selectedFiles.length) { alert('사진을 선택해주세요.'); return; }
+  const workType = document.getElementById('work-type').value;
+  if (!workType) { alert('작업 구분을 선택해주세요.'); return; }
+
+  const result = document.getElementById('upload-result');
+  result.innerHTML = `<div class="text-center py-3"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted small">업로드 중 (${selectedFiles.length}장)...</div></div>`;
+
+  let success = 0, fail = 0;
+  for (const file of selectedFiles) {
+    const fd = new FormData();
+    fd.append('image', file);
+    fd.append('work_type', workType);
+    fd.append('photo_stage', selectedStage);
+    if (document.getElementById('incident-sel').value)
+      fd.append('incident', document.getElementById('incident-sel').value);
+    if (document.getElementById('memo').value)
+      fd.append('work_type_etc', document.getElementById('memo').value);
+    if (gpsLat) { fd.append('gps_lat', gpsLat); fd.append('gps_lng', gpsLng); }
+
+    try {
+      const res = await fetch(`${API_BASE}/photos/photos/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': CSRF_TOKEN},
+        body: fd
+      });
+      if (res.ok) success++; else fail++;
+    } catch { fail++; }
+  }
+
+  if (fail === 0) {
+    result.innerHTML = `<div class="alert alert-success"><i class="bi bi-check-circle me-1"></i>${success}장 업로드 완료!</div>`;
+    selectedFiles = [];
+    renderThumbs();
+    document.getElementById('photo-form').reset();
+    document.querySelectorAll('.stage-btn').forEach((b,i) => b.classList.toggle('active', i===0));
+    selectedStage = 'before';
+  } else {
+    result.innerHTML = `<div class="alert alert-warning">성공 ${success}장 / 실패 ${fail}장</div>`;
+  }
+});
+
+loadWorkTypes();
+loadMyIncidents();
+</script>
+{% endblock %}

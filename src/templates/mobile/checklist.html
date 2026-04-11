@@ -1,0 +1,157 @@
+{% extends 'mobile/base.html' %}
+{% block title %}점검 체크리스트{% endblock %}
+{% block header_title %}점검 체크리스트{% endblock %}
+{% block nav_checklist %}active{% endblock %}
+
+{% block extra_style %}
+<style>
+  .task-card { background:#fff; border-radius:12px; padding:16px;
+    margin-bottom:12px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  .task-card.completed { border-left:4px solid #28a745; opacity:.85; }
+  .task-card.in_progress { border-left:4px solid #ffc107; }
+  .task-card.pending { border-left:4px solid #dee2e6; }
+  .check-item { display:flex; align-items:center; gap:10px; padding:10px 0;
+    border-bottom:1px solid #f1f3f5; }
+  .check-item:last-child { border-bottom:none; }
+  .check-item input[type=checkbox] { width:22px; height:22px; cursor:pointer; flex-shrink:0; }
+  .check-item label { font-size:15px; cursor:pointer; flex:1; }
+  .check-item label.checked { text-decoration:line-through; color:#adb5bd; }
+  .progress-bar-wrap { height:8px; background:#e9ecef; border-radius:4px; margin-top:8px; }
+  .progress-bar-fill { height:100%; border-radius:4px; background:#28a745; transition:.3s; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 진행 중인 점검 목록 -->
+<div id="task-list">
+  <div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-1"></div> 불러오는 중...</div>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+const DEFAULT_CHECKLIST = [
+  { key: 'switch_power',    label: '스위치 전원 및 LED 상태 확인' },
+  { key: 'cable_connect',   label: '케이블 연결 상태 확인' },
+  { key: 'port_status',     label: '포트 링크 상태 확인' },
+  { key: 'ap_signal',       label: '무선 AP 신호 강도 확인' },
+  { key: 'ap_ssid',         label: 'SSID 정상 송출 확인' },
+  { key: 'internet_speed',  label: '인터넷 속도 측정' },
+  { key: 'rack_clean',      label: '랙/캐비닛 청결 상태' },
+  { key: 'label_check',     label: '케이블 레이블 부착 확인' },
+];
+
+let tasks = [];
+let checkStates = {}; // taskId → {key: bool}
+
+async function loadMyTasks() {
+  const wrap = document.getElementById('task-list');
+  try {
+    const res = await fetch(`${API_BASE}/progress/school-inspections/?assigned_to_me=1&status__in=pending,in_progress&page_size=20`, {
+      headers: {'X-CSRFToken': CSRF_TOKEN}
+    });
+    const data = await res.json();
+    tasks = data.results || data;
+
+    if (!tasks.length) {
+      wrap.innerHTML = '<div class="text-center py-5 text-muted"><i class="bi bi-clipboard-check fs-2 d-block mb-2"></i>배정된 점검 없음</div>';
+      return;
+    }
+
+    wrap.innerHTML = tasks.map(t => {
+      const checks = t.checklist || DEFAULT_CHECKLIST.map(c => ({ ...c, done: false }));
+      checkStates[t.id] = {};
+      checks.forEach(c => { checkStates[t.id][c.key] = c.done || false; });
+      const total = checks.length;
+      const done  = checks.filter(c => c.done).length;
+      const pct   = total ? Math.round(done / total * 100) : 0;
+      const st    = t.status || 'pending';
+
+      return `<div class="task-card ${st}" id="task-${t.id}">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <div class="fw-semibold" style="font-size:15px;">${t.school_name || '-'}</div>
+          <span class="badge bg-${st==='completed'?'success':st==='in_progress'?'warning':'secondary'}">${st==='completed'?'완료':st==='in_progress'?'진행중':'대기'}</span>
+        </div>
+        <div class="text-muted small mb-2">${t.plan_name || ''} ${t.scheduled_date || ''}</div>
+        <div class="progress-bar-wrap mb-3">
+          <div class="progress-bar-fill" id="pbar-${t.id}" style="width:${pct}%"></div>
+        </div>
+        <div id="checks-${t.id}">
+          ${checks.map(c => `
+            <div class="check-item">
+              <input type="checkbox" id="chk-${t.id}-${c.key}" ${c.done?'checked':''} onchange="toggleCheck(${t.id},'${c.key}',this.checked)">
+              <label for="chk-${t.id}-${c.key}" class="${c.done?'checked':''}">${c.label}</label>
+            </div>`).join('')}
+        </div>
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-outline-primary btn-sm flex-fill" onclick="saveChecklist(${t.id})">
+            <i class="bi bi-save me-1"></i>저장
+          </button>
+          ${st !== 'completed' ? `<button class="btn btn-success btn-sm flex-fill" onclick="completeTask(${t.id})">
+            <i class="bi bi-check-circle me-1"></i>점검 완료
+          </button>` : ''}
+        </div>
+        <div id="result-${t.id}" class="mt-2"></div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    wrap.innerHTML = '<div class="text-danger small text-center py-3">불러오기 실패</div>';
+  }
+}
+
+function toggleCheck(taskId, key, checked) {
+  checkStates[taskId][key] = checked;
+  const label = document.querySelector(`label[for="chk-${taskId}-${key}"]`);
+  if (label) label.classList.toggle('checked', checked);
+  // 진척률 업데이트
+  const keys = Object.values(checkStates[taskId]);
+  const pct = Math.round(keys.filter(Boolean).length / keys.length * 100);
+  const bar = document.getElementById(`pbar-${taskId}`);
+  if (bar) bar.style.width = pct + '%';
+}
+
+async function saveChecklist(taskId) {
+  const result = document.getElementById(`result-${taskId}`);
+  const checklist = DEFAULT_CHECKLIST.map(c => ({
+    key: c.key, label: c.label, done: checkStates[taskId][c.key] || false
+  }));
+  try {
+    const res = await fetch(`${API_BASE}/progress/school-inspections/${taskId}/`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+      body: JSON.stringify({ checklist, status: 'in_progress' })
+    });
+    if (res.ok) {
+      result.innerHTML = '<div class="text-success small"><i class="bi bi-check me-1"></i>저장됨</div>';
+      setTimeout(() => { result.innerHTML = ''; }, 2000);
+    } else {
+      result.innerHTML = '<div class="text-danger small">저장 실패</div>';
+    }
+  } catch { result.innerHTML = '<div class="text-danger small">네트워크 오류</div>'; }
+}
+
+async function completeTask(taskId) {
+  if (!confirm('점검을 완료 처리하시겠습니까?')) return;
+  const checklist = DEFAULT_CHECKLIST.map(c => ({
+    key: c.key, label: c.label, done: checkStates[taskId][c.key] || false
+  }));
+  const result = document.getElementById(`result-${taskId}`);
+  try {
+    const res = await fetch(`${API_BASE}/progress/school-inspections/${taskId}/`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+      body: JSON.stringify({ checklist, status: 'completed' })
+    });
+    if (res.ok) {
+      const card = document.getElementById(`task-${taskId}`);
+      card.className = 'task-card completed';
+      result.innerHTML = '<div class="text-success small fw-semibold"><i class="bi bi-check-circle me-1"></i>점검 완료!</div>';
+    } else {
+      result.innerHTML = '<div class="text-danger small">처리 실패</div>';
+    }
+  } catch { result.innerHTML = '<div class="text-danger small">네트워크 오류</div>'; }
+}
+
+loadMyTasks();
+</script>
+{% endblock %}

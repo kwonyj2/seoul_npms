@@ -1,0 +1,232 @@
+{% extends 'mobile/base.html' %}
+{% block title %}출퇴근{% endblock %}
+{% block header_title %}출퇴근 기록{% endblock %}
+{% block nav_attendance %}active{% endblock %}
+
+{% block extra_style %}
+<style>
+  .status-card { border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 20px; }
+  .status-card.working { background: linear-gradient(135deg, #1a5fa8, #2980d9); color: #fff; }
+  .status-card.off { background: #f1f3f5; color: #495057; }
+  .time-big { font-size: 36px; font-weight: 700; letter-spacing: 2px; }
+  .btn-checkin  { background: #1a5fa8; color: #fff; font-size: 18px; padding: 16px; border-radius: 12px; width: 100%; font-weight: 700; border: none; }
+  .btn-checkout { background: #dc3545; color: #fff; font-size: 18px; padding: 16px; border-radius: 12px; width: 100%; font-weight: 700; border: none; }
+  .gps-badge { font-size: 13px; padding: 4px 10px; border-radius: 20px; }
+  .history-item { background: #fff; border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 현재 상태 카드 -->
+<div id="status-card" class="status-card off">
+  <div id="status-label" style="font-size:14px; margin-bottom:8px;">상태 확인 중...</div>
+  <div id="status-time" class="time-big">--:--</div>
+  <div id="status-sub" style="font-size:13px; margin-top:8px; opacity:.8;"></div>
+</div>
+
+<!-- GPS 상태 -->
+<div class="d-flex align-items-center gap-2 mb-3">
+  <span id="gps-badge" class="badge bg-secondary gps-badge"><i class="bi bi-geo-alt me-1"></i>GPS 확인 중</span>
+  <span id="gps-addr" class="text-muted small"></span>
+</div>
+
+<!-- 출퇴근 버튼 -->
+<button id="btn-checkin"  class="btn-checkin  mb-3" onclick="doCheckIn()"  style="display:none;">
+  <i class="bi bi-box-arrow-in-right me-2"></i>출근하기
+</button>
+<button id="btn-checkout" class="btn-checkout mb-3" onclick="doCheckOut()" style="display:none;">
+  <i class="bi bi-box-arrow-right me-2"></i>퇴근하기
+</button>
+<div id="btn-loading" class="text-center py-2 text-muted small">처리 중...</div>
+
+<!-- 이번 주 근태 -->
+<div class="fw-semibold mb-2 mt-4" style="font-size:15px;"><i class="bi bi-calendar3 me-1"></i>이번 주 근태</div>
+<div id="week-history">
+  <div class="text-center py-3 text-muted small">불러오는 중...</div>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+let gpsLat = null, gpsLng = null;
+let currentStatus = null;
+
+// GPS 취득
+function getGPS() {
+  if (!navigator.geolocation) {
+    document.getElementById('gps-badge').className = 'badge bg-danger gps-badge';
+    document.getElementById('gps-badge').innerHTML = '<i class="bi bi-geo-alt-fill me-1"></i>GPS 미지원';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(pos => {
+    gpsLat = pos.coords.latitude;
+    gpsLng = pos.coords.longitude;
+    document.getElementById('gps-badge').className = 'badge bg-success gps-badge';
+    document.getElementById('gps-badge').innerHTML = `<i class="bi bi-geo-alt-fill me-1"></i>GPS 연결됨`;
+    document.getElementById('gps-addr').textContent = `${gpsLat.toFixed(5)}, ${gpsLng.toFixed(5)}`;
+  }, err => {
+    document.getElementById('gps-badge').className = 'badge bg-warning gps-badge';
+    document.getElementById('gps-badge').innerHTML = '<i class="bi bi-geo-alt me-1"></i>GPS 실패';
+  }, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+// 오늘 근태 상태 로드
+async function loadTodayStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/workforce/attendance/today_status/`, {
+      headers: {'X-CSRFToken': CSRF_TOKEN}
+    });
+    const d = await res.json();
+    currentStatus = d;
+    renderStatus(d);
+  } catch(e) {
+    document.getElementById('status-label').textContent = '상태 불러오기 실패';
+  }
+}
+
+function renderStatus(d) {
+  const card  = document.getElementById('status-card');
+  const label = document.getElementById('status-label');
+  const time  = document.getElementById('status-time');
+  const sub   = document.getElementById('status-sub');
+  const btnIn  = document.getElementById('btn-checkin');
+  const btnOut = document.getElementById('btn-checkout');
+  document.getElementById('btn-loading').style.display = 'none';
+
+  if (d.check_in && !d.check_out) {
+    // 출근 상태
+    card.className = 'status-card working';
+    label.textContent = '근무 중';
+    time.textContent = d.check_in;
+    sub.textContent = '출근 시간';
+    btnIn.style.display  = 'none';
+    btnOut.style.display = 'block';
+  } else if (d.check_in && d.check_out) {
+    // 퇴근 완료
+    card.className = 'status-card off';
+    label.textContent = '퇴근 완료';
+    time.textContent = d.check_out;
+    sub.textContent = `출근 ${d.check_in} / 퇴근 ${d.check_out}`;
+    btnIn.style.display  = 'none';
+    btnOut.style.display = 'none';
+  } else {
+    // 미출근
+    card.className = 'status-card off';
+    label.textContent = '미출근';
+    const now = new Date();
+    time.textContent = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    sub.textContent = '현재 시간';
+    btnIn.style.display  = 'block';
+    btnOut.style.display = 'none';
+  }
+}
+
+async function doCheckIn() {
+  if (!gpsLat) {
+    alert('GPS 위치를 확인 중입니다. 잠시 후 다시 시도해주세요.');
+    getGPS();
+    return;
+  }
+  document.getElementById('btn-checkin').style.display = 'none';
+  document.getElementById('btn-loading').style.display = 'block';
+  try {
+    const res = await fetch(`${API_BASE}/workforce/attendance/check_in/`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({lat: gpsLat, lng: gpsLng, device: 'mobile'})
+    });
+    if (res.ok) {
+      await loadTodayStatus();
+      await loadWeekHistory();
+      alert('출근 처리되었습니다.');
+    } else {
+      const err = await res.json();
+      alert(err.detail || err.error || '출근 처리 실패');
+      document.getElementById('btn-checkin').style.display = 'block';
+    }
+  } catch(e) {
+    alert('네트워크 오류');
+    document.getElementById('btn-checkin').style.display = 'block';
+  }
+  document.getElementById('btn-loading').style.display = 'none';
+}
+
+async function doCheckOut() {
+  if (!confirm('퇴근하시겠습니까?')) return;
+  if (!gpsLat) { alert('GPS 위치를 확인 중입니다.'); getGPS(); return; }
+  document.getElementById('btn-checkout').style.display = 'none';
+  document.getElementById('btn-loading').style.display = 'block';
+  try {
+    const res = await fetch(`${API_BASE}/workforce/attendance/check_out/`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({lat: gpsLat, lng: gpsLng, device: 'mobile'})
+    });
+    if (res.ok) {
+      await loadTodayStatus();
+      await loadWeekHistory();
+      alert('퇴근 처리되었습니다.');
+    } else {
+      const err = await res.json();
+      alert(err.detail || err.error || '퇴근 처리 실패');
+      document.getElementById('btn-checkout').style.display = 'block';
+    }
+  } catch(e) {
+    alert('네트워크 오류');
+    document.getElementById('btn-checkout').style.display = 'block';
+  }
+  document.getElementById('btn-loading').style.display = 'none';
+}
+
+// 이번 주 근태 이력
+async function loadWeekHistory() {
+  const wrap = document.getElementById('week-history');
+  try {
+    const today = new Date();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - today.getDay() + 1);
+    const from = monday.toISOString().slice(0,10);
+    const res = await fetch(`${API_BASE}/workforce/attendance/?work_date__gte=${from}&ordering=work_date`, {
+      headers: {'X-CSRFToken': CSRF_TOKEN}
+    });
+    const data = await res.json();
+    const items = data.results || data;
+    if (!items.length) { wrap.innerHTML = '<div class="text-muted small text-center py-2">기록 없음</div>'; return; }
+    const dayKo = ['일','월','화','수','목','금','토'];
+    wrap.innerHTML = items.map(r => {
+      const d = new Date(r.work_date);
+      const day = dayKo[d.getDay()];
+      const statusMap = {normal:'정상',late:'지각',absent:'결근',early:'조퇴',leave:'연차',vacation:'휴가'};
+      const statusColor = {normal:'success',late:'warning',absent:'danger',early:'secondary',leave:'info',vacation:'info'};
+      const st = r.status || 'normal';
+      return `<div class="history-item d-flex justify-content-between align-items-center">
+        <div>
+          <span class="fw-semibold">${r.work_date} (${day})</span>
+          <div class="text-muted small mt-1">
+            출근 ${r.check_in || '-'} &nbsp;/&nbsp; 퇴근 ${r.check_out || '-'}
+          </div>
+        </div>
+        <span class="badge bg-${statusColor[st]||'secondary'}">${statusMap[st]||st}</span>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    wrap.innerHTML = '<div class="text-danger small text-center py-2">불러오기 실패</div>';
+  }
+}
+
+getGPS();
+loadTodayStatus();
+loadWeekHistory();
+
+// 1분마다 시간 갱신
+setInterval(() => {
+  if (!currentStatus?.check_in || currentStatus?.check_out) {
+    const now = new Date();
+    const el = document.getElementById('status-time');
+    if (el && document.getElementById('status-card').classList.contains('off')) {
+      el.textContent = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    }
+  }
+}, 60000);
+</script>
+{% endblock %}

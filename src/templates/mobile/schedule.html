@@ -1,0 +1,99 @@
+{% extends 'mobile/base.html' %}
+{% block title %}내 스케줄{% endblock %}
+{% block header_title %}내 스케줄{% endblock %}
+{% block nav_schedule %}active{% endblock %}
+
+{% block extra_style %}
+<style>
+  .schedule-item { background:#fff; border-radius:12px; padding:14px 16px;
+    margin-bottom:10px; box-shadow:0 1px 4px rgba(0,0,0,.07); }
+  .schedule-item .date-badge { font-size:13px; color:#6c757d; margin-bottom:6px; }
+  .schedule-item .title { font-size:15px; font-weight:600; }
+  .schedule-item .meta { font-size:13px; color:#6c757d; margin-top:4px; }
+  .today-marker { background:#fff3cd; border-left:4px solid #ffc107; }
+  .tab-btn { flex:1; padding:8px; border:none; background:#f1f3f5; font-size:14px; font-weight:600; cursor:pointer; }
+  .tab-btn.active { background:#1a5fa8; color:#fff; }
+  .tab-btn:first-child { border-radius:8px 0 0 8px; }
+  .tab-btn:last-child  { border-radius:0 8px 8px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 탭 -->
+<div class="d-flex mb-3">
+  <button class="tab-btn active" onclick="loadSchedule('week',this)">이번 주</button>
+  <button class="tab-btn" onclick="loadSchedule('month',this)">이번 달</button>
+</div>
+
+<div id="schedule-wrap">
+  <div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-1"></div> 불러오는 중...</div>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+const STATUS_LABEL = {planned:'예정',in_progress:'진행중',completed:'완료',cancelled:'취소'};
+const STATUS_COLOR = {planned:'primary',in_progress:'warning',completed:'success',cancelled:'secondary'};
+const DAY_KO = ['일','월','화','수','목','금','토'];
+
+async function loadSchedule(period, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const wrap = document.getElementById('schedule-wrap');
+  wrap.innerHTML = '<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm me-1"></div> 불러오는 중...</div>';
+
+  const today = new Date();
+  let from, to;
+  if (period === 'week') {
+    const mon = new Date(today); mon.setDate(today.getDate() - today.getDay() + 1);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    from = mon.toISOString().slice(0,10);
+    to   = sun.toISOString().slice(0,10);
+  } else {
+    from = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-01`;
+    const lastDay = new Date(today.getFullYear(), today.getMonth()+1, 0).getDate();
+    to   = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${lastDay}`;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/workforce/schedules/?start_dt__date__gte=${from}&start_dt__date__lte=${to}&ordering=start_dt&page_size=50`, {
+      headers: {'X-CSRFToken': CSRF_TOKEN}
+    });
+    const data = await res.json();
+    const items = data.results || data;
+
+    if (!items.length) {
+      wrap.innerHTML = '<div class="text-center py-5 text-muted"><i class="bi bi-calendar-x fs-2 d-block mb-2"></i>스케줄 없음</div>';
+      return;
+    }
+
+    const todayStr = today.toISOString().slice(0,10);
+    wrap.innerHTML = items.map(s => {
+      const dt = new Date(s.start_dt);
+      const dateStr = s.start_dt.slice(0,10);
+      const isToday = dateStr === todayStr;
+      const day = DAY_KO[dt.getDay()];
+      const timeStr = dt.toTimeString().slice(0,5);
+      const st = s.status || 'planned';
+      return `<div class="schedule-item${isToday?' today-marker':''}">
+        <div class="date-badge">
+          ${isToday ? '<span class="badge bg-danger me-1">오늘</span>' : ''}
+          ${dateStr} (${day}) ${timeStr}
+        </div>
+        <div class="title">${s.school_name || s.school || '-'}</div>
+        <div class="meta d-flex justify-content-between mt-2">
+          <span>${s.schedule_type_name || s.schedule_type || ''}</span>
+          <span class="badge bg-${STATUS_COLOR[st]||'secondary'}">${STATUS_LABEL[st]||st}</span>
+        </div>
+        ${s.note ? `<div class="text-muted small mt-1">${s.note}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    wrap.innerHTML = '<div class="text-danger small text-center py-3">불러오기 실패</div>';
+  }
+}
+
+loadSchedule('week', document.querySelector('.tab-btn'));
+</script>
+{% endblock %}
