@@ -111,12 +111,16 @@ class Command(BaseCommand):
             if not dry_run:
                 obj, created = SupportCenter.objects.get_or_create(
                     code=code,
-                    defaults={'name': full_name}
+                    defaults={'name': label}
                 )
-                if created:
-                    self.stdout.write(f'  ✓ 생성: {full_name}')
+                if not created and obj.name == full_name:
+                    obj.name = label
+                    obj.save(update_fields=['name'])
+                    self.stdout.write(f'  ✓ 수정: {full_name} → {label}')
+                elif created:
+                    self.stdout.write(f'  ✓ 생성: {label}')
             else:
-                obj = type('SC', (), {'id': f'[DRY:{code}]', 'name': full_name})()
+                obj = type('SC', (), {'id': f'[DRY:{code}]', 'name': label})()
             center_objects[label] = obj
         self.stdout.write(self.style.SUCCESS(f'  교육지원청 {len(center_objects)}개 준비'))
 
