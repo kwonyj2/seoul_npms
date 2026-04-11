@@ -1,0 +1,76 @@
+[
+  {"model": "incidents.incidentcategory", "pk": 1, "fields": {"code": "wired",        "name": "유선망",        "order": 1, "is_active": true}},
+  {"model": "incidents.incidentcategory", "pk": 2, "fields": {"code": "wireless",     "name": "무선망",        "order": 2, "is_active": true}},
+  {"model": "incidents.incidentcategory", "pk": 3, "fields": {"code": "cable",        "name": "케이블",        "order": 3, "is_active": true}},
+  {"model": "incidents.incidentcategory", "pk": 4, "fields": {"code": "devut",        "name": "디벗",          "order": 4, "is_active": true}},
+  {"model": "incidents.incidentcategory", "pk": 5, "fields": {"code": "board",        "name": "전자칠판",      "order": 5, "is_active": true}},
+  {"model": "incidents.incidentcategory", "pk": 6, "fields": {"code": "office",       "name": "사무기기",      "order": 6, "is_active": true}},
+  {"model": "incidents.incidentcategory", "pk": 7, "fields": {"code": "inquiry",      "name": "단순문의",      "order": 7, "is_active": true}},
+  {"model": "incidents.incidentcategory", "pk": 8, "fields": {"code": "network_work", "name": "네트워크 작업", "order": 8, "is_active": true}},
+
+  {"model": "incidents.incidentsubcategory", "pk": 1,  "fields": {"category": 1, "name": "전용회선장애", "order": 1, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 2,  "fields": {"category": 1, "name": "스위치불량",   "order": 2, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 3,  "fields": {"category": 1, "name": "포트불량",     "order": 3, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 4,  "fields": {"category": 1, "name": "소프트웨어",   "order": 4, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 5,  "fields": {"category": 1, "name": "루핑",         "order": 5, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 6,  "fields": {"category": 1, "name": "기타",         "order": 6, "is_other": true,  "is_active": true}},
+
+  {"model": "incidents.incidentsubcategory", "pk": 7,  "fields": {"category": 2, "name": "전용회선장애", "order": 1, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 8,  "fields": {"category": 2, "name": "PoE불량",      "order": 2, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 9,  "fields": {"category": 2, "name": "포트불량",     "order": 3, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 10, "fields": {"category": 2, "name": "AP불량",       "order": 4, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 11, "fields": {"category": 2, "name": "소프트웨어",   "order": 5, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 12, "fields": {"category": 2, "name": "신호세기",     "order": 6, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 13, "fields": {"category": 2, "name": "대역폭",       "order": 7, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 14, "fields": {"category": 2, "name": "채널조정",     "order": 8, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 15, "fields": {"category": 2, "name": "SSID분리",     "order": 9, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 16, "fields": {"category": 2, "name": "SSID비밀번호", "order": 10,"is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 17, "fields": {"category": 2, "name": "연결오류",     "order": 11,"is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 18, "fields": {"category": 2, "name": "기타",         "order": 12,"is_other": true,  "is_active": true}},
+
+  {"model": "incidents.incidentsubcategory", "pk": 19, "fields": {"category": 3, "name": "단선",         "order": 1, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 20, "fields": {"category": 3, "name": "RJ-45 불량",   "order": 2, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 21, "fields": {"category": 3, "name": "접촉불량",     "order": 3, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 22, "fields": {"category": 3, "name": "기타",         "order": 4, "is_other": true,  "is_active": true}},
+
+  {"model": "incidents.incidentsubcategory", "pk": 23, "fields": {"category": 4, "name": "하드웨어 불량",       "order": 1, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 24, "fields": {"category": 4, "name": "소프트웨어 불량",     "order": 2, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 25, "fields": {"category": 4, "name": "전원(어댑터) 불량",   "order": 3, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 26, "fields": {"category": 4, "name": "충전함 불량",         "order": 4, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 27, "fields": {"category": 4, "name": "기타",               "order": 5, "is_other": true,  "is_active": true}},
+
+  {"model": "incidents.incidentsubcategory", "pk": 28, "fields": {"category": 5, "name": "하드웨어 불량",   "order": 1, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 29, "fields": {"category": 5, "name": "소프트웨어 불량", "order": 2, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 30, "fields": {"category": 5, "name": "미러링",         "order": 3, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 31, "fields": {"category": 5, "name": "기타",           "order": 4, "is_other": true,  "is_active": true}},
+
+  {"model": "incidents.incidentsubcategory", "pk": 32, "fields": {"category": 6, "name": "PC불량",       "order": 1, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 33, "fields": {"category": 6, "name": "프린터 불량",  "order": 2, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 34, "fields": {"category": 6, "name": "전화 불량",    "order": 3, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 35, "fields": {"category": 6, "name": "TV불량",       "order": 4, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 36, "fields": {"category": 6, "name": "기타",         "order": 5, "is_other": true,  "is_active": true}},
+
+  {"model": "incidents.incidentsubcategory", "pk": 37, "fields": {"category": 7, "name": "공문",         "order": 1, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 38, "fields": {"category": 7, "name": "업무포탈",     "order": 2, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 39, "fields": {"category": 7, "name": "방문일정",     "order": 3, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 40, "fields": {"category": 7, "name": "기사연락처",   "order": 4, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 41, "fields": {"category": 7, "name": "산출물",       "order": 5, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 42, "fields": {"category": 7, "name": "이력관리",     "order": 6, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 43, "fields": {"category": 7, "name": "기타",         "order": 7, "is_other": true,  "is_active": true}},
+
+  {"model": "incidents.incidentsubcategory", "pk": 44, "fields": {"category": 8, "name": "지원청 작업",  "order": 1, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 45, "fields": {"category": 8, "name": "학교내부 작업","order": 2, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 46, "fields": {"category": 8, "name": "통신사 작업",  "order": 3, "is_other": false, "is_active": true}},
+  {"model": "incidents.incidentsubcategory", "pk": 47, "fields": {"category": 8, "name": "기타",         "order": 4, "is_other": true,  "is_active": true}},
+
+  {"model": "incidents.slarule", "pk": 1, "fields": {
+    "name": "기본 SLA (2시간 도착 / 8시간 처리)",
+    "arrival_hours": 2,
+    "resolve_hours": 8,
+    "is_active": true,
+    "apply_from": "2026-01-01",
+    "apply_to": null,
+    "created_by": null,
+    "created_at": "2026-01-01T00:00:00Z"
+  }}
+]

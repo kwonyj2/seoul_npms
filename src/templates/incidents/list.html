@@ -1,0 +1,705 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}장애 목록{% endblock %}
+{% block page_title %}<i class="bi bi-exclamation-triangle me-2 text-danger"></i>장애 목록{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+  <!-- 검색/필터 바 -->
+  <div class="card border-0 shadow-sm mb-2">
+    <div class="card-body py-2 px-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-3">
+          <input type="text" id="search-q" class="form-control form-control-sm" placeholder="접수번호·학교명·담당자">
+        </div>
+        <div class="col-6 col-md-2">
+          <select id="filter-status" class="form-select form-select-sm">
+            <option value="">전체 상태</option>
+            <option value="received">접수</option>
+            <option value="assigned">배정</option>
+            <option value="moving">이동</option>
+            <option value="arrived">도착</option>
+            <option value="processing">처리중</option>
+            <option value="completed">완료</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <select id="filter-priority" class="form-select form-select-sm">
+            <option value="">전체 우선순위</option>
+            <option value="critical">긴급</option>
+            <option value="high">높음</option>
+            <option value="medium">중간</option>
+            <option value="low">낮음</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <select id="filter-category" class="form-select form-select-sm">
+            <option value="">전체 분류</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-1">
+          <input type="date" id="filter-from" class="form-control form-control-sm" title="시작일">
+        </div>
+        <div class="col-6 col-md-1">
+          <input type="date" id="filter-to" class="form-control form-control-sm" title="종료일">
+        </div>
+        <div class="col-12 col-md-1 d-flex gap-1">
+          <button class="btn btn-sm btn-primary flex-fill" onclick="loadIncidents()"><i class="bi bi-search"></i></button>
+          <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="resetFilters()"><i class="bi bi-x-lg"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 메인 2열 -->
+  <div class="row g-2">
+
+    <!-- 좌측: 교육청→학교 트리 -->
+    <div class="col-12 col-xl-2 d-none d-xl-block">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
+          <span class="fw-semibold small"><i class="bi bi-diagram-3 me-1"></i>학교 트리</span>
+          <button class="btn btn-xs btn-link p-0 text-muted" onclick="resetSchoolFilter()" title="전체보기" id="tree-reset-btn" style="display:none;">
+            <i class="bi bi-x-circle"></i>
+          </button>
+        </div>
+        <div class="card-body p-0" id="school-tree" style="max-height:calc(100vh - 220px);overflow-y:auto;">
+          <div class="p-2 text-muted small">로딩 중...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 우측: 장애 목록 -->
+    <div class="col-12 col-xl-10">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header d-flex align-items-center justify-content-between py-2 bg-white border-bottom">
+          <span class="fw-semibold"><span id="total-count" class="text-primary">-</span>건</span>
+          <div class="d-flex gap-2">
+            {% if user.role in 'superadmin,admin,customer' %}
+            <a href="/npms/incidents/create/" class="btn btn-sm btn-primary">
+              <i class="bi bi-plus-lg me-1"></i>장애접수
+            </a>
+            {% endif %}
+            <button class="btn btn-sm btn-outline-secondary" onclick="downloadCsv()">
+              <i class="bi bi-download me-1"></i>CSV
+            </button>
+            <button class="btn btn-sm btn-outline-success" onclick="downloadExcel()" title="Excel 내보내기">
+              <i class="bi bi-file-earmark-excel me-1"></i>Excel
+            </button>
+            {% if user.role == 'superadmin' or user.role == 'admin' %}
+            <button class="btn btn-sm btn-outline-success" onclick="openUploadModal()">
+              <i class="bi bi-upload me-1"></i>일괄업로드
+            </button>
+            {% endif %}
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th style="width:110px;">접수번호</th>
+                <th style="width:85px;">지원청</th>
+                <th style="width:150px;">학교명</th>
+                <th style="width:90px;">분류</th>
+                <th style="width:55px;">우선</th>
+                <th style="width:65px;">상태</th>
+                <th style="width:85px;">담당자</th>
+                <th style="width:115px;">접수일시</th>
+                <th style="width:55px;">경과</th>
+              </tr>
+            </thead>
+            <tbody id="incident-table-body">
+              <tr><td colspan="9" class="text-center text-muted py-4">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- 페이지네이션 -->
+        <div class="card-footer py-2 d-flex justify-content-between align-items-center">
+          <small class="text-muted">페이지 <span id="page-info">-</span></small>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" id="btn-prev" onclick="changePage(-1)" disabled>
+              <i class="bi bi-chevron-left"></i>
+            </button>
+            <button class="btn btn-outline-secondary" id="btn-next" onclick="changePage(1)">
+              <i class="bi bi-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- CSV 기간 선택 모달 -->
+<div class="modal fade" id="csvModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title"><i class="bi bi-download me-1"></i>CSV 다운로드</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">기간 유형</label>
+          <div class="btn-group w-100" role="group">
+            <input type="radio" class="btn-check" name="csv-period-type" id="csv-type-day"   value="day"   checked>
+            <label class="btn btn-outline-secondary btn-sm" for="csv-type-day">일별</label>
+            <input type="radio" class="btn-check" name="csv-period-type" id="csv-type-month" value="month">
+            <label class="btn btn-outline-secondary btn-sm" for="csv-type-month">월별</label>
+            <input type="radio" class="btn-check" name="csv-period-type" id="csv-type-year"  value="year">
+            <label class="btn btn-outline-secondary btn-sm" for="csv-type-year">연별</label>
+            <input type="radio" class="btn-check" name="csv-period-type" id="csv-type-range" value="range">
+            <label class="btn btn-outline-secondary btn-sm" for="csv-type-range">직접</label>
+          </div>
+        </div>
+
+        <!-- 일별 -->
+        <div id="csv-day-picker">
+          <label class="form-label small">날짜 선택</label>
+          <input type="date" id="csv-day" class="form-control form-control-sm">
+        </div>
+        <!-- 월별 -->
+        <div id="csv-month-picker" style="display:none;">
+          <label class="form-label small">월 선택</label>
+          <input type="month" id="csv-month" class="form-control form-control-sm">
+        </div>
+        <!-- 연별 -->
+        <div id="csv-year-picker" style="display:none;">
+          <label class="form-label small">연도 선택</label>
+          <select id="csv-year" class="form-select form-select-sm"></select>
+        </div>
+        <!-- 직접입력 -->
+        <div id="csv-range-picker" style="display:none;">
+          <label class="form-label small">시작일</label>
+          <input type="date" id="csv-range-from" class="form-control form-control-sm mb-2">
+          <label class="form-label small">종료일</label>
+          <input type="date" id="csv-range-to" class="form-control form-control-sm">
+        </div>
+
+        <div class="mt-2">
+          <small class="text-muted">현재 필터(상태·우선순위·분류·학교)도 함께 적용됩니다.</small>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="confirmCsvDownload()">
+          <i class="bi bi-download me-1"></i>다운로드
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- 기존장애 일괄업로드 모달 -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title"><i class="bi bi-upload me-1 text-success"></i>기존 장애 일괄업로드</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+
+        <!-- 안내 -->
+        <div class="alert alert-info py-2 small mb-3">
+          <i class="bi bi-info-circle me-1"></i>
+          기존 시스템의 장애 데이터를 CSV 파일로 업로드합니다.
+          인코딩은 <strong>UTF-8</strong> 또는 <strong>EUC-KR</strong> 모두 지원합니다.
+          접수번호가 이미 존재하면 건너뜁니다.
+        </div>
+
+        <!-- 필드 매핑 안내 -->
+        <div class="mb-3">
+          <div class="fw-semibold small mb-1"><i class="bi bi-table me-1"></i>CSV 컬럼 (순서대로)</div>
+          <div class="table-responsive" style="max-height:180px;overflow-y:auto;">
+            <table class="table table-sm table-bordered mb-0" style="font-size:.78rem;">
+              <thead class="table-light">
+                <tr>
+                  <th>CSV 컬럼명</th><th>설명</th><th>필수</th><th>예시</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>접수번호</td><td>기존 접수번호 (비워두면 자동생성)</td><td></td><td>20230301_001</td></tr>
+                <tr><td>진행사항</td><td>완료 / 처리중 / 접수 / 취소</td><td></td><td>완료</td></tr>
+                <tr><td>등록일</td><td>접수 일시</td><td class="text-danger fw-bold">필수</td><td>2023-03-01 09:00</td></tr>
+                <tr><td>접수방법</td><td>전화 / 방문 / 시스템 / 이메일</td><td></td><td>전화</td></tr>
+                <tr><td>지원청</td><td>교육지원청명 (학교 검색 참고용)</td><td></td><td>동부</td></tr>
+                <tr><td>학교</td><td>학교명 (DB에 등록된 정확한 이름)</td><td class="text-danger fw-bold">필수</td><td>○○초등학교</td></tr>
+                <tr><td>분류</td><td>장애 대분류 (DB의 분류명과 일치)</td><td class="text-danger fw-bold">필수</td><td>유선망</td></tr>
+                <tr><td>세부분류</td><td>장애 소분류</td><td></td><td>LAN포트 불량</td></tr>
+                <tr><td>장애 증상</td><td>증상 설명</td><td></td><td>인터넷 안됨</td></tr>
+                <tr><td>요청자</td><td>신고자 이름</td><td></td><td>홍길동</td></tr>
+                <tr><td>접수자</td><td>접수 담당자 (참고용)</td><td></td><td>김철수</td></tr>
+                <tr><td>처리자</td><td>처리 담당자 이름 (처리내용에 기록)</td><td></td><td>이영희</td></tr>
+                <tr><td>장애내용</td><td>장애 상세 내용</td><td></td><td>교실 스위치 포트 불량</td></tr>
+                <tr><td>조치방법</td><td>조치 방법</td><td></td><td>포트 교체</td></tr>
+                <tr><td>처리유형</td><td>처리 유형 구분</td><td></td><td>부품교체</td></tr>
+                <tr><td>처리내용</td><td>처리 상세 내용</td><td></td><td>스위치 포트 1번 교체</td></tr>
+                <tr><td>현장 도착시간</td><td>도착 일시</td><td></td><td>2023-03-01 10:30</td></tr>
+                <tr><td>완료일</td><td>처리 완료 일시</td><td></td><td>2023-03-01 11:00</td></tr>
+                <tr><td>장애처리 소요시간</td><td>소요 시간(분) — 무시됨</td><td></td><td>120</td></tr>
+                <tr><td>년</td><td>연도 — 무시됨 (등록일에서 추출)</td><td></td><td>2023</td></tr>
+                <tr><td>월</td><td>월 — 무시됨 (등록일에서 추출)</td><td></td><td>3</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 파일 선택 -->
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">CSV 파일 선택</label>
+          <input type="file" id="upload-file" class="form-control form-control-sm" accept=".csv">
+        </div>
+
+        <!-- 결과 영역 -->
+        <div id="upload-result" style="display:none;"></div>
+      </div>
+      <div class="modal-footer py-2 d-flex justify-content-between">
+        <a href="#" class="btn btn-sm btn-outline-secondary" onclick="downloadSampleCsv();return false;">
+          <i class="bi bi-file-earmark-arrow-down me-1"></i>샘플 CSV 다운로드
+        </a>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">닫기</button>
+          <button type="button" class="btn btn-sm btn-success" id="btn-do-upload" onclick="doUpload()">
+            <i class="bi bi-upload me-1"></i>업로드
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const PRIORITY_BADGE = {
+  critical: '<span class="badge bg-danger">긴급</span>',
+  high:     '<span class="badge bg-warning text-dark">높음</span>',
+  medium:   '<span class="badge bg-primary">중간</span>',
+  low:      '<span class="badge bg-secondary">낮음</span>',
+};
+const STATUS_BADGE = {
+  received:   '<span class="badge bg-warning text-dark">접수</span>',
+  assigned:   '<span class="badge bg-info text-dark">배정</span>',
+  moving:     '<span class="badge bg-primary">이동</span>',
+  arrived:    '<span class="badge" style="background:#6f42c1">도착</span>',
+  processing: '<span class="badge bg-primary">처리중</span>',
+  completed:  '<span class="badge bg-success">완료</span>',
+};
+const PRIORITY_ROW = {critical:'priority-critical', high:'priority-high', medium:'priority-medium', low:'priority-low'};
+
+let currentPage = 1, totalPages = 1;
+let activeCenter = null, activeType = null, activeSchool = null;
+let _incidentReqId = 0; // race condition 방지용
+
+// ── 장애 목록 로드 ────────────────────────────────────────────────────────
+async function loadIncidents() {
+  const reqId = ++_incidentReqId;
+
+  const q        = document.getElementById('search-q').value;
+  const status   = document.getElementById('filter-status').value;
+  const priority = document.getElementById('filter-priority').value;
+  const category = document.getElementById('filter-category').value;
+  const from     = document.getElementById('filter-from').value;
+  const to       = document.getElementById('filter-to').value;
+
+  const params = {page: currentPage, page_size: 20};
+  if (q)        params.q        = q;
+  if (status)   params.status   = status;
+  if (priority) params.priority = priority;
+  if (category) params.category = category;
+  if (from)     params.date_from = from;
+  if (to)       params.date_to   = to;
+  if (activeSchool)       params.school      = activeSchool;
+  else if (activeType)    params.school_type = activeType;
+  else if (activeCenter)  params.center      = activeCenter;
+
+  const tbody = document.getElementById('incident-table-body');
+  tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">로딩 중...</td></tr>';
+  try {
+    const data = await apiGet(`${API_BASE}/incidents/incidents/`, params);
+    if (reqId !== _incidentReqId) return; // 구 응답 무시
+    totalPages = Math.ceil((data.count || 0) / 20);
+    document.getElementById('total-count').textContent = (data.count || 0).toLocaleString();
+    document.getElementById('page-info').textContent = `${currentPage} / ${totalPages || 1}`;
+    document.getElementById('btn-prev').disabled = currentPage <= 1;
+    document.getElementById('btn-next').disabled = currentPage >= totalPages;
+
+    const results = data.results || [];
+    if (!results.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">장애 없음</td></tr>';
+      return;
+    }
+    tbody.innerHTML = results.map(i => `
+      <tr class="cursor-pointer ${PRIORITY_ROW[i.priority]||''}" onclick="location.href='/npms/incidents/${i.id}/'">
+        <td><small class="fw-bold text-primary">${i.incident_number}</small></td>
+        <td><small class="text-muted">${i.center_name||'-'}</small></td>
+        <td class="text-truncate" style="max-width:150px;" title="${i.school_name||''}">${i.school_name||'-'}</td>
+        <td><small>${i.category_name||'-'}</small></td>
+        <td>${PRIORITY_BADGE[i.priority]||i.priority}</td>
+        <td>${STATUS_BADGE[i.status]||i.status}</td>
+        <td><small>${i.assigned_worker||'<span class="text-danger">미배정</span>'}</small></td>
+        <td><small class="text-nowrap">${formatDateTime(i.received_at)}</small></td>
+        <td><small class="${(i.elapsed_minutes||0)>120?'text-danger fw-bold':'text-muted'}">${i.elapsed_minutes||0}분</small></td>
+      </tr>`).join('');
+  } catch(e) {
+    if (reqId !== _incidentReqId) return;
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-3">데이터 로드 오류</td></tr>';
+  }
+}
+
+function changePage(delta) {
+  currentPage = Math.max(1, Math.min(totalPages, currentPage + delta));
+  loadIncidents();
+}
+
+function resetFilters() {
+  document.getElementById('search-q').value        = '';
+  document.getElementById('filter-status').value   = '';
+  document.getElementById('filter-priority').value = '';
+  document.getElementById('filter-category').value = '';
+  document.getElementById('filter-from').value     = '';
+  document.getElementById('filter-to').value       = '';
+  activeCenter = activeSchool = null;
+  currentPage = 1;
+  renderTreeActive();
+  loadIncidents();
+}
+
+// ── 카테고리 드롭다운 로드 ────────────────────────────────────────────────
+async function loadCategoryOptions() {
+  try {
+    const cats = await apiGet(`${API_BASE}/incidents/categories/`);
+    const sel = document.getElementById('filter-category');
+    (cats.results || cats).forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.code;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
+// ── 학교 트리 ─────────────────────────────────────────────────────────────
+let treeData = [];
+
+async function loadSchoolTree() {
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/tree/`);
+    treeData = data;
+    renderTree();
+  } catch(e) {
+    document.getElementById('school-tree').innerHTML = '<div class="p-2 text-muted small">로드 실패</div>';
+  }
+}
+
+function renderTree() {
+  const el = document.getElementById('school-tree');
+  if (!treeData.length) { el.innerHTML = '<div class="p-2 text-muted small">학교 없음</div>'; return; }
+
+  // 지원청 레벨만 먼저 렌더링 (lazy)
+  el.innerHTML = `
+    <ul class="list-unstyled mb-0 tree-list">
+      <li>
+        <a href="#" class="tree-item d-flex align-items-center px-2 py-1 small text-decoration-none ${!activeCenter&&!activeType&&!activeSchool?'active':''}"
+           onclick="filterCenter(null);return false;">
+          <i class="bi bi-grid-3x3-gap me-1 text-muted"></i>전체
+        </a>
+      </li>
+      ${treeData.map(c => `
+        <li>
+          <div class="tree-center d-flex align-items-center">
+            <a href="#" class="tree-item flex-grow-1 d-flex align-items-center px-2 py-1 small text-decoration-none ${activeCenter===c.code&&!activeType&&!activeSchool?'active':''}"
+               onclick="filterCenter('${c.code}');return false;">
+              <i class="bi bi-building me-1 text-primary" style="font-size:.7rem;"></i>
+              <span class="text-truncate">${c.name}</span>
+              <span class="badge bg-light text-muted border ms-auto" style="font-size:.6rem;">${c.count}</span>
+            </a>
+            <button class="btn btn-xs btn-link text-muted p-0 px-1 tree-toggle"
+                    onclick="toggleCenter(${c.id});return false;"
+                    data-center="${c.id}">
+              <i class="bi bi-chevron-right" style="font-size:.6rem;"></i>
+            </button>
+          </div>
+          <ul class="list-unstyled ps-3 mb-0" id="tree-c-${c.id}" style="display:none;" data-loaded="false"></ul>
+        </li>`).join('')}
+    </ul>`;
+}
+
+function renderTreeActive() {
+  renderTree();
+  // 활성 교육청 자동 펼치기 (lazy 노드 생성 포함)
+  if (activeCenter) {
+    const c = treeData.find(x => x.code === activeCenter);
+    if (c) {
+      const ul = document.getElementById(`tree-c-${c.id}`);
+      if (ul && ul.style.display === 'none') toggleCenter(c.id);
+      if (activeType) {
+        const tul = document.getElementById(`tree-t-${c.id}-${activeType}`);
+        if (tul && tul.style.display === 'none') toggleType(c.id, activeType);
+      }
+    }
+  }
+  document.getElementById('tree-reset-btn').style.display = (activeCenter || activeSchool) ? '' : 'none';
+}
+
+function toggleCenter(centerId) {
+  const ul  = document.getElementById(`tree-c-${centerId}`);
+  const btn = document.querySelector(`[data-center="${centerId}"] i`);
+  if (!ul) return;
+  const open = ul.style.display !== 'none';
+  if (!open && ul.dataset.loaded === 'false') {
+    // 최초 펼침 시 학제/학교 노드 생성
+    const c = treeData.find(x => x.id === centerId);
+    if (c) {
+      ul.innerHTML = c.types.map(t => `
+        <li>
+          <div class="d-flex align-items-center">
+            <a href="#" class="tree-item flex-grow-1 d-flex align-items-center px-1 py-1 small text-decoration-none"
+               onclick="filterType('${c.code}',${t.id});return false;">
+              <i class="bi bi-book me-1 text-success" style="font-size:.65rem;"></i>
+              <span class="text-truncate">${t.name}</span>
+              <span class="badge bg-light text-muted border ms-auto" style="font-size:.6rem;">${t.count}</span>
+            </a>
+            <button class="btn btn-xs btn-link text-muted p-0 px-1"
+                    onclick="toggleType(${c.id},${t.id});return false;"
+                    data-type="${c.id}-${t.id}">
+              <i class="bi bi-chevron-right" style="font-size:.6rem;"></i>
+            </button>
+          </div>
+          <ul class="list-unstyled ps-3 mb-0" id="tree-t-${c.id}-${t.id}" style="display:none;" data-loaded="false"></ul>
+        </li>`).join('');
+      ul.dataset.loaded = 'true';
+    }
+  }
+  ul.style.display = open ? 'none' : '';
+  if (btn) { btn.className = open ? 'bi bi-chevron-right' : 'bi bi-chevron-down'; btn.style.fontSize = '.6rem'; }
+}
+
+function toggleType(centerId, typeId) {
+  const ul  = document.getElementById(`tree-t-${centerId}-${typeId}`);
+  const btn = document.querySelector(`[data-type="${centerId}-${typeId}"] i`);
+  if (!ul) return;
+  const open = ul.style.display !== 'none';
+  if (!open && ul.dataset.loaded === 'false') {
+    // 최초 펼침 시 학교 노드 생성
+    const c = treeData.find(x => x.id === centerId);
+    const t = c && c.types.find(x => x.id === typeId);
+    if (t) {
+      ul.innerHTML = [...t.schools].sort((a,b)=>a.name.localeCompare(b.name,'ko')).map(s => `
+        <li>
+          <a href="#" class="tree-item d-flex align-items-center px-1 py-1 small text-decoration-none"
+             onclick="filterSchool(${s.id},'${c.code}',${t.id});return false;">
+            <i class="bi bi-dot me-1 text-muted"></i>
+            <span class="text-truncate" title="${s.name}">${s.name}</span>
+          </a>
+        </li>`).join('');
+      ul.dataset.loaded = 'true';
+    }
+  }
+  ul.style.display = open ? 'none' : '';
+  if (btn) { btn.className = open ? 'bi bi-chevron-right' : 'bi bi-chevron-down'; btn.style.fontSize = '.6rem'; }
+}
+
+function filterCenter(centerCode) {
+  activeCenter = centerCode;
+  activeType   = null;
+  activeSchool = null;
+  currentPage  = 1;
+  renderTreeActive();
+  loadIncidents();
+}
+
+function filterType(centerCode, typeId) {
+  activeCenter = centerCode;
+  activeType   = typeId;
+  activeSchool = null;
+  currentPage  = 1;
+  renderTreeActive();
+  loadIncidents();
+}
+
+function filterSchool(schoolId, centerCode, typeId) {
+  activeSchool = schoolId;
+  activeCenter = centerCode;
+  activeType   = typeId;
+  currentPage  = 1;
+  renderTreeActive();
+  loadIncidents();
+}
+
+function resetSchoolFilter() {
+  filterCenter(null);
+}
+
+// ── CSV 다운로드 모달 ─────────────────────────────────────────────────────
+function downloadCsv() {
+  // 오늘 날짜 기본값
+  const today = new Date().toISOString().slice(0, 10);
+  const thisMonth = today.slice(0, 7);
+  const thisYear = today.slice(0, 4);
+
+  document.getElementById('csv-day').value        = today;
+  document.getElementById('csv-month').value      = thisMonth;
+  document.getElementById('csv-range-from').value = today;
+  document.getElementById('csv-range-to').value   = today;
+
+  // 연도 셀렉트 (최근 5년)
+  const ySel = document.getElementById('csv-year');
+  ySel.innerHTML = '';
+  for (let y = parseInt(thisYear); y >= parseInt(thisYear) - 4; y--) {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = `${y}년`;
+    if (y === parseInt(thisYear)) opt.selected = true;
+    ySel.appendChild(opt);
+  }
+
+  // 기간 유형 토글
+  document.querySelectorAll('[name="csv-period-type"]').forEach(r => {
+    r.addEventListener('change', () => {
+      const v = r.value;
+      document.getElementById('csv-day-picker').style.display   = v==='day'   ? '' : 'none';
+      document.getElementById('csv-month-picker').style.display = v==='month' ? '' : 'none';
+      document.getElementById('csv-year-picker').style.display  = v==='year'  ? '' : 'none';
+      document.getElementById('csv-range-picker').style.display = v==='range' ? '' : 'none';
+    });
+  });
+
+  new bootstrap.Modal(document.getElementById('csvModal')).show();
+}
+
+function confirmCsvDownload() {
+  const type = document.querySelector('[name="csv-period-type"]:checked').value;
+  let dateFrom, dateTo;
+
+  if (type === 'day') {
+    dateFrom = dateTo = document.getElementById('csv-day').value;
+  } else if (type === 'month') {
+    const m = document.getElementById('csv-month').value; // YYYY-MM
+    dateFrom = `${m}-01`;
+    const d = new Date(m + '-01');
+    d.setMonth(d.getMonth() + 1);
+    d.setDate(0);
+    dateTo = d.toISOString().slice(0, 10);
+  } else if (type === 'year') {
+    const y = document.getElementById('csv-year').value;
+    dateFrom = `${y}-01-01`;
+    dateTo   = `${y}-12-31`;
+  } else {
+    dateFrom = document.getElementById('csv-range-from').value;
+    dateTo   = document.getElementById('csv-range-to').value;
+  }
+
+  if (!dateFrom || !dateTo) { alert('날짜를 선택하세요.'); return; }
+
+  const params = new URLSearchParams();
+  params.set('date_from', dateFrom);
+  params.set('date_to',   dateTo);
+  const status   = document.getElementById('filter-status').value;
+  const priority = document.getElementById('filter-priority').value;
+  const category = document.getElementById('filter-category').value;
+  const q        = document.getElementById('search-q').value;
+  if (status)   params.set('status', status);
+  if (priority) params.set('priority', priority);
+  if (category) params.set('category', category);
+  if (q)        params.set('q', q);
+  if (activeSchool)       params.set('school', activeSchool);
+  else if (activeCenter)  params.set('center', activeCenter);
+
+  bootstrap.Modal.getInstance(document.getElementById('csvModal')).hide();
+  window.location.href = `${API_BASE}/incidents/incidents/csv_download/?${params}`;
+}
+
+// ── Excel 다운로드 ────────────────────────────────────────────────────────
+function downloadExcel() {
+  const params = new URLSearchParams();
+  const status   = document.getElementById('filter-status').value;
+  const priority = document.getElementById('filter-priority').value;
+  const category = document.getElementById('filter-category').value;
+  const from     = document.getElementById('filter-from').value;
+  const to       = document.getElementById('filter-to').value;
+  const q        = document.getElementById('search-q').value;
+  if (status)   params.set('status', status);
+  if (priority) params.set('priority', priority);
+  if (category) params.set('category', category);
+  if (from)     params.set('date_from', from);
+  if (to)       params.set('date_to', to);
+  if (q)        params.set('q', q);
+  if (activeSchool)       params.set('school', activeSchool);
+  else if (activeCenter)  params.set('center', activeCenter);
+  window.location.href = `${API_BASE}/incidents/incidents/excel_download/?${params}`;
+}
+
+// ── 일괄업로드 ────────────────────────────────────────────────────────────
+function openUploadModal() {
+  document.getElementById('upload-file').value = '';
+  document.getElementById('upload-result').style.display = 'none';
+  document.getElementById('upload-result').innerHTML = '';
+  new bootstrap.Modal(document.getElementById('uploadModal')).show();
+}
+
+function downloadSampleCsv() {
+  window.location.href = `${API_BASE}/incidents/incidents/csv_sample/`;
+}
+
+async function doUpload() {
+  const fileInput = document.getElementById('upload-file');
+  if (!fileInput.files.length) { alert('파일을 선택하세요.'); return; }
+
+  const btn = document.getElementById('btn-do-upload');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>업로드 중...';
+
+  const form = new FormData();
+  form.append('file', fileInput.files[0]);
+
+  const resultEl = document.getElementById('upload-result');
+  try {
+    const data = await apiPost(`${API_BASE}/incidents/incidents/csv_upload/`, form);
+    let html = `
+      <div class="alert alert-success py-2 small mb-2">
+        <i class="bi bi-check-circle me-1"></i>
+        <strong>업로드 완료</strong> — 등록 <strong class="text-success">${data.created}</strong>건,
+        중복건너뜀 <strong class="text-secondary">${data.skipped}</strong>건,
+        오류 <strong class="text-danger">${data.errors}</strong>건
+      </div>`;
+    if (data.error_rows && data.error_rows.length) {
+      html += `<div class="border rounded p-2 small bg-light" style="max-height:160px;overflow-y:auto;">
+        <div class="fw-semibold text-danger mb-1"><i class="bi bi-exclamation-triangle me-1"></i>오류 내역 (최대 20건)</div>
+        ${data.error_rows.map(r => `<div class="text-muted">${r}</div>`).join('')}
+      </div>`;
+    }
+    resultEl.innerHTML = html;
+    resultEl.style.display = '';
+    if (data.created > 0) { currentPage = 1; loadIncidents(); }
+  } catch(e) {
+    resultEl.innerHTML = `<div class="alert alert-danger py-2 small"><i class="bi bi-x-circle me-1"></i>업로드 실패: ${e.message || e}</div>`;
+    resultEl.style.display = '';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-upload me-1"></i>업로드';
+  }
+}
+
+// ── 초기화 ────────────────────────────────────────────────────────────────
+loadCategoryOptions();
+loadSchoolTree();
+loadIncidents();
+
+let searchTimer;
+document.getElementById('search-q').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { currentPage=1; loadIncidents(); }, 400);
+});
+document.querySelectorAll('#filter-status,#filter-priority,#filter-category,#filter-from,#filter-to').forEach(el => {
+  el.addEventListener('change', () => { currentPage=1; loadIncidents(); });
+});
+</script>
+<style>
+.tree-item { border-radius: 4px; color: inherit; }
+.tree-item:hover { background: #f0f4ff; }
+.tree-item.active { background: #e8f0fe; color: #0d6efd; font-weight: 600; }
+.tree-toggle { font-size:.6rem; line-height:1; }
+</style>
+{% endblock %}

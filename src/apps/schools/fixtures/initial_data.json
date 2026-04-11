@@ -1,0 +1,21 @@
+[
+  {"model": "schools.supportcenter", "pk": 1, "fields": {"code": "dongbu",    "name": "동부",     "address": "서울시 성동구", "phone": "02-2204-1000", "lat": "37.5616", "lng": "127.0340", "url": "https://dbedu.sen.go.kr/", "is_active": true}},
+  {"model": "schools.supportcenter", "pk": 2, "fields": {"code": "seobu",     "name": "서부",     "address": "서울시 마포구", "phone": "02-2165-1000", "lat": "37.5519", "lng": "126.9097", "url": "https://sbedu.sen.go.kr/", "is_active": true}},
+  {"model": "schools.supportcenter", "pk": 3, "fields": {"code": "nambu",     "name": "남부",     "address": "서울시 구로구", "phone": "02-810-1000",  "lat": "37.4954", "lng": "126.8874", "url": "https://nbedu.sen.go.kr/", "is_active": true}},
+  {"model": "schools.supportcenter", "pk": 4, "fields": {"code": "bukbu",     "name": "북부",     "address": "서울시 도봉구", "phone": "02-2116-1000", "lat": "37.6688", "lng": "127.0474", "url": "https://bbedu.sen.go.kr/", "is_active": true}},
+  {"model": "schools.supportcenter", "pk": 5, "fields": {"code": "jungbu",    "name": "중부",     "address": "서울시 중구",   "phone": "02-3396-1000", "lat": "37.5630", "lng": "126.9973", "url": "https://jbedu.sen.go.kr/", "is_active": true}},
+  {"model": "schools.supportcenter", "pk": 6, "fields": {"code": "gangdong",  "name": "강동송파", "address": "서울시 강동구", "phone": "02-6252-1000", "lat": "37.5301", "lng": "127.1238", "url": "https://gdspedu.sen.go.kr/", "is_active": true}},
+  {"model": "schools.supportcenter", "pk": 7, "fields": {"code": "gangseo",   "name": "강서양천", "address": "서울시 양천구", "phone": "02-2600-1000", "lat": "37.5270", "lng": "126.8562", "url": "https://gsycedu.sen.go.kr/", "is_active": true}},
+  {"model": "schools.supportcenter", "pk": 8, "fields": {"code": "gangnam",   "name": "강남서초", "address": "서울시 서초구", "phone": "02-3473-1000", "lat": "37.4836", "lng": "127.0324", "url": "https://gnscedu.sen.go.kr/", "is_active": true}},
+  {"model": "schools.supportcenter", "pk": 9, "fields": {"code": "dongjak",   "name": "동작관악", "address": "서울시 동작구", "phone": "02-820-1000",  "lat": "37.5124", "lng": "126.9393", "url": "https://dgedu.sen.go.kr/", "is_active": true}},
+  {"model": "schools.supportcenter", "pk": 10,"fields": {"code": "seongdong", "name": "성동광진", "address": "서울시 광진구", "phone": "02-2286-1000", "lat": "37.5386", "lng": "127.0823", "url": "https://sdgjedu.sen.go.kr/", "is_active": true}},
+  {"model": "schools.supportcenter", "pk": 11,"fields": {"code": "seongbuk",  "name": "성북강북", "address": "서울시 성북구", "phone": "02-940-1000",  "lat": "37.6063", "lng": "127.0175", "url": "https://sbgbedu.sen.go.kr/", "is_active": true}},
+
+  {"model": "schools.schooltype", "pk": 1, "fields": {"code": "kindergarten", "name": "유치원",       "order": 1}},
+  {"model": "schools.schooltype", "pk": 2, "fields": {"code": "elementary",   "name": "초등학교",     "order": 2}},
+  {"model": "schools.schooltype", "pk": 3, "fields": {"code": "middle",       "name": "중학교",       "order": 3}},
+  {"model": "schools.schooltype", "pk": 4, "fields": {"code": "high",         "name": "고등학교",     "order": 4}},
+  {"model": "schools.schooltype", "pk": 5, "fields": {"code": "special",      "name": "특수학교",     "order": 5}},
+  {"model": "schools.schooltype", "pk": 6, "fields": {"code": "etc",          "name": "각종학교",     "order": 6}},
+  {"model": "schools.schooltype", "pk": 7, "fields": {"code": "vocational",   "name": "고등기술학교", "order": 7}}
+]

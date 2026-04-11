@@ -1,0 +1,1604 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}감리 대응{% endblock %}
+{% block page_title %}<i class="bi bi-shield-check me-2 text-warning"></i>감리관리{% endblock %}
+
+{% block extra_css %}
+<style>
+.audit-wrap { padding: 0.75rem 1rem; }
+
+/* 타임라인 */
+.phase-timeline { display: flex; gap: 0; margin-bottom: 1.25rem; border-radius: 8px; overflow: hidden; }
+.phase-step {
+  flex: 1; padding: 0.75rem 1rem; background: #f0f3f7;
+  border-right: 1px solid #dde3ea; cursor: pointer; transition: background 0.2s;
+}
+.phase-step:last-child { border-right: none; }
+.phase-step.active { background: #1e2d40; color: #fff; }
+.phase-step.done   { background: #3d5a7a; color: #fff; }
+.phase-step:hover:not(.active):not(.done) { background: #e0e7ef; }
+.phase-step .phase-label { font-size: 0.82rem; font-weight: 600; }
+.phase-step .phase-date  { font-size: 0.7rem; opacity: 0.65; margin-top: 2px; }
+.phase-step .phase-status {
+  font-size: 0.68rem; margin-top: 4px; display: inline-block;
+  padding: 1px 8px; border-radius: 10px; background: rgba(255,255,255,0.18);
+}
+.phase-step:not(.active):not(.done) .phase-status { background: rgba(0,0,0,0.06); color: #555; }
+
+/* 통계 카드 */
+.stat-cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 0.75rem; margin-bottom: 1.25rem; }
+.stat-card {
+  background:#fff; border:1px solid #dde3ea; border-left:4px solid #3d5a7a;
+  border-radius:6px; padding:0.8rem 1rem;
+}
+.stat-card.c1{border-left-color:#2e6da4} .stat-card.c2{border-left-color:#3a7d44}
+.stat-card.c3{border-left-color:#7a5230} .stat-card.c4{border-left-color:#6b4e9e}
+.stat-card .label { font-size:0.72rem;color:#6c757d;font-weight:600;text-transform:uppercase;letter-spacing:0.04em; }
+.stat-card .value { font-size:1.6rem;font-weight:700;color:#1e2d40;line-height:1;margin:4px 0 2px; }
+.stat-card .sub   { font-size:0.71rem;color:#8a9ab0; }
+.mini-prog { height:4px;border-radius:2px;background:#e0e7ef;margin-top:4px;overflow:hidden; }
+.mini-prog-fill { height:100%;background:#3d5a7a;border-radius:2px;transition:width 0.4s; }
+
+/* 탭 */
+.audit-tabs { border-bottom: 2px solid #dde3ea; }
+.audit-tabs .nav-link {
+  color:#5a6a7a; border:none; border-bottom:3px solid transparent;
+  padding:0.55rem 1.1rem; font-size:0.83rem; font-weight:500;
+  margin-bottom:-2px; border-radius:0; white-space:nowrap;
+}
+.audit-tabs .nav-link:hover { color:#1e2d40; }
+.audit-tabs .nav-link.active { color:#1e2d40; border-bottom-color:#1e2d40; font-weight:700; background:transparent; }
+.audit-tabs .nav-link i { margin-right:5px; }
+.tab-panel { padding:1rem 0 0; }
+
+/* 필터 바 */
+.filter-bar { display:flex; gap:0.5rem; align-items:center; margin-bottom:0.9rem; flex-wrap:wrap; }
+.btn-phase {
+  font-size:0.75rem; padding:4px 14px; border-radius:16px;
+  border:1px solid #c5cfd8; background:#f7f9fb; color:#3a4a5a;
+  font-weight:500; cursor:pointer; transition:all 0.15s;
+}
+.btn-phase:hover, .btn-phase.active { background:#1e2d40; color:#fff; border-color:#1e2d40; }
+
+/* 테이블 — table-layout:fixed + 고정 열 폭 */
+.audit-table {
+  font-size:0.8rem; border-collapse:separate; border-spacing:0;
+  width:100%; table-layout:fixed;
+}
+.audit-table thead th {
+  background:#2c3e55; color:#c8d8e8; font-weight:600; font-size:0.72rem;
+  letter-spacing:0.03em; padding:8px 10px; border:none;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  position:sticky; top:0; z-index:10;
+}
+.audit-table thead th:first-child{border-radius:6px 0 0 0}
+.audit-table thead th:last-child {border-radius:0 6px 0 0}
+.audit-table tbody tr:hover td { background:#f0f5fa; }
+.audit-table tbody td {
+  padding:7px 10px; border-bottom:1px solid #ecf0f4;
+  vertical-align:middle; color:#2e3d4d; background:#fff;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.audit-table tbody td.wrap { white-space:normal; word-break:keep-all; }
+.audit-table tbody tr.srow td {
+  background:#f0f4f8 !important; font-weight:600;
+  font-size:0.75rem; color:#2c3e55; padding:5px 10px; white-space:nowrap;
+}
+.audit-table tbody tr.catrow td {
+  background:#1e2d40 !important; color:#94a8bf !important;
+  font-size:0.72rem !important; font-weight:700 !important;
+  letter-spacing:0.05em; padding:5px 10px !important; white-space:nowrap !important;
+}
+
+/* 뱃지 */
+.bp { font-size:0.65rem;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap;display:inline-block; }
+.bp-init{background:#dbe8f5;color:#1a4a7a} .bp-mid{background:#d9f0e0;color:#1a5a2a}
+.bp-end{background:#f5e8db;color:#7a3a1a}  .bp-all{background:#ebe5f5;color:#4a2a7a}
+.bt { font-size:0.63rem;padding:2px 7px;border-radius:10px;background:#f0f3f7;color:#4a5a6a;border:1px solid #dde3ea;white-space:nowrap;display:inline-block; }
+.bs { font-size:0.65rem;padding:2px 8px;border-radius:10px;white-space:nowrap;display:inline-block; }
+.bs-pending  {background:#f5f0e8;color:#7a5a20;border:1px solid #e8d8b0}
+.bs-draft    {background:#e8f0f8;color:#1a4a7a;border:1px solid #b0c8e8}
+.bs-submitted{background:#e0f0e8;color:#1a5a30;border:1px solid #a0d0b0}
+.bs-approved {background:#d8f0d8;color:#0a4a1a;border:1px solid #80c080}
+.bs-rejected {background:#f8e0e0;color:#6a1a1a;border:1px solid #d08080}
+.bs-pass     {background:#d8f0d8;color:#0a4a1a}
+.bs-fail     {background:#f8e0e0;color:#6a1a1a}
+.bs-open     {background:#f8e8d8;color:#6a3a0a;border:1px solid #e0b878}
+.bs-verified {background:#d8e8f0;color:#0a3a5a;border:1px solid #80b0d0}
+.bs-nc       {background:#f5f5f5;color:#888;border:1px solid #ddd}
+.rq { font-size:0.63rem;padding:2px 6px;border-radius:4px;background:#e8edf5;color:#2c3e55;font-family:monospace;white-space:nowrap;display:inline-block; }
+.rq-IMR{background:#dbeafe;color:#1e40af} .rq-OHR{background:#dcfce7;color:#166534}
+.rq-SER{background:#fef9c3;color:#713f12} .rq-QUR{background:#f3e8ff;color:#6b21a8}
+.rq-PMR{background:#ffedd5;color:#9a3412} .rq-PSR{background:#e0f2fe;color:#075985}
+.rq-COR{background:#fce7f3;color:#9d174d} .rq-ADD{background:#fef3c7;color:#92400e}
+
+/* 잠금 */
+.lock-overlay {
+  background:#f8f9fa; border:1px dashed #ccc; border-radius:8px;
+  padding:2.5rem; text-align:center; color:#888; margin-top:.5rem;
+}
+.lock-overlay i { font-size:2.5rem; margin-bottom:.75rem; display:block; }
+
+/* 파일 업로드 */
+.drop-zone {
+  border:2px dashed #c5cfd8; border-radius:6px; padding:1.2rem 1rem;
+  text-align:center; background:#fafbfc; cursor:pointer; transition:border-color .2s;
+}
+.drop-zone:hover { border-color:#3d5a7a; }
+.drop-zone .dz-icon { font-size:2rem; color:#94a8bf; }
+.drop-zone p { font-size:0.78rem; color:#6a7a8a; margin:4px 0 0; }
+
+/* 모달 */
+.modal-header { background:#2c3e55; color:#fff; }
+.modal-header .btn-close { filter:invert(1); }
+.modal-footer { background:#f8f9fb; }
+
+/* 산출물 보관함 트리 */
+.vault-phase { border:1px solid #dde3ea; border-radius:6px; margin-bottom:8px; overflow:hidden; }
+.vault-phase-hd {
+  background:#1e2d40; color:#fff; padding:8px 14px; cursor:pointer;
+  display:flex; align-items:center; gap:8px; user-select:none;
+}
+.vault-phase-hd:hover { background:#2c3e55; }
+.vault-phase-hd .ph-label { font-size:.84rem; font-weight:700; flex:1; }
+.vault-phase-hd .ph-cnt  { font-size:.7rem; background:rgba(255,255,255,.15); padding:2px 8px; border-radius:10px; }
+.vault-phase-hd .ph-toggle { font-size:.8rem; transition:transform .2s; }
+.vault-phase-hd.collapsed .ph-toggle { transform:rotate(-90deg); }
+.vault-phase-body { padding:6px 0; }
+
+.vault-cat { margin:0 8px 4px; }
+.vault-cat-hd {
+  background:#f0f5fa; border-radius:4px; padding:5px 10px; cursor:pointer;
+  display:flex; align-items:center; gap:6px; font-size:.78rem; font-weight:600;
+  color:#2c3e55; user-select:none; border:1px solid #e0e7ef;
+}
+.vault-cat-hd:hover { background:#e4ecf5; }
+.vault-cat-hd .cat-toggle { font-size:.72rem; transition:transform .2s; }
+.vault-cat-hd.collapsed .cat-toggle { transform:rotate(-90deg); }
+.vault-cat-body { padding:2px 0 2px 10px; }
+
+.vault-tmpl {
+  display:flex; align-items:center; gap:6px; padding:5px 8px; border-radius:4px;
+  cursor:pointer; transition:background .15s; border-bottom:1px solid #f3f5f8;
+}
+.vault-tmpl:last-child { border-bottom:none; }
+.vault-tmpl:hover { background:#f7fbff; }
+.vault-tmpl .vt-code { font-family:monospace; font-size:.68rem; color:#5a6a7a; width:140px; flex-shrink:0; }
+.vault-tmpl .vt-name { font-size:.78rem; font-weight:500; color:#1e2d40; flex:1; }
+.vault-tmpl .vt-cnt  {
+  font-size:.7rem; padding:2px 9px; border-radius:10px; flex-shrink:0;
+  background:#e8edf5; color:#2c3e55; font-weight:600;
+}
+.vault-tmpl .vt-cnt.has-file { background:#d4edda; color:#1a5c2a; }
+.vault-tmpl .vt-cnt.no-file  { background:#f3f5f8; color:#aaa; }
+.vault-tmpl .vt-req  { font-size:.65rem; color:#e07000; flex-shrink:0; }
+
+/* 파일 테이블 행 */
+.mvf-row td { padding:5px 8px; font-size:.78rem; border-bottom:1px solid #f0f3f7; }
+.mvf-row:last-child td { border-bottom:none; }
+.mvf-row:hover td { background:#f7fbff; }
+.ext-badge {
+  display:inline-block; font-size:.62rem; padding:1px 6px; border-radius:3px;
+  font-weight:700; margin-left:4px; vertical-align:middle;
+}
+.ext-pdf { background:#ffe0dc; color:#c0392b; }
+.ext-hwp,.ext-hwpx { background:#dceeff; color:#1a5276; }
+.ext-xlsx,.ext-xls,.ext-xlsm { background:#d5f5e3; color:#1a5c2a; }
+.ext-docx,.ext-doc { background:#eaf0fb; color:#1a3a6e; }
+.ext-pptx,.ext-ppt { background:#fff3e0; color:#b06000; }
+.ext-zip { background:#f3e5f5; color:#6a1b9a; }
+
+@media (max-width:1200px) { .stat-cards { grid-template-columns:repeat(2,1fr); } }
+@media print { .audit-tabs,.filter-bar,.btn,.modal{display:none!important} .audit-table{font-size:9pt} }
+
+/* 시정조치 워크플로우 */
+.ca-flow-step {
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:6px 16px; border-radius:20px; background:#f0f4f8;
+  border:1px solid #dde3ea; cursor:pointer; transition:all .15s; min-width:70px;
+}
+.ca-flow-step:hover { background:#1e2d40; color:#fff; border-color:#1e2d40; }
+.ca-flow-step[data-st="open"]        { border-left:3px solid #e07000; }
+.ca-flow-step[data-st="in_progress"] { border-left:3px solid #3d7abf; }
+.ca-flow-step[data-st="completed"]   { border-left:3px solid #3a7d44; }
+.ca-flow-step[data-st="verified"]    { border-left:3px solid #6b4e9e; }
+.ca-flow-step.active { background:#1e2d40; color:#fff; border-color:#1e2d40; }
+.ca-flow-num { font-size:1.1rem; font-weight:700; line-height:1; }
+.ca-flow-label { font-size:.67rem; }
+.ca-flow-arrow { align-self:center; color:#94a8bf; font-weight:700; font-size:.9rem; }
+
+/* 워크플로우 버튼 */
+.btn-ca-start    { background:#fff3e0;color:#7a4000;border:1px solid #f0a060;font-size:.68rem;padding:2px 8px;border-radius:12px;cursor:pointer;white-space:nowrap; }
+.btn-ca-complete { background:#e3f0fb;color:#0d4a7a;border:1px solid #7ab0e0;font-size:.68rem;padding:2px 8px;border-radius:12px;cursor:pointer;white-space:nowrap; }
+.btn-ca-verify   { background:#eaf5ea;color:#0a4a1a;border:1px solid #80c080;font-size:.68rem;padding:2px 8px;border-radius:12px;cursor:pointer;white-space:nowrap; }
+.btn-ca-start:hover    { background:#f0a060;color:#fff; }
+.btn-ca-complete:hover { background:#3d7abf;color:#fff; }
+.btn-ca-verify:hover   { background:#3a7d44;color:#fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="audit-wrap">
+
+<!-- 탭 -->
+<ul class="nav audit-tabs">
+  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#t-art"><i class="bi bi-files"></i>산출물 목록</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-vault" onclick="initVault()"><i class="bi bi-folder2-open"></i>산출물 보관함</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-rtm"><i class="bi bi-table"></i>요구사항 추적표(RTM)</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-chk"><i class="bi bi-clipboard-check"></i>감리 체크리스트</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-ca"><i class="bi bi-exclamation-triangle"></i>시정조치</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-add"><i class="bi bi-plus-circle"></i>추가제안/기술협상</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-schedule"><i class="bi bi-calendar3"></i>감리 일정</button></li>
+</ul>
+
+<div class="tab-content">
+
+<!-- ── 탭1 산출물 목록 ───────────────────────────── -->
+<div class="tab-panel tab-pane fade show active" id="t-art">
+  <div class="filter-bar">
+    <button class="btn-phase active" onclick="filterArt('all',this)">전체</button>
+    <button class="btn-phase" onclick="filterArt('initiation',this)">착수감리</button>
+    <button class="btn-phase" onclick="filterArt('midterm',this)">중간감리</button>
+    <button class="btn-phase" onclick="filterArt('closing',this)">종료감리</button>
+    <button class="btn-phase" onclick="filterArt('occurrence',this)">발생 시</button>
+    <div class="ms-auto d-flex gap-2">
+      <button class="btn btn-sm" style="background:#3d5a7a;color:#fff;font-size:.74rem;" onclick="dlSelected()"><i class="bi bi-download me-1"></i>선택 다운로드</button>
+      <button class="btn btn-sm btn-outline-secondary" style="font-size:.74rem;" onclick="window.print()"><i class="bi bi-printer me-1"></i>인쇄</button>
+    </div>
+  </div>
+  <div class="table-responsive" style="max-height:calc(100vh - 200px);overflow-y:auto;">
+  <table class="audit-table" style="min-width:900px;">
+    <colgroup>
+      <col style="width:36px"><col style="width:26px"><col style="width:144px">
+      <col><!-- 산출물명 가변 -->
+      <col style="width:74px"><col style="width:104px"><col style="width:86px">
+      <col style="width:74px"><col style="width:68px"><col style="width:96px">
+    </colgroup>
+    <thead><tr>
+      <th>No.</th><th><input type="checkbox" id="chk-all" onchange="chkAll(this)"></th>
+      <th>산출물 코드</th><th>산출물명</th><th>감리단계</th>
+      <th>제출시점</th><th>연관요구사항</th><th>상태</th><th>파일</th><th>처리</th>
+    </tr></thead>
+    <tbody id="tb-art"><tr><td colspan="10" class="text-center py-4 text-muted"><i class="bi bi-hourglass-split me-2"></i>로딩 중...</td></tr></tbody>
+  </table>
+  </div>
+</div>
+
+<!-- ── 탭2 산출물 보관함 (트리) ────────────────────── -->
+<div class="tab-panel tab-pane fade" id="t-vault">
+  <div class="filter-bar">
+    <span style="font-size:.8rem;font-weight:600;color:#2c3e55;"><i class="bi bi-folder2-open me-1"></i>산출물 보관함</span>
+    <span style="font-size:.74rem;color:#8a9ab0;margin-left:6px;">NAS: 2026감리산출물/{코드}/{파일명}</span>
+    <div class="ms-auto d-flex gap-2 align-items-center">
+      <span style="font-size:.72rem;color:#8a9ab0;" id="vault-scan-status"></span>
+      <button class="btn btn-sm" style="background:#3d5a7a;color:#fff;font-size:.72rem;padding:3px 12px;" onclick="scanNas()">
+        <i class="bi bi-arrow-clockwise me-1"></i>NAS 스캔
+      </button>
+    </div>
+  </div>
+  <!-- 트리 -->
+  <div id="vault-tree" style="font-size:.82rem;">
+    <div class="text-muted text-center py-4"><i class="bi bi-folder2 me-2"></i>보관함 탭을 클릭하면 로드됩니다</div>
+  </div>
+</div>
+
+<!-- 파일 목록 모달 (산출물 보관함) -->
+<div class="modal fade" id="m-vault-files" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h6 class="modal-title mb-0" id="mvf-title">파일 목록</h6>
+          <small class="text-muted" id="mvf-code" style="font-size:.72rem;"></small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <!-- 업로드 영역 -->
+        <div style="background:#f8f9fb;padding:10px 16px;border-bottom:1px solid #e0e7ef;" id="mvf-upload-bar">
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <input type="date" class="form-control form-control-sm" id="mvf-occ" style="width:140px;" placeholder="발생일">
+            <input type="text" class="form-control form-control-sm" id="mvf-loc" style="width:180px;" placeholder="장소/대상(학교명·교육지원청)">
+            <label class="btn btn-sm" style="background:#2c3e55;color:#fff;font-size:.72rem;margin:0;cursor:pointer;">
+              <i class="bi bi-upload me-1"></i>파일 추가
+              <input type="file" id="mvf-fi" style="display:none" multiple onchange="vaultUpload(this)">
+            </label>
+            <span id="mvf-upload-msg" style="font-size:.72rem;color:#3a7d44;"></span>
+          </div>
+        </div>
+        <!-- 검색 + 테이블 -->
+        <div style="padding:10px 16px 4px;">
+          <div class="d-flex gap-2 align-items-center mb-2">
+            <input type="text" class="form-control form-control-sm" id="mvf-q" style="width:220px;font-size:.78rem;" placeholder="파일명·장소 검색" oninput="filterVaultFiles()">
+            <span id="mvf-count" style="font-size:.72rem;color:#8a9ab0;"></span>
+          </div>
+          <div class="table-responsive" style="max-height:420px;overflow-y:auto;">
+            <table class="audit-table" style="table-layout:fixed;">
+              <colgroup>
+                <col style="width:36px"><col style="width:180px"><col>
+                <col style="width:100px"><col style="width:80px"><col style="width:80px"><col style="width:96px">
+              </colgroup>
+              <thead><tr>
+                <th>No.</th><th>날짜</th><th>장소/대상 · 파일명</th>
+                <th>크기</th><th>등록방법</th><th>등록일</th><th>처리</th>
+              </tr></thead>
+              <tbody id="mvf-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer gap-2">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">닫기</button>
+        <button type="button" class="btn btn-sm" style="background:#3d5a7a;color:#fff;font-size:.74rem;" onclick="dlAllVault()">
+          <i class="bi bi-download me-1"></i>전체 다운로드
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 탭3 RTM ────────────────────────────────────── -->
+<div class="tab-panel tab-pane fade" id="t-rtm">
+  <div class="filter-bar">
+    <select class="form-select form-select-sm" style="width:155px;font-size:.78rem;" id="rtm-cat" onchange="renderRTM()">
+      <option value="">전체 분류</option>
+      <option value="IMR">IMR 통합관리</option><option value="OHR">OHR 운영인력</option>
+      <option value="SER">SER 보안</option><option value="QUR">QUR 품질</option>
+      <option value="COR">COR 제약</option><option value="PMR">PMR 프로젝트관리</option>
+      <option value="PSR">PSR 프로젝트지원</option>
+    </select>
+    <select class="form-select form-select-sm" style="width:130px;font-size:.78rem;" id="rtm-st" onchange="renderRTM()">
+      <option value="">전체 상태</option>
+      <option value="not_started">미착수</option><option value="in_progress">진행중</option><option value="completed">완료</option>
+    </select>
+    <div class="ms-auto"><button class="btn btn-sm btn-outline-secondary" style="font-size:.74rem;" onclick="exportRTM()"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button></div>
+  </div>
+  <div class="table-responsive" style="max-height:calc(100vh - 200px);overflow-y:auto;">
+  <table class="audit-table" style="min-width:840px;">
+    <colgroup>
+      <col style="width:86px"><col style="width:64px"><col>
+      <col style="width:186px"><col style="width:74px"><col style="width:160px"><col style="width:74px">
+    </colgroup>
+    <thead><tr>
+      <th>요구사항번호</th><th>분류</th><th>요구사항명</th>
+      <th>SLA / 이행기준</th><th>이행상태</th><th>증빙내용</th><th>처리</th>
+    </tr></thead>
+    <tbody id="tb-rtm"><tr><td colspan="7" class="text-center py-4 text-muted"><i class="bi bi-hourglass-split me-2"></i>로딩 중...</td></tr></tbody>
+  </table>
+  </div>
+</div>
+
+<!-- ── 탭3 체크리스트 ─────────────────────────────── -->
+<div class="tab-panel tab-pane fade" id="t-chk">
+  <div class="filter-bar">
+    <button class="btn-phase active" data-cp="all" onclick="filterChk('all',this)">전체</button>
+    <button class="btn-phase" data-cp="initiation" onclick="filterChk('initiation',this)">착수감리</button>
+    <button class="btn-phase" data-cp="midterm" onclick="filterChk('midterm',this)">중간감리</button>
+    <button class="btn-phase" data-cp="closing" onclick="filterChk('closing',this)">종료감리</button>
+    <div class="ms-auto text-muted" style="font-size:.75rem;">
+      적합 <strong id="chk-p">0</strong> / 부적합 <strong id="chk-f">0</strong> / 미점검 <strong id="chk-n">0</strong>
+    </div>
+  </div>
+  <div class="table-responsive" style="max-height:calc(100vh - 200px);overflow-y:auto;">
+  <table class="audit-table" style="min-width:920px;">
+    <colgroup>
+      <col style="width:36px"><col style="width:98px"><col style="width:86px">
+      <col><!-- 점검항목 가변 -->
+      <col style="width:196px"><col style="width:74px"><col style="width:136px"><col style="width:88px">
+    </colgroup>
+    <thead><tr>
+      <th>No.</th><th>감리영역</th><th>요구사항</th><th>점검항목</th>
+      <th>확인포인트</th><th>결과</th><th>확인내용</th><th>처리</th>
+    </tr></thead>
+    <tbody id="tb-chk"><tr><td colspan="8" class="text-center py-4 text-muted"><i class="bi bi-hourglass-split me-2"></i>로딩 중...</td></tr></tbody>
+  </table>
+  </div>
+</div>
+
+<!-- ── 탭4 시정조치 ───────────────────────────────── -->
+<div class="tab-panel tab-pane fade" id="t-ca">
+  <!-- 진행 단계 요약 바 -->
+  <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;" id="ca-flow-bar">
+    <div class="ca-flow-step" data-st="open"        onclick="filterCAStatus('open')">        <span class="ca-flow-num" id="ca-cnt-open">0</span><span class="ca-flow-label">미조치</span></div>
+    <div class="ca-flow-arrow">→</div>
+    <div class="ca-flow-step" data-st="in_progress" onclick="filterCAStatus('in_progress')"> <span class="ca-flow-num" id="ca-cnt-inprog">0</span><span class="ca-flow-label">조치중</span></div>
+    <div class="ca-flow-arrow">→</div>
+    <div class="ca-flow-step" data-st="completed"   onclick="filterCAStatus('completed')">   <span class="ca-flow-num" id="ca-cnt-done">0</span><span class="ca-flow-label">조치완료</span></div>
+    <div class="ca-flow-arrow">→</div>
+    <div class="ca-flow-step" data-st="verified"    onclick="filterCAStatus('verified')">    <span class="ca-flow-num" id="ca-cnt-verified">0</span><span class="ca-flow-label">확인완료</span></div>
+    <div class="ms-auto d-flex align-items-center gap-2">
+      <select class="form-select form-select-sm" style="width:138px;font-size:.78rem;" id="ca-st" onchange="renderCA()">
+        <option value="">전체 상태</option>
+        <option value="open">미조치</option><option value="in_progress">조치중</option>
+        <option value="completed">조치완료</option><option value="verified">확인완료</option>
+      </select>
+      <button class="btn btn-sm btn-primary" style="font-size:.74rem;" onclick="openCAModal()"><i class="bi bi-plus-lg me-1"></i>시정조치 등록</button>
+    </div>
+  </div>
+  <div class="table-responsive" style="max-height:calc(100vh - 200px);overflow-y:auto;">
+  <table class="audit-table" style="min-width:900px;">
+    <colgroup>
+      <col style="width:32px"><col style="width:54px"><col style="width:68px">
+      <col><col style="width:200px"><col style="width:80px">
+      <col style="width:80px"><col style="width:120px">
+    </colgroup>
+    <thead><tr>
+      <th>No.</th><th>유형</th><th>감리단계</th><th>지적사항</th>
+      <th>시정조치내용</th><th>조치기한</th><th>상태</th><th>워크플로우</th>
+    </tr></thead>
+    <tbody id="tb-ca"><tr><td colspan="8" class="text-center py-4 text-muted"><i class="bi bi-info-circle me-2"></i>등록된 시정조치가 없습니다</td></tr></tbody>
+  </table>
+  </div>
+</div>
+
+<!-- ── 탭5 추가제안/기술협상 ────────────────────────── -->
+<div class="tab-panel tab-pane fade" id="t-add">
+  <div id="add-lock" class="lock-overlay">
+    <i class="bi bi-lock-fill text-muted"></i>
+    <h6 class="text-muted mb-2">수주 확정 후 등록 가능합니다</h6>
+    <p class="text-muted small mb-3">
+      기술협상 및 추가제안 항목은 사업 수주 확정 이후 등록할 수 있습니다.<br>
+      상단의 <strong>[수주 상태 변경]</strong> 버튼으로 수주 상태를 변경해 주세요.
+    </p>
+    <button class="btn btn-sm" style="background:#3d5a7a;color:#fff;font-size:.78rem;" onclick="toggleAwarded()"><i class="bi bi-unlock me-1"></i>수주 상태 변경</button>
+  </div>
+  <div id="add-cont" style="display:none;">
+    <div class="filter-bar">
+      <button class="btn btn-sm" style="background:#3d5a7a;color:#fff;font-size:.74rem;" onclick="showAddModal('추가제안')"><i class="bi bi-plus me-1"></i>추가제안 항목 등록</button>
+      <button class="btn btn-sm btn-outline-secondary ms-2" style="font-size:.74rem;" onclick="showAddModal('기술협상')"><i class="bi bi-plus me-1"></i>기술협상 항목 등록</button>
+      <span class="ms-3 text-muted" style="font-size:.74rem;">기술협상 완료 후 최종 확정된 항목만 등록하세요</span>
+    </div>
+    <div class="table-responsive" style="max-height:calc(100vh - 200px);overflow-y:auto;">
+    <table class="audit-table" style="min-width:760px;">
+      <colgroup>
+        <col style="width:36px"><col style="width:84px"><col style="width:126px">
+        <col><col style="width:196px"><col style="width:74px"><col style="width:88px">
+      </colgroup>
+      <thead><tr>
+        <th>No.</th><th>구분</th><th>항목코드</th><th>항목명</th><th>내용</th><th>이행상태</th><th>처리</th>
+      </tr></thead>
+      <tbody id="tb-add"><tr><td colspan="7" class="text-center py-3 text-muted" style="font-size:.8rem;">등록된 추가제안/기술협상 항목이 없습니다</td></tr></tbody>
+    </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── 탭6 감리 일정 ─────────────────────────────── -->
+<div class="tab-panel tab-pane fade" id="t-schedule">
+
+  <!-- 사업 정보 -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-3 px-4">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div>
+          <div class="small text-muted mb-1">사업명</div>
+          <div class="fw-semibold">2026년 학교 디지털 인프라 통합관리(테크센터) 운영</div>
+        </div>
+        <div class="vr d-none d-md-block"></div>
+        <div>
+          <div class="small text-muted mb-1">감리법인</div>
+          <div class="fw-semibold">(주)한국정보화기술원</div>
+        </div>
+        <div class="vr d-none d-md-block"></div>
+        <div>
+          <div class="small text-muted mb-1">사업기간</div>
+          <div class="fw-semibold">2026.05 ~ 12</div>
+        </div>
+        <div class="ms-auto d-flex gap-2 align-items-center">
+          <span class="badge fs-6" id="badge-awarded" style="background:#6c757d"><i class="bi bi-lock me-1"></i>수주 전</span>
+          <button class="btn btn-sm btn-outline-secondary" onclick="toggleAwarded()"><i class="bi bi-arrow-repeat me-1"></i>수주 상태 변경</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 감리 단계 카드 -->
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom py-2 d-flex align-items-center gap-2">
+          <i class="bi bi-flag text-primary"></i>
+          <span class="fw-semibold small">착수감리</span>
+          <span class="ms-auto badge bg-secondary" id="ps-initiation">예정</span>
+        </div>
+        <div class="card-body py-3">
+          <div class="small text-muted mb-1">감리 기간</div>
+          <div class="fw-semibold mb-2">2026.06.01 ~ 06.05</div>
+          <div class="small text-muted">사업 착수 단계의 계획 및 관리 체계 적정성 확인</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom py-2 d-flex align-items-center gap-2">
+          <i class="bi bi-bar-chart-steps text-warning"></i>
+          <span class="fw-semibold small">중간감리</span>
+          <span class="ms-auto badge bg-secondary" id="ps-midterm">예정</span>
+        </div>
+        <div class="card-body py-3">
+          <div class="small text-muted mb-1">감리 기간</div>
+          <div class="fw-semibold mb-2">2026.09.01 ~ 09.05</div>
+          <div class="small text-muted">중간 산출물 및 진척 현황, 품질 적정성 확인</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom py-2 d-flex align-items-center gap-2">
+          <i class="bi bi-check2-all text-success"></i>
+          <span class="fw-semibold small">종료감리</span>
+          <span class="ms-auto badge bg-secondary" id="ps-closing">예정</span>
+        </div>
+        <div class="card-body py-3">
+          <div class="small text-muted mb-1">감리 기간</div>
+          <div class="fw-semibold mb-2">2026.12.07 ~ 12.11</div>
+          <div class="small text-muted">최종 산출물 완성도 및 사업 목표 달성 여부 확인</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI 카드 -->
+  <div class="stat-cards">
+    <div class="stat-card c1">
+      <div class="label">산출물 템플릿</div>
+      <div class="value" id="sc-tmpl">-</div>
+      <div class="sub">제출완료 <span id="sc-submitted">0</span>건
+        <div class="mini-prog"><div class="mini-prog-fill" id="sc-prog" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div class="stat-card c2">
+      <div class="label">요구사항 이행</div>
+      <div class="value" id="sc-req">-</div>
+      <div class="sub">완료 <span id="sc-req-done">0</span> / 전체 <span id="sc-req-total">0</span></div>
+    </div>
+    <div class="stat-card c3">
+      <div class="label">체크리스트</div>
+      <div class="value" id="sc-chk">-</div>
+      <div class="sub">적합 <span id="sc-pass">0</span> / 부적합 <span id="sc-fail">0</span></div>
+    </div>
+    <div class="stat-card c4">
+      <div class="label">시정조치</div>
+      <div class="value" id="sc-ca">-</div>
+      <div class="sub">미조치 <span id="sc-ca-open">0</span> / 확인완료 <span id="sc-ca-done">0</span></div>
+    </div>
+  </div>
+
+</div>
+
+</div><!-- /tab-content -->
+</div><!-- /audit-wrap -->
+
+<!-- 모달: 산출물 업로드 -->
+<div class="modal fade" id="m-art" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title mb-0" id="m-art-title">산출물 처리</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-7">
+            <table class="table table-sm table-borderless" style="font-size:.8rem;">
+              <tr><th style="width:108px;color:#5a6a7a;font-weight:600;">코드</th><td id="m-code">-</td></tr>
+              <tr><th style="color:#5a6a7a;font-weight:600;">산출물명</th><td id="m-name" style="font-weight:500;">-</td></tr>
+              <tr><th style="color:#5a6a7a;font-weight:600;">감리단계</th><td id="m-phase">-</td></tr>
+              <tr><th style="color:#5a6a7a;font-weight:600;">제출시점</th><td id="m-timing">-</td></tr>
+              <tr><th style="color:#5a6a7a;font-weight:600;">연관요구사항</th><td id="m-req">-</td></tr>
+              <tr><th style="color:#5a6a7a;font-weight:600;">현재상태</th><td id="m-status">-</td></tr>
+              <tr><th style="color:#5a6a7a;font-weight:600;">작성요령</th><td id="m-desc" style="font-size:.74rem;color:#666;white-space:normal;"></td></tr>
+            </table>
+          </div>
+          <div class="col-md-5">
+            <!-- 발생일/점검일 + 장소 입력 -->
+            <div class="mb-2" id="m-occ-wrap">
+              <label class="form-label mb-1" style="font-size:.74rem;font-weight:600;color:#5a6a7a;">발생일/점검일</label>
+              <input type="date" class="form-control form-control-sm" id="m-occ-date" placeholder="YYYY-MM-DD">
+            </div>
+            <div class="mb-2">
+              <label class="form-label mb-1" style="font-size:.74rem;font-weight:600;color:#5a6a7a;">장소/대상 <small class="text-muted fw-normal">(학교명·교육지원청)</small></label>
+              <input type="text" class="form-control form-control-sm" id="m-loc" placeholder="예: 동부교육지원청, OOO학교, 전체">
+            </div>
+            <div class="drop-zone" onclick="document.getElementById('fi').click()" ondragover="event.preventDefault()" ondrop="onDrop(event)">
+              <i class="bi bi-cloud-upload dz-icon"></i>
+              <p>클릭하거나 파일을 드래그</p>
+              <p style="font-size:.7rem;color:#bbb;">PDF · HWP · DOCX · XLSX · ZIP</p>
+            </div>
+            <input type="file" id="fi" style="display:none" accept=".pdf,.hwp,.hwpx,.doc,.docx,.xls,.xlsx,.zip,.pptx,.ppt" onchange="onFileSelect(this)">
+            <div id="fp" class="mt-2" style="display:none;">
+              <div class="d-flex align-items-center gap-2 p-2" style="background:#f0f5fa;border-radius:6px;font-size:.78rem;">
+                <i class="bi bi-file-earmark-text text-primary"></i>
+                <span id="fp-name" class="flex-grow-1 text-truncate"></span>
+                <span id="fp-size" class="text-muted" style="white-space:nowrap;font-size:.7rem;"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer gap-2">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">닫기</button>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="btn-view" onclick="viewFile()" style="display:none;"><i class="bi bi-eye me-1"></i>파일보기</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-dl" onclick="dlFile()" style="display:none;"><i class="bi bi-download me-1"></i>다운로드</button>
+        <button type="button" class="btn btn-sm btn-primary" id="btn-up" onclick="uploadFile()" style="display:none;"><i class="bi bi-upload me-1"></i>파일 저장</button>
+        <button type="button" class="btn btn-sm btn-success" onclick="submitArtifact()"><i class="bi bi-check-circle me-1"></i>제출완료 처리</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 모달: 체크리스트 결과 -->
+<div class="modal fade" id="m-chk" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title mb-0">체크리스트 결과 입력</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p style="font-size:.83rem;font-weight:600;margin-bottom:6px;" id="chk-desc"></p>
+        <p style="font-size:.75rem;color:#777;background:#f8f9fb;padding:8px 10px;border-radius:4px;border-left:3px solid #3d5a7a;" id="chk-cp"></p>
+        <div class="mb-3">
+          <label class="form-label fw-bold" style="font-size:.78rem;">점검결과</label>
+          <select class="form-select form-select-sm" id="chk-res">
+            <option value="not_checked">미점검</option><option value="pass">적합</option>
+            <option value="fail">부적합 (지적)</option><option value="excluded">점검제외</option>
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-bold" style="font-size:.78rem;">확인내용 / 증빙</label>
+          <textarea class="form-control form-control-sm" id="chk-ev" rows="3" style="font-size:.78rem;" placeholder="확인 내용 또는 증빙 자료 기술"></textarea>
+        </div>
+        <div>
+          <label class="form-label fw-bold" style="font-size:.78rem;">발견사항 (부적합 시)</label>
+          <textarea class="form-control form-control-sm" id="chk-fi" rows="2" style="font-size:.78rem;" placeholder="발견된 문제점 기술"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="button" class="btn btn-sm btn-success" onclick="saveChkResult()"><i class="bi bi-save me-1"></i>저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 모달: RTM 상태 변경 -->
+<div class="modal fade" id="m-rtm" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h6 class="modal-title mb-0">요구사항 이행상태 변경</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <p style="font-size:.83rem;font-weight:600;" id="rtm-nm"></p>
+        <div class="mb-3">
+          <label class="form-label fw-bold" style="font-size:.78rem;">이행상태</label>
+          <select class="form-select form-select-sm" id="rtm-st2">
+            <option value="not_started">미착수</option><option value="in_progress">진행중</option>
+            <option value="completed">완료</option><option value="excluded">점검제외</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label fw-bold" style="font-size:.78rem;">이행증빙</label>
+          <textarea class="form-control form-control-sm" id="rtm-ev" rows="3" style="font-size:.78rem;" placeholder="산출물명, 확인일, 확인자 등"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="button" class="btn btn-sm btn-success" onclick="saveRTM()"><i class="bi bi-save me-1"></i>저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 모달: 시정조치 등록/수정 -->
+<div class="modal fade" id="m-ca-create" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" id="m-ca-create-title">시정조치 등록</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">연관 체크리스트 항목</label>
+            <select id="ca-chk-item" class="form-select form-select-sm">
+              <option value="">-- 선택 (선택사항) --</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold">조치 유형 <span class="text-danger">*</span></label>
+            <select id="ca-action-type" class="form-select form-select-sm">
+              <option value="mandatory">필수</option>
+              <option value="recommended">권고</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold">조치기한</label>
+            <input type="date" id="ca-due-date" class="form-control form-control-sm">
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-semibold">지적사항 <span class="text-danger">*</span></label>
+            <textarea id="ca-issue-desc" class="form-control form-control-sm" rows="3" placeholder="감리 지적사항 내용을 입력하세요"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-semibold">시정조치 내용</label>
+            <textarea id="ca-action-desc-new" class="form-control form-control-sm" rows="2" placeholder="조치 방법 및 내용 (선택사항)"></textarea>
+          </div>
+        </div>
+        <div id="m-ca-create-err" class="text-danger small mt-2" style="display:none;"></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-danger me-auto" id="ca-del-btn" style="display:none" onclick="deleteCA()"><i class="bi bi-trash me-1"></i>삭제</button>
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-primary" onclick="saveCA()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 모달: 시정조치 완료 처리 -->
+<div class="modal fade" id="m-ca-complete" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title mb-0"><i class="bi bi-check-circle me-2"></i>시정조치 완료 처리</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="p-2 mb-3" style="background:#fff3e0;border-radius:6px;border-left:3px solid #e07000;">
+          <div style="font-size:.7rem;color:#7a4000;font-weight:600;margin-bottom:2px;">지적사항</div>
+          <div style="font-size:.82rem;color:#3a2000;" id="ca-issue-text"></div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-bold" style="font-size:.78rem;">시정조치 내용 <span class="text-danger">*</span></label>
+          <textarea class="form-control form-control-sm" id="ca-action-desc" rows="4" style="font-size:.78rem;"
+                    placeholder="어떻게 조치했는지 상세히 기술하세요"></textarea>
+        </div>
+        <div>
+          <label class="form-label fw-bold" style="font-size:.78rem;">증빙 내용</label>
+          <textarea class="form-control form-control-sm" id="ca-evidence-note" rows="2" style="font-size:.78rem;"
+                    placeholder="첨부 문서명, 확인 방법 등"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="submitCAComplete()">
+          <i class="bi bi-check-lg me-1"></i>조치완료 저장
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const API = '/npms/api/audit';
+let PID=null, AWARDED=false;
+let TMPL=[], REQS=[], CHKL=[], PLANS=[], CA=[];
+let CUR_ART=null, CUR_CHK=null, CUR_RTM=null, SEL_FILE=null;
+// CUR_PROJECT = PID 동기화 (산출물 보관함용)
+Object.defineProperty(window,'CUR_PROJECT',{get:()=>PID});
+let CUR_ART_PHASE='all', CUR_CHK_PHASE='all';
+
+document.addEventListener('DOMContentLoaded', ()=>loadProject());
+
+function csrf(){ const v=document.cookie.match('(^|;) ?csrftoken=([^;]*)(;|$)'); return v?v[2]:''; }
+async function get(u){ const r=await fetch(u); if(!r.ok)throw new Error(r.status); return r.json(); }
+async function post(u,d){ return fetch(u,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(d)}); }
+
+async function loadProject(){
+  try{
+    const d=await get(`${API}/projects/`);
+    const list=d.results||d;
+    if(!list.length){noProject();return;}
+    const p=list[0]; PID=p.id; AWARDED=p.is_awarded||false;
+    updateAwardUI();
+    await Promise.all([loadSummary(),loadTmpl(),loadReqs(),loadPlans()]);
+  }catch(e){console.error(e);}
+}
+
+async function loadSummary(){
+  try{
+    const d=await get(`${API}/projects/${PID}/summary/`);
+    document.getElementById('sc-tmpl').textContent=d.artifacts.template_total||0;
+    document.getElementById('sc-submitted').textContent=d.artifacts.submitted||0;
+    const pct=Math.round((d.artifacts.submitted||0)/Math.max(d.artifacts.template_total||1,1)*100);
+    document.getElementById('sc-prog').style.width=pct+'%';
+    const rp=Math.round((d.requirements.completed||0)/Math.max(d.requirements.total||1,1)*100);
+    document.getElementById('sc-req').textContent=rp+'%';
+    document.getElementById('sc-req-done').textContent=d.requirements.completed||0;
+    document.getElementById('sc-req-total').textContent=d.requirements.total||0;
+    (d.audit_plans||[]).forEach(p=>{
+      const el=document.getElementById(`ps-${p.phase}`);
+      if(el) el.textContent=p.status_display||'예정';
+      const step=document.querySelector(`.phase-step[data-phase="${p.phase}"]`);
+      if(step){step.classList.remove('active','done');
+        if(p.status==='completed') step.classList.add('done');
+        if(p.status==='in_progress') step.classList.add('active');}
+    });
+  }catch(e){}
+}
+
+async function loadTmpl(){
+  try{
+    const d=await get(`${API}/templates/?project=${PID}&ordering=audit_phase,seq,code`);
+    TMPL=d.results||d; renderArt(CUR_ART_PHASE);
+  }catch(e){}
+}
+
+async function loadReqs(){
+  try{
+    const d=await get(`${API}/requirements/?project=${PID}&ordering=category,code`);
+    REQS=d.results||d; renderRTM();
+  }catch(e){}
+}
+
+async function loadPlans(){
+  try{
+    const d=await get(`${API}/plans/?project=${PID}`);
+    PLANS=d.results||d; loadChkl();
+  }catch(e){}
+}
+
+async function loadChkl(){
+  try{
+    const d=await get(`${API}/checklist/?project=${PID}`);
+    CHKL=d.results||d; renderChk(CUR_CHK_PHASE); updChkStat(CHKL);
+  }catch(e){}
+}
+
+// ── 시정조치 등록/수정 ────────────────────────────────
+let _caEditId = null;
+function openCAModal(id=null){
+  _caEditId = id;
+  document.getElementById('m-ca-create-title').textContent = id ? '시정조치 수정' : '시정조치 등록';
+  document.getElementById('ca-del-btn').style.display = id ? '' : 'none';
+  document.getElementById('m-ca-create-err').style.display = 'none';
+  // 체크리스트 항목 셀렉트 채우기
+  const sel = document.getElementById('ca-chk-item');
+  sel.innerHTML = '<option value="">-- 선택 (선택사항) --</option>';
+  CHKL.forEach(c => { sel.innerHTML += `<option value="${c.id}">[${c.audit_phase_key||''}] ${c.description||c.area||''}</option>`; });
+  if(id){
+    const ca = CA.find(c=>c.id===id);
+    if(!ca) return;
+    sel.value = ca.checklist_item || '';
+    document.getElementById('ca-action-type').value     = ca.action_type || 'mandatory';
+    document.getElementById('ca-due-date').value        = ca.due_date    || '';
+    document.getElementById('ca-issue-desc').value      = ca.issue_description    || '';
+    document.getElementById('ca-action-desc-new').value = ca.action_description   || '';
+  } else {
+    sel.value = '';
+    document.getElementById('ca-action-type').value     = 'mandatory';
+    document.getElementById('ca-due-date').value        = '';
+    document.getElementById('ca-issue-desc').value      = '';
+    document.getElementById('ca-action-desc-new').value = '';
+  }
+  new bootstrap.Modal(document.getElementById('m-ca-create')).show();
+}
+async function saveCA(){
+  const issue = document.getElementById('ca-issue-desc').value.trim();
+  const errEl = document.getElementById('m-ca-create-err');
+  if(!issue){ errEl.textContent='지적사항은 필수 입력입니다.'; errEl.style.display=''; return; }
+  errEl.style.display='none';
+  const chkItem = document.getElementById('ca-chk-item').value;
+  const payload = {
+    action_type:        document.getElementById('ca-action-type').value,
+    issue_description:  issue,
+    action_description: document.getElementById('ca-action-desc-new').value,
+    due_date:           document.getElementById('ca-due-date').value || null,
+  };
+  if(chkItem) payload.checklist_item = parseInt(chkItem);
+  try{
+    let res;
+    if(_caEditId){
+      res = await fetch(`${API}/corrective/${_caEditId}/`, {
+        method:'PATCH', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+        body:JSON.stringify(payload)
+      });
+    } else {
+      if(!payload.checklist_item){
+        const first = CHKL[0];
+        if(!first){ errEl.textContent='먼저 감리 체크리스트에 항목이 있어야 시정조치를 등록할 수 있습니다.'; errEl.style.display=''; return; }
+        payload.checklist_item = first.id;
+      }
+      res = await fetch(`${API}/corrective/`, {
+        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+        body:JSON.stringify(payload)
+      });
+    }
+    if(!res.ok){ const d=await res.json(); errEl.textContent='저장 실패: '+(d.detail||JSON.stringify(d)); errEl.style.display=''; return; }
+    bootstrap.Modal.getInstance(document.getElementById('m-ca-create')).hide();
+    toast('저장되었습니다');
+    await loadCA2();
+  }catch(e){ errEl.textContent='저장 실패: '+e.message; errEl.style.display=''; }
+}
+async function deleteCA(){
+  if(!_caEditId || !confirm('시정조치를 삭제하시겠습니까?')) return;
+  try{
+    await fetch(`${API}/corrective/${_caEditId}/`, {method:'DELETE', headers:{'X-CSRFToken':csrf()}});
+    bootstrap.Modal.getInstance(document.getElementById('m-ca-create')).hide();
+    toast('삭제되었습니다');
+    await loadCA2();
+  }catch(e){ alert('삭제 실패'); }
+}
+
+async function loadCA2(){
+  try{
+    const url = PID ? `${API}/corrective/?project=${PID}` : `${API}/corrective/`;
+    const d=await get(url);
+    CA=d.results||d; updCAStat(CA); renderCA();
+  }catch(e){}
+}
+
+function updChkStat(items){
+  const p=items.filter(c=>c.result==='pass').length;
+  const f=items.filter(c=>c.result==='fail').length;
+  const n=items.filter(c=>c.result==='not_checked').length;
+  document.getElementById('sc-chk').textContent=items.length;
+  document.getElementById('sc-pass').textContent=p;
+  document.getElementById('sc-fail').textContent=f;
+  document.getElementById('chk-p').textContent=p;
+  document.getElementById('chk-f').textContent=f;
+  document.getElementById('chk-n').textContent=n;
+}
+
+function updCAStat(items){
+  document.getElementById('sc-ca').textContent=items.length;
+  document.getElementById('sc-ca-open').textContent=items.filter(c=>c.status==='open').length;
+  document.getElementById('sc-ca-done').textContent=items.filter(c=>c.status==='verified').length;
+}
+
+/* ── 산출물 ────────── */
+const PO={'initiation':1,'midterm':2,'closing':3,'all':4};
+const PL={'initiation':'착수감리','midterm':'중간감리','closing':'종료감리','all':'전 단계'};
+const PB={'initiation':'bp-init','midterm':'bp-mid','closing':'bp-end','all':'bp-all'};
+const TL={'contract_10d':'계약 후 10일','monthly':'매월','quarterly':'분기별','on_occurrence':'발생 시','on_completion':'사업완료 시','as_needed':'수시'};
+const SB={'pending':'bs-pending','draft':'bs-draft','submitted':'bs-submitted','approved':'bs-approved','rejected':'bs-rejected'};
+const SL={'pending':'미작성','draft':'작성중','submitted':'제출완료','approved':'승인','rejected':'반려'};
+
+function filterArt(phase,btn){
+  CUR_ART_PHASE=phase;
+  document.querySelectorAll('#t-art .btn-phase').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderArt(phase);
+}
+
+function renderArt(pf){
+  let items=TMPL.filter(t=>!t.is_additional);
+  if(pf==='occurrence') items=items.filter(t=>t.submit_timing==='on_occurrence');
+  else if(pf!=='all') items=items.filter(t=>t.audit_phase===pf);
+  items.sort((a,b)=>{const po=(PO[a.audit_phase]||9)-(PO[b.audit_phase]||9);return po||((a.seq||0)-(b.seq||0));});
+
+  const tb=document.getElementById('tb-art');
+  if(!items.length){tb.innerHTML=`<tr><td colspan="10" class="text-center py-4 text-muted"><i class="bi bi-inbox me-2"></i>산출물이 없습니다</td></tr>`;return;}
+
+  let html='',lastSec=null,rowNum=0;
+  for(const t of items){
+    const sk=`${t.audit_phase}_${t.submit_timing}`;
+    if(sk!==lastSec){
+      lastSec=sk;
+      const cnt=items.filter(x=>x.audit_phase===t.audit_phase&&x.submit_timing===t.submit_timing).length;
+      html+=`<tr class="srow"><td colspan="10">
+        <span class="bp ${PB[t.audit_phase]||''}" style="margin-right:6px;">${PL[t.audit_phase]||''}</span>${TL[t.submit_timing]||''}
+        <span style="font-weight:400;color:#8a9ab0;font-size:.68rem;margin-left:6px;">${cnt}건</span>
+      </td></tr>`;
+    }
+    rowNum++;
+    const art=t.artifact_status;
+    const st=art?art.status:'pending';
+    const rc=t.req_code||'',rcat=rc.split('-')[0]||'';
+    html+=`<tr data-tmpl="${t.id}" data-art="${art?art.id:''}">
+      <td style="color:#aaa;font-size:.7rem;">${rowNum}</td>
+      <td><input type="checkbox" class="ac" value="${t.id}"></td>
+      <td style="font-family:monospace;font-size:.7rem;color:#2c3e55;">${t.code||''}</td>
+      <td class="wrap" style="font-weight:500;">${t.name}${t.is_required?'':' <span style="font-size:.62rem;color:#aaa;">(선택)</span>'}</td>
+      <td><span class="bp ${PB[t.audit_phase]||''}">${PL[t.audit_phase]||''}</span></td>
+      <td><span class="bt">${TL[t.submit_timing]||''}</span></td>
+      <td>${rc?`<span class="rq rq-${rcat}">${rc}</span>`:'-'}</td>
+      <td><span class="bs ${SB[st]||'bs-pending'}">${SL[st]||(art?art.status_display:'미작성')}</span></td>
+      <td>${(art&&art.file)
+        ?`<div><button class="btn btn-link p-0" style="font-size:.72rem;color:#2a7a3a;" onclick="dlArtFile(${art.id})"><i class="bi bi-file-earmark-check"></i> 보기</button></div>
+          ${art.occurrence_date?`<div style="font-size:.65rem;color:#8a9ab0;">${art.occurrence_date}</div>`:''}
+          ${art.location_note?`<div class="text-truncate" style="font-size:.65rem;color:#8a9ab0;max-width:90px;" title="${art.location_note}">${art.location_note}</div>`:''}`
+        :`<span style="color:#ccc;font-size:.72rem;">없음</span>`}
+      </td>
+      <td><button class="btn btn-sm" style="background:#e8edf5;color:#2c3e55;font-size:.7rem;padding:2px 9px;border-radius:4px;" onclick="openArtModal(${t.id})"><i class="bi bi-upload me-1"></i>업로드</button></td>
+    </tr>`;
+  }
+  tb.innerHTML=html;
+}
+
+/* ── RTM ───────────── */
+const CL={'IMR':'통합관리 수행 요구사항 (IMR)','OHR':'운영인력 요구사항 (OHR)','SER':'보안 요구사항 (SER)',
+  'QUR':'품질 요구사항 (QUR)','COR':'제약 요구사항 (COR)','PMR':'프로젝트 관리 요구사항 (PMR)',
+  'PSR':'프로젝트 지원 요구사항 (PSR)','ADD':'추가제안 (ADD)'};
+const RSB={'not_started':'bs-nc','in_progress':'bs-draft','completed':'bs-submitted','excluded':'bs-nc'};
+const RSL={'not_started':'미착수','in_progress':'진행중','completed':'완료','excluded':'점검제외'};
+
+function renderRTM(){
+  const cf=document.getElementById('rtm-cat').value;
+  const sf=document.getElementById('rtm-st').value;
+  let items=REQS.filter(r=>!r.is_additional);
+  if(cf) items=items.filter(r=>r.category===cf);
+  if(sf) items=items.filter(r=>r.status===sf);
+
+  const tb=document.getElementById('tb-rtm');
+  if(!items.length){tb.innerHTML=`<tr><td colspan="7" class="text-center py-4 text-muted">해당 요구사항이 없습니다</td></tr>`;return;}
+
+  let html='',lastCat=null;
+  for(const r of items){
+    if(r.category!==lastCat){lastCat=r.category;html+=`<tr class="catrow"><td colspan="7">${CL[r.category]||r.category_display}</td></tr>`;}
+    html+=`<tr>
+      <td><span class="rq rq-${r.category}">${r.code}</span></td>
+      <td style="font-size:.72rem;color:#5a6a7a;">${r.category_display||r.category}</td>
+      <td class="wrap" style="font-weight:500;">${r.name}</td>
+      <td class="wrap" style="font-size:.73rem;color:#666;">${r.sla_target||'-'}</td>
+      <td><span class="bs ${RSB[r.status]||'bs-nc'}">${RSL[r.status]||r.status_display}</span></td>
+      <td class="wrap" style="font-size:.72rem;color:#666;">${r.evidence||'-'}</td>
+      <td><button class="btn btn-sm" style="background:#e8edf5;color:#2c3e55;font-size:.7rem;padding:2px 8px;border-radius:4px;" onclick="openRTMModal(${r.id})">상태변경</button></td>
+    </tr>`;
+  }
+  tb.innerHTML=html;
+}
+
+/* ── 체크리스트 ────── */
+const AL={'A':'A. 사업관리','B':'B. 서비스 수행','C':'C. 보안/품질'};
+const RB={'not_checked':'bs-nc','pass':'bs-pass','fail':'bs-fail','excluded':'bs-nc'};
+const RL={'not_checked':'미점검','pass':'적합','fail':'부적합','excluded':'점검제외'};
+
+function filterChk(ph,btn){
+  CUR_CHK_PHASE=ph;
+  document.querySelectorAll('[data-cp]').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderChk(ph);
+}
+
+function renderChk(ph){
+  let items=[...CHKL];
+  if(ph!=='all'){const pids=PLANS.filter(p=>p.phase===ph).map(p=>p.id);items=items.filter(c=>pids.includes(c.audit_plan));}
+  updChkStat(items);
+
+  const tb=document.getElementById('tb-chk');
+  if(!items.length){tb.innerHTML=`<tr><td colspan="8" class="text-center py-4 text-muted">체크리스트가 없습니다</td></tr>`;return;}
+
+  let html='',lastPlan=null,rowNum=0;
+  for(const c of items){
+    if(c.audit_plan!==lastPlan){
+      lastPlan=c.audit_plan;
+      const plan=PLANS.find(p=>p.id===c.audit_plan);
+      if(plan){
+        const pbc={initiation:'bp-init',midterm:'bp-mid',closing:'bp-end'}[plan.phase]||'';
+        html+=`<tr class="srow"><td colspan="8"><span class="bp ${pbc}" style="margin-right:6px;">${plan.phase_display}</span>
+          <span style="font-weight:400;color:#8a9ab0;font-size:.68rem;">${plan.planned_start||''} ~ ${plan.planned_end||''}</span></td></tr>`;
+      }
+    }
+    rowNum++;
+    const rc=c.req_code||'',rcat=rc.split('-')[0]||'';
+    html+=`<tr>
+      <td style="color:#aaa;font-size:.7rem;">${rowNum}</td>
+      <td style="font-size:.73rem;">${AL[c.area]||c.area_display||c.area}</td>
+      <td>${rc?`<span class="rq rq-${rcat}">${rc}</span>`:'-'}</td>
+      <td class="wrap" style="font-weight:500;">${c.description}</td>
+      <td class="wrap" style="font-size:.73rem;color:#666;">${c.check_point||'-'}</td>
+      <td><span class="bs ${RB[c.result]||'bs-nc'}">${RL[c.result]||c.result_display}</span></td>
+      <td class="wrap" style="font-size:.72rem;color:#666;">${c.evidence||'-'}</td>
+      <td><button class="btn btn-sm" style="background:#e8edf5;color:#2c3e55;font-size:.7rem;padding:2px 9px;border-radius:4px;" onclick="openChkModal(${c.id})">결과입력</button></td>
+    </tr>`;
+  }
+  tb.innerHTML=html;
+}
+
+/* ── 시정조치 ──────── */
+const CAB={'open':'bs-open','in_progress':'bs-draft','completed':'bs-submitted','verified':'bs-verified'};
+
+function filterCAStatus(st){
+  document.getElementById('ca-st').value=st;
+  document.querySelectorAll('.ca-flow-step').forEach(el=>{
+    el.classList.toggle('active', el.dataset.st===st);
+  });
+  renderCA();
+}
+
+function renderCA(){
+  const sf=document.getElementById('ca-st').value;
+  let items=CA.filter(c=>!sf||c.status===sf);
+  // 단계별 카운트 업데이트
+  document.getElementById('ca-cnt-open').textContent    = CA.filter(c=>c.status==='open').length;
+  document.getElementById('ca-cnt-inprog').textContent  = CA.filter(c=>c.status==='in_progress').length;
+  document.getElementById('ca-cnt-done').textContent    = CA.filter(c=>c.status==='completed').length;
+  document.getElementById('ca-cnt-verified').textContent= CA.filter(c=>c.status==='verified').length;
+
+  const tb=document.getElementById('tb-ca');
+  if(!items.length){tb.innerHTML=`<tr><td colspan="8" class="text-center py-4 text-muted"><i class="bi bi-info-circle me-2"></i>해당 조건의 시정조치가 없습니다</td></tr>`;return;}
+  let html='';
+  items.forEach((c,i)=>{
+    const typeCls = c.action_type==='mandatory' ? 'style="color:#c0392b;font-weight:600;"' : 'style="color:#7a5a00;"';
+    const typeLabel = c.action_type==='mandatory' ? '필수' : '권고';
+    // 워크플로우 버튼
+    let wfBtn = '';
+    if(c.status==='open')
+      wfBtn = `<button class="btn-ca-start" onclick="startCA(${c.id})"><i class="bi bi-play-fill me-1"></i>조치시작</button>`;
+    else if(c.status==='in_progress')
+      wfBtn = `<button class="btn-ca-complete" onclick="openCACompleteModal(${c.id})"><i class="bi bi-check-lg me-1"></i>완료처리</button>`;
+    else if(c.status==='completed')
+      wfBtn = `<button class="btn-ca-verify" onclick="verifyCA(${c.id})"><i class="bi bi-patch-check me-1"></i>확인완료</button>`;
+    else
+      wfBtn = `<span style="font-size:.68rem;color:#6b4e9e;font-weight:600;"><i class="bi bi-shield-check me-1"></i>확인완료</span>`;
+
+    html+=`<tr>
+      <td style="color:#aaa;font-size:.7rem;">${i+1}</td>
+      <td><span ${typeCls} style="font-size:.73rem;">${typeLabel}</span></td>
+      <td><span class="bp ${c.audit_phase==='착수감리'?'bp-init':c.audit_phase==='중간감리'?'bp-mid':'bp-end'}" style="font-size:.62rem;">${c.audit_phase||'-'}</span></td>
+      <td class="wrap" style="font-size:.78rem;">${c.issue_description}</td>
+      <td class="wrap" style="font-size:.75rem;color:#4a5a6a;">${c.action_description||'<span style="color:#bbb;font-style:italic;">미입력</span>'}</td>
+      <td style="font-size:.73rem;${c.due_date&&new Date(c.due_date)<new Date()&&c.status!=='verified'?'color:#c0392b;font-weight:600;':''}">${c.due_date||'-'}</td>
+      <td><span class="bs ${CAB[c.status]||'bs-open'}">${c.status_display}</span>
+          ${c.completed_by_name?`<div style="font-size:.63rem;color:#888;margin-top:2px;">${c.completed_by_name}</div>`:''}
+      </td>
+      <td>
+        <div class="d-flex flex-column gap-1 align-items-start">
+          ${wfBtn}
+          <button class="btn btn-xs btn-outline-secondary mt-1" style="font-size:.65rem;padding:1px 7px;" onclick="openCAModal(${c.id})"><i class="bi bi-pencil"></i> 수정</button>
+        </div>
+      </td>
+    </tr>`;
+  });
+  tb.innerHTML=html;
+}
+
+/* ── 산출물 모달 ────── */
+function openArtModal(tmplId){
+  const t=TMPL.find(x=>x.id===tmplId); if(!t) return;
+  document.getElementById('m-art-title').textContent=t.name;
+  document.getElementById('m-code').textContent=t.code||'-';
+  document.getElementById('m-name').textContent=t.name;
+  document.getElementById('m-phase').innerHTML=`<span class="bp ${PB[t.audit_phase]||''}">${PL[t.audit_phase]||''}</span>`;
+  document.getElementById('m-timing').textContent=TL[t.submit_timing]||'';
+  const rc=t.req_code||'',rcat=rc.split('-')[0]||'';
+  document.getElementById('m-req').innerHTML=rc?`<span class="rq rq-${rcat}">${rc}</span> ${t.req_name||''}`:'-';
+  document.getElementById('m-desc').textContent=t.description||'';
+  const art=t.artifact_status;
+  CUR_ART=art?art.id:null;
+  document.getElementById('m-status').innerHTML=art
+    ?`<span class="bs ${SB[art.status]||'bs-pending'}">${SL[art.status]||art.status_display}</span>`
+    :`<span class="bs bs-pending">미작성</span>`;
+  const hf=art&&art.file;
+  document.getElementById('btn-view').style.display=hf?'':'none';
+  document.getElementById('btn-dl').style.display=hf?'':'none';
+  document.getElementById('btn-up').style.display='none';
+  document.getElementById('fp').style.display='none';
+  // 발생일/장소 기존값 세팅
+  document.getElementById('m-occ-date').value=art&&art.occurrence_date?art.occurrence_date:'';
+  document.getElementById('m-loc').value=art&&art.location_note?art.location_note:'';
+  SEL_FILE=null;
+  new bootstrap.Modal(document.getElementById('m-art')).show();
+}
+
+function onFileSelect(inp){
+  const f=inp.files[0]; if(!f) return;
+  SEL_FILE=f;
+  document.getElementById('fp-name').textContent=f.name;
+  document.getElementById('fp-size').textContent=fmtBytes(f.size);
+  document.getElementById('fp').style.display='';
+  document.getElementById('btn-up').style.display='';
+}
+function onDrop(e){e.preventDefault();const dt=new DataTransfer();dt.items.add(e.dataTransfer.files[0]);document.getElementById('fi').files=dt.files;onFileSelect(document.getElementById('fi'));}
+
+async function uploadFile(){
+  if(!SEL_FILE||!CUR_ART) return;
+  const fd=new FormData();
+  fd.append('file',SEL_FILE);
+  const occDate=document.getElementById('m-occ-date').value;
+  const loc=document.getElementById('m-loc').value.trim();
+  if(occDate) fd.append('occurrence_date',occDate);
+  if(loc)     fd.append('location_note',loc);
+  const r=await fetch(`${API}/artifacts/${CUR_ART}/upload/`,{method:'POST',headers:{'X-CSRFToken':csrf()},body:fd});
+  if(r.ok){toast('파일이 저장되었습니다');bootstrap.Modal.getInstance(document.getElementById('m-art')).hide();loadTmpl();}
+  else{const d=await r.json();alert('업로드 실패: '+JSON.stringify(d));}
+}
+async function submitArtifact(){
+  if(!CUR_ART){alert('파일을 먼저 업로드해주세요.');return;}
+  await post(`${API}/artifacts/${CUR_ART}/submit/`,{});
+  toast('제출완료 처리되었습니다');
+  bootstrap.Modal.getInstance(document.getElementById('m-art')).hide();
+  await Promise.all([loadTmpl(),loadSummary()]);
+}
+function dlArtFile(id){window.open(`${API}/artifacts/${id}/download/`,'_blank');}
+function dlFile(){if(CUR_ART) dlArtFile(CUR_ART);}
+function viewFile(){if(CUR_ART) dlArtFile(CUR_ART);}
+
+function dlSelected(){
+  const cc=document.querySelectorAll('.ac:checked');
+  if(!cc.length){alert('다운로드할 산출물을 선택해주세요');return;}
+  cc.forEach(c=>{const row=c.closest('tr'),artId=row.dataset.art;if(artId) dlArtFile(artId);});
+}
+function chkAll(m){document.querySelectorAll('.ac').forEach(c=>c.checked=m.checked);}
+
+/* ── 체크리스트 모달 ── */
+function openChkModal(id){
+  const c=CHKL.find(x=>x.id===id); if(!c) return;
+  CUR_CHK=id;
+  document.getElementById('chk-desc').textContent=c.description;
+  document.getElementById('chk-cp').textContent=c.check_point||'확인포인트 없음';
+  document.getElementById('chk-res').value=c.result;
+  document.getElementById('chk-ev').value=c.evidence||'';
+  document.getElementById('chk-fi').value=c.finding||'';
+  new bootstrap.Modal(document.getElementById('m-chk')).show();
+}
+async function saveChkResult(){
+  if(!CUR_CHK) return;
+  await post(`${API}/checklist/${CUR_CHK}/set_result/`,{
+    result:document.getElementById('chk-res').value,
+    evidence:document.getElementById('chk-ev').value,
+    finding:document.getElementById('chk-fi').value
+  });
+  toast('저장되었습니다');
+  bootstrap.Modal.getInstance(document.getElementById('m-chk')).hide();
+  await loadChkl();
+}
+
+/* ── RTM 모달 ──────── */
+function openRTMModal(id){
+  const r=REQS.find(x=>x.id===id); if(!r) return;
+  CUR_RTM=id;
+  document.getElementById('rtm-nm').textContent=`[${r.code}] ${r.name}`;
+  document.getElementById('rtm-st2').value=r.status;
+  document.getElementById('rtm-ev').value=r.evidence||'';
+  new bootstrap.Modal(document.getElementById('m-rtm')).show();
+}
+async function saveRTM(){
+  if(!CUR_RTM) return;
+  await post(`${API}/requirements/${CUR_RTM}/update_status/`,{
+    status:document.getElementById('rtm-st2').value,
+    evidence:document.getElementById('rtm-ev').value
+  });
+  toast('저장되었습니다');
+  bootstrap.Modal.getInstance(document.getElementById('m-rtm')).hide();
+  await loadReqs(); loadSummary();
+}
+
+/* ── 수주 상태 ──────── */
+async function toggleAwarded(){
+  if(!PID) return; AWARDED=!AWARDED;
+  await fetch(`${API}/projects/${PID}/`,{method:'PATCH',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({is_awarded:AWARDED})});
+  updateAwardUI();
+  toast(AWARDED?'수주 확정 상태로 변경되었습니다':'수주 전 상태로 변경되었습니다');
+}
+function updateAwardUI(){
+  const badge=document.getElementById('badge-awarded');
+  const lock=document.getElementById('add-lock');
+  const cont=document.getElementById('add-cont');
+  if(AWARDED){
+    badge.innerHTML='<i class="bi bi-unlock me-1"></i>수주 확정';
+    badge.style.background='rgba(40,160,80,0.25)';
+    if(lock) lock.style.display='none';
+    if(cont) cont.style.display=''; loadAdditional();
+  }else{
+    badge.innerHTML='<i class="bi bi-lock me-1"></i>수주 전';
+    badge.style.background='rgba(255,255,255,0.12)';
+    if(lock) lock.style.display='';
+    if(cont) cont.style.display='none';
+  }
+}
+async function loadAdditional(){
+  try{
+    const d=await get(`${API}/requirements/?project=${PID}&is_additional=true`);
+    const items=d.results||d;
+    const tb=document.getElementById('tb-add');
+    if(!items.length){tb.innerHTML=`<tr><td colspan="7" class="text-center py-3 text-muted" style="font-size:.8rem;">등록된 항목이 없습니다</td></tr>`;return;}
+    let html='';
+    items.forEach((r,i)=>{
+      html+=`<tr>
+        <td style="color:#aaa;font-size:.7rem;">${i+1}</td>
+        <td style="font-size:.75rem;">${r.category==='ADD'?'추가제안':'기술협상'}</td>
+        <td style="font-family:monospace;font-size:.7rem;">${r.code}</td>
+        <td class="wrap" style="font-weight:500;">${r.name}</td>
+        <td class="wrap" style="font-size:.75rem;color:#666;">${r.description||'-'}</td>
+        <td><span class="bs ${RSB[r.status]||'bs-nc'}">${RSL[r.status]||r.status_display}</span></td>
+        <td><button class="btn btn-sm" style="background:#e8edf5;color:#2c3e55;font-size:.7rem;padding:2px 8px;border-radius:4px;" onclick="openRTMModal(${r.id})">상태변경</button></td>
+      </tr>`;
+    });
+    tb.innerHTML=html;
+  }catch(e){}
+}
+
+/* ── 감리단계 클릭 ──── */
+function filterByPhase(phase){
+  const tab=document.querySelector('[data-bs-target="#t-art"]');
+  if(tab) bootstrap.Tab.getOrCreateInstance(tab).show();
+  setTimeout(()=>filterArt(phase,null),100);
+}
+
+/* ── 시정조치 워크플로우 ──────── */
+let _curCAId = null;
+
+async function startCA(id){
+  if(!confirm('조치를 시작하시겠습니까?')) return;
+  try{
+    await post(`${API}/corrective/${id}/start/`, {});
+    toast('조치 시작 처리되었습니다');
+    await loadCA2();
+  }catch(e){ alert('처리 실패'); }
+}
+
+function openCACompleteModal(id){
+  _curCAId = id;
+  const ca = CA.find(c=>c.id===id);
+  if(!ca) return;
+  document.getElementById('ca-issue-text').textContent = ca.issue_description;
+  document.getElementById('ca-action-desc').value  = ca.action_description || '';
+  document.getElementById('ca-evidence-note').value = ca.evidence_note     || '';
+  new bootstrap.Modal(document.getElementById('m-ca-complete')).show();
+}
+
+async function submitCAComplete(){
+  const desc = document.getElementById('ca-action-desc').value.trim();
+  if(!desc){ alert('시정조치 내용을 입력하세요'); return; }
+  const evNote = document.getElementById('ca-evidence-note').value;
+  try{
+    await post(`${API}/corrective/${_curCAId}/complete/`, {
+      action_description: desc,
+      evidence_note: evNote,
+    });
+    bootstrap.Modal.getInstance(document.getElementById('m-ca-complete')).hide();
+    toast('조치완료 처리되었습니다');
+    await loadCA2();
+  }catch(e){ alert('저장 실패'); }
+}
+
+async function verifyCA(id){
+  const ca = CA.find(c=>c.id===id);
+  if(!confirm(`[${ca?.audit_phase}] ${ca?.issue_description?.slice(0,40)}\n\n감리 확인을 완료 처리하시겠습니까?`)) return;
+  try{
+    await post(`${API}/corrective/${id}/verify/`, {});
+    toast('확인완료 처리되었습니다');
+    await loadCA2();
+  }catch(e){ alert('처리 실패'); }
+}
+
+function showNewCAModal(){alert('시정조치는 감리 체크리스트에서 [부적합] 결과 입력 시 자동 연계 등록됩니다.');}
+function showAddModal(t){alert(`${t} 항목 등록: 기술협상 완료 후 요구사항으로 추가 등록하세요`);}
+
+/* ── 유틸 ──────────── */
+function noProject(){document.getElementById('tb-art').innerHTML=`<tr><td colspan="10" class="text-center py-4 text-danger"><i class="bi bi-exclamation-triangle me-2"></i>감리 프로젝트가 없습니다. init_audit_data를 실행하세요.</td></tr>`;}
+function fmtBytes(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';}
+function toast(msg){
+  const d=document.createElement('div');
+  d.style.cssText='position:fixed;bottom:24px;right:24px;z-index:9999;background:#1e2d40;color:#fff;padding:10px 20px;border-radius:6px;font-size:.82rem;box-shadow:0 4px 16px rgba(0,0,0,.25);transition:opacity .3s';
+  d.textContent=msg; document.body.appendChild(d);
+  setTimeout(()=>{d.style.opacity='0';setTimeout(()=>d.remove(),300);},2200);
+}
+function exportRTM(){
+  const url = `/npms/api/audit/export/rtm/${PID ? '?project='+PID : ''}`;
+  window.location.href = url;
+}
+
+/* ══════════════════════════════════════════════════
+   산출물 보관함 — 트리 구조
+   ══════════════════════════════════════════════════ */
+let VAULT_TREE  = [];      // 트리 데이터
+let VAULT_FILES = [];      // 현재 열린 템플릿의 파일 목록
+let VAULT_TMPL  = null;    // 현재 선택된 템플릿 {id, code, name}
+let vaultLoaded = false;
+
+const EXT_CLS = {
+  pdf:'ext-pdf', hwp:'ext-hwp', hwpx:'ext-hwpx',
+  xlsx:'ext-xlsx', xls:'ext-xls', xlsm:'ext-xlsm',
+  docx:'ext-docx', doc:'ext-doc', pptx:'ext-pptx', ppt:'ext-ppt', zip:'ext-zip'
+};
+
+async function initVault(){
+  if(vaultLoaded) return;
+  vaultLoaded = true;
+  await loadVaultTree();
+}
+
+async function loadVaultTree(){
+  if(!CUR_PROJECT) return;
+  document.getElementById('vault-tree').innerHTML=
+    '<div class="text-muted text-center py-4"><i class="bi bi-hourglass-split me-2"></i>로딩 중...</div>';
+  const res = await fetch(`${API}/projects/${CUR_PROJECT}/file_tree/`,
+    {headers:{'X-CSRFToken':csrf()}});
+  if(!res.ok){document.getElementById('vault-tree').innerHTML='<div class="text-danger p-3">트리 로드 실패</div>';return;}
+  VAULT_TREE = await res.json();
+  renderVaultTree();
+}
+
+function renderVaultTree(){
+  const wrap = document.getElementById('vault-tree');
+  if(!VAULT_TREE.length){wrap.innerHTML='<div class="text-muted text-center py-4">데이터 없음</div>';return;}
+
+  let html = '';
+  for(const ph of VAULT_TREE){
+    const totalFiles = ph.categories.flatMap(c=>c.templates).reduce((s,t)=>s+t.file_count,0);
+    const totalTmpl  = ph.categories.flatMap(c=>c.templates).length;
+    html += `<div class="vault-phase">
+      <div class="vault-phase-hd" onclick="toggleVaultSection(this)">
+        <i class="bi bi-chevron-down ph-toggle"></i>
+        <span class="ph-label">${ph.label}</span>
+        <span class="ph-cnt">산출물 ${totalTmpl}종</span>
+        <span class="ph-cnt" style="background:rgba(100,210,140,.25);color:#d0f0d8;">${totalFiles}개 파일</span>
+      </div>
+      <div class="vault-phase-body">`;
+    for(const cat of ph.categories){
+      const catFiles = cat.templates.reduce((s,t)=>s+t.file_count,0);
+      html += `<div class="vault-cat">
+        <div class="vault-cat-hd" onclick="toggleVaultSection(this)">
+          <i class="bi bi-chevron-down cat-toggle"></i>
+          <span style="flex:1;">${cat.label}</span>
+          <span style="font-size:.68rem;color:#8a9ab0;font-weight:400;">${cat.templates.length}종 · ${catFiles}파일</span>
+        </div>
+        <div class="vault-cat-body">`;
+      for(const t of cat.templates){
+        const cntCls = t.file_count>0 ? 'has-file' : 'no-file';
+        const reqMark = t.is_required ? '<span class="vt-req" title="필수">●</span>' : '';
+        html += `<div class="vault-tmpl" onclick="openVaultFiles(${t.id},'${escHtml(t.code)}','${escHtml(t.name)}')" data-tmpl="${t.id}">
+          <span class="vt-code">${t.code}</span>
+          <span class="vt-name">${t.name}</span>
+          ${reqMark}
+          <span class="vt-cnt ${cntCls}" id="vc-${t.id}">${t.file_count > 0 ? t.file_count+'건' : '없음'}</span>
+        </div>`;
+      }
+      html += `</div></div>`; // cat-body, vault-cat
+    }
+    html += `</div></div>`; // vault-phase-body, vault-phase
+  }
+  wrap.innerHTML = html;
+}
+
+function toggleVaultSection(hd){
+  hd.classList.toggle('collapsed');
+  const body = hd.nextElementSibling;
+  body.style.display = hd.classList.contains('collapsed') ? 'none' : '';
+}
+
+function escHtml(s){ return s.replace(/'/g,"&#39;").replace(/"/g,'&quot;'); }
+
+/* 파일 목록 모달 열기 */
+async function openVaultFiles(tmplId, code, name){
+  VAULT_TMPL = {id:tmplId, code, name};
+  document.getElementById('mvf-title').textContent = name;
+  document.getElementById('mvf-code').textContent  = code;
+  document.getElementById('mvf-q').value = '';
+  document.getElementById('mvf-occ').value = '';
+  document.getElementById('mvf-loc').value = '';
+  document.getElementById('mvf-upload-msg').textContent = '';
+  renderVaultFiles([]);
+  new bootstrap.Modal(document.getElementById('m-vault-files')).show();
+  await reloadVaultFiles();
+}
+
+async function reloadVaultFiles(){
+  if(!VAULT_TMPL || !CUR_PROJECT) return;
+  document.getElementById('mvf-tbody').innerHTML =
+    `<tr><td colspan="7" class="text-center py-3 text-muted"><i class="bi bi-hourglass-split me-2"></i>로딩 중...</td></tr>`;
+  const res = await fetch(`${API}/artifact-files/?project=${CUR_PROJECT}&template=${VAULT_TMPL.id}`);
+  VAULT_FILES = res.ok ? await res.json() : [];
+  renderVaultFiles(VAULT_FILES);
+  // 트리 카운트 업데이트
+  const badge = document.getElementById(`vc-${VAULT_TMPL.id}`);
+  if(badge){
+    badge.textContent = VAULT_FILES.length>0 ? VAULT_FILES.length+'건' : '없음';
+    badge.className = 'vt-cnt ' + (VAULT_FILES.length>0?'has-file':'no-file');
+  }
+}
+
+function filterVaultFiles(){
+  const q = document.getElementById('mvf-q').value.toLowerCase();
+  const filtered = q ? VAULT_FILES.filter(f=>
+    (f.file_name||'').toLowerCase().includes(q) ||
+    (f.location_note||'').toLowerCase().includes(q) ||
+    (f.display_name||'').toLowerCase().includes(q)
+  ) : VAULT_FILES;
+  renderVaultFiles(filtered);
+}
+
+function renderVaultFiles(files){
+  document.getElementById('mvf-count').textContent = `${files.length}건`;
+  const tb = document.getElementById('mvf-tbody');
+  if(!files.length){
+    tb.innerHTML=`<tr><td colspan="7" class="text-center py-4 text-muted"><i class="bi bi-inbox me-2"></i>파일이 없습니다</td></tr>`;
+    return;
+  }
+  let html='';
+  files.forEach((f,i)=>{
+    const ext  = (f.ext||'').replace('.','').toLowerCase();
+    const eCls = EXT_CLS[ext] || '';
+    const scanBadge = f.is_scanned
+      ? '<span style="font-size:.62rem;background:#fff3cd;color:#856404;padding:1px 5px;border-radius:3px;">자동</span>'
+      : '<span style="font-size:.62rem;background:#d4edda;color:#155724;padding:1px 5px;border-radius:3px;">수동</span>';
+    const dateStr = f.occurrence_date || '-';
+    const locStr  = f.location_note   || '-';
+    html+=`<tr class="mvf-row">
+      <td style="color:#aaa;">${i+1}</td>
+      <td>${dateStr}</td>
+      <td>
+        <div style="font-weight:500;">${locStr}</div>
+        <div style="font-size:.7rem;color:#6a7a8a;" class="text-truncate" title="${f.file_name}">
+          ${f.file_name}<span class="ext-badge ${eCls}">.${ext||'?'}</span>
+        </div>
+      </td>
+      <td style="font-size:.72rem;color:#8a9ab0;">${f.file_size_display||'-'}</td>
+      <td>${scanBadge}</td>
+      <td style="font-size:.7rem;color:#8a9ab0;">${(f.uploaded_at||'').slice(0,10)}</td>
+      <td>
+        <button class="btn btn-sm" style="background:#e8edf5;color:#2c3e55;font-size:.7rem;padding:2px 7px;border-radius:3px;margin-right:3px;"
+          onclick="dlVaultFile(${f.id},'${f.file_name}')"><i class="bi bi-download"></i></button>
+        <button class="btn btn-sm" style="background:#fdecea;color:#c0392b;font-size:.7rem;padding:2px 7px;border-radius:3px;"
+          onclick="delVaultFile(${f.id})"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`;
+  });
+  tb.innerHTML = html;
+}
+
+/* 파일 업로드 (보관함) */
+async function vaultUpload(inp){
+  if(!VAULT_TMPL || !CUR_PROJECT) return;
+  const files = Array.from(inp.files);
+  if(!files.length) return;
+  const msg  = document.getElementById('mvf-upload-msg');
+  const occ  = document.getElementById('mvf-occ').value;
+  const loc  = document.getElementById('mvf-loc').value.trim();
+  msg.textContent = `업로드 중... (${files.length}개)`;
+  let ok=0, fail=0;
+  for(const f of files){
+    const fd = new FormData();
+    fd.append('file', f);
+    fd.append('template', VAULT_TMPL.id);
+    fd.append('project', CUR_PROJECT);
+    if(occ) fd.append('occurrence_date', occ);
+    if(loc) fd.append('location_note', loc);
+    const r = await fetch(`${API}/artifact-files/upload/`,
+      {method:'POST', headers:{'X-CSRFToken':csrf()}, body:fd});
+    r.ok ? ok++ : fail++;
+  }
+  inp.value='';
+  msg.textContent = `완료: ${ok}개 성공${fail?', '+fail+'개 실패':''}`;
+  await reloadVaultFiles();
+  toast(`${ok}개 파일 업로드 완료`);
+}
+
+/* 파일 다운로드 */
+function dlVaultFile(id, fname){
+  window.open(`${API}/artifact-files/${id}/download/`, '_blank');
+}
+
+/* 파일 삭제 */
+async function delVaultFile(id){
+  if(!confirm('이 파일을 삭제하시겠습니까?')) return;
+  const r = await fetch(`${API}/artifact-files/${id}/`,
+    {method:'DELETE', headers:{'X-CSRFToken':csrf()}});
+  if(r.ok || r.status===204){
+    await reloadVaultFiles();
+    toast('파일이 삭제되었습니다');
+  } else {
+    alert('삭제 실패');
+  }
+}
+
+/* 전체 다운로드 */
+function dlAllVault(){
+  if(!VAULT_FILES.length){alert('다운로드할 파일이 없습니다.');return;}
+  VAULT_FILES.forEach(f=>{ if(f.id) window.open(`${API}/artifact-files/${f.id}/download/`,'_blank'); });
+}
+
+/* NAS 스캔 */
+async function scanNas(){
+  if(!CUR_PROJECT) return;
+  const btn = event.target.closest('button');
+  const statusEl = document.getElementById('vault-scan-status');
+  btn.disabled = true;
+  statusEl.textContent = '스캔 중...';
+  const r = await fetch(`${API}/projects/${CUR_PROJECT}/scan_files/`,
+    {method:'POST', headers:{'X-CSRFToken':csrf()}});
+  btn.disabled = false;
+  if(r.ok){
+    const d = await r.json();
+    statusEl.textContent = `완료: 신규 ${d.new}건, 기존 ${d.skipped}건`;
+    vaultLoaded = false;
+    await loadVaultTree();
+    toast(`NAS 스캔 완료 — 신규 ${d.new}건 등록`);
+  } else {
+    statusEl.textContent = '스캔 실패';
+    alert('스캔 실패');
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,401 @@
+{% extends 'mobile/base.html' %}
+{% block title %}장애 처리{% endblock %}
+{% block header_title %}장애 처리{% endblock %}
+
+{% block extra_style %}
+<style>
+  .section-label {
+    font-size: 13px; font-weight: 700; color: #1a5fa8;
+    letter-spacing: .5px; margin-bottom: 8px; padding-left: 4px;
+  }
+  .status-flow {
+    display: flex; gap: 4px; align-items: center;
+    overflow-x: auto; padding: 4px 0;
+  }
+  .status-pip {
+    flex-shrink: 0; padding: 6px 10px; border-radius: 20px;
+    font-size: 12px; font-weight: 600; border: 2px solid #dee2e6;
+    background: #fff; color: #adb5bd; white-space: nowrap;
+  }
+  .status-pip.done   { background: #e8f5e9; color: #2e7d32; border-color: #a5d6a7; }
+  .status-pip.active { background: #1a5fa8; color: #fff;    border-color: #1a5fa8; }
+  .status-pip.arrow  { border: none; background: none; color: #adb5bd; padding: 0 2px; }
+  .btn-status {
+    width: 100%; padding: 16px; font-size: 16px; font-weight: 700;
+    border-radius: 12px; border: none; color: #fff;
+    background: linear-gradient(135deg, #1a5fa8, #2196f3);
+    box-shadow: 0 4px 12px rgba(26,95,168,.3);
+    margin-bottom: 12px;
+  }
+  .btn-status:disabled { background: #adb5bd; box-shadow: none; }
+  .photo-section {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  }
+  .photo-box {
+    border: 2px dashed #dee2e6; border-radius: 10px;
+    min-height: 120px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    cursor: pointer; position: relative; overflow: hidden;
+    background: #fafafa;
+  }
+  .photo-box.has-photo { border-style: solid; border-color: #1a5fa8; }
+  .photo-box img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; }
+  .photo-box .label {
+    font-size: 12px; font-weight: 700; margin-bottom: 6px;
+  }
+  .photo-box .label.before { color: #e65100; }
+  .photo-box .label.after  { color: #2e7d32; }
+  .photo-box input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer;
+  }
+  .info-row { display: flex; gap: 8px; margin-bottom: 6px; font-size: 14px; }
+  .info-row .key { color: #6c757d; flex-shrink: 0; min-width: 60px; }
+  .info-row .val { font-weight: 600; }
+  .priority-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 700;
+  }
+  .p-critical { background:#fff0f0; color:#dc3545; }
+  .p-high     { background:#fff5e0; color:#fd7e14; }
+  .p-medium   { background:#e8f0ff; color:#1a5fa8; }
+  .p-low      { background:#f0f0f0; color:#6c757d; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- 장애 정보 카드 -->
+<div class="card card-field" id="incident-info-card">
+  <div class="card-body p-3">
+    <div class="text-center py-3">
+      <div class="spinner-border spinner-border-sm text-primary"></div>
+      <div class="text-muted small mt-1">불러오는 중...</div>
+    </div>
+  </div>
+</div>
+
+<!-- 상태 전이 버튼 -->
+<div id="status-action-wrap"></div>
+
+<!-- ① 처리 내용 -->
+<div class="mb-3">
+  <div class="section-label">처리 내용</div>
+  <div class="card card-field mb-0">
+    <div class="card-body p-3">
+      <textarea id="f-resolution" class="form-control" rows="4"
+                placeholder="처리 내용을 입력하세요"></textarea>
+      <select id="f-resolution-type" class="form-select mt-2">
+        <option value="">처리 유형 선택</option>
+        <option value="현장조치">현장조치</option>
+        <option value="부품교체">부품교체</option>
+        <option value="재시작">재시작</option>
+        <option value="설정변경">설정변경</option>
+        <option value="케이블교체">케이블교체</option>
+        <option value="장비교체">장비교체</option>
+        <option value="원격지원">원격지원</option>
+        <option value="기타">기타</option>
+      </select>
+      <button class="btn btn-outline-primary mt-2 w-100 py-2" onclick="saveResolution()">
+        <i class="bi bi-save me-1"></i>저장
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ② 사진 촬영 -->
+<div class="mb-3">
+  <div class="section-label">현장 사진</div>
+  <div class="card card-field mb-0">
+    <div class="card-body p-3">
+
+      <!-- 단계 선택 -->
+      <div class="d-flex gap-2 mb-3">
+        <label class="fw-bold small">단계:</label>
+        <select id="f-photo-stage" class="form-select form-select-sm" style="max-width:140px;">
+          {% for val, label in photo_stage_choices %}
+          <option value="{{ val }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- 작업전 / 작업후 사진 박스 -->
+      <div class="photo-section mb-3">
+        <div>
+          <div class="text-center mb-1 label before fw-bold" style="font-size:13px;color:#e65100;">작업전</div>
+          <div class="photo-box" id="box-before" onclick="triggerPhoto('before')">
+            <input type="file" id="f-photo-before" accept="image/*" capture="camera"
+                   onchange="uploadPhoto('before')" style="position:absolute;inset:0;opacity:0;cursor:pointer;">
+            <i class="bi bi-camera fs-2 text-muted"></i>
+            <div class="text-muted small mt-1">촬영</div>
+          </div>
+        </div>
+        <div>
+          <div class="text-center mb-1 label after fw-bold" style="font-size:13px;color:#2e7d32;">작업후</div>
+          <div class="photo-box" id="box-after" onclick="triggerPhoto('after')">
+            <input type="file" id="f-photo-after" accept="image/*" capture="camera"
+                   onchange="uploadPhoto('after')" style="position:absolute;inset:0;opacity:0;cursor:pointer;">
+            <i class="bi bi-camera fs-2 text-muted"></i>
+            <div class="text-muted small mt-1">촬영</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 추가 사진 -->
+      <div>
+        <div class="text-muted small mb-1">추가 사진 (여러 장)</div>
+        <label class="btn btn-outline-secondary w-100 py-2" style="border-radius:8px;">
+          <i class="bi bi-images me-1"></i>갤러리에서 추가
+          <input type="file" id="f-photo-extra" accept="image/*" multiple
+                 onchange="uploadExtraPhotos()" style="display:none;">
+        </label>
+      </div>
+
+      <!-- 업로드된 사진 목록 -->
+      <div id="photo-list" class="mt-3 d-flex flex-wrap gap-2"></div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ③ 기존 사진 (로드 후 표시) -->
+<div id="existing-photos-wrap" style="display:none;">
+  <div class="section-label">기존 첨부 사진</div>
+  <div class="card card-field mb-0">
+    <div class="card-body p-3">
+      <div id="existing-photos" class="d-flex flex-wrap gap-2"></div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_script %}
+<script>
+const INCIDENT_ID = {{ pk }};
+
+/* ── 장애 정보 로드 ─────────────────────────── */
+const STATUS_LABEL = {{ status_labels|safe }};
+const STATUS_COLOR = {
+  received:'secondary', assigned:'primary', moving:'info',
+  arrived:'warning', processing:'warning', completed:'success', cancelled:'dark'
+};
+const NEXT_STATUS = {{ next_status|safe }};
+const NEXT_LABEL  = {
+  assigned:'이동 시작', moving:'현장 도착',
+  arrived:'처리 시작', processing:'처리 완료'
+};
+const STATUS_ORDER = ['received','assigned','moving','arrived','processing','completed'];
+
+async function loadIncident(){
+  try {
+    const resp = await fetch(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/`,
+      { headers: {'X-CSRFToken': CSRF_TOKEN} });
+    const d = await resp.json();
+    renderInfo(d);
+    renderStatusAction(d);
+    renderExistingPhotos(d);
+    // 기존 처리 내용 채우기
+    if(d.resolution)      document.getElementById('f-resolution').value = d.resolution;
+    if(d.resolution_type) document.getElementById('f-resolution-type').value = d.resolution_type;
+  } catch(e) {
+    document.getElementById('incident-info-card').innerHTML =
+      '<div class="card-body p-3 text-danger">불러오기 실패</div>';
+  }
+}
+
+function renderInfo(d){
+  const prCls = { critical:'p-critical', high:'p-high', medium:'p-medium', low:'p-low' };
+  const prLbl = { critical:'긴급', high:'높음', medium:'보통', low:'낮음' };
+  const flow = STATUS_ORDER.map((s,i) => {
+    const isDone   = STATUS_ORDER.indexOf(d.status) > i;
+    const isActive = d.status === s;
+    const cls = isDone ? 'done' : isActive ? 'active' : '';
+    return `${i>0?'<span class="status-pip arrow">›</span>':''}
+            <span class="status-pip ${cls}">${STATUS_LABEL[s]||s}</span>`;
+  }).join('');
+
+  document.getElementById('incident-info-card').innerHTML = `
+    <div class="card-body p-3">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <span class="fw-bold" style="font-size:16px;">${d.school_name||'-'}</span>
+        <span class="badge bg-${STATUS_COLOR[d.status]||'secondary'} badge-status">
+          ${STATUS_LABEL[d.status]||d.status}
+        </span>
+      </div>
+      <div class="text-muted small mb-2">${d.incident_number||''}</div>
+      <div class="status-flow mb-3">${flow}</div>
+      <div class="info-row">
+        <span class="key">유형</span>
+        <span class="val">${d.category_name||'-'} ${d.subcategory_name?'/ '+d.subcategory_name:''}</span>
+      </div>
+      <div class="info-row">
+        <span class="key">긴급도</span>
+        <span class="priority-badge ${prCls[d.priority]||'p-medium'}">${prLbl[d.priority]||d.priority}</span>
+      </div>
+      <div class="info-row">
+        <span class="key">신고자</span>
+        <span class="val">${d.requester_name||'-'}
+          ${d.requester_phone?'<a href="tel:'+d.requester_phone+'" class="ms-2 text-primary"><i class="bi bi-telephone"></i></a>':''}
+        </span>
+      </div>
+      ${d.description?`
+      <div class="mt-2 p-2 bg-light rounded small">${d.description}</div>`:''}
+    </div>`;
+}
+
+function renderStatusAction(d){
+  const wrap = document.getElementById('status-action-wrap');
+  const next = NEXT_STATUS[d.status];
+  if(!next || d.status === 'completed' || d.status === 'cancelled'){
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.innerHTML = `
+    <button class="btn-status" id="btn-status" onclick="updateStatus('${next}')">
+      <i class="bi bi-arrow-right-circle me-2"></i>${NEXT_LABEL[d.status]}
+    </button>`;
+}
+
+/* ── 상태 변경 ─────────────────────────────── */
+async function updateStatus(status){
+  const btn = document.getElementById('btn-status');
+  if(btn) btn.disabled = true;
+  try {
+    const resp = await fetch(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+      body: JSON.stringify({status}),
+    });
+    if(resp.ok){ loadIncident(); }
+    else { alert('변경 실패'); if(btn) btn.disabled=false; }
+  } catch(e){ alert('오류: '+e.message); if(btn) btn.disabled=false; }
+}
+
+/* ── 처리 내용 저장 ────────────────────────── */
+async function saveResolution(){
+  const resolution      = document.getElementById('f-resolution').value;
+  const resolution_type = document.getElementById('f-resolution-type').value;
+  const resp = await fetch(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/`, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+    body: JSON.stringify({resolution, resolution_type}),
+  });
+  if(resp.ok){ showToastLocal('저장되었습니다.', 'success'); }
+  else { alert('저장 실패'); }
+}
+
+/* ── 사진 업로드 ───────────────────────────── */
+function triggerPhoto(type){
+  document.getElementById('f-photo-'+type).click();
+}
+
+async function uploadPhoto(type){
+  const input = document.getElementById('f-photo-'+type);
+  const file  = input.files[0];
+  if(!file) return;
+
+  const stage = type === 'before' ? 'before' : 'after';
+  const box   = document.getElementById('box-'+type);
+  box.innerHTML = '<div class="spinner-border spinner-border-sm text-primary m-auto"></div>';
+
+  const fd = new FormData();
+  fd.append('school',      _schoolId || '');
+  fd.append('image',       file);
+  fd.append('photo_stage', stage);
+  fd.append('incident',    INCIDENT_ID);
+  fd.append('taken_at',    new Date().toISOString());
+
+  try {
+    const resp = await fetch(`${API_BASE}/photos/photos/`, {
+      method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN}, body: fd,
+    });
+    if(resp.ok){
+      const d = await resp.json();
+      const url = d.image_url || '';
+      box.innerHTML = `
+        <img src="${url}" alt="${stage}">
+        <input type="file" id="f-photo-${type}" accept="image/*" capture="camera"
+               onchange="uploadPhoto('${type}')" style="position:absolute;inset:0;opacity:0;cursor:pointer;">`;
+      box.classList.add('has-photo');
+      addPhotoToList(url, stage);
+    } else {
+      box.innerHTML = `
+        <i class="bi bi-camera fs-2 text-muted"></i>
+        <div class="text-danger small mt-1">실패. 다시 촬영</div>
+        <input type="file" id="f-photo-${type}" accept="image/*" capture="camera"
+               onchange="uploadPhoto('${type}')" style="position:absolute;inset:0;opacity:0;cursor:pointer;">`;
+    }
+  } catch(e){
+    box.innerHTML = '<i class="bi bi-camera fs-2 text-muted"></i><div class="text-danger small">오류</div>';
+  }
+}
+
+async function uploadExtraPhotos(){
+  const files = document.getElementById('f-photo-extra').files;
+  const stage = document.getElementById('f-photo-stage').value;
+  for(const file of files){
+    const fd = new FormData();
+    fd.append('school',      _schoolId || '');
+    fd.append('image',       file);
+    fd.append('photo_stage', stage);
+    fd.append('incident',    INCIDENT_ID);
+    fd.append('taken_at',    new Date().toISOString());
+    const resp = await fetch(`${API_BASE}/photos/photos/`, {
+      method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN}, body: fd,
+    });
+    if(resp.ok){
+      const d = await resp.json();
+      addPhotoToList(d.image_url||'', stage);
+    }
+  }
+  showToastLocal(`${files.length}장 업로드 완료`, 'success');
+}
+
+function addPhotoToList(url, stage){
+  const stageLabel = {before:'작업전', after:'작업후', other:'기타'};
+  const list = document.getElementById('photo-list');
+  list.insertAdjacentHTML('beforeend', `
+    <div style="position:relative;">
+      <img src="${url}" style="height:80px;width:80px;object-fit:cover;border-radius:8px;">
+      <span style="position:absolute;bottom:2px;left:2px;background:rgba(0,0,0,.5);
+                   color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;">
+        ${stageLabel[stage]||stage}
+      </span>
+    </div>`);
+}
+
+/* ── 기존 사진 표시 ────────────────────────── */
+let _schoolId = null;
+async function renderExistingPhotos(d){
+  _schoolId = d.school;
+  const resp = await fetch(
+    `${API_BASE}/photos/photos/?incident=${INCIDENT_ID}&page_size=50`,
+    { headers: {'X-CSRFToken': CSRF_TOKEN} }
+  );
+  if(!resp.ok) return;
+  const data  = await resp.json();
+  const items = data.results || [];
+  if(!items.length) return;
+
+  const wrap = document.getElementById('existing-photos-wrap');
+  const cont = document.getElementById('existing-photos');
+  const stageLabel = {before:'작업전', after:'작업후', other:'기타'};
+  cont.innerHTML = items.map(p => `
+    <div style="position:relative;">
+      <img src="${p.image_url||''}"
+           style="height:80px;width:80px;object-fit:cover;border-radius:8px;cursor:pointer;"
+           onclick="window.open('${p.image_url||''}','_blank')">
+      <span style="position:absolute;bottom:2px;left:2px;background:rgba(0,0,0,.5);
+                   color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;">
+        ${stageLabel[p.photo_stage]||p.photo_stage||''}
+      </span>
+    </div>`).join('');
+  wrap.style.display = 'block';
+}
+
+// showToastLocal — mobile/utils.js 전역 함수 사용
+
+/* ── 초기화 ────────────────────────────────── */
+loadIncident();
+</script>
+{% endblock %}

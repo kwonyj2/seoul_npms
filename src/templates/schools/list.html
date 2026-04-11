@@ -1,0 +1,417 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}학교 정보{% endblock %}
+{% block page_title %}<i class="bi bi-building me-2"></i>학교 정보{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+  <!-- 검색 바 -->
+  <div class="card border-0 shadow-sm mb-2">
+    <div class="card-body py-2 px-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-4">
+          <input type="text" id="search-q" class="form-control form-control-sm" placeholder="학교명, 주소 검색">
+        </div>
+        <div class="col-6 col-md-3">
+          <select id="filter-center" class="form-select form-select-sm">
+            <option value="">전체 지원청</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <select id="filter-type" class="form-select form-select-sm">
+            <option value="">전체 학제</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-2 d-flex gap-1">
+          <button class="btn btn-sm btn-primary flex-fill" onclick="loadSchools()">
+            <i class="bi bi-search"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="resetFilters()">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 메인 2열 -->
+  <div class="row g-2">
+
+    <!-- 좌측: 교육청→학제→학교 트리 -->
+    <div class="col-12 col-xl-2 d-none d-xl-block">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
+          <span class="fw-semibold small"><i class="bi bi-diagram-3 me-1"></i>학교 트리</span>
+          <button class="btn btn-xs btn-link p-0 text-muted" onclick="resetSchoolFilter()" title="전체보기"
+                  id="tree-reset-btn" style="display:none;">
+            <i class="bi bi-x-circle"></i>
+          </button>
+        </div>
+        <div class="card-body p-0" id="school-tree" style="max-height:calc(100vh - 220px);overflow-y:auto;">
+          <div class="p-2 text-muted small">로딩 중...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 우측: 학교 목록 -->
+    <div class="col-12 col-xl-10">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header d-flex align-items-center justify-content-between py-2 bg-white border-bottom">
+          <span class="fw-semibold">총 <span id="total-count" class="text-primary">-</span>개 학교</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0" style="table-layout:fixed;width:100%;min-width:860px;">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th style="width:36px;">순번</th>
+                <th style="width:72px;">지원청</th>
+                <th style="width:62px;">학제</th>
+                <th style="width:120px;">학교명</th>
+                <th style="width:160px;">주소</th>
+                <th style="width:95px;">전화번호</th>
+                <th style="width:38px;" class="text-center">장애</th>
+                <th style="width:36px;" class="text-center" title="스위치">SW</th>
+                <th style="width:36px;" class="text-center" title="PoE 스위치">PoE</th>
+                <th style="width:36px;" class="text-center" title="무선 AP">AP</th>
+                <th style="width:40px;" class="text-center"><small>구성도</small></th>
+                <th style="width:40px;" class="text-center"><small>선번장</small></th>
+                <th style="width:40px;" class="text-center"><small>랙실장</small></th>
+                <th style="width:44px;" class="text-center"><small>건물정보</small></th>
+                <th style="width:44px;" class="text-center"><small>전산실랙</small></th>
+              </tr>
+            </thead>
+            <tbody id="school-tbody">
+              <tr><td colspan="15" class="text-center text-muted py-4">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer py-2 d-flex justify-content-between align-items-center">
+          <small class="text-muted">페이지 <span id="page-info">-</span></small>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" id="btn-prev" onclick="changePage(-1)" disabled>
+              <i class="bi bi-chevron-left"></i>
+            </button>
+            <button class="btn btn-outline-secondary" id="btn-next" onclick="changePage(1)" disabled>
+              <i class="bi bi-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage  = 1;
+let totalPages   = 1;
+let activeCenter = null;   // center code
+let activeType   = null;   // type id
+let activeSchool = null;   // school id
+let treeData     = [];
+
+// ── 학교 목록 로드 ─────────────────────────────────────────────────────────
+async function loadSchools() {
+  const q      = document.getElementById('search-q').value.trim();
+  const center = document.getElementById('filter-center').value;
+  const type   = document.getElementById('filter-type').value;
+
+  const params = { page: currentPage, page_size: 30 };
+  if (q)      params.q      = q;
+  // 트리 선택이 있으면 트리 우선, 없으면 드롭다운 값
+  if (activeSchool)                        params.school = activeSchool;
+  else if (activeCenter || center)         params.center = activeCenter || center;
+  if ((activeType || type) && !activeSchool) params.type = activeType || type;
+
+  const tbody = document.getElementById('school-tbody');
+  tbody.innerHTML = '<tr><td colspan="15" class="text-center text-muted py-3">로딩 중...</td></tr>';
+
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/`, params);
+    totalPages = Math.ceil((data.count || 0) / 30);
+    document.getElementById('total-count').textContent = (data.count || 0).toLocaleString();
+    document.getElementById('page-info').textContent   = `${currentPage} / ${totalPages || 1}`;
+    document.getElementById('btn-prev').disabled = currentPage <= 1;
+    document.getElementById('btn-next').disabled = currentPage >= totalPages;
+
+    const results = data.results || [];
+    if (!results.length) {
+      tbody.innerHTML = '<tr><td colspan="15" class="text-center text-muted py-4">학교 없음</td></tr>';
+      return;
+    }
+    const offset = (currentPage - 1) * 30;
+    tbody.innerHTML = results.map((s, idx) => {
+      const d = s.network_docs || {};
+      function docCell(key) {
+        const doc = d[key];
+        if (!doc) return '<td class="text-center"><span class="text-muted" style="font-size:.7rem;">-</span></td>';
+        const countBadge = doc.count > 1 ? `<sup class="text-primary fw-bold" style="font-size:.6rem;">${doc.count}</sup>` : '';
+        const attrs = (doc.inline || key === '전산실랙')
+          ? `href="${doc.url}" target="_blank"`
+          : `href="${doc.url}" download`;
+        const icon = key === '건물정보'   ? 'bi-file-earmark-pdf text-danger'
+                   : key === '전산실랙'   ? 'bi-file-earmark-image text-primary'
+                   : key === '구성도'     ? 'bi-file-earmark-ppt text-danger'
+                   :                       'bi-file-earmark-excel text-success';
+        return `<td class="text-center" onclick="event.stopPropagation()">
+          <a ${attrs} title="${key}${doc.count > 1 ? ' ('+doc.count+'개)' : ''}">
+            <i class="bi ${icon}" style="font-size:1rem;"></i>${countBadge}
+          </a>
+        </td>`;
+      }
+      return `<tr class="cursor-pointer" onclick="location.href='/npms/schools/${s.id}/'">
+        <td class="text-muted small">${offset + idx + 1}</td>
+        <td><small class="badge bg-secondary">${s.support_center_name || ''}</small></td>
+        <td><small>${s.school_type_name || ''}</small></td>
+        <td class="fw-semibold text-truncate" style="max-width:120px;" title="${s.name}">${s.name}</td>
+        <td class="text-truncate" style="max-width:160px;"><small class="text-muted" title="${s.address||''}">${s.address || '-'}</small></td>
+        <td><small class="text-muted">${s.phone || '-'}</small></td>
+        <td class="text-center">
+          ${s.active_incidents > 0
+            ? `<span class="badge bg-danger">${s.active_incidents}</span>`
+            : '<i class="bi bi-check-circle-fill text-success" style="font-size:.85rem;"></i>'}
+        </td>
+        <td class="text-center"><small class="text-muted">${s.device_count?.switch ?? '-'}</small></td>
+        <td class="text-center"><small class="text-muted">${s.device_count?.poe ?? '-'}</small></td>
+        <td class="text-center"><small class="text-muted">${s.device_count?.ap ?? '-'}</small></td>
+        ${docCell('구성도')}
+        ${docCell('선번장')}
+        ${docCell('랙실장도')}
+        ${docCell('건물정보')}
+        ${docCell('전산실랙')}
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="15" class="text-center text-danger py-3">데이터 로드 오류</td></tr>';
+  }
+}
+
+function changePage(delta) {
+  currentPage = Math.max(1, Math.min(totalPages, currentPage + delta));
+  loadSchools();
+}
+
+function resetFilters() {
+  document.getElementById('search-q').value      = '';
+  document.getElementById('filter-center').value = '';
+  document.getElementById('filter-type').value   = '';
+  activeCenter = activeType = activeSchool = null;
+  currentPage  = 1;
+  renderTreeActive();
+  loadSchools();
+}
+
+// ── 드롭다운 옵션 로드 (DB 기반) ──────────────────────────────────────────
+async function loadFilterOptions() {
+  try {
+    const [centers, types] = await Promise.all([
+      apiGet(`${API_BASE}/schools/centers/`),
+      apiGet(`${API_BASE}/schools/types/`),
+    ]);
+    const cSel = document.getElementById('filter-center');
+    (centers.results || centers).forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.code;
+      opt.textContent = c.name;
+      cSel.appendChild(opt);
+    });
+    const tSel = document.getElementById('filter-type');
+    (types.results || types).forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.code;
+      opt.textContent = t.name;
+      tSel.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
+// ── 학교 트리 ──────────────────────────────────────────────────────────────
+async function loadSchoolTree() {
+  try {
+    treeData = await apiGet(`${API_BASE}/schools/schools/tree/`);
+    renderTree();
+  } catch(e) {
+    document.getElementById('school-tree').innerHTML = '<div class="p-2 text-muted small">로드 실패</div>';
+  }
+}
+
+function renderTree() {
+  const el = document.getElementById('school-tree');
+  if (!treeData.length) { el.innerHTML = '<div class="p-2 text-muted small">학교 없음</div>'; return; }
+
+  el.innerHTML = `
+    <ul class="list-unstyled mb-0 tree-list">
+      <li>
+        <a href="#" class="tree-item d-flex align-items-center px-2 py-1 small text-decoration-none
+           ${!activeCenter && !activeType && !activeSchool ? 'active' : ''}"
+           onclick="filterCenter(null);return false;">
+          <i class="bi bi-grid-3x3-gap me-1 text-muted"></i>전체
+        </a>
+      </li>
+      ${treeData.map(c => `
+        <li>
+          <div class="tree-center d-flex align-items-center">
+            <a href="#" class="tree-item flex-grow-1 d-flex align-items-center px-2 py-1 small text-decoration-none
+               ${activeCenter === c.code && !activeType && !activeSchool ? 'active' : ''}"
+               onclick="filterCenter('${c.code}');return false;">
+              <i class="bi bi-building me-1 text-primary" style="font-size:.7rem;"></i>
+              <span class="text-truncate">${c.name}</span>
+              <span class="badge bg-light text-muted border ms-auto" style="font-size:.6rem;">${c.count}</span>
+            </a>
+            <button class="btn btn-xs btn-link text-muted p-0 px-1 tree-toggle"
+                    onclick="toggleCenter(${c.id});return false;"
+                    data-center="${c.id}">
+              <i class="bi bi-chevron-right" style="font-size:.6rem;"></i>
+            </button>
+          </div>
+          <ul class="list-unstyled ps-3 mb-0" id="tree-c-${c.id}" style="display:none;">
+            ${c.types.map(t => `
+              <li>
+                <div class="d-flex align-items-center">
+                  <a href="#" class="tree-item flex-grow-1 d-flex align-items-center px-1 py-1 small text-decoration-none
+                     ${activeCenter === c.code && activeType === t.id && !activeSchool ? 'active' : ''}"
+                     onclick="filterType('${c.code}', ${t.id});return false;">
+                    <i class="bi bi-book me-1 text-success" style="font-size:.65rem;"></i>
+                    <span class="text-truncate">${t.name}</span>
+                    <span class="badge bg-light text-muted border ms-auto" style="font-size:.6rem;">${t.count}</span>
+                  </a>
+                  <button class="btn btn-xs btn-link text-muted p-0 px-1"
+                          onclick="toggleType(${c.id}, ${t.id});return false;"
+                          data-type="${c.id}-${t.id}">
+                    <i class="bi bi-chevron-right" style="font-size:.6rem;"></i>
+                  </button>
+                </div>
+                <ul class="list-unstyled ps-3 mb-0" id="tree-t-${c.id}-${t.id}" style="display:none;">
+                  ${t.schools.map(s => `
+                    <li>
+                      <a href="#" class="tree-item d-flex align-items-center px-1 py-1 small text-decoration-none
+                         ${activeSchool === s.id ? 'active' : ''}"
+                         onclick="filterSchool(${s.id}, '${c.code}', ${t.id});return false;">
+                        <i class="bi bi-dot me-1 text-muted"></i>
+                        <span class="text-truncate" title="${s.name}">${s.name}</span>
+                      </a>
+                    </li>`).join('')}
+                </ul>
+              </li>`).join('')}
+          </ul>
+        </li>`).join('')}
+    </ul>`;
+}
+
+function renderTreeActive() {
+  renderTree();
+  if (activeCenter) {
+    const c = treeData.find(x => x.code === activeCenter);
+    if (c) {
+      const ul = document.getElementById(`tree-c-${c.id}`);
+      if (ul) {
+        ul.style.display = '';
+        const btn = document.querySelector(`[data-center="${c.id}"] i`);
+        if (btn) btn.className = 'bi bi-chevron-down';
+      }
+      if (activeType) {
+        const tul = document.getElementById(`tree-t-${c.id}-${activeType}`);
+        if (tul) {
+          tul.style.display = '';
+          const tbtn = document.querySelector(`[data-type="${c.id}-${activeType}"] i`);
+          if (tbtn) tbtn.className = 'bi bi-chevron-down';
+        }
+      }
+    }
+  }
+  document.getElementById('tree-reset-btn').style.display =
+    (activeCenter || activeSchool) ? '' : 'none';
+}
+
+function toggleCenter(centerId) {
+  const ul  = document.getElementById(`tree-c-${centerId}`);
+  const btn = document.querySelector(`[data-center="${centerId}"] i`);
+  if (!ul) return;
+  const open = ul.style.display !== 'none';
+  ul.style.display = open ? 'none' : '';
+  if (btn) btn.className = open ? 'bi bi-chevron-right' : 'bi bi-chevron-down';
+  btn && (btn.style.fontSize = '.6rem');
+}
+
+function toggleType(centerId, typeId) {
+  const ul  = document.getElementById(`tree-t-${centerId}-${typeId}`);
+  const btn = document.querySelector(`[data-type="${centerId}-${typeId}"] i`);
+  if (!ul) return;
+  const open = ul.style.display !== 'none';
+  ul.style.display = open ? 'none' : '';
+  if (btn) btn.className = open ? 'bi bi-chevron-right' : 'bi bi-chevron-down';
+  btn && (btn.style.fontSize = '.6rem');
+}
+
+function filterCenter(centerCode) {
+  activeCenter = centerCode;
+  activeType   = null;
+  activeSchool = null;
+  currentPage  = 1;
+  // 드롭다운도 동기화
+  document.getElementById('filter-center').value = centerCode || '';
+  document.getElementById('filter-type').value   = '';
+  renderTreeActive();
+  loadSchools();
+}
+
+function filterType(centerCode, typeId) {
+  activeCenter = centerCode;
+  activeType   = typeId;
+  activeSchool = null;
+  currentPage  = 1;
+  document.getElementById('filter-center').value = centerCode || '';
+  renderTreeActive();
+  loadSchools();
+}
+
+function filterSchool(schoolId, centerCode, typeId) {
+  activeSchool = schoolId;
+  activeCenter = centerCode;
+  activeType   = typeId;
+  currentPage  = 1;
+  renderTreeActive();
+  loadSchools();
+}
+
+function resetSchoolFilter() {
+  filterCenter(null);
+}
+
+// ── 이벤트 바인딩 ──────────────────────────────────────────────────────────
+let searchTimer;
+document.getElementById('search-q').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { currentPage = 1; loadSchools(); }, 400);
+});
+document.getElementById('filter-center').addEventListener('change', () => {
+  activeCenter = document.getElementById('filter-center').value || null;
+  activeType   = null;
+  activeSchool = null;
+  currentPage  = 1;
+  renderTreeActive();
+  loadSchools();
+});
+document.getElementById('filter-type').addEventListener('change', () => {
+  activeType   = null;  // type dropdown uses code not id — handled in loadSchools()
+  activeSchool = null;
+  currentPage  = 1;
+  loadSchools();
+});
+
+// ── 초기화 ─────────────────────────────────────────────────────────────────
+loadFilterOptions();
+loadSchoolTree();
+loadSchools();
+</script>
+<style>
+.tree-item { border-radius: 4px; color: inherit; }
+.tree-item:hover { background: #f0f4ff; }
+.tree-item.active { background: #e8f0fe; color: #0d6efd; font-weight: 600; }
+.tree-toggle { font-size: .6rem; line-height: 1; }
+</style>
+{% endblock %}

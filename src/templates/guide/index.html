@@ -1,0 +1,432 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}사용 안내{% endblock %}
+{% block page_title %}<i class="bi bi-book me-2 text-primary"></i>사용 안내{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── 전체 레이아웃 ─────────────────────────── */
+.guide-wrap {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  height: calc(100vh - 110px);
+}
+
+/* ── 좌측 모듈 목록 ─────────────────────────── */
+.guide-nav {
+  width: 195px;
+  min-width: 195px;
+  flex-shrink: 0;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.guide-nav-header {
+  padding: 10px 13px 9px;
+  font-size: .78rem;
+  font-weight: 600;
+  color: #334155;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.guide-nav-header i { color: #2563eb; font-size: .85rem; }
+.guide-nav-scroll {
+  flex: 1 1 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+.guide-nav-scroll::-webkit-scrollbar { width: 3px; }
+.guide-nav-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+.guide-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  font-size: .78rem;
+  color: #475569;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background .12s, color .12s, border-color .12s;
+  text-decoration: none;
+  border-bottom: 1px solid #f1f5f9;
+}
+.guide-nav-item:hover {
+  background: #f0f7ff;
+  color: #1d4ed8;
+}
+.guide-nav-item.active {
+  background: #eff6ff;
+  border-left-color: #2563eb;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+.guide-nav-item i { font-size: .82rem; width: 15px; flex-shrink: 0; }
+
+/* ── 우측 콘텐츠 (스크롤) ────────────────────── */
+.guide-content {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 0;
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+.guide-content::-webkit-scrollbar { width: 5px; }
+.guide-content::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+/* ── 모듈 섹션 ──────────────────────────────── */
+.guide-section {
+  padding: 18px 22px 24px;
+  background: #fff;
+  border-radius: 8px;
+  margin: 8px 8px 0 0;
+  border: 1px solid #e2e8f0;
+}
+.guide-section:last-child { margin-bottom: 8px; }
+
+/* 섹션 헤더 */
+.guide-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f1f5f9;
+}
+.guide-section-header h5 {
+  margin: 0;
+  font-size: .98rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+.guide-section-header .mod-icon {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.guide-url-badge {
+  margin-left: auto;
+  font-size: .7rem;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 2px 9px;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 4px;
+}
+.guide-url-badge:hover { background: #dbeafe; }
+.guide-pptx-badge {
+  font-size: .7rem;
+  color: #d97706;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 2px 9px;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 4px;
+  cursor: pointer;
+}
+.guide-pptx-badge:hover { background: #fef3c7; }
+
+/* 이미지 + 설명 2컬럼 */
+.guide-body {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+/* 좌: 이미지 */
+.guide-img-col {
+  width: 380px;
+  min-width: 380px;
+  flex-shrink: 0;
+}
+.guide-img-wrap {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 16/9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.guide-img-wrap img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.guide-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #94a3b8;
+  font-size: .75rem;
+  width: 100%; height: 100%;
+}
+.guide-placeholder i { font-size: 2rem; color: #cbd5e1; }
+.guide-placeholder small { font-size: .65rem; color: #b0bec5; text-align: center; padding: 0 10px; }
+
+/* 우: 설명 */
+.guide-desc-col {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.guide-summary {
+  font-size: .82rem;
+  color: #475569;
+  line-height: 1.7;
+  margin-bottom: 14px;
+  padding: 10px 13px;
+  background: #f8fafc;
+  border-left: 3px solid #2563eb;
+  border-radius: 0 6px 6px 0;
+}
+
+/* 탭 목록 */
+.guide-section-label {
+  font-size: .7rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 7px;
+  display: flex; align-items: center; gap: 5px;
+}
+.guide-tab-item {
+  display: flex;
+  gap: 0;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin-bottom: 5px;
+  font-size: .78rem;
+  overflow: hidden;
+}
+.tab-name {
+  font-weight: 600;
+  color: #1e40af;
+  background: #eff6ff;
+  padding: 7px 10px;
+  min-width: 130px;
+  max-width: 130px;
+  border-right: 1px solid #dbeafe;
+  font-size: .75rem;
+  display: flex;
+  align-items: flex-start;
+  word-break: keep-all;
+}
+.tab-desc {
+  color: #475569;
+  padding: 7px 11px;
+  line-height: 1.5;
+  flex: 1;
+}
+
+/* 주요 기능 */
+.guide-feature-list {
+  list-style: none;
+  padding: 0; margin: 0;
+  display: flex; flex-wrap: wrap; gap: 5px;
+}
+.guide-feature-list li {
+  display: flex; align-items: center; gap: 5px;
+  font-size: .76rem;
+  color: #334155;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 3px 10px;
+}
+.guide-feature-list li::before {
+  content: '';
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #2563eb;
+  flex-shrink: 0;
+}
+
+/* 반응형 */
+@media (max-width: 1100px) {
+  .guide-img-col { width: 280px; min-width: 280px; }
+}
+@media (max-width: 900px) {
+  .guide-body { flex-direction: column; }
+  .guide-img-col { width: 100%; min-width: 0; }
+  .guide-nav { width: 160px; min-width: 160px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2" style="height:calc(100vh - 110px); overflow:hidden;">
+  <div class="guide-wrap">
+
+    <!-- ── 좌측 모듈 목록 ── -->
+    <div class="guide-nav">
+      <div class="guide-nav-header">
+        <i class="bi bi-grid me-1"></i>모듈 목록 ({{ modules|length }})
+      </div>
+      <div class="guide-nav-scroll" id="guide-nav-scroll">
+        {% for mod in modules %}
+        <a class="guide-nav-item {% if forloop.first %}active{% endif %}"
+           href="#guide-{{ mod.key }}"
+           data-key="{{ mod.key }}"
+           onclick="navClick(this, '{{ mod.key }}')">
+          <i class="bi {{ mod.icon }}"></i>
+          <span>{{ mod.label }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- ── 우측 전체 스크롤 콘텐츠 ── -->
+    <div class="guide-content" id="guide-content">
+
+      {% for mod in modules %}
+      <div class="guide-section" id="guide-{{ mod.key }}">
+
+        <!-- 섹션 헤더 -->
+        <div class="guide-section-header">
+          <div class="mod-icon bg-{{ mod.color }} bg-opacity-10 text-{{ mod.color }}">
+            <i class="bi {{ mod.icon }}"></i>
+          </div>
+          <h5>{{ mod.label }}</h5>
+          {% if request.user.role == 'superadmin' %}
+          <a href="{% url 'guide-pptx' mod.key %}" class="guide-pptx-badge" download>
+            <i class="bi bi-file-earmark-ppt"></i>PPTX
+          </a>
+          {% endif %}
+          <a href="{{ mod.url }}" class="guide-url-badge" target="_blank">
+            <i class="bi bi-box-arrow-up-right"></i>바로가기
+          </a>
+        </div>
+
+        <!-- 이미지 + 설명 -->
+        <div class="guide-body">
+
+          <!-- 좌: 이미지 -->
+          <div class="guide-img-col">
+            <div class="guide-img-wrap" id="img-wrap-{{ mod.key }}">
+              <img src="{% static mod.image %}"
+                   alt="{{ mod.label }} 화면"
+                   onerror="showPlaceholder('{{ mod.key }}', '{{ mod.icon }}')">
+            </div>
+          </div>
+
+          <!-- 우: 설명 -->
+          <div class="guide-desc-col">
+
+            <!-- 요약 -->
+            <div class="guide-summary">{{ mod.summary }}</div>
+
+            <!-- 탭 구성 -->
+            {% if mod.tabs %}
+            <div class="guide-section-label mb-2">
+              <i class="bi bi-layout-tabs"></i>탭 구성
+            </div>
+            {% for tab in mod.tabs %}
+            <div class="guide-tab-item">
+              <div class="tab-name">{{ tab.name }}</div>
+              <div class="tab-desc">{{ tab.desc }}</div>
+            </div>
+            {% endfor %}
+            {% endif %}
+
+            <!-- 주요 기능 -->
+            {% if mod.features %}
+            <div class="guide-section-label mt-3 mb-2">
+              <i class="bi bi-check2-square"></i>주요 기능
+            </div>
+            <ul class="guide-feature-list">
+              {% for feat in mod.features %}
+              <li>{{ feat }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+
+          </div>
+        </div>
+
+      </div>
+      {% endfor %}
+
+    </div><!-- /guide-content -->
+  </div><!-- /guide-wrap -->
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 이미지 없을 때 placeholder 표시
+function showPlaceholder(key, icon) {
+  const wrap = document.getElementById('img-wrap-' + key);
+  if (!wrap) return;
+  wrap.innerHTML = `
+    <div class="guide-placeholder">
+      <i class="bi ${icon}"></i>
+      <span>스크린샷 준비 중</span>
+      <small>static/img/guide/${key}.png 파일을 추가하면 표시됩니다</small>
+    </div>`;
+}
+
+// 좌측 네비 클릭 → 해당 섹션으로 스크롤 + active 표시
+function navClick(el, key) {
+  // active 전환
+  document.querySelectorAll('.guide-nav-item').forEach(a => a.classList.remove('active'));
+  el.classList.add('active');
+
+  // 해당 섹션으로 스크롤
+  const section = document.getElementById('guide-' + key);
+  const content = document.getElementById('guide-content');
+  if (section && content) {
+    content.scrollTo({ top: section.offsetTop - 8, behavior: 'smooth' });
+  }
+}
+
+// 스크롤 시 좌측 네비 active 자동 동기화
+(function() {
+  const content = document.getElementById('guide-content');
+  if (!content) return;
+
+  const sections = document.querySelectorAll('.guide-section');
+  const navItems = document.querySelectorAll('.guide-nav-item');
+
+  content.addEventListener('scroll', function() {
+    let current = null;
+    sections.forEach(sec => {
+      if (sec.offsetTop - 60 <= content.scrollTop) {
+        current = sec.id.replace('guide-', '');
+      }
+    });
+    if (!current) return;
+    navItems.forEach(a => {
+      a.classList.toggle('active', a.dataset.key === current);
+    });
+    // 좌측 네비에서 active 항목이 보이도록 스크롤
+    const activeNav = document.querySelector(`.guide-nav-item[data-key="${current}"]`);
+    if (activeNav) activeNav.scrollIntoView({ block: 'nearest' });
+  });
+})();
+</script>
+{% endblock %}

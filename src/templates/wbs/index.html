@@ -1,0 +1,831 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}WBS 관리{% endblock %}
+{% block page_title %}<i class="bi bi-diagram-3 me-2 text-secondary"></i>WBS 관리{% endblock %}
+
+{% block extra_css %}
+<style>
+.wbs-wrap { padding: 0.75rem 1rem; }
+
+/* 공정준수율 카드 */
+.compliance-cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 1.25rem; }
+.cc-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.85rem 1rem; }
+.cc-card .label { font-size: 0.75rem; color: #64748b; margin-bottom: 4px; }
+.cc-card .rate  { font-size: 1.4rem; font-weight: 700; }
+.cc-card.total  { background: #1a3a2a; color: #fff; }
+.cc-card.total .label { color: #9ec9b0; }
+.cc-bar { height: 6px; border-radius: 3px; background: #e2e8f0; margin-top: 6px; overflow: hidden; }
+.cc-bar-inner { height: 100%; border-radius: 3px; background: #2d8a56; transition: width .5s; }
+.cc-bar-plan  { height: 3px; background: #94a3b8; border-radius: 2px; margin-top: 2px; }
+
+/* 탭 */
+.nav-tabs .nav-link { font-size: .85rem; padding: 8px 14px; }
+
+/* 테이블 */
+.wbs-table-wrap {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  overflow: auto; max-height: calc(100vh - 300px);
+}
+.wbs-table {
+  width: 100%; min-width: 1160px;
+  border-collapse: collapse; font-size: 0.82rem;
+  table-layout: fixed;
+}
+.wbs-table th {
+  background: #f0f4f8; font-weight: 600; padding: 7px 8px;
+  border-bottom: 2px solid #cbd5e1; white-space: nowrap; text-align: center;
+  overflow: hidden;
+  position: sticky; top: 0; z-index: 10;
+}
+.wbs-table td {
+  padding: 5px 8px; border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis;
+}
+.wbs-table tr:hover td { background: #f8fafc; }
+.wbs-table .col-name { text-align: left; }
+
+/* depth별 */
+.wbs-row-d1 td { background: #f0f4f8 !important; font-weight: 700; }
+.wbs-row-d2 .col-name { padding-left: 20px; font-weight: 600; }
+.wbs-row-d3 .col-name { padding-left: 38px; }
+
+/* 코드 */
+.wbs-code { font-family: monospace; font-size: 0.74rem; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 3px; }
+
+/* 진척바 */
+.prog-bar { width: 54px; height: 7px; background: #e2e8f0; border-radius: 4px; overflow: hidden; display: inline-block; vertical-align: middle; flex-shrink: 0; }
+.prog-inner { height: 100%; border-radius: 4px; transition: width .4s; }
+.prog-manual    { background: #3b82f6; }
+.prog-artifact  { background: #10b981; }
+.prog-inspection{ background: #f59e0b; }
+.prog-incident  { background: #ef4444; }
+.prog-children  { background: #8b5cf6; }
+
+/* 소스 뱃지 */
+.src-badge { font-size: 0.63rem; padding: 1px 5px; border-radius: 10px; white-space: nowrap; }
+.src-manual     { background: #dbeafe; color: #1d4ed8; }
+.src-artifact   { background: #d1fae5; color: #065f46; }
+.src-inspection { background: #fef3c7; color: #92400e; }
+.src-incident   { background: #fee2e2; color: #991b1b; }
+.src-children   { background: #ede9fe; color: #5b21b6; }
+
+.milestone-icon { color: #f59e0b; margin-right: 3px; }
+
+/* 버튼 */
+.btn-row { display: flex; gap: 2px; justify-content: center; }
+.btn-row .btn { font-size: 0.68rem; padding: 1px 5px; line-height: 1.4; }
+
+/* ── 인라인 편집 ── */
+.editable {
+  cursor: pointer; position: relative;
+  transition: background 0.1s;
+}
+.editable:hover {
+  background: #eff6ff !important;
+  outline: 1px dashed #93c5fd;
+  outline-offset: -2px;
+}
+.editable::after {
+  content: '✏';
+  font-size: 0.55rem;
+  color: #93c5fd;
+  position: absolute;
+  top: 2px; right: 3px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.editable:hover::after { opacity: 1; }
+.editable.saving { background: #fefce8 !important; }
+.editable.saved  { background: #dcfce7 !important; }
+
+/* 인라인 입력 */
+.inline-input {
+  width: 100%; border: 1.5px solid #3b82f6; border-radius: 4px;
+  padding: 2px 4px; font-size: 0.78rem;
+  background: #fff; outline: none; box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+.inline-input:focus { border-color: #2563eb; }
+.inline-progress-wrap { display: flex; align-items: center; gap: 4px; }
+.inline-progress-num  { width: 46px; text-align: center; }
+
+/* 주간 텍스트 셀 */
+.week-cell { max-width: 120px; font-size: 0.75rem; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-cell.empty { color: #cbd5e1; font-style: italic; }
+
+/* 간트 */
+#ganttContainer {
+  width: 100%; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  overflow: auto; max-height: calc(100vh - 300px);
+}
+.gantt-table { border-collapse: collapse; font-size: 0.78rem; }
+.gantt-table th, .gantt-table td { border: 1px solid #e2e8f0; padding: 3px 6px; white-space: nowrap; }
+.gantt-table th {
+  background: #f0f4f8; text-align: center;
+  position: sticky; top: 0; z-index: 10;
+}
+.gantt-table th:nth-child(1),
+.gantt-table td:nth-child(1) {
+  position: sticky; left: 0; z-index: 11; background: #f0f4f8;
+}
+.gantt-table td:nth-child(1) { background: #fff; }
+.gantt-table tr:hover td:nth-child(1) { background: #f8fafc; }
+.gantt-table th:nth-child(2),
+.gantt-table td:nth-child(2) {
+  position: sticky; left: 280px; z-index: 11; background: #f0f4f8;
+  border-right: 2px solid #cbd5e1;
+}
+.gantt-table td:nth-child(2) { background: #fff; }
+.gantt-table tr:hover td:nth-child(2) { background: #f8fafc; }
+.gantt-bar-wrap { position: relative; height: 20px; }
+.gantt-bar-plan   { position: absolute; height: 10px; top: 1px; background: #93c5fd; border-radius: 2px; }
+.gantt-bar-actual { position: absolute; height: 10px; top: 11px; background: #34d399; border-radius: 2px; }
+.gantt-milestone  { position: absolute; top: 3px; font-size: 12px; color: #f59e0b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wbs-wrap">
+
+
+  <!-- 공정준수율 카드 -->
+  <div class="compliance-cards" id="complianceCards">
+    <div class="cc-card"><div class="label">로딩 중...</div></div>
+  </div>
+
+  <!-- 탭 네비게이션 -->
+  <ul class="nav nav-tabs mb-3" id="wbs-tabs">
+    <li class="nav-item">
+      <a class="nav-link active" href="#" onclick="switchView('tree',this);return false;">
+        <i class="bi bi-diagram-3 me-1"></i>트리/테이블
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" onclick="switchView('gantt',this);return false;">
+        <i class="bi bi-bar-chart-steps me-1"></i>간트 차트
+      </a>
+    </li>
+    <li class="nav-item ms-auto d-flex align-items-center pe-1">
+      <span class="text-muted me-3" style="font-size:0.75rem"><i class="bi bi-info-circle me-1"></i>셀 클릭 → 인라인 편집</span>
+      <button class="btn btn-sm btn-success" onclick="openItemModal(null)">
+        <i class="bi bi-plus-lg me-1"></i>항목 추가
+      </button>
+    </li>
+  </ul>
+
+  <!-- 트리/테이블 뷰 -->
+  <div id="viewTree">
+    <div class="wbs-table-wrap">
+      <table class="wbs-table">
+        <colgroup>
+          <col style="width:72px">   <!-- 코드 -->
+          <col>                       <!-- 작업명 -->
+          <col style="width:56px">   <!-- 담당자 -->
+          <col style="width:46px">   <!-- 가중치 -->
+          <col style="width:74px">   <!-- 계획시작 -->
+          <col style="width:74px">   <!-- 계획종료 -->
+          <col style="width:74px">   <!-- 실적시작 -->
+          <col style="width:74px">   <!-- 실적종료 -->
+          <col style="width:100px">  <!-- 진척률 -->
+          <col style="width:46px">   <!-- 소스 -->
+          <col style="width:120px">  <!-- 금주 실적 -->
+          <col style="width:120px">  <!-- 차주 계획 -->
+          <col style="width:44px">   <!-- 수정 -->
+        </colgroup>
+        <thead>
+          <tr>
+            <th>코드</th>
+            <th style="text-align:left">작업명</th>
+            <th>담당자</th>
+            <th>가중치</th>
+            <th>계획시작</th>
+            <th>계획종료</th>
+            <th title="클릭하여 수정">실적시작 ✏</th>
+            <th title="클릭하여 수정">실적종료 ✏</th>
+            <th title="클릭하여 수정">진척률 ✏</th>
+            <th>소스</th>
+            <th title="클릭하여 수정">금주 실적 ✏</th>
+            <th title="클릭하여 수정">차주 계획 ✏</th>
+            <th>수정</th>
+          </tr>
+        </thead>
+        <tbody id="wbsTableBody">
+          <tr><td colspan="13" class="text-center text-muted py-4">로딩 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 간트 차트 뷰 -->
+  <div id="viewGantt" style="display:none">
+    <div id="ganttContainer">
+      <p class="text-center text-muted py-5">간트 차트 로딩 중...</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── 항목 추가/수정 모달 ── -->
+<div class="modal fade" id="itemModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" id="itemModalTitle">WBS 항목</h6>
+        <button class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-3">
+            <label class="form-label small fw-semibold">WBS 코드 <span class="text-danger">*</span></label>
+            <input type="text" id="iCode" class="form-control form-control-sm" placeholder="예: 2.1.6">
+          </div>
+          <div class="col-9">
+            <label class="form-label small fw-semibold">작업명 <span class="text-danger">*</span></label>
+            <input type="text" id="iName" class="form-control form-control-sm" placeholder="작업명 입력">
+          </div>
+          <div class="col-3">
+            <label class="form-label small">단계</label>
+            <select id="iPhase" class="form-select form-select-sm">
+              <option value="plan">계획</option>
+              <option value="execute">수행</option>
+              <option value="close">종료</option>
+            </select>
+          </div>
+          <div class="col-3">
+            <label class="form-label small">깊이(Depth)</label>
+            <select id="iDepth" class="form-select form-select-sm">
+              <option value="1">1 — 대분류</option>
+              <option value="2">2 — 중분류</option>
+              <option value="3" selected>3 — 소분류</option>
+            </select>
+          </div>
+          <div class="col-3">
+            <label class="form-label small">상위 항목</label>
+            <select id="iParent" class="form-select form-select-sm">
+              <option value="">없음 (최상위)</option>
+            </select>
+          </div>
+          <div class="col-3">
+            <label class="form-label small">가중치</label>
+            <input type="number" id="iWeight" class="form-control form-control-sm" step="0.0001" min="0" max="1" value="0.0200">
+          </div>
+          <div class="col-3">
+            <label class="form-label small">계획 시작일</label>
+            <input type="date" id="iPlannedStart" class="form-control form-control-sm">
+          </div>
+          <div class="col-3">
+            <label class="form-label small">계획 종료일</label>
+            <input type="date" id="iPlannedEnd" class="form-control form-control-sm">
+          </div>
+          <div class="col-3">
+            <label class="form-label small">실적 시작일</label>
+            <input type="date" id="iActualStart" class="form-control form-control-sm">
+          </div>
+          <div class="col-3">
+            <label class="form-label small">실적 종료일</label>
+            <input type="date" id="iActualEnd" class="form-control form-control-sm">
+          </div>
+          <div class="col-3">
+            <label class="form-label small">진척 소스</label>
+            <select id="iSrc" class="form-select form-select-sm">
+              <option value="manual">수동</option>
+              <option value="artifact">산출물 등록</option>
+              <option value="inspection">점검 진척</option>
+              <option value="incident">장애처리</option>
+              <option value="children">하위 자동집계</option>
+            </select>
+          </div>
+          <div class="col-3">
+            <label class="form-label small">정렬 순서</label>
+            <input type="number" id="iSeq" class="form-control form-control-sm" value="99">
+          </div>
+          <div class="col-3 d-flex align-items-end">
+            <div class="form-check mb-1">
+              <input class="form-check-input" type="checkbox" id="iMilestone">
+              <label class="form-check-label small" for="iMilestone">마일스톤</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label small">금주 계획</label>
+            <textarea id="iWeekPlan" class="form-control form-control-sm" rows="2"></textarea>
+          </div>
+          <div class="col-6">
+            <label class="form-label small">금주 실적</label>
+            <textarea id="iWeekActual" class="form-control form-control-sm" rows="2"></textarea>
+          </div>
+          <div class="col-6">
+            <label class="form-label small">차주 계획</label>
+            <textarea id="iNextPlan" class="form-control form-control-sm" rows="2"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label small">비고</label>
+            <input type="text" id="iNotes" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div id="itemModalErr" class="text-danger small mt-2" style="display:none"></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-danger me-auto" id="btnDeleteItem" onclick="deleteItem()" style="display:none">
+          <i class="bi bi-trash"></i> 삭제
+        </button>
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-success" onclick="saveItem()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const API_WBS   = '/npms/api/wbs/items/';
+const API_AUDIT = '/npms/api/audit';
+let WBS_PID = null;
+let _editItemId = null;
+let _wbsItems   = [];
+
+// ── 프로젝트 로드 (활성 프로젝트 자동 선택) ───────────
+async function loadProjects() {
+  try {
+    const res = await fetch(`${API_AUDIT}/projects/`, {credentials: 'same-origin'});
+    if (!res.ok) return;
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('json')) return;
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : (data.results || []);
+    const active = list.find(p => p.is_active) || list[0];
+    if (active) {
+      WBS_PID = active.id;
+      loadWbs();
+    }
+  } catch(e) { console.error('loadProjects:', e); }
+}
+loadProjects();
+
+async function loadWbs() {
+  if (!WBS_PID) return;
+  await Promise.all([loadSummary(), loadItems()]);
+}
+
+// ── 공정준수율 ────────────────────────────────────────
+async function loadSummary() {
+  try {
+    const res = await fetch(`${API_WBS}summary/?project=${WBS_PID}`, {credentials:'same-origin'});
+    if (!res.ok) return;
+    const ct = res.headers.get('content-type')||'';
+    if (!ct.includes('json')) return;
+    renderSummary(await res.json());
+  } catch(e) { console.error('loadSummary:', e); }
+}
+function renderSummary(rows) {
+  const colors = {plan:'#2d8a56', execute:'#3b82f6', close:'#8b5cf6'};
+  document.getElementById('complianceCards').innerHTML = rows.map(r => `
+    <div class="cc-card ${r.phase==='total'?'total':''}">
+      <div class="label">${r.phase_display} (가중치 ${parseFloat(r.total_weight).toFixed(2)})</div>
+      <div class="rate" style="color:${r.phase==='total'?'#fff':colors[r.phase]||'#1a3a2a'}">${r.actual_progress}%</div>
+      <div style="font-size:0.7rem;margin-top:3px;color:${r.phase==='total'?'#9ec9b0':'#64748b'}">
+        계획 ${r.planned_progress}% &nbsp;|&nbsp; 공정준수율 <b>${r.compliance_rate}%</b>
+      </div>
+      <div class="cc-bar"><div class="cc-bar-inner" style="width:${r.actual_progress}%;background:${r.phase==='total'?'#4ade80':colors[r.phase]}"></div></div>
+      <div class="cc-bar-plan" style="width:${r.planned_progress}%"></div>
+    </div>`).join('');
+}
+
+// ── 트리 테이블 ───────────────────────────────────────
+async function loadItems() {
+  try {
+    const res = await fetch(`${API_WBS}?project=${WBS_PID}`, {credentials:'same-origin'});
+    if (!res.ok) return;
+    const ct = res.headers.get('content-type')||'';
+    if (!ct.includes('json')) return;
+    _wbsItems = await res.json();
+    renderTree(_wbsItems);
+  } catch(e) { console.error('loadItems:', e); }
+}
+
+const SRC = {
+  manual:     ['수동',  'src-manual',     'prog-manual'],
+  artifact:   ['산출물','src-artifact',   'prog-artifact'],
+  inspection: ['점검',  'src-inspection', 'prog-inspection'],
+  incident:   ['장애',  'src-incident',   'prog-incident'],
+  children:   ['집계',  'src-children',   'prog-children'],
+};
+
+function _fmtDate(d) { return d ? d.slice(5) : '-'; }
+function _weekCell(text) {
+  if (!text) return `<span class="week-cell empty">—</span>`;
+  return `<span class="week-cell" title="${text.replace(/"/g,'&quot;')}">${text.replace(/</g,'&lt;')}</span>`;
+}
+
+function renderTree(items) {
+  const tbody = document.getElementById('wbsTableBody');
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="13" class="text-center text-muted py-4">WBS 데이터 없음</td></tr>';
+    return;
+  }
+  let html = '';
+  items.forEach(item => {
+    const [sl, sc, pc] = SRC[item.progress_source] || SRC.manual;
+    const ms  = item.is_milestone ? '<i class="bi bi-diamond-fill milestone-icon"></i>' : '';
+    const canEdit = item.progress_source === 'manual';
+    // 인라인 편집 가능 여부 (날짜·주간은 manual/artifact 허용)
+    const canWeek = canEdit || item.progress_source === 'artifact';
+
+    html += `<tr class="wbs-row-d${item.depth}" id="wbs-row-${item.id}">
+      <td class="text-center"><span class="wbs-code">${item.code}</span></td>
+      <td class="col-name" title="${item.name}">${ms}${item.name}</td>
+      <td class="text-center" style="font-size:0.73rem">${item.assignee_name||'-'}</td>
+      <td class="text-center">${parseFloat(item.weight).toFixed(3)}</td>
+      <td class="text-center">${_fmtDate(item.planned_start)}</td>
+      <td class="text-center">${_fmtDate(item.planned_end)}</td>
+      <td class="text-center ${canEdit?'editable':''}" id="as-${item.id}"
+          ${canEdit?`onclick="inlineDate(this,${item.id},'actual_start','${item.actual_start||''}')"`:''}>
+        ${_fmtDate(item.actual_start)}
+      </td>
+      <td class="text-center ${canEdit?'editable':''}" id="ae-${item.id}"
+          ${canEdit?`onclick="inlineDate(this,${item.id},'actual_end','${item.actual_end||''}')"`:''}>
+        ${_fmtDate(item.actual_end)}
+      </td>
+      <td id="prog-cell-${item.id}" class="${canEdit?'editable':''}"
+          ${canEdit?`onclick="inlineProgress(this,${item.id},${item.progress})"`:''}>
+        <div class="d-flex align-items-center gap-1" id="prog-inner-${item.id}">
+          <div class="prog-bar"><div class="prog-inner ${pc}" id="pb-${item.id}" style="width:${item.progress}%"></div></div>
+          <span id="pv-${item.id}" style="font-size:0.73rem;min-width:26px">${item.progress}%</span>
+        </div>
+      </td>
+      <td class="text-center"><span class="src-badge ${sc}">${sl}</span></td>
+      <td class="${canWeek?'editable week-td':''}" id="wa-${item.id}"
+          ${canWeek?`onclick="inlineText(this,${item.id},'this_week_actual')"`:''}
+          style="max-width:120px">
+        ${_weekCell(item.this_week_actual)}
+      </td>
+      <td class="${canWeek?'editable week-td':''}" id="np-${item.id}"
+          ${canWeek?`onclick="inlineText(this,${item.id},'next_week_plan')"`:''}
+          style="max-width:120px">
+        ${_weekCell(item.next_week_plan)}
+      </td>
+      <td>
+        <div class="btn-row">
+          <button class="btn btn-outline-secondary btn-sm" title="항목 수정" onclick="openItemModal(${item.id})">
+            <i class="bi bi-pencil-square"></i>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+}
+
+// ── 인라인 편집 — 진척률 ────────────────────────────
+function inlineProgress(td, id, current) {
+  if (td.querySelector('.inline-input')) return; // 이미 편집 중
+  const item = _wbsItems.find(i => i.id === id);
+  if (!item || item.progress_source !== 'manual') return;
+
+  const [sl, sc, pc] = SRC[item.progress_source] || SRC.manual;
+  const orig = td.innerHTML;
+  td.innerHTML = `
+    <div class="inline-progress-wrap" onclick="event.stopPropagation()">
+      <input type="range" class="form-range" style="width:60px;height:4px"
+             min="0" max="100" value="${current}"
+             oninput="document.getElementById('ipn-${id}').value=this.value"
+             id="ipr-${id}">
+      <input type="number" id="ipn-${id}" class="inline-input inline-progress-num"
+             min="0" max="100" value="${current}"
+             oninput="document.getElementById('ipr-${id}').value=this.value"
+             onkeydown="handleInlineKey(event,()=>saveInlineProgress(${id},'${pc}'),()=>cancelInline('prog-cell-${id}','${orig.replace(/'/g,'&#39;')}'))">
+      <button class="btn btn-xs btn-success" style="font-size:0.65rem;padding:1px 5px;line-height:1.3"
+              onclick="saveInlineProgress(${id},'${pc}')">✓</button>
+      <button class="btn btn-xs btn-outline-secondary" style="font-size:0.65rem;padding:1px 5px;line-height:1.3"
+              onclick="cancelInline('prog-cell-${id}','${orig.replace(/'/g,'&#39;')}')">✗</button>
+    </div>`;
+  td.classList.remove('editable');
+  document.getElementById(`ipn-${id}`).focus();
+}
+
+async function saveInlineProgress(id, progClass) {
+  const valEl = document.getElementById(`ipn-${id}`);
+  if (!valEl) return;
+  const val = Math.max(0, Math.min(100, parseInt(valEl.value) || 0));
+  const item = _wbsItems.find(i => i.id === id);
+  if (!item) return;
+
+  const payload = { progress: val };
+  const td = document.getElementById(`prog-cell-${id}`);
+  td.classList.add('saving');
+
+  const res = await fetch(`${API_WBS}${id}/progress/`, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json','X-CSRFToken': getCsrf()},
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) { td.classList.remove('saving'); alert('저장 실패'); return; }
+
+  const updated = await res.json();
+  const idx = _wbsItems.findIndex(i => i.id === id);
+  if (idx >= 0) _wbsItems[idx] = updated;
+
+  td.innerHTML = `
+    <div class="d-flex align-items-center gap-1" id="prog-inner-${id}">
+      <div class="prog-bar"><div class="prog-inner ${progClass}" id="pb-${id}" style="width:${val}%"></div></div>
+      <span id="pv-${id}" style="font-size:0.73rem;min-width:26px">${val}%</span>
+    </div>`;
+  td.classList.remove('saving');
+  td.classList.add('editable', 'saved');
+  td.setAttribute('onclick', `inlineProgress(this,${id},${val})`);
+  setTimeout(() => td.classList.remove('saved'), 1500);
+
+  // 부모 행 진척바 갱신 (bubble-up 결과 반영)
+  if (updated.parent) {
+    const parentUpdated = await fetch(`${API_WBS}${updated.parent}/`, {credentials:'same-origin'}).then(r=>r.json()).catch(()=>null);
+    if (parentUpdated) {
+      const pi = _wbsItems.findIndex(i => i.id === updated.parent);
+      if (pi >= 0) { _wbsItems[pi] = parentUpdated; updateRowProgress(parentUpdated); }
+    }
+  }
+  loadSummary();
+}
+
+function updateRowProgress(item) {
+  const [,, pc] = SRC[item.progress_source] || SRC.manual;
+  const pb = document.getElementById(`pb-${item.id}`);
+  const pv = document.getElementById(`pv-${item.id}`);
+  if (pb) pb.style.width = item.progress + '%';
+  if (pv) pv.textContent = item.progress + '%';
+}
+
+// ── 인라인 편집 — 날짜 ──────────────────────────────
+function inlineDate(td, id, field, current) {
+  if (td.querySelector('.inline-input')) return;
+  const orig = td.innerHTML;
+  td.innerHTML = `
+    <div onclick="event.stopPropagation()">
+      <input type="date" class="inline-input" value="${current}"
+             onkeydown="handleInlineKey(event,()=>saveInlineDate(${id},'${field}',this.value,'${orig.replace(/'/g,'&#39;')}'),()=>cancelInline('${field==='actual_start'?'as':'ae'}-${id}','${orig.replace(/'/g,'&#39;')}'))">
+    </div>`;
+  td.classList.remove('editable');
+  td.querySelector('input').focus();
+}
+
+async function saveInlineDate(id, field, value, orig) {
+  const cellId = (field === 'actual_start') ? `as-${id}` : `ae-${id}`;
+  const td = document.getElementById(cellId);
+  td.classList.add('saving');
+
+  const payload = {[field]: value || null};
+  const res = await fetch(`${API_WBS}${id}/`, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json','X-CSRFToken': getCsrf()},
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) { td.classList.remove('saving'); alert('저장 실패'); return; }
+
+  const updated = await res.json();
+  const idx = _wbsItems.findIndex(i => i.id === id);
+  if (idx >= 0) _wbsItems[idx] = updated;
+
+  const display = value ? value.slice(5) : '-';
+  td.innerHTML = display;
+  td.classList.remove('saving');
+  td.classList.add('editable', 'saved');
+  td.setAttribute('onclick', `inlineDate(this,${id},'${field}','${value}')`);
+  setTimeout(() => td.classList.remove('saved'), 1500);
+}
+
+// ── 인라인 편집 — 텍스트(주간 실적/계획) ────────────
+function inlineText(td, id, field) {
+  if (td.querySelector('.inline-input')) return;
+  const item = _wbsItems.find(i => i.id === id);
+  if (!item) return;
+  const current = item[field] || '';
+  const orig = td.innerHTML;
+  const cellId = field === 'this_week_actual' ? `wa-${id}` : `np-${id}`;
+
+  td.innerHTML = `
+    <div onclick="event.stopPropagation()">
+      <textarea class="inline-input" rows="2" style="resize:vertical;min-height:36px;white-space:normal"
+                onkeydown="handleInlineKey(event,()=>saveInlineText(${id},'${field}',this.value),()=>cancelInline('${cellId}','${orig.replace(/'/g,'&#39;')}'),true)"
+      >${current}</textarea>
+      <div class="d-flex gap-1 mt-1">
+        <button class="btn btn-xs btn-success" style="font-size:0.65rem;padding:1px 6px;line-height:1.3"
+                onclick="saveInlineText(${id},'${field}',this.closest('div').previousElementSibling.value)">저장</button>
+        <button class="btn btn-xs btn-outline-secondary" style="font-size:0.65rem;padding:1px 6px;line-height:1.3"
+                onclick="cancelInline('${cellId}','${orig.replace(/'/g,'&#39;')}')">취소</button>
+      </div>
+    </div>`;
+  td.classList.remove('editable');
+  td.style.whiteSpace = 'normal';
+  td.querySelector('textarea').focus();
+}
+
+async function saveInlineText(id, field, value) {
+  const cellId = field === 'this_week_actual' ? `wa-${id}` : `np-${id}`;
+  const td = document.getElementById(cellId);
+  td.classList.add('saving');
+
+  const res = await fetch(`${API_WBS}${id}/`, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json','X-CSRFToken': getCsrf()},
+    body: JSON.stringify({[field]: value}),
+  });
+  if (!res.ok) { td.classList.remove('saving'); alert('저장 실패'); return; }
+
+  const updated = await res.json();
+  const idx = _wbsItems.findIndex(i => i.id === id);
+  if (idx >= 0) _wbsItems[idx] = updated;
+
+  td.innerHTML = _weekCell(value);
+  td.style.whiteSpace = '';
+  td.classList.remove('saving');
+  td.classList.add('editable', 'saved', 'week-td');
+  td.setAttribute('onclick', `inlineText(this,${id},'${field}')`);
+  setTimeout(() => td.classList.remove('saved'), 1500);
+}
+
+// ── 인라인 공통 ──────────────────────────────────────
+function cancelInline(cellId, origHtml) {
+  const td = document.getElementById(cellId);
+  if (!td) return;
+  td.innerHTML = origHtml;
+  td.style.whiteSpace = '';
+  td.classList.add('editable');
+}
+
+function handleInlineKey(e, save, cancel, isTextarea = false) {
+  if (e.key === 'Enter' && !isTextarea) { e.preventDefault(); save(); }
+  if (e.key === 'Enter' && isTextarea && e.ctrlKey) { e.preventDefault(); save(); }
+  if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+}
+
+// ── 항목 추가/수정 모달 ──────────────────────────────
+function _fillParentSelect(excludeId) {
+  const sel = document.getElementById('iParent');
+  sel.innerHTML = '<option value="">없음 (최상위)</option>';
+  _wbsItems.filter(i => i.id !== excludeId && i.depth < 3)
+    .forEach(i => sel.innerHTML += `<option value="${i.id}">[${i.code}] ${i.name}</option>`);
+}
+
+function openItemModal(id) {
+  _editItemId = id;
+  document.getElementById('itemModalErr').style.display = 'none';
+  document.getElementById('btnDeleteItem').style.display = id ? '' : 'none';
+
+  if (id) {
+    const item = _wbsItems.find(i => i.id === id);
+    if (!item) return;
+    document.getElementById('itemModalTitle').textContent = `항목 수정 — [${item.code}]`;
+    document.getElementById('iCode').value         = item.code;
+    document.getElementById('iName').value         = item.name;
+    document.getElementById('iPhase').value        = item.phase;
+    document.getElementById('iDepth').value        = item.depth;
+    document.getElementById('iWeight').value       = item.weight;
+    document.getElementById('iPlannedStart').value = item.planned_start || '';
+    document.getElementById('iPlannedEnd').value   = item.planned_end   || '';
+    document.getElementById('iActualStart').value  = item.actual_start  || '';
+    document.getElementById('iActualEnd').value    = item.actual_end    || '';
+    document.getElementById('iSrc').value          = item.progress_source;
+    document.getElementById('iSeq').value          = item.seq || 99;
+    document.getElementById('iMilestone').checked  = item.is_milestone;
+    document.getElementById('iWeekPlan').value     = item.this_week_plan   || '';
+    document.getElementById('iWeekActual').value   = item.this_week_actual || '';
+    document.getElementById('iNextPlan').value     = item.next_week_plan   || '';
+    document.getElementById('iNotes').value        = item.notes || '';
+    _fillParentSelect(id);
+    document.getElementById('iParent').value = item.parent || '';
+  } else {
+    document.getElementById('itemModalTitle').textContent = '항목 추가';
+    ['iCode','iName','iWeekPlan','iWeekActual','iNextPlan','iNotes',
+     'iPlannedStart','iPlannedEnd','iActualStart','iActualEnd'].forEach(f => document.getElementById(f).value = '');
+    document.getElementById('iPhase').value = 'execute';
+    document.getElementById('iDepth').value = '3';
+    document.getElementById('iWeight').value = '0.0200';
+    document.getElementById('iSrc').value = 'manual';
+    document.getElementById('iSeq').value = '99';
+    document.getElementById('iMilestone').checked = false;
+    _fillParentSelect(null);
+  }
+  new bootstrap.Modal(document.getElementById('itemModal')).show();
+}
+
+async function saveItem() {
+  const errEl = document.getElementById('itemModalErr');
+  errEl.style.display = 'none';
+
+  const code = document.getElementById('iCode').value.trim();
+  const name = document.getElementById('iName').value.trim();
+  if (!code || !name) { errEl.textContent = 'WBS 코드와 작업명은 필수입니다.'; errEl.style.display=''; return; }
+
+  const payload = {
+    project:          WBS_PID,
+    code, name,
+    phase:            document.getElementById('iPhase').value,
+    depth:            parseInt(document.getElementById('iDepth').value),
+    parent:           document.getElementById('iParent').value || null,
+    weight:           parseFloat(document.getElementById('iWeight').value) || 0,
+    planned_start:    document.getElementById('iPlannedStart').value || null,
+    planned_end:      document.getElementById('iPlannedEnd').value   || null,
+    actual_start:     document.getElementById('iActualStart').value  || null,
+    actual_end:       document.getElementById('iActualEnd').value    || null,
+    progress_source:  document.getElementById('iSrc').value,
+    seq:              parseInt(document.getElementById('iSeq').value) || 99,
+    is_milestone:     document.getElementById('iMilestone').checked,
+    this_week_plan:   document.getElementById('iWeekPlan').value,
+    this_week_actual: document.getElementById('iWeekActual').value,
+    next_week_plan:   document.getElementById('iNextPlan').value,
+    notes:            document.getElementById('iNotes').value,
+  };
+
+  const url    = _editItemId ? `${API_WBS}${_editItemId}/` : API_WBS;
+  const method = _editItemId ? 'PATCH' : 'POST';
+  const res = await fetch(url, {
+    method,
+    headers: {'Content-Type':'application/json','X-CSRFToken':getCsrf()},
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const e = await res.json();
+    errEl.textContent = JSON.stringify(e); errEl.style.display = ''; return;
+  }
+  bootstrap.Modal.getInstance(document.getElementById('itemModal')).hide();
+  loadItems(); loadSummary();
+}
+
+async function deleteItem() {
+  if (!_editItemId) return;
+  const item = _wbsItems.find(i => i.id === _editItemId);
+  if (!confirm(`[${item?.code}] ${item?.name}\n\n이 항목을 삭제하시겠습니까?`)) return;
+  const res = await fetch(`${API_WBS}${_editItemId}/`, {
+    method: 'DELETE', headers: {'X-CSRFToken': getCsrf()},
+  });
+  if (!res.ok && res.status !== 204) { alert('삭제 실패'); return; }
+  bootstrap.Modal.getInstance(document.getElementById('itemModal')).hide();
+  loadItems(); loadSummary();
+}
+
+// ── 간트 차트 ─────────────────────────────────────────
+async function loadGantt() {
+  try {
+    const res = await fetch(`${API_WBS}gantt/?project=${WBS_PID}`, {credentials:'same-origin'});
+    if (!res.ok) return;
+    renderGantt(await res.json());
+  } catch(e) { console.error('loadGantt:', e); }
+}
+function renderGantt(items) {
+  if (!items.length) { document.getElementById('ganttContainer').innerHTML='<p class="text-center text-muted py-5">데이터 없음</p>'; return; }
+  const dates = items.flatMap(i=>[i.start_date,i.end_date,i.actual_start,i.actual_end].filter(Boolean));
+  if (!dates.length) return;
+  const minDate = new Date(dates.reduce((a,b)=>a<b?a:b)); minDate.setDate(1);
+  const maxDate = new Date(dates.reduce((a,b)=>a>b?a:b)); maxDate.setMonth(maxDate.getMonth()+1,0);
+  const months=[]; let cur=new Date(minDate);
+  while(cur<=maxDate){ months.push(new Date(cur)); cur.setMonth(cur.getMonth()+1); }
+  const px=3;
+  let html=`<table class="gantt-table"><thead><tr><th style="width:280px;min-width:280px">작업명</th><th style="width:42px">진척</th>`;
+  months.forEach(m=>{ const d=new Date(m.getFullYear(),m.getMonth()+1,0).getDate(); html+=`<th style="width:${d*px}px">${m.getFullYear()}.${String(m.getMonth()+1).padStart(2,'0')}</th>`; });
+  html+='</tr></thead><tbody>';
+  items.forEach(item=>{
+    const indent=(item.depth-1)*14;
+    const ms=item.is_milestone?'◆ ':'';
+    html+=`<tr class="${item.depth===1?'fw-bold':item.depth===2?'fw-semibold':''}">
+      <td style="padding-left:${8+indent}px;font-size:0.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:280px;min-width:280px" title="${item.text}">${ms}[${item.code}] ${item.text}</td>
+      <td class="text-center" style="font-size:0.73rem">${Math.round(item.progress*100)}%</td>`;
+    months.forEach(m=>{
+      const ms2=new Date(m.getFullYear(),m.getMonth(),1), me=new Date(m.getFullYear(),m.getMonth()+1,0), md=me.getDate();
+      let bar=`<div class="gantt-bar-wrap" style="width:${md*px}px">`;
+      if(item.start_date&&item.end_date){
+        const ps=new Date(item.start_date),pe=new Date(item.end_date);
+        const l=Math.max(0,Math.min((ps-ms2)/86400000,md)), r=Math.max(0,Math.min((me-pe)/86400000,md));
+        const w=(md-l-r)*px; if(w>0) bar+=`<div class="gantt-bar-plan" style="left:${l*px}px;width:${w}px"></div>`;
+      }
+      if(item.actual_start){
+        const as2=new Date(item.actual_start),ae2=item.actual_end?new Date(item.actual_end):new Date();
+        const l=Math.max(0,Math.min((as2-ms2)/86400000,md)), r=Math.max(0,Math.min((me-ae2)/86400000,md));
+        const w=(md-l-r)*px; if(w>0) bar+=`<div class="gantt-bar-actual" style="left:${l*px}px;width:${w}px"></div>`;
+      }
+      if(item.is_milestone&&item.end_date){
+        const pe=new Date(item.end_date);
+        if(pe>=ms2&&pe<=me) bar+=`<div class="gantt-milestone" style="left:${(pe-ms2)/86400000*px}px">◆</div>`;
+      }
+      html+=`<td style="padding:2px">${bar}</div></td>`;
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  document.getElementById('ganttContainer').innerHTML=html;
+}
+
+// ── 뷰 전환 ──────────────────────────────────────────
+function switchView(view, el) {
+  document.getElementById('viewTree').style.display  = view==='tree'  ? '' : 'none';
+  document.getElementById('viewGantt').style.display = view==='gantt' ? '' : 'none';
+  document.querySelectorAll('#wbs-tabs .nav-link').forEach(a => a.classList.remove('active'));
+  if (el) el.classList.add('active');
+  if (view==='gantt' && WBS_PID) loadGantt();
+}
+
+// ── CSRF ─────────────────────────────────────────────
+function getCsrf() {
+  return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1]||'';
+}
+</script>
+{% endblock %}

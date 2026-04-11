@@ -1,0 +1,289 @@
+{% extends 'mobile/base.html' %}
+{% block title %}장애 접수{% endblock %}
+{% block header_title %}장애 접수{% endblock %}
+{% block nav_create %}active{% endblock %}
+
+{% block extra_style %}
+<style>
+  .required-mark { color: #dc3545; }
+  .section-label {
+    font-size: 13px; font-weight: 700; color: #1a5fa8;
+    text-transform: uppercase; letter-spacing: .5px;
+    margin-bottom: 8px; padding-left: 4px;
+  }
+  .priority-btn {
+    flex: 1; padding: 10px 4px; border: 2px solid #dee2e6;
+    border-radius: 8px; background: #fff; font-size: 14px;
+    font-weight: 600; text-align: center; cursor: pointer;
+    transition: all .15s;
+  }
+  .priority-btn.active-critical { border-color:#dc3545; background:#fff5f5; color:#dc3545; }
+  .priority-btn.active-high     { border-color:#fd7e14; background:#fff9f5; color:#fd7e14; }
+  .priority-btn.active-medium   { border-color:#1a5fa8; background:#f0f5ff; color:#1a5fa8; }
+  .priority-btn.active-low      { border-color:#6c757d; background:#f8f9fa; color:#6c757d; }
+  .school-search { position: relative; }
+  .school-dropdown {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
+    background: #fff; border: 1px solid #dee2e6; border-radius: 8px;
+    max-height: 220px; overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,.15); display: none;
+  }
+  .school-item {
+    padding: 12px 14px; cursor: pointer; font-size: 15px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .school-item:last-child { border-bottom: none; }
+  .school-item:active { background: #e8f0ff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<form id="incident-form" novalidate autocomplete="off">
+{% csrf_token %}
+
+<!-- ① 학교 -->
+<div class="mb-3">
+  <div class="section-label">학교 <span class="required-mark">*</span></div>
+  <div class="card card-field mb-0">
+    <div class="card-body p-3">
+      <div class="school-search">
+        <input type="text" id="f-school-search" class="form-control"
+               placeholder="학교명 검색..." autocomplete="off">
+        <div class="school-dropdown" id="school-dropdown"></div>
+      </div>
+      <input type="hidden" id="f-school">
+      <div id="school-selected" class="mt-2 text-primary fw-bold" style="display:none;font-size:15px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ② 장애 유형 -->
+<div class="mb-3">
+  <div class="section-label">장애 유형 <span class="required-mark">*</span></div>
+  <div class="card card-field mb-0">
+    <div class="card-body p-3">
+      <select id="f-category" class="form-select mb-2" required>
+        <option value="">-- 대분류 선택 --</option>
+      </select>
+      <select id="f-subcategory" class="form-select" style="display:none;">
+        <option value="">-- 세부 유형 선택 --</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- ③ 우선순위 -->
+<div class="mb-3">
+  <div class="section-label">긴급도</div>
+  <div class="card card-field mb-0">
+    <div class="card-body p-3">
+      <div class="d-flex gap-2" id="priority-btns">
+        {% for val, label in priority_choices %}
+        <button type="button" class="priority-btn {% if val == 'medium' %}active-medium{% endif %}"
+                data-val="{{ val }}" onclick="setPriority('{{ val }}')">{{ label }}</button>
+        {% endfor %}
+      </div>
+      <input type="hidden" id="f-priority" value="medium">
+    </div>
+  </div>
+</div>
+
+<!-- ④ 접수 방법 -->
+<div class="mb-3">
+  <div class="section-label">접수 방법</div>
+  <div class="card card-field mb-0">
+    <div class="card-body p-3">
+      <select id="f-contact-method" class="form-select">
+        {% for val, label in contact_method_choices %}
+        <option value="{{ val }}" {% if val == 'phone' %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- ⑤ 신고자 정보 -->
+<div class="mb-3">
+  <div class="section-label">신고자 정보 <span class="required-mark">*</span></div>
+  <div class="card card-field mb-0">
+    <div class="card-body p-3">
+      <input type="text"  id="f-requester-name"     class="form-control mb-2" placeholder="이름 (필수)" required>
+      <input type="tel"   id="f-requester-phone"    class="form-control mb-2" placeholder="연락처 (필수)" required>
+      <input type="text"  id="f-requester-position" class="form-control"      placeholder="직위 (선택)">
+    </div>
+  </div>
+</div>
+
+<!-- ⑥ 장애 유형 (SLA) -->
+<div class="mb-3">
+  <div class="section-label">장애 분류</div>
+  <div class="card card-field mb-0">
+    <div class="card-body p-3">
+      <select id="f-fault-type" class="form-select">
+        {% for val, label in fault_type_choices %}
+        <option value="{{ val }}" {% if val == 'service_stop' %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <div class="form-check mt-2">
+        <input class="form-check-input" type="checkbox" id="f-human-error">
+        <label class="form-check-label" for="f-human-error">인적 장애 (조작 미숙·실수 등)</label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ⑦ 장애 내용 -->
+<div class="mb-3">
+  <div class="section-label">장애 내용 <span class="required-mark">*</span></div>
+  <div class="card card-field mb-0">
+    <div class="card-body p-3">
+      <textarea id="f-description" class="form-control" rows="4"
+                placeholder="증상을 구체적으로 입력하세요" required></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- 접수 버튼 -->
+<button type="submit" id="btn-submit" class="btn btn-field text-white fw-bold"
+        style="background:#1a5fa8;">
+  <i class="bi bi-check-circle me-2"></i>장애 접수
+</button>
+
+</form>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+/* ── 학교 검색 ─────────────────────────────── */
+let _schools = [];
+async function loadSchools(){
+  const resp = await fetch(`${API_BASE}/schools/schools/?page_size=2000`);
+  const data = await resp.json();
+  _schools = data.results || [];
+}
+
+document.getElementById('f-school-search').addEventListener('input', function(){
+  const q = this.value.trim();
+  const dd = document.getElementById('school-dropdown');
+  if(q.length < 1){ dd.style.display='none'; return; }
+  const hits = _schools.filter(s => s.name.includes(q)).slice(0, 15);
+  if(!hits.length){ dd.style.display='none'; return; }
+  dd.innerHTML = hits.map(s =>
+    `<div class="school-item" onclick="selectSchool(${s.id},'${s.name.replace(/'/g,"\\'")}')">
+       ${s.name}
+       <small class="text-muted ms-1">${s.support_center_name||''}</small>
+     </div>`
+  ).join('');
+  dd.style.display='block';
+});
+
+function selectSchool(id, name){
+  document.getElementById('f-school').value = id;
+  document.getElementById('f-school-search').value = '';
+  document.getElementById('school-dropdown').style.display='none';
+  const sel = document.getElementById('school-selected');
+  sel.textContent = '✓ ' + name;
+  sel.style.display = 'block';
+}
+
+document.addEventListener('click', function(e){
+  if(!e.target.closest('.school-search'))
+    document.getElementById('school-dropdown').style.display='none';
+});
+
+/* ── 장애 대분류 → 소분류 ──────────────────── */
+async function loadCategories(){
+  const sel = document.getElementById('f-category');
+  const resp = await fetch(`${API_BASE}/incidents/categories/`);
+  const data = await resp.json();
+  (data.results||data||[]).forEach(c =>
+    sel.insertAdjacentHTML('beforeend', `<option value="${c.id}">${c.name}</option>`)
+  );
+}
+
+document.getElementById('f-category').addEventListener('change', async function(){
+  const sub = document.getElementById('f-subcategory');
+  sub.style.display='none';
+  sub.innerHTML='<option value="">-- 세부 유형 선택 --</option>';
+  if(!this.value) return;
+  const resp = await fetch(`${API_BASE}/incidents/subcategories/?category=${this.value}`);
+  const data = await resp.json();
+  const items = data.results||data||[];
+  if(items.length){
+    items.forEach(s => sub.insertAdjacentHTML('beforeend', `<option value="${s.id}">${s.name}</option>`));
+    sub.style.display='block';
+  }
+});
+
+/* ── 우선순위 버튼 ─────────────────────────── */
+function setPriority(val){
+  document.getElementById('f-priority').value = val;
+  document.querySelectorAll('.priority-btn').forEach(b => {
+    b.className = 'priority-btn';
+    if(b.dataset.val === val) b.classList.add('active-'+val);
+  });
+}
+
+/* ── 폼 제출 ───────────────────────────────── */
+document.getElementById('incident-form').addEventListener('submit', async function(e){
+  e.preventDefault();
+
+  const school   = document.getElementById('f-school').value;
+  const category = document.getElementById('f-category').value;
+  const reqName  = document.getElementById('f-requester-name').value.trim();
+  const reqPhone = document.getElementById('f-requester-phone').value.trim();
+  const desc     = document.getElementById('f-description').value.trim();
+
+  if(!school)   { alert('학교를 선택하세요.');       return; }
+  if(!category) { alert('장애 유형을 선택하세요.');   return; }
+  if(!reqName)  { alert('신고자 이름을 입력하세요.'); return; }
+  if(!reqPhone) { alert('신고자 연락처를 입력하세요.'); return; }
+  if(!desc)     { alert('장애 내용을 입력하세요.');   return; }
+
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>접수 중...';
+
+  try {
+    const payload = {
+      school:              parseInt(school),
+      category:            parseInt(category),
+      subcategory:         document.getElementById('f-subcategory').value || null,
+      priority:            document.getElementById('f-priority').value,
+      contact_method:      document.getElementById('f-contact-method').value,
+      requester_name:      reqName,
+      requester_phone:     reqPhone,
+      requester_position:  document.getElementById('f-requester-position').value || '',
+      fault_type:          document.getElementById('f-fault-type').value,
+      is_human_error:      document.getElementById('f-human-error').checked,
+      description:         desc,
+    };
+
+    const resp = await fetch(`${API_BASE}/incidents/incidents/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify(payload),
+    });
+
+    if(resp.ok){
+      const data = await resp.json();
+      location.href = `/npms/mobile/incidents/${data.id}/`;
+    } else {
+      const err = await resp.json();
+      const msg = err.detail || Object.entries(err).map(([k,v])=>`${k}: ${v}`).join('\n');
+      alert('접수 실패:\n' + msg);
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>장애 접수';
+    }
+  } catch(ex){
+    alert('오류: ' + ex.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>장애 접수';
+  }
+});
+
+/* ── 초기화 ────────────────────────────────── */
+loadSchools();
+loadCategories();
+</script>
+{% endblock %}

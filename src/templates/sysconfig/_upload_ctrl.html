@@ -1,0 +1,44 @@
+{% comment %}
+  item_id       : 고유 식별자
+  upload_url    : POST 업로드 API URL (API_BASE 기준)
+  download_url  : GET 다운로드 API URL
+  allow_reset   : True/False — 초기화 모드 버튼 표시 여부
+{% endcomment %}
+
+<!-- 모드 선택 -->
+<div class="d-flex align-items-center gap-1 mb-2">
+  <span class="small text-muted me-1">모드:</span>
+  <button type="button" class="mode-btn active" data-item="{{ item_id }}"
+          onclick="setMode('{{ item_id }}','add_update',this)">추가/덮어쓰기</button>
+  {% if allow_reset %}
+  <button type="button" class="mode-btn danger" data-item="{{ item_id }}"
+          onclick="setMode('{{ item_id }}','reset',this)">초기화 후 입력</button>
+  {% endif %}
+</div>
+<input type="hidden" id="mode-{{ item_id }}" value="add_update">
+
+<!-- 파일 선택 + 다운로드 -->
+<div class="d-flex gap-2 align-items-center flex-wrap">
+  <label class="btn btn-sm btn-outline-success mb-0 flex-shrink-0">
+    <i class="bi bi-folder2-open me-1"></i>파일 선택
+    <input type="file" id="file-{{ item_id }}" class="d-none" accept=".csv"
+           onchange="previewCSV(this,'{{ item_id }}')">
+  </label>
+  <a class="btn btn-sm btn-outline-primary flex-shrink-0"
+     onclick="this.href=API_BASE+'/{{ download_url }}';return true;" href="#">
+    <i class="bi bi-download me-1"></i>양식 다운로드
+  </a>
+  <span id="file-name-{{ item_id }}" class="small text-muted text-truncate" style="max-width:120px;"></span>
+</div>
+
+<!-- 미리보기 -->
+<div id="preview-{{ item_id }}" class="preview-wrap" style="display:none;"></div>
+
+<!-- 업로드 확정 버튼 -->
+<button id="btn-upload-{{ item_id }}" class="btn btn-sm btn-primary mt-2 w-100" disabled
+        onclick="doUpload('{{ item_id }}','{{ upload_url }}')">
+  <i class="bi bi-cloud-upload me-1"></i>업로드 확정
+</button>
+
+<!-- 결과 -->
+<div id="result-{{ item_id }}"></div>

@@ -1,0 +1,817 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}장애 상세{% endblock %}
+{% block page_title %}<i class="bi bi-exclamation-triangle text-danger me-2"></i>장애 상세{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2" id="incident-detail-root" data-id="{{ incident.id }}">
+
+  <!-- 상단 액션 바 -->
+  <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <a href="/npms/incidents/list/" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>목록
+    </a>
+    <span id="inc-number" class="fw-bold text-primary">{{ incident.incident_number }}</span>
+    <span id="inc-status-badge"></span>
+    <span id="inc-priority-badge"></span>
+    <div class="ms-auto d-flex gap-2 flex-wrap">
+      {% if user.role in 'superadmin,admin' %}
+      <button class="btn btn-sm btn-info" onclick="openAssignModal()">
+        <i class="bi bi-person-plus me-1"></i>배정
+      </button>
+      <button class="btn btn-sm btn-outline-info" onclick="aiAssign()">
+        <i class="bi bi-cpu me-1"></i>AI 배정
+      </button>
+      {% endif %}
+      {% if user.role in 'superadmin,admin,worker' %}
+      <button class="btn btn-sm btn-success" id="btn-complete" onclick="openCompleteModal()" style="display:none;">
+        <i class="bi bi-check-circle me-1"></i>완료 등록
+      </button>
+      {% endif %}
+      <button class="btn btn-sm btn-outline-danger" onclick="generateReport()">
+        <i class="bi bi-file-pdf me-1"></i>처리보고서
+      </button>
+    </div>
+  </div>
+
+  <div class="row g-2">
+
+    <!-- 좌측: 기본 정보 + 타임라인 -->
+    <div class="col-12 col-xl-5">
+
+      <!-- 기본 정보 카드 -->
+      <div class="card border-0 shadow-sm mb-2">
+        <div class="card-header py-2 bg-white border-bottom fw-semibold">
+          <i class="bi bi-info-circle me-1 text-primary"></i>기본 정보
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <tbody id="inc-info-table">
+              <tr><td colspan="2" class="text-center py-3 text-muted">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 상태 변경 -->
+      {% if user.role in 'superadmin,admin,worker' %}
+      <div class="card border-0 shadow-sm mb-2">
+        <div class="card-header py-2 bg-white border-bottom fw-semibold">
+          <i class="bi bi-arrow-repeat me-1 text-warning"></i>상태 변경
+        </div>
+        <div class="card-body py-2">
+          <div class="d-flex flex-wrap gap-2" id="status-actions"></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- 타임라인 -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-header py-2 bg-white border-bottom fw-semibold">
+          <i class="bi bi-clock-history me-1 text-secondary"></i>처리 이력
+        </div>
+        <div class="card-body p-2" id="timeline" style="max-height:300px;overflow-y:auto;">
+          <div class="text-center text-muted small py-2">로딩 중...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 우측: 댓글 + 사진 -->
+    <div class="col-12 col-xl-7">
+
+      <!-- SLA -->
+      <div class="card border-0 shadow-sm mb-2">
+        <div class="card-header py-2 bg-white border-bottom fw-semibold">
+          <i class="bi bi-shield-check me-1 text-success"></i>SLA 현황
+        </div>
+        <div class="card-body py-2" id="sla-info">
+          <div class="text-center text-muted small py-1">로딩 중...</div>
+        </div>
+      </div>
+
+      <!-- 댓글 -->
+      <div class="card border-0 shadow-sm mb-2">
+        <div class="card-header py-2 bg-white border-bottom fw-semibold">
+          <i class="bi bi-chat-text me-1 text-info"></i>댓글
+        </div>
+        <div class="card-body p-2" id="comments-area" style="max-height:250px;overflow-y:auto;">
+          <div class="text-center text-muted small py-2">로딩 중...</div>
+        </div>
+        <div class="card-footer py-2">
+          <div class="input-group input-group-sm">
+            <input type="text" id="comment-input" class="form-control" placeholder="댓글 입력...">
+            <button class="btn btn-primary" onclick="submitComment()">
+              <i class="bi bi-send"></i>
+            </button>
+          </div>
+          <div class="form-check mt-1">
+            <input class="form-check-input" type="checkbox" id="comment-internal">
+            <label class="form-check-label small text-muted" for="comment-internal">내부 메모</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 사진 -->
+      <div class="card border-0 shadow-sm mb-2">
+        <div class="card-header py-2 bg-white border-bottom fw-semibold d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-images me-1 text-warning"></i>현장 사진</span>
+          <label class="btn btn-xs btn-outline-warning mb-0" style="font-size:.72rem;padding:2px 9px;cursor:pointer;">
+            <i class="bi bi-upload me-1"></i>업로드
+            <input type="file" id="photo-file-input" accept="image/*" multiple style="display:none;" onchange="uploadPhotos(this)">
+          </label>
+        </div>
+        <div class="card-body p-2">
+          <div class="row g-2" id="photos-grid">
+            <div class="col-12 text-center text-muted small py-2">로딩 중...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 작업지시서 -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-header py-2 bg-white border-bottom fw-semibold d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-file-text me-1 text-primary"></i>작업지시서</span>
+          <button class="btn btn-xs btn-outline-primary" style="font-size:.72rem;padding:2px 9px;"
+                  onclick="openNewWorkOrderModal()">
+            <i class="bi bi-plus"></i> 발행
+          </button>
+        </div>
+        <div class="card-body p-2" id="wo-list">
+          <div class="text-center text-muted small py-2">로딩 중...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 배정 모달 -->
+<div class="modal fade" id="assignModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold">인력 배정</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <select id="worker-select" class="form-select form-select-sm mb-2">
+          <option value="">담당자 선택...</option>
+        </select>
+        <textarea id="assign-note" class="form-control form-control-sm" rows="2" placeholder="배정 메모"></textarea>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-primary" onclick="submitAssign()">배정</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- 완료 등록 모달 -->
+<div class="modal fade" id="completeModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2 bg-success text-white">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-check-circle me-1"></i>장애 처리 완료 등록</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">처리 유형 <span class="text-danger">*</span></label>
+          <select id="resolution-type" class="form-select form-select-sm">
+            <option value="현장수리">현장수리</option>
+            <option value="부품교체">부품교체</option>
+            <option value="설정변경">설정변경</option>
+            <option value="재부팅">재부팅</option>
+            <option value="케이블교체">케이블교체</option>
+            <option value="장비교체">장비교체</option>
+            <option value="원격지원">원격지원</option>
+            <option value="기타">기타</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">처리 내용 <span class="text-danger">*</span></label>
+          <textarea id="resolution-text" class="form-control form-control-sm" rows="5"
+                    placeholder="처리 내용을 상세히 입력하세요..."></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">장애 유형</label>
+          <select id="fault-type" class="form-select form-select-sm">
+            <option value="service_stop">서비스 중단</option>
+            <option value="service_delay">서비스 지연</option>
+            <option value="malfunction">서비스 오작동</option>
+            <option value="terminal">단말 장애</option>
+            <option value="infra">기반시설 장애</option>
+            <option value="cyber">사이버 침해</option>
+            <option value="other">기타</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="is-human-error">
+            <label class="form-check-label small fw-semibold" for="is-human-error">
+              인적장애 <span class="text-muted">(사람의 실수/과실로 발생한 장애)</span>
+            </label>
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">현장 도착 일시 <span class="text-muted">(미입력 시 기존 값 유지)</span></label>
+          <input type="datetime-local" id="arrived-at" class="form-control form-control-sm">
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">완료 일시</label>
+          <input type="datetime-local" id="completed-at" class="form-control form-control-sm">
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-success" onclick="submitComplete()">
+          <i class="bi bi-check-lg me-1"></i>완료 처리
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 작업지시서 발행 모달 -->
+<div class="modal fade" id="woModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2" style="background:#1a3a5a;color:#fff;">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-file-text me-1"></i>작업지시서 발행</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-12">
+            <label class="form-label small fw-semibold">작업제목 <span class="text-danger">*</span></label>
+            <input type="text" id="wo-title" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">작업유형</label>
+            <select id="wo-type" class="form-select form-select-sm">
+              <option value="repair">수리/복구</option>
+              <option value="installation">설치</option>
+              <option value="inspection">점검</option>
+              <option value="replacement">교체</option>
+              <option value="config">설정변경</option>
+              <option value="other">기타</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">담당자</label>
+            <select id="wo-assignee" class="form-select form-select-sm">
+              <option value="">-- 선택 --</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">완료기한</label>
+            <input type="date" id="wo-due" class="form-control form-control-sm">
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-semibold">작업지시 내용</label>
+            <textarea id="wo-desc" class="form-control form-control-sm" rows="3"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-semibold">필요 자재</label>
+            <textarea id="wo-parts" class="form-control form-control-sm" rows="2" placeholder="교체 부품, 케이블 등"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-primary" onclick="submitWorkOrder()">
+          <i class="bi bi-file-text me-1"></i>작업지시서 발행
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 작업지시서 완료 처리 모달 -->
+<div class="modal fade" id="woCompleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2 bg-success text-white">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-check-circle me-1"></i>작업 수행 완료</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">실제 수행 내용 <span class="text-danger">*</span></label>
+          <textarea id="wo-actual" class="form-control form-control-sm" rows="4"></textarea>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">사용 자재</label>
+          <textarea id="wo-parts-used" class="form-control form-control-sm" rows="2"></textarea>
+        </div>
+        <div>
+          <label class="form-label small fw-semibold">특이사항</label>
+          <textarea id="wo-note" class="form-control form-control-sm" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-success" onclick="submitWOComplete()">
+          <i class="bi bi-check-lg me-1"></i>완료 처리
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const INCIDENT_ID = document.getElementById('incident-detail-root').dataset.id;
+const PRIORITY_BADGE = {
+  critical: '<span class="badge bg-danger">긴급</span>',
+  high:     '<span class="badge bg-warning text-dark">높음</span>',
+  medium:   '<span class="badge bg-primary">중간</span>',
+  low:      '<span class="badge bg-secondary">낮음</span>',
+};
+const STATUS_BADGE = {
+  received:   '<span class="badge bg-warning text-dark">접수</span>',
+  assigned:   '<span class="badge bg-info text-dark">배정</span>',
+  moving:     '<span class="badge bg-primary">이동</span>',
+  arrived:    '<span class="badge" style="background:#6f42c1">도착</span>',
+  processing: '<span class="badge bg-primary">처리중</span>',
+  completed:  '<span class="badge bg-success">완료</span>',
+};
+const FAULT_TYPE_LABEL = {
+  service_stop:  '서비스 중단',
+  service_delay: '서비스 지연',
+  malfunction:   '서비스 오작동',
+  terminal:      '단말 장애',
+  infra:         '기반시설 장애',
+  cyber:         '사이버 침해',
+  other:         '기타',
+};
+const STATUS_NEXT = {
+  received:   [{s:'moving',     label:'이동 시작', cls:'btn-primary'}, {s:'arrived', label:'현장 도착', cls:'btn-info'}],
+  assigned:   [{s:'moving',     label:'이동 시작', cls:'btn-primary'}, {s:'arrived', label:'현장 도착', cls:'btn-info'}],
+  moving:     [{s:'arrived',    label:'현장 도착', cls:'btn-info'}],
+  arrived:    [{s:'processing', label:'처리 시작', cls:'btn-warning'}],
+  processing: [{s:'completed',  label:'완료',     cls:'btn-success'}],
+  completed:  [],
+};
+
+let incidentData = {};
+
+async function loadIncident() {
+  try {
+    const d = await apiGet(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/`);
+    incidentData = d;
+    document.getElementById('inc-status-badge').innerHTML   = STATUS_BADGE[d.status] || d.status;
+    document.getElementById('inc-priority-badge').innerHTML = PRIORITY_BADGE[d.priority] || '';
+
+    // 기본 정보 테이블
+    document.getElementById('inc-info-table').innerHTML = `
+      <tr><td class="text-muted fw-semibold" style="width:35%">학교</td><td>${d.school_name}</td></tr>
+      <tr><td class="text-muted fw-semibold">지원청</td><td>${d.center_name||'-'}</td></tr>
+      <tr><td class="text-muted fw-semibold">분류</td><td>${d.category_name||'-'}</td></tr>
+      <tr><td class="text-muted fw-semibold">세부분류</td><td>${d.subcategory_name||'-'}</td></tr>
+      <tr><td class="text-muted fw-semibold">담당자</td><td>${d.assigned_worker_name||'<span class="text-danger">미배정</span>'}</td></tr>
+      <tr><td class="text-muted fw-semibold">접수자</td><td>${d.received_by_name||'-'}</td></tr>
+      <tr><td class="text-muted fw-semibold">접수일시</td><td>${formatDateTime(d.received_at)}</td></tr>
+      <tr><td class="text-muted fw-semibold">경과시간</td><td>${d.elapsed_minutes||0}분</td></tr>
+      <tr><td class="text-muted fw-semibold">장애 유형</td><td>${FAULT_TYPE_LABEL[d.fault_type]||'-'}</td></tr>
+      <tr><td class="text-muted fw-semibold">인적장애</td><td>${d.is_human_error ? '<span class="badge bg-danger">해당</span>' : '<span class="text-muted">-</span>'}</td></tr>
+      ${(d.location_building_name || d.location_detail) ? `
+      <tr><td class="text-muted fw-semibold">장애위치</td><td>
+        ${[d.location_building_name, d.location_floor_name, d.location_room_name].filter(Boolean).join(' &rsaquo; ')}
+        ${d.location_detail ? `<small class="text-muted ms-1">(${d.location_detail})</small>` : ''}
+      </td></tr>` : ''}
+      <tr><td class="text-muted fw-semibold" colspan="2">증상</td></tr>
+      <tr><td colspan="2" class="text-wrap" style="white-space:pre-line">${d.description||'-'}</td></tr>
+    `;
+
+    // 완료 등록 버튼 — processing 상태일 때만 표시
+    const btnComplete = document.getElementById('btn-complete');
+    if (btnComplete) btnComplete.style.display = (d.status === 'processing') ? '' : 'none';
+
+    // 상태 변경 버튼 (완료 제외 — 완료는 모달로 처리)
+    const nextActions = (STATUS_NEXT[d.status] || []).filter(a => a.s !== 'completed');
+    const actionsHtml = nextActions.map(a => `
+      <button class="btn btn-sm ${a.cls}" onclick="changeStatus('${a.s}')">
+        <i class="bi bi-arrow-right-circle me-1"></i>${a.label}
+      </button>`).join('');
+    const statusDiv = document.getElementById('status-actions');
+    if (statusDiv) statusDiv.innerHTML = actionsHtml || '<span class="text-muted small">변경 가능한 상태 없음</span>';
+
+    // SLA
+    const sla = d.sla;
+    if (sla) {
+      const fmtDt = v => v ? formatDateTime(v) : '-';
+      const okBadge = ok => ok === true
+        ? '<span class="badge bg-success">준수</span>'
+        : ok === false
+          ? '<span class="badge bg-danger">초과</span>'
+          : '<span class="badge bg-secondary">측정중</span>';
+      const diffStr = min => {
+        if (min == null) return '';
+        const abs = Math.abs(min);
+        const h = Math.floor(abs / 60), m = abs % 60;
+        const label = h > 0 ? `${h}시간 ${m}분` : `${m}분`;
+        return min <= 0
+          ? `<small class="text-success ms-1">(${label} 여유)</small>`
+          : `<small class="text-danger ms-1">(${label} 초과)</small>`;
+      };
+      document.getElementById('sla-info').innerHTML = `
+        <div class="row g-2" style="font-size:.82rem;">
+          <div class="col-6 border-end">
+            <div class="text-muted small mb-1">도착 SLA ${okBadge(sla.arrival_ok)}</div>
+            <div><span class="text-muted">목표:</span> <strong>${fmtDt(sla.arrival_target)}</strong>${diffStr(sla.arrival_diff_min)}</div>
+            <div><span class="text-muted">실제:</span> ${sla.arrival_actual ? `<strong>${fmtDt(sla.arrival_actual)}</strong>` : '<span class="text-muted">미도착</span>'}</div>
+          </div>
+          <div class="col-6">
+            <div class="text-muted small mb-1">처리 SLA ${okBadge(sla.resolve_ok)}</div>
+            <div><span class="text-muted">목표:</span> <strong>${fmtDt(sla.resolve_target)}</strong>${diffStr(sla.resolve_diff_min)}</div>
+            <div><span class="text-muted">실제:</span> ${sla.resolve_actual ? `<strong>${fmtDt(sla.resolve_actual)}</strong>` : '<span class="text-muted">미완료</span>'}</div>
+          </div>
+        </div>`;
+    } else {
+      document.getElementById('sla-info').innerHTML = '<div class="text-muted small text-center py-1">SLA 정보 없음</div>';
+    }
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+async function loadComments() {
+  try {
+    const data = await apiGet(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/comments/`);
+    const area = document.getElementById('comments-area');
+    const comments = data.results || data;
+    if (!comments.length) {
+      area.innerHTML = '<div class="text-muted small text-center py-2">댓글 없음</div>';
+      return;
+    }
+    area.innerHTML = comments.map(c => `
+      <div class="mb-2 p-2 rounded ${c.is_internal ? 'bg-warning bg-opacity-10 border border-warning border-opacity-25' : 'bg-light'}">
+        <div class="d-flex justify-content-between align-items-start">
+          <strong class="small">${c.author_name}</strong>
+          <small class="text-muted">${formatDateTime(c.created_at)}</small>
+        </div>
+        <div class="mt-1 small">${c.content}</div>
+        ${c.is_internal ? '<span class="badge bg-warning text-dark" style="font-size:.6rem;">내부메모</span>' : ''}
+      </div>`).join('');
+    area.scrollTop = area.scrollHeight;
+  } catch(e) {}
+}
+
+async function submitComment() {
+  const content  = document.getElementById('comment-input').value.trim();
+  const internal = document.getElementById('comment-internal').checked;
+  if (!content) return;
+  try {
+    await apiPost(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/comments/`, {
+      content, is_internal: internal
+    });
+    document.getElementById('comment-input').value = '';
+    loadComments();
+    showToast('댓글 등록됨', 'success');
+  } catch(e) {
+    showToast('댓글 등록 실패', 'error');
+  }
+}
+
+async function loadPhotos() {
+  try {
+    const data = await apiGet(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/photos/`);
+    const grid = document.getElementById('photos-grid');
+    const photos = data.results || data;
+    if (!photos.length) {
+      grid.innerHTML = '<div class="col-12 text-center text-muted small py-2">사진 없음</div>';
+      return;
+    }
+    grid.innerHTML = photos.map(p => `
+      <div class="col-6 col-md-4 col-lg-3">
+        <img src="${p.image}" class="img-fluid rounded cursor-pointer" style="height:90px;width:100%;object-fit:cover;"
+             onclick="window.open('${p.image}','_blank')" title="${p.caption||''}">
+      </div>`).join('');
+  } catch(e) {}
+}
+
+async function changeStatus(newStatus) {
+  if (!confirm(`상태를 "${newStatus}"로 변경하시겠습니까?`)) return;
+  try {
+    await apiPost(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/change_status/`, {status: newStatus});
+    showToast('상태 변경됨', 'success');
+    loadIncident();
+  } catch(e) {
+    showToast('상태 변경 실패', 'error');
+  }
+}
+
+async function openAssignModal() {
+  try {
+    const workers = await apiGet(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/available_workers/`);
+    const sel = document.getElementById('worker-select');
+    sel.innerHTML = '<option value="">담당자 선택...</option>' +
+      (workers||[]).map(w => `<option value="${w.id}">${w.name} (${w.support_center_name||''})</option>`).join('');
+    new bootstrap.Modal(document.getElementById('assignModal')).show();
+  } catch(e) {
+    showToast('인력 목록 로드 실패', 'error');
+  }
+}
+
+async function submitAssign() {
+  const worker_id = document.getElementById('worker-select').value;
+  const note      = document.getElementById('assign-note').value;
+  if (!worker_id) { showToast('담당자를 선택하세요', 'warning'); return; }
+  try {
+    await apiPost(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/assign/`, {worker_id, note});
+    bootstrap.Modal.getInstance(document.getElementById('assignModal')).hide();
+    showToast('배정 완료', 'success');
+    loadIncident();
+  } catch(e) {
+    showToast('배정 실패', 'error');
+  }
+}
+
+async function aiAssign() {
+  if (!confirm('AI 자동 배정을 실행하시겠습니까?')) return;
+  try {
+    const result = await apiPost(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/ai_assign/`, {});
+    showToast(`AI 배정: ${result.worker_name||'완료'}`, 'success');
+    loadIncident();
+  } catch(e) {
+    showToast('AI 배정 실패', 'error');
+  }
+}
+
+function openCompleteModal() {
+  // 현재 일시를 기본값으로
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById('completed-at').value = now.toISOString().slice(0, 16);
+  document.getElementById('resolution-text').value = '';
+  // 기존 fault_type, is_human_error 값 반영
+  if (incidentData.fault_type) {
+    document.getElementById('fault-type').value = incidentData.fault_type;
+  }
+  document.getElementById('is-human-error').checked = !!incidentData.is_human_error;
+  // 기존 arrived_at이 있으면 채워줌, 없으면 비움
+  if (incidentData.arrived_at) {
+    const arr = new Date(incidentData.arrived_at);
+    arr.setMinutes(arr.getMinutes() - arr.getTimezoneOffset());
+    document.getElementById('arrived-at').value = arr.toISOString().slice(0, 16);
+  } else {
+    document.getElementById('arrived-at').value = '';
+  }
+  new bootstrap.Modal(document.getElementById('completeModal')).show();
+}
+
+async function submitComplete() {
+  const resolution = document.getElementById('resolution-text').value.trim();
+  const resType    = document.getElementById('resolution-type').value;
+  const completedAt= document.getElementById('completed-at').value;
+  if (!resolution) { showToast('처리 내용을 입력하세요', 'warning'); return; }
+
+  try {
+    const arrivedAt   = document.getElementById('arrived-at').value;
+    const faultType   = document.getElementById('fault-type').value;
+    const isHumanErr  = document.getElementById('is-human-error').checked;
+    await apiPost(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/change_status/`, {
+      status:          'completed',
+      resolution:      resolution,
+      resolution_type: resType,
+      fault_type:      faultType,
+      is_human_error:  isHumanErr,
+      arrived_at:      arrivedAt  || undefined,
+      completed_at:    completedAt || undefined,
+    });
+    bootstrap.Modal.getInstance(document.getElementById('completeModal')).hide();
+    showToast('장애 처리 완료 등록되었습니다', 'success');
+    loadIncident();
+  } catch(e) {
+    showToast('완료 처리 실패: ' + (e?.detail || ''), 'error');
+  }
+}
+
+async function generateReport() {
+  showToast('보고서 생성 중...', 'info');
+  try {
+    const res = await fetch(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/generate_pdf/`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json'},
+      body: JSON.stringify({}),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast('보고서 생성 완료', 'success');
+      window.open(location.origin + data.download_url, '_blank');
+    } else {
+      showToast(data.error || '보고서 생성 실패', 'error');
+    }
+  } catch(e) {
+    showToast('보고서 생성 실패', 'error');
+  }
+}
+
+async function loadTimeline() {
+  try {
+    const items = await apiGet(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/timeline/`);
+    const el = document.getElementById('timeline');
+    if (!items.length) {
+      el.innerHTML = '<div class="text-muted small text-center py-2">이력 없음</div>';
+      return;
+    }
+    const STATUS_ICON = {
+      received:   {icon:'bi-envelope-open',  cls:'text-warning'},
+      assigned:   {icon:'bi-person-check',   cls:'text-info'},
+      moving:     {icon:'bi-car-front',       cls:'text-primary'},
+      arrived:    {icon:'bi-geo-alt-fill',   cls:'text-purple'},
+      processing: {icon:'bi-tools',          cls:'text-warning'},
+      completed:  {icon:'bi-check-circle-fill', cls:'text-success'},
+      cancelled:  {icon:'bi-x-circle-fill',  cls:'text-danger'},
+    };
+    el.innerHTML = items.map((h, i) => {
+      const ico = STATUS_ICON[h.to_status] || {icon:'bi-arrow-right-circle', cls:'text-secondary'};
+      return `<div class="d-flex gap-2 mb-2">
+        <div class="flex-shrink-0 pt-1">
+          <i class="bi ${ico.icon} ${ico.cls}" style="font-size:.9rem;"></i>
+        </div>
+        <div class="flex-grow-1" style="font-size:.78rem;">
+          <div class="d-flex justify-content-between">
+            <strong>${h.to_label}</strong>
+            <span class="text-muted">${formatDateTime(h.changed_at)}</span>
+          </div>
+          <div class="text-muted">${h.changed_by}${h.note ? ` · ${h.note}` : ''}</div>
+        </div>
+      </div>`;
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+  } catch(e) {}
+}
+
+async function uploadPhotos(input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  let ok = 0;
+  for (const f of files) {
+    const fd = new FormData();
+    fd.append('image', f);
+    fd.append('caption', f.name);
+    try {
+      const res = await fetch(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/photos/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': CSRF_TOKEN},
+        credentials: 'same-origin',
+        body: fd,
+      });
+      if (res.ok) ok++;
+    } catch(e) {}
+  }
+  input.value = '';
+  showToast(`${ok}장 업로드 완료`, ok > 0 ? 'success' : 'error');
+  if (ok > 0) loadPhotos();
+}
+
+// 초기 로드
+loadIncident();
+loadComments();
+loadPhotos();
+loadTimeline();
+loadWorkOrders();
+
+// 댓글 입력 엔터키
+document.getElementById('comment-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitComment(); }
+});
+
+// ── 작업지시서 ────────────────────────────────────────
+const WO_API = '/npms/api/incidents/work-orders/';
+let _curWOId = null;
+
+const WO_STATUS = {
+  issued:      {label:'발행', cls:'badge bg-secondary'},
+  in_progress: {label:'수행중', cls:'badge bg-primary'},
+  completed:   {label:'완료', cls:'badge bg-success'},
+  confirmed:   {label:'확인완료', cls:'badge bg-dark'},
+  cancelled:   {label:'취소', cls:'badge bg-danger'},
+};
+
+async function loadWorkOrders() {
+  const res = await fetch(`${WO_API}?incident=${INCIDENT_ID}`, {credentials:'same-origin'});
+  if (!res.ok) return;
+  const wos = await res.json();
+  const el  = document.getElementById('wo-list');
+  if (!wos.length) {
+    el.innerHTML = '<div class="text-muted small text-center py-2">발행된 작업지시서가 없습니다</div>';
+    return;
+  }
+  el.innerHTML = wos.map(wo => {
+    const st = WO_STATUS[wo.status] || WO_STATUS.issued;
+    let btn = '';
+    if (wo.status === 'issued')
+      btn = `<button class="btn btn-xs btn-outline-primary" style="font-size:.65rem;padding:1px 7px;"
+                     onclick="startWO(${wo.id})"><i class="bi bi-play-fill"></i> 시작</button>`;
+    else if (wo.status === 'in_progress')
+      btn = `<button class="btn btn-xs btn-success" style="font-size:.65rem;padding:1px 7px;"
+                     onclick="openWOComplete(${wo.id})"><i class="bi bi-check-lg"></i> 완료</button>`;
+    else if (wo.status === 'completed')
+      btn = `<button class="btn btn-xs btn-outline-secondary" style="font-size:.65rem;padding:1px 7px;"
+                     onclick="confirmWO(${wo.id})"><i class="bi bi-patch-check"></i> 확인</button>`;
+
+    return `<div class="d-flex align-items-start gap-2 py-2 border-bottom" style="font-size:.78rem;">
+      <div class="flex-grow-1">
+        <div class="d-flex align-items-center gap-1 mb-1">
+          <span class="fw-semibold">${wo.work_order_number}</span>
+          <span class="${st.cls}" style="font-size:.62rem;">${st.label}</span>
+        </div>
+        <div>${wo.title}</div>
+        <div class="text-muted" style="font-size:.72rem;">
+          담당: ${wo.assigned_to_name||'미배정'}
+          ${wo.due_date?` | 기한: ${wo.due_date}`:''}
+        </div>
+        ${wo.actual_work?`<div class="mt-1 p-1" style="background:#f0f9f0;border-radius:4px;font-size:.72rem;color:#2a6a3a;">${wo.actual_work}</div>`:''}
+      </div>
+      <div class="flex-shrink-0">${btn}</div>
+    </div>`;
+  }).join('');
+}
+
+function openNewWorkOrderModal() {
+  // 현재 장애 정보로 기본값 세팅
+  fetch(`/npms/api/incidents/incidents/${INCIDENT_ID}/`, {credentials:'same-origin'})
+    .then(r=>r.json())
+    .then(d => {
+      document.getElementById('wo-title').value =
+        `[${d.category_name||''}] ${d.school_name||''} 장애처리`;
+      document.getElementById('wo-desc').value = d.description || '';
+      // 배정된 인력 가져오기
+      const assigneeEl = document.getElementById('wo-assignee');
+      assigneeEl.innerHTML = '<option value="">-- 선택 --</option>';
+      (d.assignments||[]).forEach(a => {
+        assigneeEl.innerHTML += `<option value="${a.worker_id}">${a.worker_name}</option>`;
+      });
+      // 기한: 오늘+1일
+      const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+      document.getElementById('wo-due').value = tomorrow.toISOString().slice(0,10);
+    });
+  new bootstrap.Modal(document.getElementById('woModal')).show();
+}
+
+async function submitWorkOrder() {
+  const title = document.getElementById('wo-title').value.trim();
+  if (!title) { alert('작업제목을 입력하세요'); return; }
+  const payload = {
+    title,
+    work_description: document.getElementById('wo-desc').value,
+    work_type:        document.getElementById('wo-type').value,
+    assigned_to:      document.getElementById('wo-assignee').value || null,
+    due_date:         document.getElementById('wo-due').value || null,
+    required_parts:   document.getElementById('wo-parts').value,
+  };
+  const res = await fetch(`/npms/api/incidents/incidents/${INCIDENT_ID}/work_orders/`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken':getCsrf()},
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) { alert('발행 실패: ' + (await res.json()).detail || '오류'); return; }
+  bootstrap.Modal.getInstance(document.getElementById('woModal')).hide();
+  loadWorkOrders();
+}
+
+async function startWO(id) {
+  await fetch(`${WO_API}${id}/start/`, {method:'POST', headers:{'X-CSRFToken':getCsrf()}});
+  loadWorkOrders();
+}
+
+function openWOComplete(id) {
+  _curWOId = id;
+  document.getElementById('wo-actual').value    = '';
+  document.getElementById('wo-parts-used').value = '';
+  document.getElementById('wo-note').value      = '';
+  new bootstrap.Modal(document.getElementById('woCompleteModal')).show();
+}
+
+async function submitWOComplete() {
+  const actual = document.getElementById('wo-actual').value.trim();
+  if (!actual) { alert('수행 내용을 입력하세요'); return; }
+  const res = await fetch(`${WO_API}${_curWOId}/complete/`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken':getCsrf()},
+    body: JSON.stringify({
+      actual_work: actual,
+      parts_used:  document.getElementById('wo-parts-used').value,
+      work_note:   document.getElementById('wo-note').value,
+    }),
+  });
+  if (!res.ok) { alert('처리 실패'); return; }
+  bootstrap.Modal.getInstance(document.getElementById('woCompleteModal')).hide();
+  loadWorkOrders();
+}
+
+async function confirmWO(id) {
+  if (!confirm('작업을 확인완료 처리하시겠습니까?')) return;
+  await fetch(`${WO_API}${id}/confirm/`, {method:'POST', headers:{'X-CSRFToken':getCsrf()}});
+  loadWorkOrders();
+}
+
+function getCsrf() {
+  return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1]||'';
+}
+</script>
+{% endblock %}

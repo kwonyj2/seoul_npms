@@ -1,0 +1,1087 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}진척관리{% endblock %}
+{% block page_title %}<i class="bi bi-clipboard2-check me-2"></i>점검 진척관리{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+<div class="row g-2">
+
+  <!-- ─── 좌: 계획 목록 ─── -->
+  <div class="col-12 col-lg-3">
+    <div class="card border-0 shadow-sm mb-2">
+      <div class="card-body py-2 px-3">
+        <div class="row g-1 align-items-end">
+          <div class="col-5">
+            <select id="filter-type" class="form-select form-select-sm">
+              <option value="">전체 유형</option>
+              <option value="regular">정기점검</option>
+              <option value="special">특별점검</option>
+              <option value="quarterly">분기점검</option>
+              <option value="project">사업점검</option>
+              <option value="survey">실태조사</option>
+              <option value="followup">사후점검</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <input type="number" id="filter-year" class="form-control form-control-sm" placeholder="연도" value="{{ now.year }}">
+          </div>
+          <div class="col-3">
+            <button class="btn btn-sm btn-success w-100" onclick="openPlanModal()" title="계획 생성"><i class="bi bi-plus-lg"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom small fw-semibold">
+        점검 계획 <span class="badge bg-secondary ms-1" id="plan-count">-</span>
+      </div>
+      <div id="plan-list" style="max-height:calc(100vh - 370px);overflow-y:auto;">
+        <div class="text-center py-4 text-muted small">로딩 중...</div>
+      </div>
+    </div>
+
+    <!-- 지원청별 진척현황 -->
+    <div class="card border-0 shadow-sm mt-2" id="center-summary-card" style="display:none;">
+      <div class="card-header py-2 bg-white border-bottom small fw-semibold d-flex align-items-center">
+        <span class="flex-fill">지원청별 진척현황</span>
+        <span class="badge bg-primary ms-1 small" id="left-plan-badge"></span>
+      </div>
+      <div id="left-center-chart" class="card-body p-0" style="overflow-x:auto;"></div>
+    </div>
+  </div>
+
+  <!-- ─── 우: 계획 상세 ─── -->
+  <div class="col-12 col-lg-9" id="detail-col" style="display:none;">
+    <!-- 헤더 -->
+    <div class="card border-0 shadow-sm mb-2">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
+        <div class="flex-fill">
+          <div class="fw-semibold" id="plan-name"></div>
+          <small class="text-muted" id="plan-meta"></small>
+        </div>
+        <span id="plan-status-badge"></span>
+        <div class="d-flex gap-1 flex-wrap">
+          <button class="btn btn-xs btn-outline-success" onclick="activatePlan()" title="활성화"><i class="bi bi-play-circle"></i> 활성화</button>
+          <button class="btn btn-xs btn-outline-primary" onclick="openAutoAssignModal()" title="자동배정"><i class="bi bi-calendar2-check"></i> 자동배정</button>
+          <button class="btn btn-xs btn-outline-warning" onclick="openReplaceWorkerModal()" title="기사교체"><i class="bi bi-arrow-left-right"></i> 기사교체</button>
+          <button class="btn btn-xs btn-outline-info" onclick="openUploadModal()" title="업로드"><i class="bi bi-upload"></i> 업로드</button>
+          <button class="btn btn-xs btn-outline-secondary" onclick="closeDetail()"><i class="bi bi-x-lg"></i></button>
+        </div>
+      </div>
+      <div class="card-body py-2 px-3">
+        <div class="d-flex justify-content-between small mb-1">
+          <span class="fw-semibold">전체 진행률</span>
+          <span id="progress-text" class="text-primary fw-bold"></span>
+        </div>
+        <div class="progress" style="height:14px;">
+          <div class="progress-bar bg-success progress-bar-striped" id="progress-bar" style="width:0%;"></div>
+        </div>
+        <div class="row g-2 mt-1" id="kpi-row"></div>
+      </div>
+    </div>
+
+    <!-- 탭 -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-0 bg-white border-bottom">
+        <ul class="nav nav-tabs card-header-tabs small" id="detail-tabs">
+          <li class="nav-item"><button class="nav-link active py-2" onclick="showTab('school')"><i class="bi bi-list-check me-1"></i>학교별</button></li>
+          <li class="nav-item"><button class="nav-link py-2" onclick="showTab('date')"><i class="bi bi-calendar3 me-1"></i>날짜별</button></li>
+          <li class="nav-item"><button class="nav-link py-2" onclick="showTab('worker')"><i class="bi bi-person-badge me-1"></i>기사별</button></li>
+          <li class="nav-item"><button class="nav-link py-2" onclick="showTab('completed')"><i class="bi bi-check-circle me-1 text-success"></i>완료</button></li>
+          <li class="nav-item"><button class="nav-link py-2" onclick="showTab('incomplete')"><i class="bi bi-hourglass-split me-1 text-warning"></i>미완료</button></li>
+        </ul>
+      </div>
+      <div class="card-body p-0">
+
+        <!-- ── 학교별 탭 ── -->
+        <div id="tab-school">
+          <div class="p-2 d-flex gap-2 border-bottom flex-wrap align-items-center bg-light">
+            <select id="sf-center" class="form-select form-select-sm" style="width:110px;">
+              <option value="">전체 지원청</option>
+              <option value="1">동부</option><option value="2">서부</option><option value="3">남부</option>
+              <option value="4">북부</option><option value="5">중부</option><option value="6">강동송파</option>
+              <option value="7">강서양천</option><option value="8">강남서초</option><option value="9">동작관악</option>
+              <option value="10">성동광진</option><option value="11">성북강북</option>
+            </select>
+            <select id="sf-type" class="form-select form-select-sm" style="width:95px;">
+              <option value="">전체 학제</option>
+              <option value="1">유치원</option><option value="2">초등학교</option><option value="3">중학교</option>
+              <option value="4">고등학교</option><option value="5">특수학교</option>
+            </select>
+            <input type="text" id="sf-school" class="form-control form-control-sm" style="width:130px;" placeholder="학교명 검색">
+            <select id="sf-status" class="form-select form-select-sm" style="width:90px;">
+              <option value="">전체 상태</option>
+              <option value="pending">미정</option><option value="scheduled">예정</option>
+              <option value="completed">완료</option><option value="skipped">제외</option>
+            </select>
+            <button class="btn btn-sm btn-primary py-1" onclick="siPage=1;loadTab('school')"><i class="bi bi-search"></i></button>
+            <button class="btn btn-sm btn-outline-secondary py-1" onclick="openAddSchoolModal()" title="학교 추가"><i class="bi bi-plus"></i> 추가</button>
+            <button class="btn btn-sm btn-outline-success py-1 ms-auto" onclick="csvDownload('school')" title="CSV 다운로드"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
+          </div>
+          <div id="school-table-wrap"></div>
+          <div id="school-pagination" class="border-top px-3 py-2 d-flex justify-content-between align-items-center"></div>
+        </div>
+
+        <!-- ── 날짜별 탭 ── -->
+        <div id="tab-date" style="display:none;">
+          <div class="p-2 d-flex gap-2 border-bottom flex-wrap align-items-center bg-light">
+            <input type="date" id="df-date" class="form-control form-control-sm" style="width:150px;" placeholder="예정일">
+            <button class="btn btn-sm btn-primary py-1" onclick="datePage=1;loadTab('date')"><i class="bi bi-search"></i> 검색</button>
+            <button class="btn btn-sm btn-outline-secondary py-1" onclick="document.getElementById('df-date').value='';datePage=1;loadTab('date')">전체</button>
+            <button class="btn btn-sm btn-outline-success py-1 ms-auto" onclick="csvDownload('date')"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
+          </div>
+          <div id="date-table-wrap"></div>
+          <div id="date-pagination" class="border-top px-3 py-2 d-flex justify-content-between align-items-center"></div>
+        </div>
+
+        <!-- ── 기사별 탭 ── -->
+        <div id="tab-worker" style="display:none;">
+          <div class="p-2 d-flex gap-2 border-bottom flex-wrap align-items-center bg-light">
+            <select id="wf-worker" class="form-select form-select-sm" style="width:130px;">
+              <option value="">전체 기사</option>
+            </select>
+            <button class="btn btn-sm btn-primary py-1" onclick="workerPage=1;loadTab('worker')"><i class="bi bi-search"></i> 검색</button>
+            <button class="btn btn-sm btn-outline-success py-1 ms-auto" onclick="csvDownload('worker')"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
+          </div>
+          <div id="worker-table-wrap"></div>
+          <div id="worker-pagination" class="border-top px-3 py-2 d-flex justify-content-between align-items-center"></div>
+        </div>
+
+        <!-- ── 완료 탭 ── -->
+        <div id="tab-completed" style="display:none;">
+          <div class="p-2 d-flex gap-2 border-bottom bg-light flex-wrap">
+            <span class="small text-muted align-self-center">완료된 학교 목록</span>
+            <button class="btn btn-sm btn-outline-success py-1 ms-auto" onclick="csvDownload('completed')"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
+          </div>
+          <div id="completed-table-wrap"></div>
+          <div id="completed-pagination" class="border-top px-3 py-2 d-flex justify-content-between align-items-center"></div>
+        </div>
+
+        <!-- ── 미완료 탭 ── -->
+        <div id="tab-incomplete" style="display:none;">
+          <div class="p-2 d-flex gap-2 border-bottom bg-light flex-wrap">
+            <span class="small text-muted align-self-center">미완료(미정+예정) 학교 목록</span>
+            <button class="btn btn-sm btn-outline-warning py-1 ms-auto" onclick="csvDownload('incomplete')"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
+          </div>
+          <div id="incomplete-table-wrap"></div>
+          <div id="incomplete-pagination" class="border-top px-3 py-2 d-flex justify-content-between align-items-center"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+
+<!-- ── Modal: 계획 생성 ── -->
+<div class="modal fade" id="planModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header py-2"><h6 class="modal-title fw-bold">점검 계획 생성</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="row g-2">
+        <div class="col-8"><label class="form-label small fw-semibold">계획명 <span class="text-danger">*</span></label><input type="text" id="pm-name" class="form-control form-control-sm" placeholder="예: 2026년 1분기 정기점검"></div>
+        <div class="col-4"><label class="form-label small fw-semibold">유형</label>
+          <select id="pm-type" class="form-select form-select-sm">
+            <option value="regular">정기점검</option><option value="special">특별점검</option>
+            <option value="quarterly">분기점검</option><option value="project">사업점검</option>
+            <option value="survey">실태조사</option><option value="followup">사후점검</option>
+          </select></div>
+        <div class="col-4"><label class="form-label small fw-semibold">연도 *</label><input type="number" id="pm-year" class="form-control form-control-sm"></div>
+        <div class="col-4"><label class="form-label small fw-semibold">분기</label>
+          <select id="pm-quarter" class="form-select form-select-sm"><option value="">-</option><option value="1">1분기</option><option value="2">2분기</option><option value="3">3분기</option><option value="4">4분기</option></select></div>
+        <div class="col-4"><label class="form-label small fw-semibold">상태</label>
+          <select id="pm-status" class="form-select form-select-sm"><option value="draft">준비중</option><option value="active">진행중</option></select></div>
+        <div class="col-6"><label class="form-label small fw-semibold">시작일 *</label><input type="date" id="pm-start" class="form-control form-control-sm"></div>
+        <div class="col-6"><label class="form-label small fw-semibold">종료일 *</label><input type="date" id="pm-end" class="form-control form-control-sm"></div>
+        <div class="col-12"><label class="form-label small fw-semibold">설명</label><textarea id="pm-desc" class="form-control form-control-sm" rows="2"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer py-2"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button><button class="btn btn-sm btn-primary" onclick="submitPlan()"><i class="bi bi-check-lg me-1"></i>생성</button></div>
+  </div></div>
+</div>
+
+<!-- ── Modal: 계획 수정 ── -->
+<div class="modal fade" id="planEditModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header py-2"><h6 class="modal-title fw-bold">점검 계획 수정</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="pe-id">
+      <div class="row g-2">
+        <div class="col-8"><label class="form-label small fw-semibold">계획명 *</label><input type="text" id="pe-name" class="form-control form-control-sm"></div>
+        <div class="col-4"><label class="form-label small fw-semibold">유형</label>
+          <select id="pe-type" class="form-select form-select-sm">
+            <option value="regular">정기점검</option><option value="special">특별점검</option>
+            <option value="quarterly">분기점검</option><option value="project">사업점검</option>
+            <option value="survey">실태조사</option><option value="followup">사후점검</option>
+          </select></div>
+        <div class="col-4"><label class="form-label small fw-semibold">연도 *</label><input type="number" id="pe-year" class="form-control form-control-sm"></div>
+        <div class="col-4"><label class="form-label small fw-semibold">분기</label>
+          <select id="pe-quarter" class="form-select form-select-sm"><option value="">-</option><option value="1">1분기</option><option value="2">2분기</option><option value="3">3분기</option><option value="4">4분기</option></select></div>
+        <div class="col-4"><label class="form-label small fw-semibold">상태</label>
+          <select id="pe-status" class="form-select form-select-sm"><option value="draft">준비중</option><option value="active">진행중</option><option value="completed">완료</option></select></div>
+        <div class="col-6"><label class="form-label small fw-semibold">시작일 *</label><input type="date" id="pe-start" class="form-control form-control-sm"></div>
+        <div class="col-6"><label class="form-label small fw-semibold">종료일 *</label><input type="date" id="pe-end" class="form-control form-control-sm"></div>
+        <div class="col-12"><label class="form-label small fw-semibold">설명</label><textarea id="pe-desc" class="form-control form-control-sm" rows="2"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer py-2"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button><button class="btn btn-sm btn-primary" onclick="submitEditPlan()"><i class="bi bi-check-lg me-1"></i>저장</button></div>
+  </div></div>
+</div>
+
+<!-- ── Modal: 점검 항목 수정 ── -->
+<div class="modal fade" id="siModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header py-2"><h6 class="modal-title fw-bold" id="si-modal-title">점검 정보 수정</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="si-id">
+      <div class="row g-2">
+        <div class="col-6"><label class="form-label small fw-semibold">상태</label>
+          <select id="si-status" class="form-select form-select-sm"><option value="pending">미정</option><option value="scheduled">예정</option><option value="completed">완료</option><option value="skipped">제외</option></select></div>
+        <div class="col-6"><label class="form-label small fw-semibold">우선순위</label>
+          <select id="si-priority" class="form-select form-select-sm"><option value="normal">보통</option><option value="high">높음</option><option value="low">낮음</option></select></div>
+        <div class="col-6"><label class="form-label small fw-semibold">예정일</label><input type="date" id="si-scheduled" class="form-control form-control-sm"></div>
+        <div class="col-6"><label class="form-label small fw-semibold">완료일</label><input type="date" id="si-completed" class="form-control form-control-sm"></div>
+        <div class="col-6"><label class="form-label small fw-semibold">담당기사</label><select id="si-worker" class="form-select form-select-sm"><option value="">미배정</option></select></div>
+        <div class="col-6"><label class="form-label small fw-semibold">작업유형</label><input type="text" id="si-task-type" class="form-control form-control-sm" placeholder="스위치교체, AP설치..."></div>
+        <div class="col-12"><label class="form-label small fw-semibold">비고</label><textarea id="si-notes" class="form-control form-control-sm" rows="2"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer py-2"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button><button class="btn btn-sm btn-primary" onclick="submitSi()">저장</button></div>
+  </div></div>
+</div>
+
+<!-- ── Modal: 자동배정 ── -->
+<div class="modal fade" id="autoAssignModal" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header py-2"><h6 class="modal-title fw-bold"><i class="bi bi-calendar2-check me-2"></i>자동 일정 배정</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-info small mb-3">
+        <i class="bi bi-info-circle me-1"></i>
+        토·일요일 및 법정공휴일을 제외한 <strong>점검계획 기간 내 영업일</strong>과 <strong>지원청별 인력 수</strong>를 기준으로 1일 방문 건수를 자동 계산하여 배정합니다.<br>
+        <strong>근접 학교 우선 배정:</strong> 인근 학교(예: 경희초·경희중·경희고)를 같은 기사가 같은 날 연속 방문하도록 근접거리 순으로 최적화합니다.<br>
+        작업유형이 없는 경우 점검계획명으로 자동 설정됩니다.
+      </div>
+      <div class="mb-2">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="aa-force-reassign">
+          <label class="form-check-label small text-warning fw-semibold" for="aa-force-reassign">
+            <i class="bi bi-exclamation-triangle me-1"></i>기존 배정 초기화 후 전체 재배정
+          </label>
+        </div>
+        <div class="form-text small text-muted ms-4">체크 시 이미 배정된 학교도 모두 초기화 후 재배정합니다.</div>
+      </div>
+      <div id="aa-result" style="display:none;"><hr><div id="aa-result-body"></div></div>
+    </div>
+    <div class="modal-footer py-2">
+      <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">닫기</button>
+      <button class="btn btn-sm btn-primary" id="btn-auto-assign" onclick="submitAutoAssign()"><i class="bi bi-play-fill me-1"></i>자동배정 실행</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- ── Modal: 기사교체 ── -->
+<div class="modal fade" id="replaceWorkerModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header py-2"><h6 class="modal-title fw-bold"><i class="bi bi-arrow-left-right me-2"></i>담당 기사 교체</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-warning small mb-3"><i class="bi bi-exclamation-triangle me-1"></i>교체 전 기사의 미완료(미정·예정) 업무가 신규 기사에게 이관됩니다.</div>
+      <div class="row g-2">
+        <div class="col-6"><label class="form-label small fw-semibold">교체 전 기사 *</label><select id="rw-old-worker" class="form-select form-select-sm"><option value="">선택...</option></select></div>
+        <div class="col-6"><label class="form-label small fw-semibold">신규 기사 *</label><select id="rw-new-worker" class="form-select form-select-sm"><option value="">선택...</option></select></div>
+        <div class="col-12"><label class="form-label small fw-semibold">교체 기준일 (비워두면 전체)</label><input type="date" id="rw-from-date" class="form-control form-control-sm"></div>
+      </div>
+      <div id="rw-result" class="mt-2" style="display:none;"><div id="rw-result-body"></div></div>
+    </div>
+    <div class="modal-footer py-2"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button><button class="btn btn-sm btn-warning" onclick="submitReplaceWorker()"><i class="bi bi-check-lg me-1"></i>교체 실행</button></div>
+  </div></div>
+</div>
+
+<!-- ── Modal: 업로드 ── -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+  <div class="modal-dialog modal-xl"><div class="modal-content">
+    <div class="modal-header py-2"><h6 class="modal-title fw-bold"><i class="bi bi-upload me-2"></i>학교 데이터 업로드</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="d-flex gap-2 mb-3 align-items-center">
+        <a href="#" class="btn btn-sm btn-outline-secondary" onclick="downloadTemplate(); return false;"><i class="bi bi-file-earmark-excel me-1"></i>템플릿 다운로드</a>
+        <span class="text-muted small">← 템플릿 양식으로 작성 후 업로드하세요.</span>
+      </div>
+      <div class="border rounded p-3 text-center bg-light mb-3" ondragover="event.preventDefault();" ondrop="handleDrop(event)">
+        <i class="bi bi-file-earmark-arrow-up fs-2 text-muted"></i>
+        <p class="mb-1 text-muted small">Excel(.xlsx/.xls/.xlsm) 또는 CSV 파일을 드래그하거나 선택하세요.</p>
+        <input type="file" id="upload-file" class="form-control form-control-sm mt-2" accept=".xlsx,.xls,.xlsm,.csv" onchange="handleFileSelect(this)">
+      </div>
+      <div id="upload-preview" style="display:none;">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="small fw-bold mb-0">매칭 미리보기</h6><span id="upload-summary" class="badge bg-secondary"></span>
+        </div>
+        <div class="table-responsive" style="max-height:350px;overflow-y:auto;">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light sticky-top">
+              <tr><th>#</th><th>학교명(입력)</th><th>매칭학교</th><th>지원청</th><th>예정일</th><th>담당기사</th><th>우선순위</th><th>작업유형</th><th>결과</th></tr>
+            </thead>
+            <tbody id="upload-preview-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer py-2">
+      <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+      <button class="btn btn-sm btn-primary" id="btn-confirm-upload" onclick="confirmUpload()" style="display:none;"><i class="bi bi-check-lg me-1"></i>확인 및 등록</button>
+    </div>
+  </div></div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const API = API_BASE + '/progress';
+const STATUS_BADGE = {
+  draft:     '<span class="badge bg-secondary">준비중</span>',
+  active:    '<span class="badge bg-primary">진행중</span>',
+  completed: '<span class="badge bg-success">완료</span>',
+};
+const SI_BADGE = {
+  pending:   '<span class="badge bg-light text-dark border" style="font-size:0.7rem;">미정</span>',
+  scheduled: '<span class="badge bg-info text-dark" style="font-size:0.7rem;">예정</span>',
+  completed: '<span class="badge bg-success" style="font-size:0.7rem;">완료</span>',
+  skipped:   '<span class="badge bg-secondary" style="font-size:0.7rem;">제외</span>',
+};
+const PRIORITY_BADGE = {
+  high:   '<span class="badge bg-danger" style="font-size:0.7rem;">높음</span>',
+  normal: '<span class="badge bg-light text-dark border" style="font-size:0.7rem;">보통</span>',
+  low:    '<span class="badge bg-light text-muted border" style="font-size:0.7rem;">낮음</span>',
+};
+const TYPE_COLOR = { regular:'primary', special:'danger', quarterly:'info', project:'warning', survey:'dark', followup:'secondary' };
+const PAGE_SIZE  = 20;
+
+let currentPlanId = null;
+let currentTab    = 'school';
+let workerOptions = null;
+let uploadRows    = [];
+let uploadFileName = '';
+
+// 탭별 페이지·정렬 상태
+let siPage = 1, datePage = 1, workerPage = 1, completedPage = 1, incompletePage = 1;
+const sortState = { school:{f:'school__support_center__name', d:'asc'}, date:{f:'scheduled_date', d:'asc'}, worker:{f:'assigned_worker__name', d:'asc'}, completed:{f:'completed_date', d:'desc'}, incomplete:{f:'scheduled_date', d:'asc'} };
+
+// ─────────────────────────────────────
+// 계획 목록
+// ─────────────────────────────────────
+async function loadPlans() {
+  const params = {};
+  const type = document.getElementById('filter-type').value;
+  const year = document.getElementById('filter-year').value;
+  if (type) params.plan_type = type;
+  if (year) params.year = year;
+  const el = document.getElementById('plan-list');
+  el.innerHTML = '<div class="text-center py-3 text-muted small">로딩 중...</div>';
+  try {
+    const data = await apiGet(`${API}/plans/`, params);
+    const items = data.results || data;
+    document.getElementById('plan-count').textContent = items.length || 0;
+    if (!items.length) { el.innerHTML = '<div class="text-center py-4 text-muted small">계획 없음</div>'; return; }
+    el.innerHTML = items.map(p => `
+      <div class="p-2 border-bottom cursor-pointer plan-card ${p.id===currentPlanId?'bg-primary bg-opacity-10':''}" onclick="openPlan(${p.id})">
+        <div class="d-flex align-items-start gap-1">
+          <span class="badge bg-${TYPE_COLOR[p.plan_type]||'secondary'}" style="font-size:0.65rem;">${p.plan_type_display}</span>
+          <div class="flex-fill min-w-0">
+            <div class="fw-semibold text-truncate" style="font-size:0.8rem;">${p.name}</div>
+            <small class="text-muted" style="font-size:0.7rem;">${p.year}년${p.quarter?` ${p.quarter}분기`:''} · ${p.start_date}~${p.end_date}</small>
+          </div>
+          ${STATUS_BADGE[p.status]||''}
+        </div>
+        <div class="mt-1">
+          <div class="d-flex justify-content-between" style="font-size:0.72rem;">
+            <span>${p.completed_count}/${p.total} 완료</span>
+            <span class="fw-bold text-${p.progress_pct>=100?'success':'primary'}">${p.progress_pct}%</span>
+          </div>
+          <div class="progress" style="height:5px;"><div class="progress-bar bg-${p.progress_pct>=100?'success':'primary'}" style="width:${p.progress_pct}%;"></div></div>
+        </div>
+        <div class="d-flex justify-content-end gap-1 mt-1">
+          <button class="btn btn-xs btn-outline-secondary py-0 px-1" onclick="event.stopPropagation();openEditPlanModal(${p.id})" title="수정"><i class="bi bi-pencil"></i></button>
+          <button class="btn btn-xs btn-outline-danger py-0 px-1" data-pid="${p.id}" data-pname="${p.name.replace(/"/g,'&quot;')}" data-ptotal="${p.total}" onclick="event.stopPropagation();deletePlan(+this.dataset.pid,this.dataset.pname,+this.dataset.ptotal)" title="삭제"><i class="bi bi-trash"></i></button>
+        </div>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = '<div class="text-center py-3 text-danger small">로드 실패</div>'; }
+}
+
+// ─────────────────────────────────────
+// 계획 상세 열기
+// ─────────────────────────────────────
+async function openPlan(id) {
+  currentPlanId = id;
+  document.getElementById('detail-col').style.display = '';
+  try {
+    const stats = await apiGet(`${API}/plans/${id}/stats/`);
+    document.getElementById('plan-name').textContent = stats.plan_name;
+    document.getElementById('plan-meta').textContent = `총 ${stats.total}개 학교`;
+    document.getElementById('progress-bar').style.width = `${stats.progress_pct}%`;
+    document.getElementById('progress-text').textContent = `${stats.completed}/${stats.total} (${stats.progress_pct}%)`;
+    const bs = stats.by_status;
+    document.getElementById('kpi-row').innerHTML = `
+      <div class="col-3"><div class="text-center py-1 rounded bg-light"><div class="small text-muted" style="font-size:0.72rem;">미정</div><div class="fw-bold">${bs.pending||0}</div></div></div>
+      <div class="col-3"><div class="text-center py-1 rounded bg-info bg-opacity-10"><div class="small text-muted" style="font-size:0.72rem;">예정</div><div class="fw-bold text-info">${bs.scheduled||0}</div></div></div>
+      <div class="col-3"><div class="text-center py-1 rounded bg-success bg-opacity-10"><div class="small text-muted" style="font-size:0.72rem;">완료</div><div class="fw-bold text-success">${bs.completed||0}</div></div></div>
+      <div class="col-3"><div class="text-center py-1 rounded bg-secondary bg-opacity-10"><div class="small text-muted" style="font-size:0.72rem;">제외</div><div class="fw-bold text-secondary">${bs.skipped||0}</div></div></div>`;
+    // 좌측 지원청 요약
+    renderLeftCenterSummary(stats.by_center || [], stats.plan_name);
+    // 현재 탭 로드
+    loadTab(currentTab);
+    loadPlans();
+  } catch(e) { showToast('계획 로드 실패', 'danger'); }
+}
+
+function closeDetail() {
+  document.getElementById('detail-col').style.display = 'none';
+  document.getElementById('center-summary-card').style.display = 'none';
+  currentPlanId = null;
+}
+
+// ─────────────────────────────────────
+// 탭 전환
+// ─────────────────────────────────────
+const TABS = ['school','date','worker','completed','incomplete'];
+function showTab(name) {
+  currentTab = name;
+  TABS.forEach(t => document.getElementById(`tab-${t}`).style.display = t===name ? '' : 'none');
+  document.querySelectorAll('#detail-tabs .nav-link').forEach((btn, i) => {
+    btn.classList.toggle('active', TABS[i] === name);
+  });
+  if (currentPlanId) loadTab(name);
+}
+
+// ─────────────────────────────────────
+// 공통 테이블 로더
+// ─────────────────────────────────────
+async function loadTab(tab) {
+  if (!currentPlanId) return;
+  const ss = sortState[tab];
+  const ordering = `${ss.d==='desc'?'-':''}${ss.f}`;
+  let params = { plan_id: currentPlanId, page_size: PAGE_SIZE, ordering };
+
+  switch(tab) {
+    case 'school':
+      params.page = siPage;
+      const center = document.getElementById('sf-center').value;
+      const stype  = document.getElementById('sf-type').value;
+      const sname  = document.getElementById('sf-school').value;
+      const sstat  = document.getElementById('sf-status').value;
+      if (center) params.center = center;
+      if (stype)  params.school_type = stype;
+      if (sname)  params.school_name = sname;
+      if (sstat)  params.status = sstat;
+      break;
+    case 'date':
+      params.page = datePage;
+      const dv = document.getElementById('df-date').value;
+      if (dv) params.scheduled_date = dv;
+      break;
+    case 'worker':
+      params.page = workerPage;
+      const wv = document.getElementById('wf-worker').value;
+      if (wv) params.worker = wv;
+      break;
+    case 'completed':
+      params.page = completedPage;
+      params.status = 'completed';
+      break;
+    case 'incomplete':
+      params.page = incompletePage;
+      params.status = 'pending,scheduled';
+      break;
+  }
+
+  const wrapId = `${tab}-table-wrap`;
+  const pagId  = `${tab}-pagination`;
+  document.getElementById(wrapId).innerHTML = '<div class="text-center py-3 text-muted small">로딩 중...</div>';
+  try {
+    const data  = await apiGet(`${API}/inspections/`, params);
+    const items = data.results || [];
+    const total = data.count || 0;
+    document.getElementById(wrapId).innerHTML = renderTable(tab, items, ss);
+    renderPagination(pagId, total, PAGE_SIZE, params.page, (pg) => {
+      if (tab==='school') siPage=pg;
+      else if (tab==='date') datePage=pg;
+      else if (tab==='worker') workerPage=pg;
+      else if (tab==='completed') completedPage=pg;
+      else incompletePage=pg;
+      loadTab(tab);
+    });
+    // 정렬 이벤트 바인딩
+    document.querySelectorAll(`#${wrapId} th[data-sort]`).forEach(th => {
+      th.style.cursor = 'pointer';
+      th.addEventListener('click', () => {
+        const f = th.dataset.sort;
+        if (ss.f === f) ss.d = ss.d==='asc' ? 'desc' : 'asc';
+        else { ss.f = f; ss.d = 'asc'; }
+        if (tab==='school') siPage=1;
+        else if (tab==='date') datePage=1;
+        else if (tab==='worker') workerPage=1;
+        else if (tab==='completed') completedPage=1;
+        else incompletePage=1;
+        loadTab(tab);
+      });
+    });
+  } catch(e) { document.getElementById(wrapId).innerHTML = '<div class="text-center py-3 text-danger small">로드 실패</div>'; }
+}
+
+function sortArrow(tab, field) {
+  const ss = sortState[tab];
+  if (ss.f !== field) return '<i class="bi bi-arrow-down-up text-muted ms-1" style="font-size:0.65rem;"></i>';
+  return ss.d==='asc' ? '<i class="bi bi-sort-up ms-1" style="font-size:0.65rem;"></i>' : '<i class="bi bi-sort-down ms-1" style="font-size:0.65rem;"></i>';
+}
+
+function renderTable(tab, items, ss) {
+  if (!items.length) return '<div class="text-center py-4 text-muted small">항목 없음</div>';
+  const fs = 'font-size:0.78rem;';
+  if (tab === 'date') {
+    return `<div class="table-responsive"><table class="table table-sm table-hover mb-0" style="${fs}table-layout:fixed;width:100%;">
+      <thead class="table-light sticky-top"><tr>
+        <th data-sort="scheduled_date" style="width:10%;">예정일${sortArrow('date','scheduled_date')}</th>
+        <th data-sort="school__support_center__name" style="width:9%;">지원청${sortArrow('date','school__support_center__name')}</th>
+        <th data-sort="school__name" style="width:14%;">학교${sortArrow('date','school__name')}</th>
+        <th data-sort="assigned_worker__name" style="width:9%;">담당기사${sortArrow('date','assigned_worker__name')}</th>
+        <th style="width:14%;">작업유형</th>
+        <th style="width:7%;">상태</th>
+        <th style="width:8%;">조치</th>
+      </tr></thead>
+      <tbody>${items.map(si=>`<tr>
+        <td>${si.scheduled_date||'-'}</td>
+        <td><small class="text-muted">${si.center_name||'-'}</small></td>
+        <td class="fw-semibold" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${si.school_name}</td>
+        <td>${si.worker_name||'-'}</td>
+        <td><small class="text-muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">${si.task_type||'-'}</small></td>
+        <td>${SI_BADGE[si.status]||si.status}</td>
+        <td>${actionBtns(si)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+  if (tab === 'worker') {
+    return `<div class="table-responsive"><table class="table table-sm table-hover mb-0" style="${fs}table-layout:fixed;width:100%;">
+      <thead class="table-light sticky-top"><tr>
+        <th data-sort="assigned_worker__name" style="width:9%;">담당기사${sortArrow('worker','assigned_worker__name')}</th>
+        <th data-sort="school__support_center__name" style="width:9%;">지원청${sortArrow('worker','school__support_center__name')}</th>
+        <th data-sort="school__name" style="width:14%;">학교${sortArrow('worker','school__name')}</th>
+        <th data-sort="scheduled_date" style="width:10%;">예정일${sortArrow('worker','scheduled_date')}</th>
+        <th data-sort="completed_date" style="width:10%;">완료일${sortArrow('worker','completed_date')}</th>
+        <th style="width:7%;">상태</th>
+        <th style="width:8%;">조치</th>
+      </tr></thead>
+      <tbody>${items.map(si=>`<tr>
+        <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${si.worker_name||'<span class="text-muted">미배정</span>'}</td>
+        <td><small class="text-muted">${si.center_name||'-'}</small></td>
+        <td class="fw-semibold" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${si.school_name}</td>
+        <td>${si.scheduled_date||'-'}</td>
+        <td>${si.completed_date||'-'}</td>
+        <td>${SI_BADGE[si.status]||si.status}</td>
+        <td>${actionBtns(si)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+  // school / completed / incomplete
+  return `<div class="table-responsive"><table class="table table-sm table-hover mb-0" style="${fs}table-layout:fixed;width:100%;">
+    <thead class="table-light sticky-top"><tr>
+      <th data-sort="school__support_center__name" style="width:9%;">지원청${sortArrow(tab,'school__support_center__name')}</th>
+      <th data-sort="school__name" style="width:12%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">학교${sortArrow(tab,'school__name')}</th>
+      <th style="width:6%;" class="text-muted small">학제</th>
+      <th data-sort="assigned_worker__name" style="width:9%;">담당기사${sortArrow(tab,'assigned_worker__name')}</th>
+      <th data-sort="scheduled_date" style="width:10%;">예정일${sortArrow(tab,'scheduled_date')}</th>
+      <th data-sort="completed_date" style="width:9%;">완료일${sortArrow(tab,'completed_date')}</th>
+      <th style="width:13%;">작업유형</th>
+      <th data-sort="priority" style="width:7%;">우선${sortArrow(tab,'priority')}</th>
+      <th style="width:7%;">상태</th>
+      <th style="width:8%;">조치</th>
+    </tr></thead>
+    <tbody>${items.map(si=>`<tr>
+      <td><small class="text-muted">${si.center_name||'-'}</small></td>
+      <td class="fw-semibold">${si.school_name}</td>
+      <td><small class="text-muted">${si.school_type_name||''}</small></td>
+      <td>${si.worker_name||'<span class="text-danger small">미배정</span>'}</td>
+      <td>${si.scheduled_date||'-'}</td>
+      <td>${si.completed_date||'-'}</td>
+      <td><small class="text-muted">${si.task_type||'-'}</small></td>
+      <td>${PRIORITY_BADGE[si.priority]||'-'}</td>
+      <td>${SI_BADGE[si.status]||si.status}</td>
+      <td>${actionBtns(si)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function actionBtns(si) {
+  const canComplete = si.status !== 'completed' && si.status !== 'skipped';
+  return `<div class="d-flex gap-1">
+    ${canComplete ? `<button class="btn btn-xs btn-success py-0 px-1" onclick="markComplete(${si.id})" title="완료"><i class="bi bi-check2"></i></button>` : ''}
+    <button class="btn btn-xs btn-outline-primary py-0 px-1" onclick="openSiModal(${si.id})" title="수정"><i class="bi bi-pencil"></i></button>
+  </div>`;
+}
+
+function renderPagination(containerId, total, pageSize, curPage, onPage) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const totalPages = Math.ceil(total / pageSize);
+  const from = total ? (curPage-1)*pageSize+1 : 0;
+  const to   = Math.min(curPage*pageSize, total);
+  if (totalPages <= 1) { el.innerHTML = '<small class="text-muted">총 ' + total + '건</small><span></span>'; return; }
+  const pages = [];
+  const start = Math.max(1, curPage-2);
+  const end   = Math.min(totalPages, curPage+2);
+  if (start>1) pages.push({p:1,label:'1'});
+  if (start>2) pages.push({p:null,label:'…'});
+  for (let p=start; p<=end; p++) pages.push({p,label:String(p)});
+  if (end<totalPages-1) pages.push({p:null,label:'…'});
+  if (end<totalPages) pages.push({p:totalPages,label:String(totalPages)});
+  let html = '<small class="text-muted">' + from + '-' + to + ' / ' + total + '건</small>'
+    + '<nav><ul class="pagination pagination-sm mb-0">'
+    + '<li class="page-item ' + (curPage<=1?'disabled':'') + '"><a class="page-link py-0 pg-btn" href="#" data-pg="' + (curPage-1) + '">‹</a></li>';
+  pages.forEach(function(item) {
+    if (item.p == null) {
+      html += '<li class="page-item disabled"><span class="page-link py-0">' + item.label + '</span></li>';
+    } else {
+      html += '<li class="page-item ' + (item.p===curPage?'active':'') + '"><a class="page-link py-0 pg-btn" href="#" data-pg="' + item.p + '">' + item.label + '</a></li>';
+    }
+  });
+  html += '<li class="page-item ' + (curPage>=totalPages?'disabled':'') + '"><a class="page-link py-0 pg-btn" href="#" data-pg="' + (curPage+1) + '">›</a></li>'
+    + '</ul></nav>';
+  el.innerHTML = html;
+  el.querySelectorAll('.pg-btn').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      const pg = parseInt(this.dataset.pg);
+      if (pg >= 1 && pg <= totalPages) onPage(pg);
+    });
+  });
+}
+
+// ─────────────────────────────────────
+// 좌측 지원청 요약 (피벗 테이블)
+// ─────────────────────────────────────
+function renderLeftCenterSummary(data, planName) {
+  const card = document.getElementById('center-summary-card');
+  const el   = document.getElementById('left-center-chart');
+  document.getElementById('left-plan-badge').textContent = planName;
+  if (!data.length) {
+    el.innerHTML = '<div class="text-muted text-center small py-3">데이터 없음</div>';
+    card.style.display = '';
+    return;
+  }
+
+  // 지원청 순서 고정
+  const CENTER_ORDER = ['동부','서부','남부','북부','중부','강동송파','강서양천','강남서초','동작관악','성동광진','성북강북'];
+  const dataMap = Object.fromEntries(data.map(c => [c.name, c]));
+  const sorted  = CENTER_ORDER.map(n => dataMap[n]).filter(Boolean);
+  // 순서 외 나머지(혹시 있을 경우) 뒤에 추가
+  data.filter(c => !CENTER_ORDER.includes(c.name)).forEach(c => sorted.push(c));
+  data = sorted;
+
+  const sumTotal = data.reduce((s, c) => s + (c.total||0), 0);
+  const sumDone  = data.reduce((s, c) => s + (c.completed||0), 0);
+  const sumPct   = sumTotal ? Math.round(sumDone / sumTotal * 100) : 0;
+
+  // 4글자 지원청명 2줄 처리
+  function centerLabel(name) {
+    if (name.length === 4) return name.slice(0,2) + '<br>' + name.slice(2);
+    return name;
+  }
+
+  // 열 폭: 전체 100% / (지원청수 + 구분1 + 합계1)
+  const totalCols = data.length + 2;
+  const colW = (100 / totalCols).toFixed(1) + '%';
+
+  function pctColor(pct) {
+    if (pct >= 80) return '#166534';
+    if (pct >= 50) return '#0d6efd';
+    if (pct >= 20) return '#fd7e14';
+    return '#dc3545';
+  }
+  function pctBg(pct) {
+    if (pct >= 80) return '#d1fae5';
+    if (pct >= 50) return '#dbeafe';
+    if (pct >= 20) return '#ffedd5';
+    return '#fee2e2';
+  }
+
+  const fs = 'font-size:0.72rem;';
+  const thStyle = `text-align:center;vertical-align:middle;padding:4px 3px;width:${colW};`;
+
+  // 헤더행: 지원청명 (4글자 2줄, 2글자 수직 중앙)
+  const headerCols = data.map(c =>
+    `<th style="${thStyle}color:#fff;background:#1f4e79;line-height:1.4;">${centerLabel(c.name)}</th>`
+  ).join('') +
+  `<th style="${thStyle}color:#fff;background:#0f2d4a;border-left:2px solid #0d6efd;">합계</th>`;
+
+  // 목표행
+  const goalCols = data.map(c =>
+    `<td style="text-align:center;padding:4px 6px;">${c.total||0}</td>`
+  ).join('') +
+  `<td style="text-align:center;padding:4px 6px;font-weight:700;background:#e8f0fe;border-left:2px solid #0d6efd;">${sumTotal}</td>`;
+
+  // 점검(완료)행
+  const doneCols = data.map(c =>
+    `<td style="text-align:center;padding:4px 6px;color:#166534;font-weight:600;">${c.completed||0}</td>`
+  ).join('') +
+  `<td style="text-align:center;padding:4px 6px;font-weight:700;color:#166534;background:#e8f0fe;border-left:2px solid #0d6efd;">${sumDone}</td>`;
+
+  // 진척율행
+  const pctCols = data.map(c => {
+    const pct = c.total ? Math.round(c.completed / c.total * 100) : 0;
+    return `<td style="text-align:center;padding:4px 6px;font-weight:700;color:${pctColor(pct)};background:${pctBg(pct)};">${pct}%</td>`;
+  }).join('') +
+  `<td style="text-align:center;padding:4px 6px;font-weight:700;color:${pctColor(sumPct)};background:#e8f0fe;border-left:2px solid #0d6efd;">${sumPct}%</td>`;
+
+  const labelStyle = `text-align:center;padding:4px 3px;font-weight:600;width:${colW};`;
+
+  el.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="table table-bordered mb-0" style="${fs}table-layout:fixed;width:100%;">
+        <thead>
+          <tr>
+            <th style="${thStyle}background:#1a3a5c;color:#fff;border-right:2px solid #0d6efd;">구분</th>
+            ${headerCols}
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background:#f0f4ff;">
+            <td style="${labelStyle}background:#c7d7f7;color:#1e3a8a;">목표</td>
+            ${goalCols}
+          </tr>
+          <tr style="background:#f0fdf4;">
+            <td style="${labelStyle}background:#86efac;color:#14532d;">점검</td>
+            ${doneCols}
+          </tr>
+          <tr>
+            <td style="${labelStyle}background:#fef08a;color:#713f12;">진척</td>
+            ${pctCols}
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+  card.style.display = '';
+}
+
+// ─────────────────────────────────────
+// 점검 항목 수정 모달
+// ─────────────────────────────────────
+async function ensureWorkerOptions() {
+  if (workerOptions !== null) return;
+  workerOptions = '';
+  try {
+    // 현장기사(worker) + 상주인력(resident) 모두 조회
+    const [d1, d2] = await Promise.all([
+      apiGet(`${API_BASE}/accounts/api/users/`, { role: 'worker',   page_size: 200 }),
+      apiGet(`${API_BASE}/accounts/api/users/`, { role: 'resident', page_size: 200 }),
+    ]);
+    const workers = [...(d1.results || d1), ...(d2.results || d2)];
+    workers.sort((a, b) => a.name.localeCompare(b.name));
+    workerOptions = workers.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+    // 기사별 필터 드롭다운도 채우기
+    const wfEl = document.getElementById('wf-worker');
+    if (wfEl) wfEl.innerHTML = '<option value="">전체 기사</option>' + workerOptions;
+  } catch(e) { workerOptions = ''; }
+}
+
+async function openSiModal(id) {
+  const si = await apiGet(`${API}/inspections/${id}/`);
+  document.getElementById('si-id').value        = id;
+  document.getElementById('si-status').value    = si.status;
+  document.getElementById('si-priority').value  = si.priority || 'normal';
+  document.getElementById('si-scheduled').value = si.scheduled_date || '';
+  document.getElementById('si-completed').value = si.completed_date || '';
+  document.getElementById('si-task-type').value = si.task_type || '';
+  document.getElementById('si-notes').value     = si.notes || '';
+  document.getElementById('si-modal-title').textContent = `점검 수정 — ${si.school_name}`;
+  await ensureWorkerOptions();
+  const sel = document.getElementById('si-worker');
+  sel.innerHTML = `<option value="">미배정</option>${workerOptions}`;
+  sel.value = si.assigned_worker || '';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('siModal')).show();
+}
+
+async function submitSi() {
+  const id = document.getElementById('si-id').value;
+  const payload = {
+    status: document.getElementById('si-status').value,
+    priority: document.getElementById('si-priority').value,
+    scheduled_date: document.getElementById('si-scheduled').value || null,
+    completed_date: document.getElementById('si-completed').value || null,
+    task_type: document.getElementById('si-task-type').value,
+    notes: document.getElementById('si-notes').value,
+    assigned_worker: document.getElementById('si-worker').value || null,
+  };
+  try {
+    await apiPatch(`${API}/inspections/${id}/`, payload);
+    bootstrap.Modal.getInstance(document.getElementById('siModal')).hide();
+    showToast('저장 완료', 'success');
+    loadTab(currentTab);
+    openPlan(currentPlanId);
+  } catch(e) { showToast('저장 실패', 'danger'); }
+}
+
+async function markComplete(id) {
+  try {
+    await apiPost(`${API}/inspections/${id}/mark_complete/`, {});
+    showToast('완료 처리됨', 'success');
+    loadTab(currentTab);
+    openPlan(currentPlanId);
+  } catch(e) { showToast('완료 처리 실패', 'danger'); }
+}
+
+// ─────────────────────────────────────
+// 계획 생성/수정/삭제
+// ─────────────────────────────────────
+function openPlanModal() {
+  const y = new Date().getFullYear();
+  ['pm-name','pm-desc','pm-start','pm-end'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('pm-year').value = y;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('planModal')).show();
+}
+
+async function submitPlan() {
+  const name=document.getElementById('pm-name').value.trim(), year=document.getElementById('pm-year').value, start=document.getElementById('pm-start').value, end=document.getElementById('pm-end').value;
+  if (!name||!year||!start||!end) { showToast('필수 항목을 입력하세요.','warning'); return; }
+  const payload = { name, plan_type:document.getElementById('pm-type').value, year:parseInt(year), quarter:document.getElementById('pm-quarter').value||null, start_date:start, end_date:end, description:document.getElementById('pm-desc').value, status:document.getElementById('pm-status').value };
+  try {
+    const p = await apiPost(`${API}/plans/`, payload);
+    bootstrap.Modal.getInstance(document.getElementById('planModal')).hide();
+    showToast('계획 생성 완료', 'success');
+    loadPlans();
+    openPlan(p.id);
+  } catch(e) { showToast('생성 실패: '+JSON.stringify(e), 'danger'); }
+}
+
+async function openEditPlanModal(id) {
+  const p = await apiGet(`${API}/plans/${id}/`);
+  document.getElementById('pe-id').value    = id;
+  document.getElementById('pe-name').value  = p.name;
+  document.getElementById('pe-type').value  = p.plan_type;
+  document.getElementById('pe-year').value  = p.year;
+  document.getElementById('pe-quarter').value = p.quarter || '';
+  document.getElementById('pe-status').value  = p.status;
+  document.getElementById('pe-start').value   = p.start_date;
+  document.getElementById('pe-end').value     = p.end_date;
+  document.getElementById('pe-desc').value    = p.description || '';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('planEditModal')).show();
+}
+
+async function submitEditPlan() {
+  const id = document.getElementById('pe-id').value;
+  const payload = { name:document.getElementById('pe-name').value.trim(), plan_type:document.getElementById('pe-type').value, year:parseInt(document.getElementById('pe-year').value), quarter:document.getElementById('pe-quarter').value||null, status:document.getElementById('pe-status').value, start_date:document.getElementById('pe-start').value, end_date:document.getElementById('pe-end').value, description:document.getElementById('pe-desc').value };
+  try {
+    await apiPatch(`${API}/plans/${id}/`, payload);
+    bootstrap.Modal.getInstance(document.getElementById('planEditModal')).hide();
+    showToast('수정 완료', 'success');
+    loadPlans();
+    if (parseInt(id)===currentPlanId) openPlan(currentPlanId);
+  } catch(e) { showToast('수정 실패', 'danger'); }
+}
+
+async function deletePlan(id, name, total) {
+  const msg = total > 0 ? `"${name}" 계획을 삭제하시겠습니까?\n등록된 학교 ${total}개 항목도 모두 삭제됩니다.` : `"${name}" 계획을 삭제하시겠습니까?`;
+  if (!confirm(msg)) return;
+  try {
+    await apiDelete(`${API}/plans/${id}/`);
+    showToast('삭제 완료', 'success');
+    if (currentPlanId === id) closeDetail();
+    loadPlans();
+  } catch(e) { showToast('삭제 실패', 'danger'); }
+}
+
+async function activatePlan() {
+  if (!currentPlanId) return;
+  try { await apiPost(`${API}/plans/${currentPlanId}/activate/`, {}); showToast('활성화됨','success'); openPlan(currentPlanId); } catch(e) {}
+}
+
+async function openAddSchoolModal() {
+  if (!currentPlanId) return;
+  const name = prompt('추가할 학교명 검색:');
+  if (!name) return;
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/`, { q: name, page_size: 20 });
+    const schools = data.results || data;
+    if (!schools.length) { showToast('학교를 찾을 수 없습니다.','warning'); return; }
+    const opts = schools.map((s,i) => `${i+1}. ${s.name} (${s.support_center?.name||'-'})`).join('\n');
+    const idx = parseInt(prompt(`학교 번호 선택:\n${opts}`)) - 1;
+    if (isNaN(idx)||idx<0||idx>=schools.length) return;
+    await apiPost(`${API}/plans/${currentPlanId}/add_schools/`, { school_ids: [schools[idx].id] });
+    showToast('학교 추가 완료','success');
+    loadTab(currentTab);
+    openPlan(currentPlanId);
+  } catch(e) { showToast('추가 실패','danger'); }
+}
+
+// ─────────────────────────────────────
+// 자동배정
+// ─────────────────────────────────────
+function openAutoAssignModal() {
+  if (!currentPlanId) return;
+  document.getElementById('aa-result').style.display='none';
+  document.getElementById('aa-force-reassign').checked=false;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('autoAssignModal')).show();
+}
+
+async function submitAutoAssign() {
+  const btn = document.getElementById('btn-auto-assign');
+  btn.disabled=true; btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>처리 중...';
+  try {
+    const result = await apiPost(`${API}/plans/${currentPlanId}/auto_assign/`, {
+      force_reassign: document.getElementById('aa-force-reassign').checked,
+    });
+    let html = `<div class="alert alert-success small">배정 완료: <strong>${result.assigned||0}</strong>개 학교 배정 / 기사 미배정 <strong>${result.skipped||0}</strong>개</div>`;
+    if (result.by_worker && Object.keys(result.by_worker).length) {
+      html += '<table class="table table-sm table-bordered"><thead class="table-light"><tr><th>기사</th><th>배정건수</th></tr></thead><tbody>';
+      for (const [n,c] of Object.entries(result.by_worker)) html += `<tr><td>${n}</td><td>${c}</td></tr>`;
+      html += '</tbody></table>';
+    }
+    if (result.no_worker_schools?.length) {
+      const shown = result.no_worker_schools.slice(0,5);
+      const more  = result.no_worker_schools.length - 5;
+      html += `<div class="alert alert-warning small">기사 미배정: ${shown.join(', ')}${more>0?' 외 '+more+'개':''}</div>`;
+    }
+    document.getElementById('aa-result-body').innerHTML = html;
+    document.getElementById('aa-result').style.display='';
+    showToast('자동배정 완료','success');
+    openPlan(currentPlanId);
+  } catch(e) { showToast('자동배정 실패','danger'); }
+  finally { btn.disabled=false; btn.innerHTML='<i class="bi bi-play-fill me-1"></i>자동배정 실행'; }
+}
+
+// ─────────────────────────────────────
+// 기사 교체
+// ─────────────────────────────────────
+async function openReplaceWorkerModal() {
+  if (!currentPlanId) return;
+  await ensureWorkerOptions();
+  const opts = `<option value="">선택...</option>${workerOptions}`;
+  document.getElementById('rw-old-worker').innerHTML = opts;
+  document.getElementById('rw-new-worker').innerHTML = opts;
+  document.getElementById('rw-from-date').value='';
+  document.getElementById('rw-result').style.display='none';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('replaceWorkerModal')).show();
+}
+
+async function submitReplaceWorker() {
+  const oldId=document.getElementById('rw-old-worker').value, newId=document.getElementById('rw-new-worker').value;
+  if (!oldId||!newId) { showToast('기사를 선택하세요','warning'); return; }
+  if (oldId===newId) { showToast('교체 전/후 기사가 같습니다','warning'); return; }
+  try {
+    const result = await apiPost(`${API}/plans/${currentPlanId}/replace_worker/`, { old_worker_id:parseInt(oldId), new_worker_id:parseInt(newId), from_date:document.getElementById('rw-from-date').value||null });
+    document.getElementById('rw-result-body').innerHTML = `<div class="alert alert-success small">이관 완료: <strong>${result.transferred||0}건</strong>이 ${result.new_worker}에게 이관되었습니다.</div>`;
+    document.getElementById('rw-result').style.display='';
+    showToast('기사 교체 완료','success');
+    openPlan(currentPlanId);
+  } catch(e) { showToast('기사 교체 실패','danger'); }
+}
+
+// ─────────────────────────────────────
+// 업로드
+// ─────────────────────────────────────
+function openUploadModal() {
+  if (!currentPlanId) return;
+  uploadRows=[]; uploadFileName='';
+  document.getElementById('upload-file').value='';
+  document.getElementById('upload-preview').style.display='none';
+  document.getElementById('btn-confirm-upload').style.display='none';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal')).show();
+}
+function handleDrop(e) { e.preventDefault(); if (e.dataTransfer.files[0]) processUploadFile(e.dataTransfer.files[0]); }
+function handleFileSelect(input) { if (input.files[0]) processUploadFile(input.files[0]); }
+
+async function processUploadFile(file) {
+  uploadFileName = file.name;
+  const formData = new FormData(); formData.append('file', file);
+  try {
+    const resp = await fetch(`${API}/plans/${currentPlanId}/upload_schools/`, { method:'POST', headers:{'X-CSRFToken':CSRF_TOKEN}, body:formData });
+    if (!resp.ok) throw new Error(await resp.text());
+    const result = await resp.json();
+    uploadRows = result.rows || [];
+    renderUploadPreview(result);
+  } catch(e) { showToast('업로드 처리 실패: '+e.message,'danger'); }
+}
+
+function renderUploadPreview(result) {
+  const rows=result.rows||[], failed=result.failed||[];
+  document.getElementById('upload-summary').textContent = `전체 ${result.total||0}행 · 매칭 ${result.matched||0}건 · 실패 ${result.failed_count||0}건`;
+  document.getElementById('upload-summary').className = `badge ${result.failed_count?'bg-warning text-dark':'bg-success'}`;
+  let n=0;
+  document.getElementById('upload-preview-tbody').innerHTML = [
+    ...rows.map(r => { n++; return `<tr><td class="text-muted">${n}</td><td>${r.raw_name||''}</td><td class="fw-semibold text-success">${r.school_name||''}</td><td><small class="text-muted">${r.center_name||'-'}</small></td><td><small>${r.scheduled_date||'-'}</small></td><td><small>${r.assigned_worker_id?'배정됨':'-'}</small></td><td><small>${r.priority||'normal'}</small></td><td><small>${r.task_type||'-'}</small></td><td><span class="badge bg-success">매칭(${r.match_type||''})</span></td></tr>`; }),
+    ...failed.map(f => { n++; return `<tr class="table-danger"><td class="text-muted">${n}</td><td>${f.raw_name||''}</td><td colspan="6"><small class="text-danger">${f.reason||'매칭 실패'}</small></td><td><span class="badge bg-danger">실패</span></td></tr>`; }),
+  ].join('');
+  document.getElementById('upload-preview').style.display='';
+  if (rows.length>0) document.getElementById('btn-confirm-upload').style.display='';
+}
+
+async function confirmUpload() {
+  const matched = uploadRows.filter(r => r.school_id);
+  if (!matched.length) { showToast('매칭된 학교가 없습니다','warning'); return; }
+  try {
+    const result = await apiPost(`${API}/plans/${currentPlanId}/confirm_upload/`, { rows:matched, file_name:uploadFileName });
+    bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
+    showToast(`${result.added||0}개 학교가 등록되었습니다.`,'success');
+    loadTab(currentTab);
+    openPlan(currentPlanId);
+  } catch(e) { showToast('등록 실패','danger'); }
+}
+
+function downloadTemplate() {
+  window.location.href = `${API}/plans/download_template/?plan_type=special`;
+}
+
+// ─────────────────────────────────────
+// CSV 다운로드
+// ─────────────────────────────────────
+function csvDownload(tab) {
+  if (!currentPlanId) return;
+  const p = new URLSearchParams({ tab });
+  if (tab==='school') {
+    const c=document.getElementById('sf-center').value, t=document.getElementById('sf-type').value, s=document.getElementById('sf-school').value, st=document.getElementById('sf-status').value;
+    if (c) p.append('center',c); if (t) p.append('school_type',t); if (s) p.append('school_name',s); if (st) p.append('status',st);
+  } else if (tab==='date') {
+    const dv=document.getElementById('df-date').value; if (dv) p.append('scheduled_date',dv);
+  } else if (tab==='worker') {
+    const wv=document.getElementById('wf-worker').value; if (wv) p.append('worker',wv);
+  } else if (tab==='completed') {
+    p.set('status','completed');
+  } else if (tab==='incomplete') {
+    p.set('status','pending,scheduled');
+  }
+  window.location.href = `${API}/plans/${currentPlanId}/csv_download/?${p}`;
+}
+
+// ─────────────────────────────────────
+// 분기 선택 → 시작일/종료일 자동입력
+// ─────────────────────────────────────
+function autoFillQuarterDates(quarter, yearId, startId, endId) {
+  const q = parseInt(quarter);
+  if (!q) return;
+  const y = parseInt(document.getElementById(yearId).value) || new Date().getFullYear();
+  const ranges = { 1:['01-01','03-31'], 2:['04-01','06-30'], 3:['07-01','09-30'], 4:['10-01','12-31'] };
+  const [s, e] = ranges[q] || [];
+  if (!s) return;
+  const sEl = document.getElementById(startId), eEl = document.getElementById(endId);
+  if (sEl && !sEl.value) sEl.value = `${y}-${s}`;
+  if (eEl && !eEl.value) eEl.value = `${y}-${e}`;
+}
+
+// ─────────────────────────────────────
+// 초기화
+// ─────────────────────────────────────
+(function init() {
+  loadPlans();
+  ensureWorkerOptions();
+})();
+document.getElementById('filter-type').addEventListener('change', loadPlans);
+document.getElementById('filter-year').addEventListener('change', loadPlans);
+document.getElementById('pm-quarter').addEventListener('change', function() {
+  autoFillQuarterDates(this.value, 'pm-year', 'pm-start', 'pm-end');
+});
+document.getElementById('pe-quarter').addEventListener('change', function() {
+  autoFillQuarterDates(this.value, 'pe-year', 'pe-start', 'pe-end');
+});
+</script>
+{% endblock %}

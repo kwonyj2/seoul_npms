@@ -1,0 +1,1060 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}시스템 설정{% endblock %}
+{% block page_title %}<i class="bi bi-gear-fill me-2 text-secondary"></i>시스템 설정{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── 공통 탭 ── */
+.sys-tab-content { display:none; }
+.sys-tab-content.active { display:block; }
+.nav-tabs .nav-link { font-size:.85rem; padding:8px 14px; }
+
+/* ── 탭1: DB 업로드 카드 ── */
+.up-card { border:1.5px solid #dee2e6; border-radius:10px; background:#fff; height:100%; transition:box-shadow .15s; }
+.up-card:hover { box-shadow:0 3px 14px rgba(0,0,0,.09); }
+.up-card-header { background:#f8f9fa; border-bottom:1px solid #dee2e6; border-radius:10px 10px 0 0; padding:10px 14px; display:flex; align-items:center; gap:8px; }
+.up-card-body { padding:12px 14px; }
+.mod-badge { font-size:.62rem; padding:2px 7px; border-radius:10px; font-weight:600; white-space:nowrap; }
+.preview-wrap { max-height:130px; overflow:auto; font-size:.73rem; margin-top:8px; }
+.preview-wrap table { min-width:100%; border-collapse:collapse; }
+.preview-wrap th { background:#e9ecef; padding:2px 6px; white-space:nowrap; border:1px solid #dee2e6; }
+.preview-wrap td { padding:2px 6px; white-space:nowrap; border:1px solid #dee2e6; }
+.mode-btn { font-size:.7rem; padding:2px 9px; border-radius:4px; cursor:pointer; border:1px solid #ced4da; background:#f8f9fa; color:#495057; }
+.mode-btn.active  { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+.mode-btn.danger.active { background:#dc3545; border-color:#dc3545; }
+.dl-card { border:1.5px solid #dee2e6; border-radius:10px; background:#fff; padding:14px; height:100%; }
+.dl-card h6 { font-size:.85rem; margin-bottom:6px; }
+
+/* ── 탭2: 사용자 관리 ── */
+.user-table th { background:#f8f9fa; font-size:.78rem; white-space:nowrap; padding:7px 10px; }
+.user-table td { font-size:.8rem; vertical-align:middle; padding:6px 10px; }
+.btn-xs { font-size:.72rem; padding:2px 7px; }
+.sum-card { border:none; border-radius:10px; text-align:center; padding:12px 8px; }
+.sum-card .num { font-size:1.6rem; font-weight:700; line-height:1; }
+.sum-card .lbl { font-size:.7rem; color:#6c757d; margin-top:3px; }
+.matrix-wrap { overflow-y:auto; }
+.matrix-table th, .matrix-table td { font-size:.73rem; text-align:center; vertical-align:middle; padding:4px 6px; }
+.matrix-table thead th { background:#f8f9fa; position:sticky; top:0; vertical-align:middle; }
+.matrix-table input[type=checkbox] { width:15px; height:15px; cursor:pointer; display:block; margin:0 auto; }
+/* 페이지네이션 */
+.u-pagination .page-link { font-size:.78rem; padding:3px 9px; }
+.u-pagination .page-item.active .page-link { background:#0d6efd; border-color:#0d6efd; }
+
+/* ── 탭3: 내보내기 ── */
+.exp-card { border:1.5px solid #dee2e6; border-radius:10px; background:#fff; overflow:hidden; }
+.exp-card .exp-head { padding:11px 16px; display:flex; align-items:center; gap:10px; border-bottom:1px solid #dee2e6; }
+.exp-card .exp-body { padding:14px 16px; }
+.exp-card .exp-head .icon-wrap { width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0; }
+.exp-sub-btn { font-size:.72rem; padding:2px 10px; border-radius:4px; cursor:pointer; border:1px solid #ced4da; background:#f8f9fa; color:#495057; }
+.exp-sub-btn.active { background:#6c757d; color:#fff; border-color:#6c757d; }
+.fmt-btn { font-size:.72rem; padding:3px 12px; border-radius:4px; cursor:pointer; border:1px solid #ced4da; background:#f8f9fa; color:#495057; }
+.fmt-btn.active-csv  { background:#198754; color:#fff; border-color:#198754; }
+.fmt-btn.active-xlsx { background:#155724; color:#fff; border-color:#155724; }
+
+/* ── 탭4: NAS 권한 ── */
+.perm-tbl th { background:#f8f9fa; font-size:.8rem; text-align:center; }
+.perm-tbl td { font-size:.82rem; vertical-align:middle; text-align:center; }
+.fl-badge { font-size:.68rem; padding:2px 8px; border-radius:12px; }
+
+/* ── 탭5: 접속이력 ── */
+#al-subtabs .btn { font-size:.78rem; }
+
+/* ── 탭6: 시스템 정보 ── */
+.si-card { border:1px solid #dee2e6; border-radius:8px; padding:16px; background:#fff; text-align:center; }
+.si-card .si-icon { font-size:1.8rem; margin-bottom:6px; }
+.si-card .si-lbl { font-size:.7rem; color:#6c757d; }
+.si-card .si-val { font-size:1rem; font-weight:600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+  <!-- 탭 네비게이션 -->
+  <ul class="nav nav-tabs mb-3" id="sys-tabs">
+    <li class="nav-item"><a class="nav-link active" href="#" onclick="switchTab('db',this);return false;"><i class="bi bi-database me-1"></i>주요 DB 관리</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('users',this);return false;"><i class="bi bi-people me-1"></i>사용자·권한 관리</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('export',this);return false;"><i class="bi bi-box-arrow-up me-1"></i>데이터 내보내기</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('nas',this);return false;"><i class="bi bi-folder me-1"></i>NAS 권한 설정</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('accesslog',this);return false;"><i class="bi bi-journal-text me-1"></i>접속이력</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('info',this);return false;"><i class="bi bi-info-circle me-1"></i>시스템 정보</a></li>
+  </ul>
+
+
+  <!-- ══════════════════════════════════════════
+       탭1: 주요 DB 관리
+  ══════════════════════════════════════════ -->
+  <div id="tab-db" class="sys-tab-content active">
+    <div class="alert alert-info d-flex align-items-start py-2 mb-3 small">
+      <i class="bi bi-info-circle-fill me-2 mt-1 flex-shrink-0"></i>
+      CSV 파일은 <strong class="mx-1">UTF-8 (BOM 포함)</strong> 으로 저장 후 업로드하세요. 헤더 행이 반드시 포함되어야 하며,
+      <strong class="text-danger mx-1">초기화 모드</strong>는 기존 데이터를 삭제 후 재입력하므로 주의하세요.
+    </div>
+
+    <div class="row g-3">
+      {% include 'sysconfig/_up_card.html' with item_id="schools" title="학교 정보" icon="bi-building" color="primary" badges="장애관리,위치지도,보고서,통계" cols="학교명·교육지원청·학제·주소·위도·경도·전화번호" upload_url="schools/schools/csv_upload/" download_url="schools/schools/csv_download/" allow_reset=True %}
+      {% include 'sysconfig/_up_card.html' with item_id="buildings" title="건물 정보" icon="bi-house" color="warning" badges="학교정보,보고서,NAS폴더" cols="학교명·건물명·층수" upload_url="schools/buildings/csv_upload/" download_url="schools/buildings/csv_download/" allow_reset=True %}
+      {% include 'sysconfig/_up_card.html' with item_id="contacts" title="교직원(담당자)" icon="bi-person-badge" color="info" badges="장애접수,SMS알림" cols="학교명·성명·직위·전화번호·이메일" upload_url="schools/schools/contacts_csv_upload/" download_url="schools/schools/contacts_csv_download/" allow_reset=True %}
+      {% include 'sysconfig/_up_card.html' with item_id="assets" title="장비 목록" icon="bi-hdd-network" color="success" badges="학교정보,스위치설치확인서" cols="분류코드·S/N·모델명·제조사·설치학교·상태" upload_url="assets/assets/csv_register/" download_url="assets/assets/csv_register_template/" allow_reset=False %}
+      {% include 'sysconfig/_up_card.html' with item_id="workers" title="수행인력" icon="bi-people" color="secondary" badges="인력관리,GPS,근태" cols="username·이름·역할·전화번호·이메일·소속지원청·비밀번호" upload_url="accounts/api/users/csv_import/" download_url="accounts/api/users/csv_template/" allow_reset=False %}
+      {% include 'sysconfig/_up_card.html' with item_id="materials" title="자재 목록" icon="bi-boxes" color="danger" badges="자재관리,재고관리" cols="분류코드·자재코드·자재명·규격·단위·최소재고·공급업체" upload_url="materials/items/bulk_import/" download_url="materials/items/csv_template/" allow_reset=True %}
+      {% include 'sysconfig/_up_card.html' with item_id="mat_inbound" title="자재 입고 (초기재고)" icon="bi-box-arrow-in-down" color="info" badges="자재관리,창고재고" cols="자재코드·수량·입고일·공급업체·인계자·인수자" upload_url="materials/inbound/bulk_import/" download_url="materials/inbound/csv_template/" allow_reset=False %}
+      {% include 'sysconfig/_up_card.html' with item_id="inc_cats" title="장애 분류 (대/소분류)" icon="bi-exclamation-triangle" color="warning" badges="장애관리,통계" cols="대분류코드·대분류명·소분류명·정렬순서" upload_url="incidents/categories/csv_upload/" download_url="incidents/categories/csv_template/" allow_reset=True %}
+      {% include 'sysconfig/_up_card.html' with item_id="sla_rules" title="SLA 규칙" icon="bi-shield-check" color="primary" badges="SLA관리,통계" cols="규칙명·도착기준(시간)·처리기준(시간)·적용시작일·적용중" upload_url="incidents/sla-rules/csv_upload/" download_url="incidents/sla-rules/csv_template/" allow_reset=True %}
+
+    </div>
+    <div class="alert alert-secondary d-flex align-items-center py-2 mt-2 small">
+      <i class="bi bi-arrow-right-circle me-2 flex-shrink-0"></i>
+      출퇴근기록·장비전체목록 내보내기는 <strong class="mx-1">"데이터 내보내기"</strong> 탭에서 CSV/엑셀 형식으로 다운로드하세요.
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════
+       탭2: 사용자·권한 관리
+  ══════════════════════════════════════════ -->
+  <div id="tab-users" class="sys-tab-content">
+    <!-- 요약 카드 -->
+    <div class="row g-2 mb-3">
+      <div class="col-6 col-md-3"><div class="sum-card bg-primary bg-opacity-10"><div class="num text-primary" id="cnt-total">—</div><div class="lbl">전체</div></div></div>
+      <div class="col-6 col-md-3"><div class="sum-card bg-success bg-opacity-10"><div class="num text-success" id="cnt-worker">—</div><div class="lbl">현장기사</div></div></div>
+      <div class="col-6 col-md-3"><div class="sum-card bg-info bg-opacity-10"><div class="num text-info" id="cnt-admin">—</div><div class="lbl">관리자</div></div></div>
+      <div class="col-6 col-md-3"><div class="sum-card bg-secondary bg-opacity-10"><div class="num text-secondary" id="cnt-inactive">—</div><div class="lbl">비활성</div></div></div>
+    </div>
+
+    <div class="row g-3">
+      <!-- 사용자 목록 -->
+      <div class="col-12 col-xl-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom py-2">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <input id="u-search" type="text" class="form-control form-control-sm" placeholder="이름·아이디·연락처" style="width:160px;" oninput="renderUserTable()">
+              <select id="u-role" class="form-select form-select-sm" style="width:110px;" onchange="renderUserTable()">
+                <option value="">전체 역할</option>
+                <option value="superadmin">슈퍼관리자</option>
+                <option value="admin">관리자</option>
+                <option value="worker">현장기사</option>
+                <option value="resident">상주자</option>
+                <option value="customer">학교담당자</option>
+              </select>
+              <select id="u-center" class="form-select form-select-sm" style="width:140px;" onchange="renderUserTable()">
+                <option value="">전체 지원청</option>
+                {% for c in centers %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+              </select>
+              <select id="u-active" class="form-select form-select-sm" style="width:90px;" onchange="renderUserTable()">
+                <option value="">전체</option><option value="true">활성</option><option value="false">비활성</option>
+              </select>
+              <div class="ms-auto d-flex gap-2">
+                <button class="btn btn-sm btn-outline-success" onclick="excelDownloadUsers()"><i class="bi bi-file-earmark-excel me-1"></i>다운로드</button>
+                <button class="btn btn-sm btn-outline-warning" onclick="document.getElementById('u-excel-input').click()"><i class="bi bi-upload me-1"></i>일괄등록</button>
+                <input type="file" id="u-excel-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="bulkImportUsers(this)">
+                <button class="btn btn-sm btn-primary" onclick="openUserModal()"><i class="bi bi-person-plus me-1"></i>인력 등록</button>
+              </div>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0 user-table">
+              <thead><tr>
+                <th class="text-center">#</th><th>성명</th><th>아이디</th><th>역할</th>
+                <th>연락처</th><th>소속지원청</th><th>만료일</th><th class="text-center">상태</th><th></th>
+              </tr></thead>
+              <tbody id="user-tbody"><tr><td colspan="9" class="text-center py-4 text-muted">로딩 중…</td></tr></tbody>
+            </table>
+          </div>
+          <div class="card-footer bg-white border-top py-2 d-flex align-items-center justify-content-between">
+            <small class="text-muted" id="u-page-info"></small>
+            <ul class="pagination pagination-sm mb-0 u-pagination" id="u-pager"></ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- 역할별 모듈 접근 매트릭스 -->
+      <div class="col-12 col-xl-4">
+        <div class="card border-0 shadow-sm h-100 d-flex flex-column">
+          <div class="card-header bg-white border-bottom py-2 d-flex align-items-center gap-2">
+            <i class="bi bi-shield-lock text-warning"></i>
+            <span class="fw-semibold small">역할별 모듈 접근 권한</span>
+            <span class="ms-auto badge bg-success-subtle text-success" style="font-size:.65rem;">체크 = 해당 역할 이상 접근 가능</span>
+          </div>
+          <div class="card-body p-0 matrix-wrap flex-fill overflow-auto">
+            <table class="table table-sm table-bordered mb-0 matrix-table">
+              <thead><tr>
+                <th class="text-start ps-2">모듈</th>
+                <th class="text-center" title="슈퍼관리자">슈퍼<br>관리자</th>
+                <th class="text-center">관리자</th>
+                <th class="text-center">현장<br>기사</th>
+                <th class="text-center">상주자</th>
+                <th class="text-center">고객</th>
+              </tr></thead>
+              <tbody id="matrix-tbody"><tr><td colspan="6" class="text-center py-3 text-muted">로딩 중…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 등록/수정 모달 -->
+    <div class="modal fade" id="userModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header py-2">
+            <h6 class="modal-title" id="um-title">인력 등록</h6>
+            <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row g-3">
+              <div class="col-12"><div class="fw-semibold text-muted small border-bottom pb-1">기본 정보</div></div>
+              <div class="col-md-4"><label class="form-label small mb-1">아이디 <span class="text-danger" id="um-req">*</span></label><input type="text" id="um-username" class="form-control form-control-sm" placeholder="로그인 아이디"></div>
+              <div class="col-md-4"><label class="form-label small mb-1">성명 *</label><input type="text" id="um-name" class="form-control form-control-sm" placeholder="홍길동"></div>
+              <div class="col-md-4"><label class="form-label small mb-1">연락처</label><input type="text" id="um-phone" class="form-control form-control-sm" placeholder="010-0000-0000"></div>
+              <div class="col-md-6"><label class="form-label small mb-1">이메일</label><input type="email" id="um-email" class="form-control form-control-sm"></div>
+              <div class="col-md-3"><label class="form-label small mb-1">역할 *</label>
+                <select id="um-role" class="form-select form-select-sm">
+                  <option value="worker">현장기사</option><option value="resident">상주자</option>
+                  <option value="admin">관리자</option><option value="customer">학교담당자</option>
+                  <option value="superadmin">슈퍼관리자</option>
+                </select></div>
+              <div class="col-md-3"><label class="form-label small mb-1">소속 지원청</label>
+                <select id="um-center" class="form-select form-select-sm">
+                  <option value="">선택 안함</option>
+                  {% for c in centers %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+                </select></div>
+              <div class="col-12"><div class="fw-semibold text-muted small border-bottom pb-1">비밀번호</div></div>
+              <div class="col-md-6"><label class="form-label small mb-1">비밀번호 <span class="text-danger" id="um-pw-req">*</span></label><input type="password" id="um-password" class="form-control form-control-sm" placeholder="수정 시 미입력이면 유지"></div>
+              <div class="col-md-6"><label class="form-label small mb-1">비밀번호 확인</label><input type="password" id="um-password2" class="form-control form-control-sm"></div>
+              <div class="col-12"><div class="fw-semibold text-muted small border-bottom pb-1">위치 정보 (현장기사 자택)</div></div>
+              <div class="col-12"><label class="form-label small mb-1">자택주소</label><input type="text" id="um-address" class="form-control form-control-sm"></div>
+              <div class="col-md-6"><label class="form-label small mb-1">위도</label><input type="number" id="um-lat" class="form-control form-control-sm" step="0.0000001" placeholder="37.5665"></div>
+              <div class="col-md-6"><label class="form-label small mb-1">경도</label><input type="number" id="um-lng" class="form-control form-control-sm" step="0.0000001" placeholder="126.9780"></div>
+              <div class="col-12"><div class="fw-semibold text-muted small border-bottom pb-1">기타</div></div>
+              <div class="col-md-6"><label class="form-label small mb-1">서비스 만료일</label><input type="date" id="um-expiry" class="form-control form-control-sm"></div>
+              <div class="col-md-6 d-flex align-items-end pb-1"><div class="form-check"><input class="form-check-input" type="checkbox" id="um-active" checked><label class="form-check-label small" for="um-active">활성 계정</label></div></div>
+            </div>
+          </div>
+          <div class="modal-footer py-2">
+            <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+            <button class="btn btn-sm btn-primary" onclick="saveUser()">저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 삭제 확인 모달 -->
+    <div class="modal fade" id="delModal" tabindex="-1">
+      <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+          <div class="modal-header py-2"><h6 class="modal-title">인력 삭제</h6><button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button></div>
+          <div class="modal-body small"><span id="del-name"></span> 계정을 삭제하시겠습니까?</div>
+          <div class="modal-footer py-2">
+            <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+            <button class="btn btn-sm btn-danger" onclick="confirmDelete()">삭제</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════
+       탭3: 데이터 내보내기
+  ══════════════════════════════════════════ -->
+  <div id="tab-export" class="sys-tab-content">
+
+    <!-- 공통 기간 필터 -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body py-2 px-3">
+        <div class="d-flex flex-wrap gap-3 align-items-center">
+          <span class="small fw-semibold text-muted">공통 기간 필터</span>
+          <div class="d-flex align-items-center gap-1">
+            <label class="small text-muted mb-0">시작</label>
+            <input type="date" id="exp-from" class="form-control form-control-sm" style="width:140px;">
+          </div>
+          <div class="d-flex align-items-center gap-1">
+            <label class="small text-muted mb-0">종료</label>
+            <input type="date" id="exp-to" class="form-control form-control-sm" style="width:140px;">
+          </div>
+          <div class="d-flex align-items-center gap-1">
+            <label class="small text-muted mb-0">지원청</label>
+            <select id="exp-center" class="form-select form-select-sm" style="width:140px;">
+              <option value="">전체</option>
+              {% for c in centers %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <button class="btn btn-sm btn-outline-secondary" onclick="clearExpFilter()"><i class="bi bi-x-circle me-1"></i>초기화</button>
+          <span class="ms-auto small text-muted">CSV 또는 엑셀 형식으로 다운로드</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+
+      <!-- 장애 목록 -->
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="exp-card">
+          <div class="exp-head">
+            <div class="icon-wrap bg-danger bg-opacity-10 text-danger"><i class="bi bi-exclamation-triangle"></i></div>
+            <div><div class="fw-semibold">장애 목록</div><div class="small text-muted">장애접수·처리·SLA 포함</div></div>
+          </div>
+          <div class="exp-body">
+            <div class="mb-2">
+              <label class="small text-muted d-block mb-1">상태 필터</label>
+              <select id="exp-inc-status" class="form-select form-select-sm">
+                <option value="">전체 상태</option>
+                <option value="received">접수</option><option value="assigned">배정</option>
+                <option value="completed">완료</option>
+              </select>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-success flex-fill" onclick="doExport('incidents','csv')"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
+              <button class="btn btn-sm btn-success flex-fill" onclick="doExport('incidents','xlsx')"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 사진 목록 -->
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="exp-card">
+          <div class="exp-head">
+            <div class="icon-wrap bg-secondary bg-opacity-10 text-secondary"><i class="bi bi-camera"></i></div>
+            <div><div class="fw-semibold">사진 목록</div><div class="small text-muted">스위치 설치확인서 포함, 파일명 제공</div></div>
+          </div>
+          <div class="exp-body">
+            <div class="mb-2">
+              <label class="small text-muted d-block mb-1">작업 유형</label>
+              <select id="exp-photo-type" class="form-select form-select-sm">
+                <option value="">전체 유형</option>
+              </select>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-success flex-fill" onclick="doExport('photos','csv')"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
+              <button class="btn btn-sm btn-success flex-fill" onclick="doExport('photos','xlsx')"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 장비 전체목록 -->
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="exp-card">
+          <div class="exp-head">
+            <div class="icon-wrap bg-success bg-opacity-10 text-success"><i class="bi bi-hdd-network"></i></div>
+            <div><div class="fw-semibold">장비 전체 목록</div><div class="small text-muted">S/N·모델·설치교·상태</div></div>
+          </div>
+          <div class="exp-body">
+            <div class="mb-2">
+              <label class="small text-muted d-block mb-1">상태 필터</label>
+              <select id="exp-asset-status" class="form-select form-select-sm">
+                <option value="">전체</option>
+                <option value="installed">설치됨</option><option value="warehouse">창고</option>
+                <option value="defective">불량</option><option value="disposed">폐기</option>
+              </select>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-success flex-fill" onclick="doExport('assets','csv')"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
+              <button class="btn btn-sm btn-success flex-fill" onclick="doExport('assets','xlsx')"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 자재 내역 -->
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="exp-card">
+          <div class="exp-head">
+            <div class="icon-wrap bg-warning bg-opacity-10 text-warning"><i class="bi bi-boxes"></i></div>
+            <div><div class="fw-semibold">자재 내역</div><div class="small text-muted">현재고·입고·출고 선택</div></div>
+          </div>
+          <div class="exp-body">
+            <div class="mb-2 d-flex gap-1 flex-wrap">
+              <button class="exp-sub-btn active" data-mat="inventory" onclick="setMatSub(this,'inventory')">현재고</button>
+              <button class="exp-sub-btn" data-mat="inbound" onclick="setMatSub(this,'inbound')">입고 내역</button>
+              <button class="exp-sub-btn" data-mat="outbound" onclick="setMatSub(this,'outbound')">출고 내역</button>
+            </div>
+            <input type="hidden" id="exp-mat-sub" value="inventory">
+            <div class="d-flex gap-2 mt-2">
+              <button class="btn btn-sm btn-outline-success flex-fill" onclick="doExport('materials','csv')"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
+              <button class="btn btn-sm btn-success flex-fill" onclick="doExport('materials','xlsx')"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 출퇴근 기록 -->
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="exp-card">
+          <div class="exp-head">
+            <div class="icon-wrap bg-info bg-opacity-10 text-info"><i class="bi bi-clock-history"></i></div>
+            <div><div class="fw-semibold">출퇴근 기록</div><div class="small text-muted">기간별 인력 근태 현황</div></div>
+          </div>
+          <div class="exp-body">
+            <p class="small text-muted mb-2">근무일·출근시각·퇴근시각·근무시간·상태</p>
+            <div class="d-flex gap-2 mt-3">
+              <button class="btn btn-sm btn-outline-success flex-fill" onclick="doExport('attendance','csv')"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
+              <button class="btn btn-sm btn-success flex-fill" onclick="doExport('attendance','xlsx')"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 진척관리 -->
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="exp-card">
+          <div class="exp-head">
+            <div class="icon-wrap bg-primary bg-opacity-10 text-primary"><i class="bi bi-clipboard2-check"></i></div>
+            <div><div class="fw-semibold">진척관리 (점검 결과)</div><div class="small text-muted">학교별 점검 완료 현황</div></div>
+          </div>
+          <div class="exp-body">
+            <p class="small text-muted mb-2">점검계획·학교명·예정일·완료일·상태·담당기사</p>
+            <div class="d-flex gap-2 mt-3">
+              <button class="btn btn-sm btn-outline-success flex-fill" onclick="doExport('progress','csv')"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
+              <button class="btn btn-sm btn-success flex-fill" onclick="doExport('progress','xlsx')"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SLA 성과 -->
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="exp-card">
+          <div class="exp-head">
+            <div class="icon-wrap bg-dark bg-opacity-10 text-dark"><i class="bi bi-shield-check"></i></div>
+            <div><div class="fw-semibold">SLA 성과</div><div class="small text-muted">도착·처리 목표 대비 실적</div></div>
+          </div>
+          <div class="exp-body">
+            <p class="small text-muted mb-2">접수번호·도착목표/실제·처리목표/실제·준수여부</p>
+            <div class="d-flex gap-2 mt-3">
+              <button class="btn btn-sm btn-outline-success flex-fill" onclick="doExport('sla','csv')"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
+              <button class="btn btn-sm btn-success flex-fill" onclick="doExport('sla','xlsx')"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 업무보고서 -->
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="exp-card">
+          <div class="exp-head">
+            <div class="icon-wrap bg-primary bg-opacity-10 text-primary"><i class="bi bi-file-earmark-text"></i></div>
+            <div><div class="fw-semibold">업무보고서</div><div class="small text-muted">장애처리·정기점검·스위치설치 확인서</div></div>
+          </div>
+          <div class="exp-body">
+            <div class="mb-2">
+              <label class="small text-muted d-block mb-1">상태 필터</label>
+              <select id="exp-rpt-status" class="form-select form-select-sm">
+                <option value="">전체 상태</option>
+                <option value="draft">작성중</option>
+                <option value="completed">완료</option>
+                <option value="archived">보관</option>
+              </select>
+            </div>
+            <div class="d-flex gap-2 mt-2">
+              <button class="btn btn-sm btn-outline-success flex-fill" onclick="doExport('reports','csv')"><i class="bi bi-filetype-csv me-1"></i>CSV</button>
+              <button class="btn btn-sm btn-success flex-fill" onclick="doExport('reports','xlsx')"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════
+       탭4: NAS 권한 설정
+  ══════════════════════════════════════════ -->
+  <div id="tab-nas" class="sys-tab-content">
+    <div class="row g-3">
+      <div class="col-12 col-md-6">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom py-2 d-flex align-items-center gap-2">
+            <i class="bi bi-key text-success"></i><span class="fw-semibold">역할별 NAS 행위 권한</span>
+            <span class="ms-auto small text-muted">체크 시 즉시 적용</span>
+          </div>
+          <div class="card-body p-0">
+            <table class="table table-sm table-bordered mb-0 perm-tbl">
+              <thead><tr><th class="text-start ps-3">역할</th><th>파일 열람</th><th>파일 다운로드</th><th>파일 업로드</th><th>파일 삭제</th><th>폴더 생성</th></tr></thead>
+              <tbody id="nas-role-tbody"><tr><td colspan="6" class="text-center py-3 text-muted">로딩 중…</td></tr></tbody>
+            </table>
+          </div>
+          <div class="card-footer bg-white border-top small text-muted">파일 열람 권한은 폴더별 접근 수준(우측)으로 관리됩니다.</div>
+        </div>
+      </div>
+      <div class="col-12 col-md-6">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom py-2 d-flex align-items-center gap-2">
+            <i class="bi bi-folder2-open text-warning"></i><span class="fw-semibold">최상위 폴더 접근 수준</span>
+            <button class="btn btn-sm btn-outline-primary ms-auto" onclick="loadNasFolders()"><i class="bi bi-arrow-clockwise"></i></button>
+          </div>
+          <div class="card-body p-0" style="height:calc(100vh - 220px);min-height:300px;overflow-y:auto;">
+            <table class="table table-sm table-hover mb-0 perm-tbl">
+              <thead><tr><th class="text-start ps-3">폴더명</th><th class="text-center">현재 접근</th><th class="text-center" style="width:160px;">변경</th></tr></thead>
+              <tbody id="nas-tbody"><tr><td colspan="3" class="text-center py-3 text-muted">로딩 중…</td></tr></tbody>
+            </table>
+          </div>
+          <div class="card-footer bg-white border-top small text-muted">
+            <span class="fl-badge bg-success bg-opacity-10 text-success me-1">전체공개</span>
+            <span class="fl-badge bg-primary bg-opacity-10 text-primary me-1">관리자이상</span>
+            <span class="fl-badge bg-dark bg-opacity-10 text-dark">슈퍼관리자</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════
+       탭5: 접속이력
+  ══════════════════════════════════════════ -->
+  <div id="tab-accesslog" class="sys-tab-content">
+
+    <!-- 서브탭 -->
+    <ul class="nav nav-pills mb-3 gap-1" id="al-subtabs">
+      <li class="nav-item"><button class="btn btn-sm btn-primary" onclick="alSwitchKind('login',this)"><i class="bi bi-box-arrow-in-right me-1"></i>로그인 이력</button></li>
+      <li class="nav-item"><button class="btn btn-sm btn-outline-secondary" onclick="alSwitchKind('activity',this)"><i class="bi bi-activity me-1"></i>활동 로그</button></li>
+      <li class="nav-item"><button class="btn btn-sm btn-outline-secondary" onclick="alSwitchKind('session',this)"><i class="bi bi-person-check me-1"></i>현재 접속자</button></li>
+    </ul>
+
+    <!-- 검색 필터 -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body py-2 px-3">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <div class="input-group input-group-sm" style="width:200px">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" id="al-q" class="form-control" placeholder="이름·아이디·IP">
+          </div>
+          <input type="date" id="al-from" class="form-control form-control-sm" style="width:140px">
+          <span class="text-muted small">~</span>
+          <input type="date" id="al-to" class="form-control form-control-sm" style="width:140px">
+          <button class="btn btn-sm btn-primary" onclick="alLoadPage(1)"><i class="bi bi-search me-1"></i>조회</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="alClear()"><i class="bi bi-x me-1"></i>초기화</button>
+          <small class="text-muted ms-auto" id="al-total-info"></small>
+        </div>
+      </div>
+    </div>
+
+    <!-- 테이블 -->
+    <div class="card border-0 shadow-sm">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.8rem;">
+          <thead class="table-light" id="al-thead">
+            <tr>
+              <th>사용자</th><th>성명</th><th>IP</th><th>브라우저</th><th class="text-center">결과</th><th>실패사유</th><th>시도일시</th>
+            </tr>
+          </thead>
+          <tbody id="al-tbody">
+            <tr><td colspan="7" class="text-center text-muted py-4">조회 버튼을 눌러 데이터를 불러오세요</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center">
+        <small class="text-muted" id="al-page-info"></small>
+        <ul class="pagination pagination-sm mb-0" id="al-pager"></ul>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════
+       탭6: 시스템 정보
+  ══════════════════════════════════════════ -->
+  <div id="tab-info" class="sys-tab-content">
+    <div class="row g-3 mb-3" id="si-cards">
+      <div class="col-12 text-center py-4 text-muted">로딩 중…</div>
+    </div>
+    <div class="row g-3">
+      <div class="col-12 col-xl-6">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+            <i class="bi bi-table text-primary"></i><span class="fw-semibold">모듈별 데이터 현황</span>
+            <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="loadSysInfo()"><i class="bi bi-arrow-clockwise"></i></button>
+          </div>
+          <div class="card-body p-0">
+            <table class="table table-sm table-hover mb-0">
+              <thead><tr class="table-light"><th class="ps-3">항목</th><th class="text-end pe-3">건수</th></tr></thead>
+              <tbody id="si-count-tbody"><tr><td colspan="2" class="text-center py-3 text-muted">로딩 중…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-6">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+            <i class="bi bi-server text-success"></i><span class="fw-semibold">서버 환경</span>
+          </div>
+          <div class="card-body" id="si-env-body"><div class="text-center text-muted py-3">로딩 중…</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const SYSCONF_API = API_BASE.replace('/api','') + '/api/sysconfig';
+const SYS_TABS   = ['db','users','export','nas','accesslog','info'];
+
+// ══ 탭 전환 ═══════════════════════════════════════════
+function switchTab(name, el) {
+  document.querySelectorAll('#sys-tabs .nav-link').forEach(a => a.classList.remove('active'));
+  el.classList.add('active');
+  SYS_TABS.forEach(t => document.getElementById('tab-'+t).classList.toggle('active', t===name));
+  if (name==='users'  && !window._uLoaded)  { loadUsers(); loadMatrix(); window._uLoaded=true; }
+  if (name==='export' && !window._exLoaded) { loadPhotoTypes(); window._exLoaded=true; }
+  if (name==='nas'    && !window._nLoaded)  { loadNasFolders(); loadNasRolePerms(); window._nLoaded=true; }
+  if (name==='accesslog') { /* 수동 조회 */ }
+  if (name==='info'   && !window._iLoaded)  { loadSysInfo(); window._iLoaded=true; }
+}
+
+// ══ 업로드 공통 JS ════════════════════════════════════
+function setMode(itemId, mode, el) {
+  document.querySelectorAll(`.mode-btn[data-item="${itemId}"]`).forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('mode-'+itemId).value = mode;
+}
+function previewCSV(input, itemId) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const lines = e.target.result.split('\n').filter(l=>l.trim()).slice(0,6);
+    if (!lines.length) return;
+    const wrap = document.getElementById('preview-'+itemId);
+    const cols = lines[0].split(',').map(c=>c.replace(/^"|"$/g,'').trim());
+    let html = '<table><thead><tr>'+cols.map(c=>`<th>${escH(c)}</th>`).join('')+'</tr></thead><tbody>';
+    lines.slice(1).forEach(line=>{
+      const vals = line.split(',').map(v=>v.replace(/^"|"$/g,'').trim());
+      html += '<tr>'+vals.map(v=>`<td>${escH(v)}</td>`).join('')+'</tr>';
+    });
+    wrap.innerHTML = html+'</tbody></table>'; wrap.style.display='block';
+    document.getElementById('btn-up-'+itemId).disabled=false;
+    document.getElementById('fn-'+itemId).textContent=file.name;
+  };
+  reader.readAsText(file,'UTF-8');
+}
+function doUpload(itemId, uploadUrl) {
+  const fi = document.getElementById('file-'+itemId);
+  const mode = document.getElementById('mode-'+itemId).value;
+  const res  = document.getElementById('res-'+itemId);
+  const btn  = document.getElementById('btn-up-'+itemId);
+  if (!fi.files[0]) { alert('파일을 선택하세요.'); return; }
+  const fd = new FormData(); fd.append('file', fi.files[0]); fd.append('mode', mode);
+  btn.disabled=true; btn.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>처리 중…'; res.innerHTML='';
+  fetch(API_BASE+'/'+uploadUrl,{method:'POST',headers:{'X-CSRFToken':CSRF_TOKEN},body:fd})
+  .then(r=>r.json()).then(d=>{
+    const err = d.errors&&d.errors.length ? `<br><span class="text-danger small">오류 ${d.errors.length}건</span>` : '';
+    res.innerHTML=`<div class="alert alert-success py-1 mt-2 small mb-0">생성 ${d.created??0} / 수정 ${d.updated??0}${err}</div>`;
+  }).catch(()=>{ res.innerHTML=`<div class="alert alert-danger py-1 mt-2 small mb-0">업로드 실패</div>`; })
+  .finally(()=>{ btn.disabled=false; btn.innerHTML='<i class="bi bi-cloud-upload me-1"></i>업로드 확정'; });
+}
+function escH(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ══ 탭2: 사용자 관리 ══════════════════════════════════
+const ROLE_BADGE_MAP = {
+  superadmin:'<span class="badge bg-danger">슈퍼관리자</span>',
+  admin:     '<span class="badge bg-primary">관리자</span>',
+  worker:    '<span class="badge bg-success">현장기사</span>',
+  resident:  '<span class="badge bg-info text-dark">상주자</span>',
+  customer:  '<span class="badge bg-secondary">학교담당자</span>',
+};
+let _allUsers=[], _editId=null, _delId=null, _uPage=1;
+const U_PER_PAGE = 25;
+
+async function loadUsers() {
+  const tbody = document.getElementById('user-tbody');
+  tbody.innerHTML='<tr><td colspan="9" class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>로딩 중…</td></tr>';
+  try {
+    const data = await apiGet(`${API_BASE}/accounts/api/users/?page_size=9999`);
+    _allUsers = data.results || data;
+    document.getElementById('cnt-total').textContent    = _allUsers.length;
+    document.getElementById('cnt-worker').textContent   = _allUsers.filter(u=>u.role==='worker').length;
+    document.getElementById('cnt-admin').textContent    = _allUsers.filter(u=>['admin','superadmin'].includes(u.role)).length;
+    document.getElementById('cnt-inactive').textContent = _allUsers.filter(u=>!u.is_active).length;
+    _uPage=1; renderUserTable();
+  } catch(e) { tbody.innerHTML='<tr><td colspan="9" class="text-center text-danger py-4">데이터 로드 실패</td></tr>'; }
+}
+function renderUserTable() {
+  const q=document.getElementById('u-search').value.trim().toLowerCase();
+  const role=document.getElementById('u-role').value;
+  const ctr=document.getElementById('u-center').value;
+  const act=document.getElementById('u-active').value;
+  let list=_allUsers;
+  if(q)    list=list.filter(u=>(u.name||'').toLowerCase().includes(q)||(u.username||'').toLowerCase().includes(q)||(u.phone||'').includes(q));
+  if(role) list=list.filter(u=>u.role===role);
+  if(ctr)  list=list.filter(u=>String(u.support_center)===ctr);
+  if(act==='true')  list=list.filter(u=>u.is_active);
+  if(act==='false') list=list.filter(u=>!u.is_active);
+  const tbody=document.getElementById('user-tbody');
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="9" class="text-center py-4 text-muted">결과 없음</td></tr>'; renderPager(0,0); return; }
+  // 페이지네이션
+  const totalPages = Math.ceil(list.length / U_PER_PAGE);
+  if(_uPage > totalPages) _uPage = totalPages;
+  const start = (_uPage-1)*U_PER_PAGE;
+  const page  = list.slice(start, start+U_PER_PAGE);
+  tbody.innerHTML=page.map((u,i)=>`
+    <tr class="${!u.is_active?'text-muted':''}">
+      <td class="text-center small">${start+i+1}</td>
+      <td class="fw-semibold">${escH(u.name)}</td>
+      <td class="small text-muted">${escH(u.username)}</td>
+      <td>${ROLE_BADGE_MAP[u.role]||`<span class="badge bg-secondary">${u.role}</span>`}</td>
+      <td class="small">${escH(u.phone||'—')}</td>
+      <td class="small">${escH(u.support_center_name||'—')}</td>
+      <td class="small">${u.service_expiry||'—'}</td>
+      <td class="text-center"><span class="badge ${u.is_active?'bg-success':'bg-secondary'}">${u.is_active?'활성':'비활성'}</span></td>
+      <td class="text-end pe-2">
+        <button class="btn btn-xs btn-outline-primary me-1" onclick="openUserModal(${u.id})"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-xs btn-outline-danger" onclick="openDelModal(${u.id},'${escH(u.name)}')"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`).join('');
+  renderPager(list.length, totalPages);
+}
+function renderPager(total, totalPages) {
+  const info = document.getElementById('u-page-info');
+  const pager = document.getElementById('u-pager');
+  if(!info||!pager) return;
+  const start = (_uPage-1)*U_PER_PAGE+1;
+  const end   = Math.min(_uPage*U_PER_PAGE, total);
+  info.textContent = total ? `${start}-${end} / 전체 ${total}명` : '';
+  if(totalPages<=1){ pager.innerHTML=''; return; }
+  let html='';
+  html+=`<li class="page-item ${_uPage===1?'disabled':''}"><a class="page-link" href="#" onclick="_uPage=1;renderUserTable();return false;">«</a></li>`;
+  html+=`<li class="page-item ${_uPage===1?'disabled':''}"><a class="page-link" href="#" onclick="_uPage=Math.max(1,_uPage-1);renderUserTable();return false;">‹</a></li>`;
+  const s=Math.max(1,_uPage-2), e=Math.min(totalPages,_uPage+2);
+  for(let p=s;p<=e;p++) html+=`<li class="page-item ${p===_uPage?'active':''}"><a class="page-link" href="#" onclick="_uPage=${p};renderUserTable();return false;">${p}</a></li>`;
+  html+=`<li class="page-item ${_uPage===totalPages?'disabled':''}"><a class="page-link" href="#" onclick="_uPage=Math.min(${totalPages},_uPage+1);renderUserTable();return false;">›</a></li>`;
+  html+=`<li class="page-item ${_uPage===totalPages?'disabled':''}"><a class="page-link" href="#" onclick="_uPage=${totalPages};renderUserTable();return false;">»</a></li>`;
+  pager.innerHTML=html;
+}
+async function openUserModal(userId=null) {
+  _editId=userId; const isEdit=!!userId;
+  document.getElementById('um-title').textContent=isEdit?'인력 수정':'인력 등록';
+  document.getElementById('um-req').style.display=isEdit?'none':'';
+  document.getElementById('um-pw-req').style.display=isEdit?'none':'';
+  document.getElementById('um-username').disabled=isEdit;
+  ['username','name','phone','email','address','lat','lng','password','password2'].forEach(f=>{
+    const el=document.getElementById('um-'+f); if(el) el.value='';
+  });
+  document.getElementById('um-role').value='worker';
+  document.getElementById('um-center').value='';
+  document.getElementById('um-expiry').value='';
+  document.getElementById('um-active').checked=true;
+  if(isEdit){
+    try {
+      const u=await apiGet(`${API_BASE}/accounts/api/users/${userId}/`);
+      ['username','name','phone','email'].forEach(f=>{ const el=document.getElementById('um-'+f); if(el) el.value=u[f]||''; });
+      document.getElementById('um-role').value=u.role||'worker';
+      document.getElementById('um-center').value=u.support_center||'';
+      document.getElementById('um-address').value=u.home_address||'';
+      document.getElementById('um-lat').value=u.home_lat||'';
+      document.getElementById('um-lng').value=u.home_lng||'';
+      document.getElementById('um-expiry').value=u.service_expiry||'';
+      document.getElementById('um-active').checked=u.is_active;
+    } catch(e){ showToast&&showToast('데이터 로드 실패','error'); return; }
+  }
+  new bootstrap.Modal(document.getElementById('userModal')).show();
+}
+async function saveUser() {
+  const pw=document.getElementById('um-password').value;
+  const pw2=document.getElementById('um-password2').value;
+  if(pw&&pw!==pw2){ alert('비밀번호가 일치하지 않습니다.'); return; }
+  const payload={
+    name:document.getElementById('um-name').value,
+    phone:document.getElementById('um-phone').value,
+    email:document.getElementById('um-email').value,
+    role:document.getElementById('um-role').value,
+    support_center:document.getElementById('um-center').value||null,
+    home_address:document.getElementById('um-address').value,
+    home_lat:document.getElementById('um-lat').value||null,
+    home_lng:document.getElementById('um-lng').value||null,
+    service_expiry:document.getElementById('um-expiry').value||null,
+    is_active:document.getElementById('um-active').checked,
+  };
+  if(pw) payload.password=pw;
+  try {
+    if(_editId){
+      await fetch(`${API_BASE}/accounts/api/users/${_editId}/`,{method:'PATCH',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},body:JSON.stringify(payload)});
+    } else {
+      payload.username=document.getElementById('um-username').value;
+      await fetch(`${API_BASE}/accounts/api/users/`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},body:JSON.stringify(payload)});
+    }
+    bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();
+    loadUsers();
+  } catch(e){ alert('저장 실패: '+e.message); }
+}
+function openDelModal(id,name){ _delId=id; document.getElementById('del-name').textContent=name; new bootstrap.Modal(document.getElementById('delModal')).show(); }
+async function confirmDelete(){
+  await fetch(`${API_BASE}/accounts/api/users/${_delId}/`,{method:'DELETE',headers:{'X-CSRFToken':CSRF_TOKEN}});
+  bootstrap.Modal.getInstance(document.getElementById('delModal')).hide();
+  loadUsers();
+}
+function excelDownloadUsers(){ window.location.href=API_BASE+'/accounts/api/users/excel_download/'; }
+async function bulkImportUsers(input){
+  const fd=new FormData(); fd.append('file',input.files[0]);
+  const ext=input.files[0].name.split('.').pop().toLowerCase();
+  const url=ext==='csv'?`${API_BASE}/accounts/api/users/csv_import/`:`${API_BASE}/accounts/api/users/excel_import/`;
+  const r=await fetch(url,{method:'POST',headers:{'X-CSRFToken':CSRF_TOKEN},body:fd});
+  const d=await r.json();
+  alert(`생성: ${d.created||0}, 수정: ${d.updated||0}, 오류: ${(d.errors||[]).length}`);
+  input.value=''; loadUsers();
+}
+function loadMatrix(){
+  fetch(SYSCONF_API+'/modules/').then(r=>r.json()).then(d=>{
+    document.getElementById('matrix-tbody').innerHTML=d.modules.map(mod=>{
+      const cells=d.roles.map(r=>{
+        const can=d.matrix[r.key][mod.key];
+        const disabled=(r.key==='superadmin')?'disabled':''; // superadmin 항상 접근
+        return `<td><input type="checkbox" class="form-check-input" ${can?'checked':''} ${disabled} onchange="updateModuleRolePerm('${mod.key}','${r.key}',this.checked,this)" title="${r.label}"></td>`;
+      }).join('');
+      return `<tr><td class="text-start ps-2" style="white-space:nowrap;font-size:.8rem"><i class="bi ${mod.icon} me-1 text-muted"></i>${mod.label}</td>${cells}</tr>`;
+    }).join('');
+    requestAnimationFrame(adjustMatrixRows);
+  }).catch(()=>{ document.getElementById('matrix-tbody').innerHTML='<tr><td colspan="6" class="text-danger text-center">로드 실패</td></tr>'; });
+}
+function adjustMatrixRows(){
+  const wrap  = document.querySelector('.matrix-wrap');
+  const thead = wrap && wrap.querySelector('thead');
+  const tbody = document.getElementById('matrix-tbody');
+  if(!wrap||!thead||!tbody) return;
+  const rows = tbody.querySelectorAll('tr');
+  if(!rows.length) return;
+  const available = wrap.clientHeight - thead.offsetHeight;
+  const rowH = Math.max(Math.floor(available / rows.length), 24);
+  rows.forEach(row => { row.style.height = rowH + 'px'; });
+}
+function updateModuleRolePerm(module_key, role, allowed, el) {
+  if(role==='superadmin'){ el.checked=true; return; } // superadmin은 항상 접근
+  el.disabled=true;
+  fetch(`${SYSCONF_API}/modules/${module_key}/role-perm/`,{
+    method:'PATCH',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+    body:JSON.stringify({role, allowed})
+  }).then(r=>r.json())
+  .catch(()=>{ alert('권한 변경 실패'); el.checked=!allowed; })
+  .finally(()=>{ el.disabled=false; });
+}
+
+// ══ 탭3: 데이터 내보내기 ══════════════════════════════
+async function loadPhotoTypes(){
+  try {
+    const d=await apiGet(`${API_BASE}/photos/work-types/?page_size=100`);
+    const sel=document.getElementById('exp-photo-type');
+    const list=d.results||d;
+    list.forEach(t=>{ const o=document.createElement('option'); o.value=t.id; o.textContent=t.name; sel.appendChild(o); });
+  } catch(e){}
+}
+function clearExpFilter(){
+  document.getElementById('exp-from').value='';
+  document.getElementById('exp-to').value='';
+  document.getElementById('exp-center').value='';
+}
+function setMatSub(el, val){
+  document.querySelectorAll('.exp-sub-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('exp-mat-sub').value=val;
+}
+function doExport(module, fmt){
+  const from   = document.getElementById('exp-from').value;
+  const to     = document.getElementById('exp-to').value;
+  const center = document.getElementById('exp-center').value;
+  let url = `${SYSCONF_API}/export/${module}/?format=${fmt}`;
+  if(from)   url+=`&date_from=${from}`;
+  if(to)     url+=`&date_to=${to}`;
+  if(center) url+=`&center=${center}`;
+  if(module==='incidents'){
+    const st=document.getElementById('exp-inc-status').value;
+    if(st) url+=`&status=${st}`;
+  }
+  if(module==='photos'){
+    const wt=document.getElementById('exp-photo-type').value;
+    if(wt) url+=`&work_type=${wt}`;
+  }
+  if(module==='assets'){
+    const st=document.getElementById('exp-asset-status').value;
+    if(st) url+=`&status=${st}`;
+  }
+  if(module==='materials'){
+    url+=`&sub=${document.getElementById('exp-mat-sub').value}`;
+  }
+  if(module==='reports'){
+    const st=document.getElementById('exp-rpt-status').value;
+    if(st) url+=`&status=${st}`;
+  }
+  window.location.href=url;
+}
+
+// ══ 탭4: NAS 역할 권한 ══════════════════════════════════
+const NAS_ROLE_LABELS={superadmin:'<span class="badge bg-dark">슈퍼관리자</span>',admin:'<span class="badge bg-primary">관리자</span>',worker:'<span class="badge bg-success">현장기사</span>',resident:'<span class="badge bg-info text-dark">상주자</span>',customer:'<span class="badge bg-warning text-dark">고객</span>'};
+const NAS_ACTIONS=['download','upload','delete','create_folder'];
+const NAS_ACT_LBL={download:'파일 다운로드',upload:'파일 업로드',delete:'파일 삭제',create_folder:'폴더 생성'};
+function loadNasRolePerms(){
+  fetch(SYSCONF_API+'/nas-role-perms/').then(r=>r.json()).then(d=>{
+    const roles=['superadmin','admin','worker','resident','customer'];
+    document.getElementById('nas-role-tbody').innerHTML=roles.map(role=>{
+      const cells=NAS_ACTIONS.map(act=>{
+        const checked=d.perms[role]&&d.perms[role][act];
+        return `<td><input type="checkbox" class="form-check-input" ${checked?'checked':''} onchange="updateNasRolePerm('${role}','${act}',this.checked,this)" title="${NAS_ACT_LBL[act]}"></td>`;
+      }).join('');
+      return `<tr><td class="text-start ps-3">${NAS_ROLE_LABELS[role]||role}</td><td><i class="bi bi-check-circle-fill text-success"></i></td>${cells}</tr>`;
+    }).join('');
+  }).catch(()=>{ document.getElementById('nas-role-tbody').innerHTML='<tr><td colspan="6" class="text-danger text-center py-3">로드 실패</td></tr>'; });
+}
+function updateNasRolePerm(role, action, allowed, el){
+  el.disabled=true;
+  fetch(SYSCONF_API+'/nas-role-perms/',{
+    method:'PATCH',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+    body:JSON.stringify({role,action,allowed})
+  }).then(r=>r.json())
+  .catch(()=>{ alert('권한 변경 실패'); el.checked=!allowed; })
+  .finally(()=>{ el.disabled=false; });
+}
+
+// ══ 탭4: NAS 폴더 ══════════════════════════════════════
+const ACC_LABEL={public:'전체공개',admin:'관리자이상',superadmin:'슈퍼관리자'};
+const ACC_COLOR={public:'bg-success bg-opacity-10 text-success',admin:'bg-primary bg-opacity-10 text-primary',superadmin:'bg-dark bg-opacity-10 text-dark'};
+function loadNasFolders(){
+  fetch(SYSCONF_API+'/nas-folders/').then(r=>r.json()).then(d=>{
+    const tbody=document.getElementById('nas-tbody');
+    if(!d.folders||!d.folders.length){ tbody.innerHTML='<tr><td colspan="3" class="text-center py-3 text-muted">폴더 없음</td></tr>'; return; }
+    tbody.innerHTML=d.folders.map(f=>`
+      <tr>
+        <td class="ps-3 text-start"><i class="bi bi-folder-fill text-warning me-1"></i>${escH(f.name)}</td>
+        <td class="text-center"><span class="fl-badge ${ACC_COLOR[f.access_level]||''}">${ACC_LABEL[f.access_level]||f.access_level}</span></td>
+        <td class="text-center">
+          <select class="form-select form-select-sm mx-auto" style="width:140px;" onchange="updateFolderAccess(${f.id},this.value,this)">
+            <option value="public" ${f.access_level==='public'?'selected':''}>전체공개</option>
+            <option value="admin" ${f.access_level==='admin'?'selected':''}>관리자이상</option>
+            <option value="superadmin" ${f.access_level==='superadmin'?'selected':''}>슈퍼관리자</option>
+          </select>
+        </td>
+      </tr>`).join('');
+  }).catch(()=>{ document.getElementById('nas-tbody').innerHTML='<tr><td colspan="3" class="text-center text-danger">로드 실패</td></tr>'; });
+}
+function updateFolderAccess(id,val,el){
+  el.disabled=true;
+  fetch(SYSCONF_API+'/nas-folders/',{method:'PATCH',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},body:JSON.stringify({id,access_level:val})})
+  .then(r=>r.json()).then(()=>loadNasFolders()).catch(()=>alert('오류')).finally(()=>el.disabled=false);
+}
+
+// ══ 탭5: 접속이력 ════════════════════════════════════
+let _alKind = 'login';
+let _alPage = 1;
+
+const AL_HEADS = {
+  login:    ['사용자', '성명', 'IP', '브라우저', '결과', '실패사유', '시도일시'],
+  activity: ['사용자', '성명', '행위', '대상', '상세', 'IP', '발생일시'],
+  session:  ['사용자', '성명', 'IP', '현재 화면', '로그인시각', '마지막활동'],
+};
+const AL_COLS = {
+  login:    ['username','name','ip','user_agent','success','fail_reason','created_at'],
+  activity: ['username','name','action','target','detail','ip','created_at'],
+  session:  ['username','name','ip','current_page','login_at','last_active'],
+};
+
+function alSwitchKind(kind, el) {
+  _alKind = kind;
+  _alPage = 1;
+  document.querySelectorAll('#al-subtabs .btn').forEach(b => {
+    b.className = 'btn btn-sm btn-outline-secondary';
+  });
+  el.className = 'btn btn-sm btn-primary';
+  // 헤더 갱신
+  const heads = AL_HEADS[kind] || [];
+  document.getElementById('al-thead').innerHTML =
+    '<tr>' + heads.map(h => `<th>${h}</th>`).join('') + '</tr>';
+  // 날짜 필터 숨기기 (session은 현재 상태라 날짜 무의미)
+  const dateInputs = document.querySelectorAll('#al-from, #al-to');
+  dateInputs.forEach(el => el.style.display = kind === 'session' ? 'none' : '');
+  document.querySelector('span.text-muted.small').style.display = kind === 'session' ? 'none' : '';
+  // 테이블 리셋
+  document.getElementById('al-tbody').innerHTML =
+    `<tr><td colspan="${heads.length}" class="text-center text-muted py-4">조회 버튼을 눌러 데이터를 불러오세요</td></tr>`;
+  document.getElementById('al-total-info').textContent = '';
+  document.getElementById('al-pager').innerHTML = '';
+  document.getElementById('al-page-info').textContent = '';
+}
+
+function alClear() {
+  document.getElementById('al-q').value = '';
+  document.getElementById('al-from').value = '';
+  document.getElementById('al-to').value = '';
+}
+
+function alLoadPage(page) {
+  _alPage = page;
+  const q     = document.getElementById('al-q').value.trim();
+  const from  = document.getElementById('al-from').value;
+  const to    = document.getElementById('al-to').value;
+  let url = `${SYSCONF_API}/access-log/?kind=${_alKind}&page=${page}`;
+  if (q)    url += `&q=${encodeURIComponent(q)}`;
+  if (from) url += `&from=${from}`;
+  if (to)   url += `&to=${to}`;
+
+  const cols = AL_COLS[_alKind] || [];
+  const colCount = cols.length;
+  document.getElementById('al-tbody').innerHTML =
+    `<tr><td colspan="${colCount}" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-1"></span>로딩 중…</td></tr>`;
+
+  fetch(url).then(r => r.json()).then(d => {
+    if (!d.rows) { document.getElementById('al-tbody').innerHTML = `<tr><td colspan="${colCount}" class="text-center text-danger py-4">오류</td></tr>`; return; }
+    document.getElementById('al-total-info').textContent = `총 ${d.total.toLocaleString()}건`;
+    document.getElementById('al-page-info').textContent = `${d.page} / ${d.total_pages} 페이지`;
+
+    if (!d.rows.length) {
+      document.getElementById('al-tbody').innerHTML = `<tr><td colspan="${colCount}" class="text-center text-muted py-4">데이터 없음</td></tr>`;
+      document.getElementById('al-pager').innerHTML = '';
+      return;
+    }
+
+    // 테이블 렌더
+    document.getElementById('al-tbody').innerHTML = d.rows.map(row => {
+      const cells = cols.map(c => {
+        let val = row[c] ?? '-';
+        if (c === 'success') {
+          val = row.success
+            ? '<span class="badge bg-success-subtle text-success">성공</span>'
+            : '<span class="badge bg-danger-subtle text-danger">실패</span>';
+        }
+        return `<td>${val}</td>`;
+      });
+      return `<tr>${cells.join('')}</tr>`;
+    }).join('');
+
+    // 페이저
+    const tp = d.total_pages;
+    const cp = d.page;
+    if (tp <= 1) { document.getElementById('al-pager').innerHTML = ''; return; }
+    const range = [];
+    for (let i = Math.max(1,cp-2); i <= Math.min(tp,cp+2); i++) range.push(i);
+    let html = `<li class="page-item ${cp===1?'disabled':''}"><a class="page-link" href="#" onclick="alLoadPage(${cp-1});return false;">‹</a></li>`;
+    range.forEach(i => {
+      html += `<li class="page-item ${i===cp?'active':''}"><a class="page-link" href="#" onclick="alLoadPage(${i});return false;">${i}</a></li>`;
+    });
+    html += `<li class="page-item ${cp===tp?'disabled':''}"><a class="page-link" href="#" onclick="alLoadPage(${cp+1});return false;">›</a></li>`;
+    document.getElementById('al-pager').innerHTML = html;
+  }).catch(() => {
+    document.getElementById('al-tbody').innerHTML =
+      `<tr><td colspan="${colCount}" class="text-center text-danger py-4">서버 오류</td></tr>`;
+  });
+}
+
+// ══ 탭6: 시스템 정보 ══════════════════════════════════
+const COUNT_LBL={schools:'학교 수',buildings:'건물 수',contacts:'교직원(담당자)',incidents:'장애 건수',inc_cats:'장애 분류',sla_rules:'SLA 규칙',assets:'장비 수',materials:'자재 종류',inventory:'창고 재고 항목',users:'전체 사용자',workers:'현장기사 수',worker_profiles:'인력 프로필',nas_folders:'NAS 폴더',nas_files:'NAS 파일',photos:'사진 수'};
+function loadSysInfo(){
+  document.getElementById('si-cards').innerHTML='<div class="col-12 text-center py-4 text-muted">로딩 중…</div>';
+  fetch(SYSCONF_API+'/info/').then(r=>r.json()).then(d=>{
+    const s=d.server;
+    document.getElementById('si-cards').innerHTML=[
+      {lbl:'Python 버전',val:s.python,icon:'bi-filetype-py',col:'text-primary'},
+      {lbl:'Django 버전',val:s.django,icon:'bi-layers',col:'text-success'},
+      {lbl:'DB 크기',val:s.db_size||'—',icon:'bi-database',col:'text-warning'},
+      {lbl:'OS',val:s.os,icon:'bi-cpu',col:'text-secondary'},
+    ].map(c=>`<div class="col-6 col-md-3"><div class="si-card"><div class="si-icon ${c.col}"><i class="bi ${c.icon}"></i></div><div class="si-lbl">${c.lbl}</div><div class="si-val">${c.val}</div></div></div>`).join('');
+    document.getElementById('si-count-tbody').innerHTML=Object.entries(d.counts).map(([k,v])=>`<tr><td class="ps-3">${COUNT_LBL[k]||k}</td><td class="text-end pe-3"><strong>${v.toLocaleString()}</strong></td></tr>`).join('')||'<tr><td colspan="2" class="text-muted text-center py-3">데이터 없음</td></tr>';
+    document.getElementById('si-env-body').innerHTML=`<dl class="row mb-0 small"><dt class="col-5 text-muted">Python</dt><dd class="col-7">${s.python}</dd><dt class="col-5 text-muted">Django</dt><dd class="col-7">${s.django}</dd><dt class="col-5 text-muted">PostgreSQL</dt><dd class="col-7">${escH(s.pg||'—')}</dd><dt class="col-5 text-muted">DB 크기</dt><dd class="col-7">${s.db_size||'—'}</dd><dt class="col-5 text-muted">OS</dt><dd class="col-7">${escH(s.os)}</dd></dl>`;
+  }).catch(()=>{ document.getElementById('si-cards').innerHTML='<div class="col-12 text-center text-danger py-3">로드 실패</div>'; });
+}
+window.addEventListener('resize', () => { if(window._uLoaded) adjustMatrixRows(); });
+</script>
+{% endblock %}

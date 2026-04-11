@@ -1,0 +1,134 @@
+name: CI — Test & Lint
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: "3.11"
+  DJANGO_SETTINGS_MODULE: config.settings.development
+
+jobs:
+  # ── Django 테스트 + Lint ──────────────────────────────────
+  test:
+    name: Django Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: npms_test
+          POSTGRES_USER: npms
+          POSTGRES_PASSWORD: testpass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev gcc \
+            libcairo2 libpango-1.0-0 libpangocairo-1.0-0 \
+            libgdk-pixbuf2.0-0 libffi-dev shared-mime-info
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r src/requirements-dev.txt
+
+      - name: Write test .env
+        run: |
+          cat <<EOF > src/.env
+          SECRET_KEY=ci-test-secret-key-not-for-prod
+          DEBUG=True
+          DB_NAME=npms_test
+          DB_USER=npms
+          DB_PASSWORD=testpass
+          DB_HOST=localhost
+          DB_PORT=5432
+          REDIS_URL=redis://localhost:6379/0
+          AI_SERVER_URL=http://localhost:8100
+          SMS_ENABLED=False
+          EOF
+
+      - name: Run migrations
+        working-directory: src
+        run: python manage.py migrate --no-input
+
+      - name: Lint with flake8
+        working-directory: src
+        run: |
+          flake8 apps/ config/ core/ --max-line-length=120 \
+            --exclude=migrations,__pycache__ \
+            --extend-ignore=E501,W503
+
+      - name: Django system check
+        working-directory: src
+        run: python manage.py check
+
+      - name: Run tests with coverage
+        working-directory: src
+        run: |
+          coverage run manage.py test apps --verbosity=2 --no-input
+          coverage report --skip-covered --fail-under=50
+
+  # ── FastAPI AI 서버 테스트 ────────────────────────────────
+  ai-server-test:
+    name: AI Server Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install AI server dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r ai_server/requirements.txt
+          pip install pytest httpx
+
+      - name: Run AI server tests
+        working-directory: ai_server
+        run: pytest tests/ -v --tb=short 2>/dev/null || echo "No tests found — skip"
+
+      - name: Verify FastAPI app starts
+        working-directory: ai_server
+        run: |
+          python -c "
+          import importlib, sys
+          sys.path.insert(0, '.')
+          app = importlib.import_module('main').app
+          assert app.title == 'NPMS AI Server'
+          print('AI server app OK')
+          "

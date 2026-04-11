@@ -1,0 +1,466 @@
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.http import FileResponse
+from django.conf import settings
+from django.db.models import Q
+import os
+import mimetypes
+
+def file_open_view(request, token):
+    """임시 토큰으로 파일 제공 (인증 불필요 — Office URI 스킴 전용)"""
+    from django.core.cache import cache
+    from django.http import HttpResponse
+    file_id = cache.get(f'nas_open_{token}')
+    if not file_id:
+        return HttpResponse('링크가 만료되었거나 유효하지 않습니다.', status=410)
+    try:
+        file_obj = File.objects.get(pk=file_id)
+    except File.DoesNotExist:
+        return HttpResponse('파일을 찾을 수 없습니다.', status=404)
+    if not os.path.exists(file_obj.file_path):
+        return HttpResponse('파일이 서버에 존재하지 않습니다.', status=404)
+    return FileResponse(
+        open(file_obj.file_path, 'rb'),
+        as_attachment=False,
+        filename=file_obj.original_name,
+        content_type=file_obj.mime_type or 'application/octet-stream',
+    )
+
+
+@login_required
+def nas_view(request):
+    return render(request, 'nas/index.html')
+
+
+@login_required
+def deliverables_view(request):
+    return render(request, 'deliverables/index.html')
+
+
+from .models import Folder, File, FileDownloadLog
+from .serializers import FolderSerializer, FileSerializer, FileUploadSerializer
+from core.permissions.roles import IsAdmin
+from core.pagination import StandardPagination
+
+
+class FolderViewSet(viewsets.ModelViewSet):
+    """NAS 폴더 관리"""
+    serializer_class = FolderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def _access_filter(self, qs):
+        """사용자 역할에 따라 접근 가능한 폴더만 반환"""
+        role = self.request.user.role
+        if role == 'superadmin':
+            return qs  # 모든 폴더 접근 가능
+        if role in ('admin',):
+            return qs.exclude(access_level='superadmin')
+        # worker, resident, customer 등 일반 사용자
+        return qs.filter(access_level='public')
+
+    def get_queryset(self):
+        qs = Folder.objects.select_related('school', 'created_by')
+        parent_id = self.request.query_params.get('parent_id')
+        if parent_id == 'null' or parent_id == '0':
+            qs = qs.filter(parent__isnull=True)
+        elif parent_id:
+            qs = qs.filter(parent_id=parent_id)
+        school_id = self.request.query_params.get('school_id')
+        if school_id:
+            qs = qs.filter(school_id=school_id)
+        return self._access_filter(qs)
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+        from apps.sysconfig.models import NasRoleConfig
+        role = self.request.user.role
+        parent = serializer.validated_data.get('parent')
+        if parent is None and role != 'superadmin':
+            raise PermissionDenied('최상위 폴더는 슈퍼어드민만 생성할 수 있습니다.')
+        if not NasRoleConfig.can_do(role, 'create_folder'):
+            raise PermissionDenied('폴더 생성 권한이 없습니다.')
+        if parent and 'access_level' not in serializer.validated_data:
+            serializer.save(created_by=self.request.user, access_level=parent.access_level)
+        else:
+            serializer.save(created_by=self.request.user)
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+        from apps.sysconfig.models import NasRoleConfig
+        if not NasRoleConfig.can_do(self.request.user.role, 'delete'):
+            raise PermissionDenied('폴더 삭제 권한이 없습니다.')
+        instance.delete()
+
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        """폴더 전체를 zip으로 압축하여 다운로드"""
+        import zipfile
+        import io
+        from django.http import HttpResponse
+        from django.shortcuts import get_object_or_404
+
+        folder = get_object_or_404(Folder, pk=pk)
+
+        # 폴더 하위 모든 파일을 재귀 수집
+        def collect_files(f, base_path=''):
+            result = []
+            rel = f'{base_path}/{f.name}' if base_path else f.name
+            for file_obj in f.files.all():
+                result.append((file_obj, f'{rel}/{file_obj.name}'))
+            for child in f.children.all():
+                result.extend(collect_files(child, rel))
+            return result
+
+        all_files = collect_files(folder)
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for file_obj, arc_name in all_files:
+                if os.path.exists(file_obj.file_path):
+                    zf.write(file_obj.file_path, arc_name)
+        buf.seek(0)
+
+        response = HttpResponse(buf, content_type='application/zip')
+        safe_name = folder.name.encode('utf-8').decode('latin-1', errors='replace')
+        response['Content-Disposition'] = f'attachment; filename="{safe_name}.zip"'
+        return response
+
+    @action(detail=True, methods=['patch'])
+    def rename(self, request, pk=None):
+        """폴더 이름 변경 및 full_path 재귀 갱신"""
+        folder = self.get_object()
+        new_name = request.data.get('name', '').strip()
+        if not new_name:
+            return Response({'error': '이름을 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
+        old_path = folder.full_path
+        parent_path = folder.parent.full_path if folder.parent else ''
+        new_path = f'{parent_path}/{new_name}'
+
+        def update_paths(f, old_prefix, new_prefix):
+            f.full_path = new_prefix + f.full_path[len(old_prefix):]
+            f.save(update_fields=['full_path'])
+            for child in f.children.all():
+                update_paths(child, old_prefix, new_prefix)
+
+        folder.name = new_name
+        folder.full_path = new_path
+        folder.save(update_fields=['name', 'full_path'])
+        for child in folder.children.all():
+            update_paths(child, old_path, new_path)
+        return Response({'id': folder.id, 'name': folder.name, 'full_path': folder.full_path})
+
+    @action(detail=True, methods=['patch'])
+    def move(self, request, pk=None):
+        """폴더를 다른 부모로 이동 및 full_path 재귀 갱신"""
+        folder = self.get_object()
+        new_parent_id = request.data.get('parent')
+        if new_parent_id:
+            try:
+                new_parent = Folder.objects.get(pk=new_parent_id)
+            except Folder.DoesNotExist:
+                return Response({'error': '대상 폴더를 찾을 수 없습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            if new_parent.full_path.startswith(folder.full_path):
+                return Response({'error': '하위 폴더로 이동할 수 없습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+            new_path = f'{new_parent.full_path}/{folder.name}'
+        else:
+            if self.request.user.role != 'superadmin':
+                return Response({'error': '최상위로 이동은 슈퍼어드민만 가능합니다.'}, status=status.HTTP_403_FORBIDDEN)
+            new_parent = None
+            new_path = f'/{folder.name}'
+
+        old_path = folder.full_path
+
+        def update_paths(f, old_prefix, new_prefix):
+            f.full_path = new_prefix + f.full_path[len(old_prefix):]
+            f.save(update_fields=['full_path'])
+            for child in f.children.all():
+                update_paths(child, old_prefix, new_prefix)
+
+        folder.parent = new_parent
+        folder.full_path = new_path
+        folder.save(update_fields=['parent', 'full_path'])
+        for child in folder.children.all():
+            update_paths(child, old_path, new_path)
+        return Response({'id': folder.id, 'full_path': folder.full_path})
+
+    @action(detail=False, methods=['get'])
+    def children(self, request):
+        """지정 폴더의 직접 자식 폴더 목록 반환 (지연 로드용)
+        ?parent_id=<id>  → 해당 폴더의 자식
+        ?parent_id=root  → 루트 폴더 목록
+        """
+        parent_id = request.query_params.get('parent_id', 'root')
+        if parent_id == 'root':
+            qs = Folder.objects.filter(parent__isnull=True).order_by('name')
+        else:
+            qs = Folder.objects.filter(parent_id=parent_id).order_by('name')
+
+        # 접근 권한 필터
+        qs = self._access_filter(qs)
+
+        data = [
+            {
+                'id': f.id,
+                'name': f.name,
+                'full_path': f.full_path,
+                'access_level': f.access_level,
+                'has_children': self._access_filter(f.children.all()).exists(),
+            }
+            for f in qs
+        ]
+        return Response(data)
+
+
+class FileViewSet(viewsets.ModelViewSet):
+    """NAS 파일 관리"""
+    serializer_class = FileSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardPagination
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        qs = File.objects.select_related('folder', 'school', 'uploaded_by')
+        folder_id = self.request.query_params.get('folder_id')
+        if folder_id:
+            qs = qs.filter(folder_id=folder_id)
+        school_id   = self.request.query_params.get('school_id')
+        school_name = self.request.query_params.get('school_name')
+        if school_id:
+            # school FK 일치 OR 파일명·설명에 학교명 포함
+            if school_name:
+                qs = qs.filter(
+                    Q(school_id=school_id) |
+                    Q(name__icontains=school_name) |
+                    Q(description__icontains=school_name) |
+                    Q(folder__full_path__icontains=school_name)
+                )
+            else:
+                qs = qs.filter(school_id=school_id)
+        category = self.request.query_params.get('category')
+        if category:
+            qs = qs.filter(category=category)
+        q = self.request.query_params.get('q')
+        if q:
+            qs = qs.filter(
+                Q(name__icontains=q) | Q(description__icontains=q) |
+                Q(ocr_text__icontains=q) | Q(school__name__icontains=q)
+            )
+        # 파일명 키워드 탭 필터
+        TAB_KEYWORDS = ['구성도', '선번장', '랙실장도', '장비목록', '건물정보', '장애처리', '정기점검', '소규모', '스위치']
+        tab = self.request.query_params.get('tab')
+        if tab == '이미지':
+            qs = qs.filter(mime_type__startswith='image/')
+        elif tab == '기타':
+            excl = Q(mime_type__startswith='image/')
+            for kw in TAB_KEYWORDS:
+                excl |= Q(name__icontains=kw)
+            qs = qs.exclude(excl)
+        elif tab in TAB_KEYWORDS:
+            qs = qs.filter(name__icontains=tab)
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        """파일 업로드"""
+        from rest_framework.exceptions import PermissionDenied
+        from apps.sysconfig.models import NasRoleConfig
+        if not NasRoleConfig.can_do(request.user.role, 'upload'):
+            raise PermissionDenied('파일 업로드 권한이 없습니다.')
+        upload_ser = FileUploadSerializer(data=request.data)
+        if not upload_ser.is_valid():
+            return Response(upload_ser.errors, status=status.HTTP_400_BAD_REQUEST)
+        data = upload_ser.validated_data
+        uploaded_file = data['file']
+
+        try:
+            folder = Folder.objects.get(id=data['folder'])
+        except Folder.DoesNotExist:
+            return Response({'error': '폴더를 찾을 수 없습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        nas_root = getattr(settings, 'NAS_MEDIA_ROOT', settings.MEDIA_ROOT)
+        folder_path = os.path.join(nas_root, folder.full_path.lstrip('/'))
+        os.makedirs(folder_path, exist_ok=True)
+
+        # 중복 파일명 처리
+        original_name = uploaded_file.name
+        safe_name = original_name.replace(' ', '_')
+        file_dest = os.path.join(folder_path, safe_name)
+        counter = 1
+        base, ext = os.path.splitext(safe_name)
+        while os.path.exists(file_dest):
+            safe_name = f'{base}_{counter}{ext}'
+            file_dest = os.path.join(folder_path, safe_name)
+            counter += 1
+
+        with open(file_dest, 'wb') as f:
+            for chunk in uploaded_file.chunks():
+                f.write(chunk)
+
+        mime_type = mimetypes.guess_type(original_name)[0] or 'application/octet-stream'
+        file_obj = File.objects.create(
+            folder=folder,
+            name=safe_name,
+            original_name=original_name,
+            file_path=file_dest,
+            file_size=os.path.getsize(file_dest),
+            mime_type=mime_type,
+            category=data.get('category', 'other'),
+            school=folder.school,
+            description=data.get('description', ''),
+            uploaded_by=request.user,
+        )
+        # PDF 및 이미지 파일 OCR + AI 분류 비동기 처리
+        if 'pdf' in mime_type or mime_type.startswith('image/'):
+            from .tasks import extract_ocr_text, classify_nas_file
+            extract_ocr_text.delay(file_obj.id)
+            classify_nas_file.delay(file_obj.id)
+
+        return Response(FileSerializer(file_obj).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['patch'])
+    def rename(self, request, pk=None):
+        """파일 표시명(original_name) 변경"""
+        file_obj = self.get_object()
+        new_name = request.data.get('name', '').strip()
+        if not new_name:
+            return Response({'error': '이름을 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
+        file_obj.original_name = new_name
+        file_obj.save(update_fields=['original_name'])
+        return Response({'id': file_obj.id, 'original_name': file_obj.original_name})
+
+    @action(detail=True, methods=['patch'])
+    def move(self, request, pk=None):
+        """파일을 다른 폴더로 이동"""
+        file_obj = self.get_object()
+        folder_id = request.data.get('folder')
+        if not folder_id:
+            return Response({'error': 'folder 필드가 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            folder = Folder.objects.get(pk=folder_id)
+        except Folder.DoesNotExist:
+            return Response({'error': '대상 폴더를 찾을 수 없습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        file_obj.folder = folder
+        file_obj.school = folder.school
+        file_obj.save(update_fields=['folder', 'school'])
+        return Response({'id': file_obj.id, 'folder': folder.id, 'folder_path': folder.full_path})
+
+    @action(detail=True, methods=['post'])
+    def ocr_retry(self, request, pk=None):
+        """OCR 재추출 요청"""
+        file_obj = self.get_object()
+        file_obj.ocr_text = ''
+        file_obj.save(update_fields=['ocr_text'])
+        from .tasks import extract_ocr_text
+        extract_ocr_text.delay(file_obj.id)
+        return Response({'message': 'OCR 재추출 요청됨'})
+
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        """파일 다운로드"""
+        from rest_framework.exceptions import PermissionDenied
+        from apps.sysconfig.models import NasRoleConfig
+        if not NasRoleConfig.can_do(request.user.role, 'download'):
+            raise PermissionDenied('파일 다운로드 권한이 없습니다.')
+        file_obj = self.get_object()
+        if not os.path.exists(file_obj.file_path):
+            return Response({'error': '파일이 존재하지 않습니다.'}, status=status.HTTP_404_NOT_FOUND)
+        FileDownloadLog.objects.create(
+            file=file_obj,
+            user=request.user,
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+        return FileResponse(
+            open(file_obj.file_path, 'rb'),
+            as_attachment=True,
+            filename=file_obj.original_name,
+            content_type=file_obj.mime_type or 'application/octet-stream'
+        )
+
+    @action(detail=True, methods=['get'])
+    def temp_url(self, request, pk=None):
+        """Office URI 스킴용 임시 다운로드 토큰 발급 (5분 유효)"""
+        import uuid
+        from urllib.parse import urlparse
+        from django.core.cache import cache
+        file_obj = self.get_object()
+        token = uuid.uuid4().hex
+        cache.set(f'nas_open_{token}', file_obj.id, timeout=300)
+        # nginx가 Host 헤더에서 포트를 제거하므로 Referer에서 origin 추출
+        referer = request.META.get('HTTP_REFERER', '')
+        if referer:
+            p = urlparse(referer)
+            origin = f'{p.scheme}://{p.netloc}'
+        else:
+            origin = request.build_absolute_uri('/').rstrip('/')
+        url = f'{origin}/npms/nas/open/{token}/'
+        return Response({'url': url, 'token': token})
+
+    @action(detail=True, methods=['get'])
+    def preview(self, request, pk=None):
+        """이미지/PDF 인라인 미리보기"""
+        file_obj = self.get_object()
+        if not os.path.exists(file_obj.file_path):
+            return Response({'error': '파일이 존재하지 않습니다.'}, status=status.HTTP_404_NOT_FOUND)
+        mime = file_obj.mime_type or 'application/octet-stream'
+        response = FileResponse(
+            open(file_obj.file_path, 'rb'),
+            content_type=mime,
+            as_attachment=False,
+        )
+        # iframe 내 표시 허용 (기본값 DENY → SAMEORIGIN으로 완화)
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+        response['Content-Disposition'] = f'inline; filename="{file_obj.original_name}"'
+        return response
+
+    @action(detail=False, methods=['get'])
+    def search(self, request):
+        """전문 검색: 파일명, 설명, OCR 텍스트, 학교명 통합 검색"""
+        q = request.query_params.get('q', '').strip()
+        if not q:
+            return Response({'results': [], 'count': 0})
+
+        qs = File.objects.select_related('folder', 'school', 'uploaded_by').filter(
+            Q(name__icontains=q) |
+            Q(original_name__icontains=q) |
+            Q(description__icontains=q) |
+            Q(ocr_text__icontains=q) |
+            Q(school__name__icontains=q)
+        )
+
+        # 추가 필터
+        school_id = request.query_params.get('school_id')
+        if school_id:
+            qs = qs.filter(school_id=school_id)
+        category = request.query_params.get('category')
+        if category:
+            qs = qs.filter(category=category)
+
+        total = qs.count()
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            return self.get_paginated_response(FileSerializer(page, many=True).data)
+        return Response({'results': FileSerializer(qs[:50], many=True).data, 'count': total})
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """NAS 통계: 카테고리별 파일 수 / 용량"""
+        from django.db.models import Sum, Count
+        qs = File.objects.all()
+        school_id = request.query_params.get('school_id')
+        if school_id:
+            qs = qs.filter(school_id=school_id)
+
+        by_cat = qs.values('category').annotate(
+            count=Count('id'),
+            total_size=Sum('file_size'),
+        )
+        total_size = qs.aggregate(s=Sum('file_size'))['s'] or 0
+        return Response({
+            'total_files': qs.count(),
+            'total_size_mb': round(total_size / 1024 / 1024, 2),
+            'by_category': list(by_cat),
+        })

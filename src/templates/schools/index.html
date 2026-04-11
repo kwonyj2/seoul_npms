@@ -1,0 +1,1515 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}학교 정보{% endblock %}
+{% block page_title %}<i class="bi bi-building me-2"></i>학교 정보{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+  <!-- ── 탭 메뉴 ─────────────────────────────────────────────────────── -->
+  <div class="d-flex align-items-end justify-content-between mb-2">
+    <ul class="nav nav-tabs mb-0" id="schoolTabs">
+      <li class="nav-item">
+        <a class="nav-link" id="tab-list-btn" href="#" onclick="showTab('list');return false;">
+          <i class="bi bi-list-ul me-1"></i>리스트
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="tab-info-btn" href="#" onclick="showTab('info');return false;">
+          <i class="bi bi-info-circle me-1"></i>학교정보
+          <span id="tab-school-name" class="ms-1 text-muted small"></span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="tab-building-btn" href="#" onclick="showTab('building');return false;">
+          <i class="bi bi-diagram-2 me-1"></i>건물정보
+        </a>
+      </li>
+    </ul>
+    {% if user.role == 'superadmin' %}
+    <a href="/npms/api/schools/buildings/rooms_csv_download/"
+       class="btn btn-sm btn-success mb-1"
+       title="전체 학교 건물·호실 CSV 다운로드 (슈퍼관리자)">
+      <i class="bi bi-download me-1"></i>전체 건물정보 CSV
+    </a>
+    {% endif %}
+  </div>
+
+  <!-- ══════════ TAB 1: 리스트 ══════════ -->
+  <div id="tab-list" class="tab-pane-custom">
+
+    <!-- 검색 바 -->
+    <div class="card border-0 shadow-sm mb-2">
+      <div class="card-body py-2 px-3">
+        <div class="row g-2 align-items-end">
+          <div class="col-12 col-md-4">
+            <input type="text" id="search-q" class="form-control form-control-sm" placeholder="학교명, 주소 검색">
+          </div>
+          <div class="col-6 col-md-3">
+            <select id="filter-center" class="form-select form-select-sm">
+              <option value="">전체 지원청</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <select id="filter-type" class="form-select form-select-sm">
+              <option value="">전체 학제</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-2 d-flex gap-1">
+            <button class="btn btn-sm btn-primary flex-fill" onclick="loadSchools()">
+              <i class="bi bi-search"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="resetFilters()">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 메인 2열 -->
+    <div class="row g-2">
+      <!-- 좌측: 학교 트리 -->
+      <div class="col-12 col-xl-2 d-none d-xl-block">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
+            <span class="fw-semibold small"><i class="bi bi-diagram-3 me-1"></i>학교 트리</span>
+            <button class="btn btn-xs btn-link p-0 text-muted" onclick="resetSchoolFilter()" title="전체보기"
+                    id="tree-reset-btn" style="display:none;">
+              <i class="bi bi-x-circle"></i>
+            </button>
+          </div>
+          <div class="card-body p-0" id="school-tree" style="max-height:calc(100vh - 260px);overflow-y:auto;">
+            <div class="p-2 text-muted small">로딩 중...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 우측: 학교 목록 -->
+      <div class="col-12 col-xl-10">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header d-flex align-items-center justify-content-between py-2 bg-white border-bottom">
+            <span class="fw-semibold">총 <span id="total-count" class="text-primary">-</span>개 학교</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0" style="table-layout:fixed;width:100%;min-width:860px;">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th style="width:36px;">순번</th>
+                  <th style="width:72px;">지원청</th>
+                  <th style="width:62px;">학제</th>
+                  <th style="width:120px;">학교명</th>
+                  <th style="width:160px;">주소</th>
+                  <th style="width:95px;">전화번호</th>
+                  <th style="width:38px;" class="text-center">장애</th>
+                  <th style="width:36px;" class="text-center" title="스위치">SW</th>
+                  <th style="width:36px;" class="text-center" title="PoE 스위치">PoE</th>
+                  <th style="width:36px;" class="text-center" title="무선 AP">AP</th>
+                  <th style="width:40px;" class="text-center"><small>구성도</small></th>
+                  <th style="width:40px;" class="text-center"><small>선번장</small></th>
+                  <th style="width:40px;" class="text-center"><small>랙실장</small></th>
+                  <th style="width:44px;" class="text-center"><small>건물정보</small></th>
+                  <th style="width:44px;" class="text-center"><small>전산실랙</small></th>
+                </tr>
+              </thead>
+              <tbody id="school-tbody">
+                <tr><td colspan="15" class="text-center text-muted py-4">로딩 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card-footer py-2 d-flex justify-content-between align-items-center">
+            <small class="text-muted">페이지 <span id="page-info">-</span></small>
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-outline-secondary" id="btn-prev" onclick="changePage(-1)" disabled>
+                <i class="bi bi-chevron-left"></i>
+              </button>
+              <button class="btn btn-outline-secondary" id="btn-next" onclick="changePage(1)" disabled>
+                <i class="bi bi-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-list -->
+
+  <!-- ══════════ TAB 2: 학교정보 ══════════ -->
+  <div id="tab-info" class="tab-pane-custom" style="display:none;">
+
+    <div id="info-placeholder" class="text-center text-muted py-5">
+      <i class="bi bi-arrow-left-circle" style="font-size:2rem;"></i>
+      <div class="mt-2">리스트에서 학교를 선택하세요</div>
+    </div>
+
+    <div id="info-content" style="display:none;">
+      <!-- 브레드크럼 -->
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb mb-0 small">
+            <li class="breadcrumb-item"><a href="#" onclick="showTab('list');return false;">학교 목록</a></li>
+            <li class="breadcrumb-item active" id="info-breadcrumb-name">-</li>
+          </ol>
+        </nav>
+        <a id="info-incident-btn" href="#" class="btn btn-sm btn-warning">
+          <i class="bi bi-plus-circle me-1"></i>장애 접수
+        </a>
+      </div>
+
+      <div class="row g-2">
+        <!-- 좌측 컬럼 -->
+        <div class="col-lg-4">
+          <!-- 기본 정보 -->
+          <div class="card border-0 shadow-sm mb-2">
+            <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center">
+              <span class="fw-semibold small"><i class="bi bi-info-circle me-1"></i>기본 정보</span>
+              <span id="info-active-badge" class="badge bg-secondary">-</span>
+            </div>
+            <div class="card-body p-0">
+              <table class="table table-sm mb-0" id="info-basic-table">
+                <tbody>
+                  <tr><td colspan="2" class="text-center text-muted py-3 small">로딩 중...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 담당자 -->
+          <div class="card border-0 shadow-sm mb-2">
+            <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center">
+              <span class="fw-semibold small"><i class="bi bi-person-lines-fill me-1"></i>담당자</span>
+              <button class="btn btn-xs btn-outline-primary" onclick="showContactModal()"><i class="bi bi-plus"></i></button>
+            </div>
+            <div class="card-body p-0">
+              <table class="table table-sm mb-0">
+                <thead class="table-light"><tr><th>이름</th><th>직책</th><th>연락처</th><th>이메일</th></tr></thead>
+                <tbody id="contact-tbody">
+                  <tr><td colspan="4" class="text-center text-muted py-2 small">로딩 중...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 최근 장애 이력 -->
+          <div class="card border-0 shadow-sm mb-2">
+            <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center">
+              <span class="fw-semibold small"><i class="bi bi-exclamation-triangle me-1"></i>최근 장애 이력</span>
+              <small class="text-muted" id="incident-count"></small>
+            </div>
+            <div class="card-body p-0">
+              <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                  <tr><th>접수번호</th><th>분류</th><th>상태</th><th>우선</th><th>접수일</th></tr>
+                </thead>
+                <tbody id="incident-tbody">
+                  <tr><td colspan="5" class="text-center text-muted py-2 small">로딩 중...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card-footer py-1 d-flex justify-content-between align-items-center">
+              <small class="text-muted" id="inc-page-info"></small>
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" id="inc-prev" onclick="changeIncPage(-1)" disabled><i class="bi bi-chevron-left"></i></button>
+                <button class="btn btn-outline-secondary" id="inc-next" onclick="changeIncPage(1)"><i class="bi bi-chevron-right"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 네트워크 문서 -->
+          <div class="card border-0 shadow-sm">
+            <div class="card-header py-2 bg-white border-bottom">
+              <span class="fw-semibold small"><i class="bi bi-folder2-open me-1"></i>네트워크 문서</span>
+            </div>
+            <div class="card-body p-2" id="network-doc-list">
+              <div class="text-center text-muted py-2 small">로딩 중...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 우측 컬럼 -->
+        <div class="col-lg-8">
+          <!-- 위치 지도 -->
+          <div class="card border-0 shadow-sm mb-2" id="map-card" style="display:none;">
+            <div class="card-header py-2 bg-white border-bottom">
+              <span class="fw-semibold small"><i class="bi bi-geo-alt me-1"></i>위치</span>
+            </div>
+            <div id="school-map" style="height:200px;"></div>
+          </div>
+
+          <!-- 네트워크 장비 -->
+          <div class="card border-0 shadow-sm mb-2">
+            <div class="card-header py-2 bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
+              <span class="fw-semibold small me-1"><i class="bi bi-hdd-network me-1"></i>네트워크 장비</span>
+              <div class="btn-group btn-group-sm" style="font-size:.75rem;">
+                <button class="btn btn-primary" onclick="setEquipFilter('')" id="ebtn-all" style="font-size:.75rem;padding:.1rem .45rem;">전체</button>
+                <button class="btn btn-outline-primary" onclick="setEquipFilter('스위치')" id="ebtn-sw" style="font-size:.75rem;padding:.1rem .45rem;">스위치</button>
+                <button class="btn btn-outline-info" onclick="setEquipFilter('PoE')" id="ebtn-poe" style="font-size:.75rem;padding:.1rem .45rem;">PoE</button>
+                <button class="btn btn-outline-success" onclick="setEquipFilter('AP')" id="ebtn-ap" style="font-size:.75rem;padding:.1rem .45rem;">AP</button>
+              </div>
+              <span class="badge bg-secondary ms-auto" id="equip-count">-</span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover mb-0" style="font-size:.78rem;min-width:700px;">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th style="width:70px;">구분</th>
+                    <th style="width:110px;">모델명</th>
+                    <th style="width:80px;">제조사</th>
+                    <th style="width:130px;">설치장소</th>
+                    <th style="width:55px;">장비 ID</th>
+                    <th style="width:65px;">망구분</th>
+                    <th style="width:45px;">속도</th>
+                    <th style="width:35px;">계위</th>
+                    <th style="width:55px;">국산/외산</th>
+                    <th style="width:45px;">MGMT</th>
+                    <th style="width:50px;">도입년</th>
+                  </tr>
+                </thead>
+                <tbody id="equip-tbody">
+                  <tr><td colspan="11" class="text-center text-muted py-3">로딩 중...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="card-footer py-1 d-flex justify-content-between align-items-center">
+              <small class="text-muted" id="equip-page-info">-</small>
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary" id="equip-prev" onclick="changeEquipPage(-1)" disabled><i class="bi bi-chevron-left"></i></button>
+                <button class="btn btn-outline-secondary" id="equip-next" onclick="changeEquipPage(1)" disabled><i class="bi bi-chevron-right"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 네트워크 정보 -->
+          <div class="card border-0 shadow-sm">
+            <div class="card-header py-2 bg-white border-bottom">
+              <span class="fw-semibold small"><i class="bi bi-hdd-network me-1"></i>네트워크 정보</span>
+            </div>
+            <div class="card-body p-0">
+              <table class="table table-sm mb-0" id="network-info">
+                <tbody>
+                  <tr><td colspan="2" class="text-center text-muted py-3 small">로딩 중...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /info-content -->
+
+  </div><!-- /tab-info -->
+
+  <!-- ══════════ TAB 3: 건물정보 ══════════ -->
+  <div id="tab-building" class="tab-pane-custom" style="display:none;">
+
+    <div id="building-placeholder" class="text-center text-muted py-5">
+      <i class="bi bi-arrow-left-circle" style="font-size:2rem;"></i>
+      <div class="mt-2">리스트에서 학교를 선택하세요</div>
+    </div>
+
+    <div id="building-content" style="display:none;">
+      <!-- 헤더 -->
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+          <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0 small">
+              <li class="breadcrumb-item"><a href="#" onclick="showTab('list');return false;">학교 목록</a></li>
+              <li class="breadcrumb-item"><a href="#" id="bld-breadcrumb-info" onclick="showTab('info');return false;">학교정보</a></li>
+              <li class="breadcrumb-item active" id="bld-breadcrumb-name">-</li>
+            </ol>
+          </nav>
+        </div>
+        <div class="d-flex gap-1">
+          <a id="btn-rooms-csv" href="#" class="btn btn-sm btn-outline-success" title="건물·호실 전체 CSV 다운로드">
+            <i class="bi bi-download me-1"></i>CSV 다운로드
+          </a>
+          <button class="btn btn-sm btn-outline-secondary" onclick="triggerVsdxParse()" id="vsdx-trigger-btn" title="VSDX 재파싱">
+            <i class="bi bi-arrow-repeat me-1"></i>VSDX 재파싱
+          </button>
+        </div>
+      </div>
+
+      <div class="row g-2">
+        <!-- 좌측: 건물·층 트리 -->
+        <div class="col-12 col-xl-3">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-header py-2 bg-white border-bottom">
+              <span class="fw-semibold small"><i class="bi bi-diagram-2 me-1"></i>건물 구조</span>
+            </div>
+            <div class="card-body p-0" id="building-tree" style="overflow-y:auto;max-height:calc(100vh - 280px);">
+              <div class="p-3 text-muted small text-center">건물 정보 없음</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 우측: 평면도 뷰어 -->
+        <div class="col-12 col-xl-9">
+          <div class="card border-0 shadow-sm">
+            <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
+              <span class="fw-semibold small" id="floor-plan-title">
+                <i class="bi bi-grid-3x3 me-1"></i>평면도
+              </span>
+              <div class="d-flex align-items-center gap-2">
+                <span id="floor-room-count" class="badge bg-secondary" style="display:none;"></span>
+                <div class="d-flex gap-1 flex-wrap" id="room-type-legend" style="font-size:.65rem;display:none!important;"></div>
+              </div>
+            </div>
+            <div class="card-body p-2" id="floor-plan-body">
+              <div class="text-center text-muted py-4 small">
+                <i class="bi bi-building" style="font-size:2rem;"></i>
+                <div class="mt-2">좌측에서 층을 선택하세요</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- VSDX 임포트 로그 -->
+          <div class="card border-0 shadow-sm mt-2">
+            <div class="card-header py-2 bg-white border-bottom">
+              <span class="fw-semibold small"><i class="bi bi-clock-history me-1"></i>VSDX 파싱 이력</span>
+            </div>
+            <div class="card-body p-0" id="vsdx-log-area">
+              <div class="p-3 text-muted small text-center">이력 없음</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /building-content -->
+
+  </div><!-- /tab-building -->
+
+</div><!-- /container-fluid -->
+
+<!-- 담당자 추가 모달 -->
+<div class="modal fade" id="contactModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2"><h6 class="modal-title">담당자 추가</h6><button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-2"><input type="text" id="c-name" class="form-control form-control-sm" placeholder="이름 *"></div>
+        <div class="mb-2"><input type="text" id="c-position" class="form-control form-control-sm" placeholder="직책"></div>
+        <div class="mb-2"><input type="text" id="c-phone" class="form-control form-control-sm" placeholder="연락처 *"></div>
+        <div class="mb-2"><input type="email" id="c-email" class="form-control form-control-sm" placeholder="이메일"></div>
+        <div class="form-check"><input type="checkbox" class="form-check-input" id="c-primary"><label class="form-check-label small" for="c-primary">주담당자</label></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-primary" onclick="saveContact()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// 전역 상태
+// ─────────────────────────────────────────────────────────────────────────────
+let currentSchoolId   = null;
+let currentSchoolName = '';
+let currentSchoolData = null;   // API 상세 데이터 캐시
+let _mapInitialized   = false;
+let _olMap            = null;
+
+// 탭 전환
+function showTab(tab) {
+  ['list','info','building'].forEach(t => {
+    document.getElementById(`tab-${t}`).style.display      = t === tab ? '' : 'none';
+    document.getElementById(`tab-${t}-btn`).classList.toggle('active', t === tab);
+  });
+  // URL 히스토리 갱신
+  const url = new URL(location.href);
+  url.searchParams.set('tab', tab);
+  if (currentSchoolId) url.searchParams.set('school', currentSchoolId);
+  history.replaceState(null, '', url.toString());
+}
+
+// 학교 선택 → 탭2로 이동
+function selectSchool(schoolId, schoolName, goTab) {
+  currentSchoolId   = schoolId;
+  currentSchoolName = schoolName;
+  _floorPlanData    = null;   // 다른 학교 선택 시 캐시 초기화
+  document.getElementById('tab-school-name').textContent = schoolName ? `(${schoolName})` : '';
+  const dest = goTab || 'info';
+  showTab(dest);
+  loadSchoolInfo(schoolId);
+  if (dest === 'building') loadBuildingInfo(schoolId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 1: 리스트
+// ─────────────────────────────────────────────────────────────────────────────
+let currentPage  = 1;
+let totalPages   = 1;
+let activeCenter = null;
+let activeType   = null;
+let activeSchool = null;
+let treeData     = [];
+
+async function loadSchools() {
+  const q      = document.getElementById('search-q').value.trim();
+  const center = document.getElementById('filter-center').value;
+  const type   = document.getElementById('filter-type').value;
+
+  const params = { page: currentPage, page_size: 30 };
+  if (q)      params.q      = q;
+  if (activeSchool)                         params.school = activeSchool;
+  else if (activeCenter || center)          params.center = activeCenter || center;
+  if ((activeType || type) && !activeSchool) params.type = activeType || type;
+
+  const tbody = document.getElementById('school-tbody');
+  tbody.innerHTML = '<tr><td colspan="15" class="text-center text-muted py-3">로딩 중...</td></tr>';
+
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/`, params);
+    totalPages = Math.ceil((data.count || 0) / 30);
+    document.getElementById('total-count').textContent = (data.count || 0).toLocaleString();
+    document.getElementById('page-info').textContent   = `${currentPage} / ${totalPages || 1}`;
+    document.getElementById('btn-prev').disabled = currentPage <= 1;
+    document.getElementById('btn-next').disabled = currentPage >= totalPages;
+
+    const results = data.results || [];
+    if (!results.length) {
+      tbody.innerHTML = '<tr><td colspan="15" class="text-center text-muted py-4">학교 없음</td></tr>';
+      return;
+    }
+    const offset = (currentPage - 1) * 30;
+    tbody.innerHTML = results.map((s, idx) => {
+      const d = s.network_docs || {};
+      function docCell(key) {
+        const doc = d[key];
+        if (!doc) return '<td class="text-center"><span class="text-muted" style="font-size:.7rem;">-</span></td>';
+        const countBadge = doc.count > 1 ? `<sup class="text-primary fw-bold" style="font-size:.6rem;">${doc.count}</sup>` : '';
+        const attrs = (doc.inline || key === '전산실랙')
+          ? `href="${doc.url}" target="_blank"`
+          : `href="${doc.url}" download`;
+        const icon = key === '건물정보'   ? 'bi-file-earmark-pdf text-danger'
+                   : key === '전산실랙'   ? 'bi-file-earmark-image text-primary'
+                   : key === '구성도'     ? 'bi-file-earmark-ppt text-danger'
+                   :                       'bi-file-earmark-excel text-success';
+        return `<td class="text-center" onclick="event.stopPropagation()">
+          <a ${attrs} title="${key}${doc.count > 1 ? ' ('+doc.count+'개)' : ''}">
+            <i class="bi ${icon}" style="font-size:1rem;"></i>${countBadge}
+          </a>
+        </td>`;
+      }
+      const isActive = currentSchoolId === s.id;
+      return `<tr class="cursor-pointer ${isActive ? 'table-primary' : ''}"
+                  onclick="selectSchool(${s.id}, '${s.name.replace(/'/g,"\\'")}', 'info')">
+        <td class="text-muted small">${offset + idx + 1}</td>
+        <td><small class="badge bg-secondary">${s.support_center_name || ''}</small></td>
+        <td><small>${s.school_type_name || ''}</small></td>
+        <td class="fw-semibold text-truncate" style="max-width:120px;" title="${s.name}">${s.name}</td>
+        <td class="text-truncate" style="max-width:160px;"><small class="text-muted" title="${s.address||''}">${s.address || '-'}</small></td>
+        <td><small class="text-muted">${s.phone || '-'}</small></td>
+        <td class="text-center">
+          ${s.active_incidents > 0
+            ? `<span class="badge bg-danger">${s.active_incidents}</span>`
+            : '<i class="bi bi-check-circle-fill text-success" style="font-size:.85rem;"></i>'}
+        </td>
+        <td class="text-center"><small class="text-muted">${s.device_count?.switch ?? '-'}</small></td>
+        <td class="text-center"><small class="text-muted">${s.device_count?.poe ?? '-'}</small></td>
+        <td class="text-center"><small class="text-muted">${s.device_count?.ap ?? '-'}</small></td>
+        ${docCell('구성도')}
+        ${docCell('선번장')}
+        ${docCell('랙실장도')}
+        ${docCell('건물정보')}
+        ${docCell('전산실랙')}
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="15" class="text-center text-danger py-3">데이터 로드 오류</td></tr>';
+  }
+}
+
+function changePage(delta) {
+  currentPage = Math.max(1, Math.min(totalPages, currentPage + delta));
+  loadSchools();
+}
+
+function resetFilters() {
+  document.getElementById('search-q').value      = '';
+  document.getElementById('filter-center').value = '';
+  document.getElementById('filter-type').value   = '';
+  activeCenter = activeType = activeSchool = null;
+  currentPage  = 1;
+  renderTreeActive();
+  loadSchools();
+}
+
+async function loadFilterOptions() {
+  try {
+    const [centers, types] = await Promise.all([
+      apiGet(`${API_BASE}/schools/centers/`),
+      apiGet(`${API_BASE}/schools/types/`),
+    ]);
+    const cSel = document.getElementById('filter-center');
+    (centers.results || centers).forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.code; opt.textContent = c.name;
+      cSel.appendChild(opt);
+    });
+    const tSel = document.getElementById('filter-type');
+    (types.results || types).forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.code; opt.textContent = t.name;
+      tSel.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
+async function loadSchoolTree() {
+  try {
+    treeData = await apiGet(`${API_BASE}/schools/schools/tree/`);
+    renderTree();
+  } catch(e) {
+    document.getElementById('school-tree').innerHTML = '<div class="p-2 text-muted small">로드 실패</div>';
+  }
+}
+
+function renderTree() {
+  const el = document.getElementById('school-tree');
+  if (!treeData.length) { el.innerHTML = '<div class="p-2 text-muted small">학교 없음</div>'; return; }
+  el.innerHTML = `
+    <ul class="list-unstyled mb-0 tree-list">
+      <li>
+        <a href="#" class="tree-item d-flex align-items-center px-2 py-1 small text-decoration-none
+           ${!activeCenter && !activeType && !activeSchool ? 'active' : ''}"
+           onclick="filterCenter(null);return false;">
+          <i class="bi bi-grid-3x3-gap me-1 text-muted"></i>전체
+        </a>
+      </li>
+      ${treeData.map(c => `
+        <li>
+          <div class="tree-center d-flex align-items-center">
+            <a href="#" class="tree-item flex-grow-1 d-flex align-items-center px-2 py-1 small text-decoration-none
+               ${activeCenter === c.code && !activeType && !activeSchool ? 'active' : ''}"
+               onclick="filterCenter('${c.code}');return false;">
+              <i class="bi bi-building me-1 text-primary" style="font-size:.7rem;"></i>
+              <span class="text-truncate">${c.name}</span>
+              <span class="badge bg-light text-muted border ms-auto" style="font-size:.6rem;">${c.count}</span>
+            </a>
+            <button class="btn btn-xs btn-link text-muted p-0 px-1 tree-toggle"
+                    onclick="toggleCenter(${c.id});return false;"
+                    data-center="${c.id}">
+              <i class="bi bi-chevron-right" style="font-size:.6rem;"></i>
+            </button>
+          </div>
+          <ul class="list-unstyled ps-3 mb-0" id="tree-c-${c.id}" style="display:none;">
+            ${c.types.map(t => `
+              <li>
+                <div class="d-flex align-items-center">
+                  <a href="#" class="tree-item flex-grow-1 d-flex align-items-center px-1 py-1 small text-decoration-none
+                     ${activeCenter === c.code && activeType === t.id && !activeSchool ? 'active' : ''}"
+                     onclick="filterType('${c.code}', ${t.id});return false;">
+                    <i class="bi bi-book me-1 text-success" style="font-size:.65rem;"></i>
+                    <span class="text-truncate">${t.name}</span>
+                    <span class="badge bg-light text-muted border ms-auto" style="font-size:.6rem;">${t.count}</span>
+                  </a>
+                  <button class="btn btn-xs btn-link text-muted p-0 px-1"
+                          onclick="toggleType(${c.id}, ${t.id});return false;"
+                          data-type="${c.id}-${t.id}">
+                    <i class="bi bi-chevron-right" style="font-size:.6rem;"></i>
+                  </button>
+                </div>
+                <ul class="list-unstyled ps-3 mb-0" id="tree-t-${c.id}-${t.id}" style="display:none;">
+                  ${t.schools.map(s => `
+                    <li>
+                      <a href="#" class="tree-item d-flex align-items-center px-1 py-1 small text-decoration-none
+                         ${activeSchool === s.id ? 'active' : ''}"
+                         onclick="filterSchool(${s.id}, '${c.code}', ${t.id});return false;">
+                        <i class="bi bi-dot me-1 text-muted"></i>
+                        <span class="text-truncate" title="${s.name}">${s.name}</span>
+                      </a>
+                    </li>`).join('')}
+                </ul>
+              </li>`).join('')}
+          </ul>
+        </li>`).join('')}
+    </ul>`;
+}
+
+function renderTreeActive() {
+  renderTree();
+  if (activeCenter) {
+    const c = treeData.find(x => x.code === activeCenter);
+    if (c) {
+      const ul = document.getElementById(`tree-c-${c.id}`);
+      if (ul) { ul.style.display = ''; const btn = document.querySelector(`[data-center="${c.id}"] i`); if (btn) btn.className = 'bi bi-chevron-down'; }
+      if (activeType) {
+        const tul = document.getElementById(`tree-t-${c.id}-${activeType}`);
+        if (tul) { tul.style.display = ''; const tbtn = document.querySelector(`[data-type="${c.id}-${activeType}"] i`); if (tbtn) tbtn.className = 'bi bi-chevron-down'; }
+      }
+    }
+  }
+  document.getElementById('tree-reset-btn').style.display = (activeCenter || activeSchool) ? '' : 'none';
+}
+
+function toggleCenter(centerId) {
+  const ul = document.getElementById(`tree-c-${centerId}`);
+  const btn = document.querySelector(`[data-center="${centerId}"] i`);
+  if (!ul) return;
+  const open = ul.style.display !== 'none';
+  ul.style.display = open ? 'none' : '';
+  if (btn) { btn.className = open ? 'bi bi-chevron-right' : 'bi bi-chevron-down'; btn.style.fontSize='.6rem'; }
+}
+
+function toggleType(centerId, typeId) {
+  const ul = document.getElementById(`tree-t-${centerId}-${typeId}`);
+  const btn = document.querySelector(`[data-type="${centerId}-${typeId}"] i`);
+  if (!ul) return;
+  const open = ul.style.display !== 'none';
+  ul.style.display = open ? 'none' : '';
+  if (btn) { btn.className = open ? 'bi bi-chevron-right' : 'bi bi-chevron-down'; btn.style.fontSize='.6rem'; }
+}
+
+function filterCenter(centerCode) {
+  activeCenter = centerCode; activeType = null; activeSchool = null; currentPage = 1;
+  document.getElementById('filter-center').value = centerCode || '';
+  document.getElementById('filter-type').value   = '';
+  renderTreeActive(); loadSchools();
+}
+
+function filterType(centerCode, typeId) {
+  activeCenter = centerCode; activeType = typeId; activeSchool = null; currentPage = 1;
+  document.getElementById('filter-center').value = centerCode || '';
+  renderTreeActive(); loadSchools();
+}
+
+function filterSchool(schoolId, centerCode, typeId) {
+  activeSchool = schoolId; activeCenter = centerCode; activeType = typeId; currentPage = 1;
+  renderTreeActive(); loadSchools();
+}
+
+function resetSchoolFilter() { filterCenter(null); }
+
+let searchTimer;
+document.getElementById('search-q').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { currentPage = 1; loadSchools(); }, 400);
+});
+document.getElementById('filter-center').addEventListener('change', () => {
+  activeCenter = document.getElementById('filter-center').value || null;
+  activeType = null; activeSchool = null; currentPage = 1;
+  renderTreeActive(); loadSchools();
+});
+document.getElementById('filter-type').addEventListener('change', () => {
+  activeType = null; activeSchool = null; currentPage = 1; loadSchools();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 2: 학교정보
+// ─────────────────────────────────────────────────────────────────────────────
+const STATUS_BADGE = {
+  received:   '<span class="badge bg-secondary" style="font-size:.65rem;">접수</span>',
+  assigned:   '<span class="badge bg-info" style="font-size:.65rem;">배정</span>',
+  moving:     '<span class="badge bg-primary" style="font-size:.65rem;">이동</span>',
+  arrived:    '<span class="badge bg-primary" style="font-size:.65rem;">도착</span>',
+  processing: '<span class="badge bg-warning text-dark" style="font-size:.65rem;">처리중</span>',
+  completed:  '<span class="badge bg-success" style="font-size:.65rem;">완료</span>',
+};
+const PRI_BADGE = {
+  critical: '<span class="badge bg-danger" style="font-size:.65rem;">긴급</span>',
+  high:     '<span class="badge bg-warning text-dark" style="font-size:.65rem;">높음</span>',
+  medium:   '<span class="badge bg-info" style="font-size:.65rem;">보통</span>',
+  low:      '<span class="badge bg-secondary" style="font-size:.65rem;">낮음</span>',
+};
+
+let incPage = 1, incTotal = 1;
+let _equipAll = [], _equipFilter = '', _equipPage = 1;
+const EQUIP_PAGE_SIZE = 10;
+
+async function loadSchoolInfo(schoolId) {
+  document.getElementById('info-placeholder').style.display = 'none';
+  document.getElementById('info-content').style.display     = '';
+
+  // 장애접수 버튼 링크
+  document.getElementById('info-incident-btn').href = `/npms/incidents/create/?school=${schoolId}`;
+  document.getElementById('info-breadcrumb-name').textContent = currentSchoolName;
+
+  // 탭3 브레드크럼도 업데이트
+  document.getElementById('bld-breadcrumb-name').textContent = currentSchoolName;
+
+  // 병렬 로드
+  incPage = 1;
+  await Promise.all([
+    loadNetworkInfo(schoolId),
+    loadContacts(schoolId),
+    loadEquipment(schoolId),
+    loadIncidents(schoolId),
+    loadNetworkDocs(schoolId),
+  ]);
+}
+
+async function loadNetworkInfo(schoolId) {
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${schoolId}/`);
+    currentSchoolData = data;
+    const n = data.network;
+    const tbody = document.querySelector('#network-info tbody');
+
+    // 기본 정보 테이블
+    document.getElementById('info-active-badge').textContent = data.is_active ? '활성' : '비활성';
+    document.getElementById('info-active-badge').className = `badge ${data.is_active ? 'bg-success' : 'bg-secondary'}`;
+    document.querySelector('#info-basic-table tbody').innerHTML = `
+      <tr><th class="ps-3 text-muted fw-normal" style="width:38%">교육지원청</th><td>${data.support_center_name||(data.support_center&&data.support_center.name)||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">학제</th><td>${data.school_type_name||(data.school_type&&data.school_type.name)||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">학교코드</th><td>${data.code||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">주소</th><td><small>${data.address||'-'}</small></td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">대표전화</th><td>${data.phone||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">팩스</th><td>${data.fax||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">홈페이지</th>
+        <td>${data.homepage ? `<a href="${data.homepage}" target="_blank" class="text-truncate d-block" style="max-width:180px;font-size:.8rem;">${data.homepage}</a>` : '-'}</td>
+      </tr>`;
+
+    // 지도
+    if (data.lat && data.lng) {
+      document.getElementById('map-card').style.display = '';
+      initMap(parseFloat(data.lat), parseFloat(data.lng));
+    } else {
+      document.getElementById('map-card').style.display = 'none';
+    }
+
+    // 네트워크 정보
+    if (!n) {
+      tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted small">정보 없음</td></tr>';
+      return;
+    }
+    tbody.innerHTML = `
+      <tr><th class="ps-3 text-muted fw-normal" style="width:38%">IP 대역</th><td>${n.ip_range||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">게이트웨이</th><td>${n.gateway||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">주 DNS</th><td>${n.dns_primary||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">통신사</th><td>${n.isp||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">회선속도</th><td>${n.bandwidth||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">SNMP Community</th><td>${n.snmp_community||'-'}</td></tr>`;
+  } catch(e) {}
+}
+
+function initMap(lat, lng) {
+  if (typeof ol === 'undefined') return;
+  // 기존 맵 파괴 후 재생성
+  const mapEl = document.getElementById('school-map');
+  mapEl.innerHTML = '';
+  const coord = ol.proj.fromLonLat([lng, lat]);
+  const markerFeature = new ol.Feature({geometry: new ol.geom.Point(coord)});
+  markerFeature.setStyle(new ol.style.Style({
+    image: new ol.style.Circle({radius:10, fill: new ol.style.Fill({color:'#dc3545'}), stroke: new ol.style.Stroke({color:'#fff',width:2})}),
+    text:  new ol.style.Text({text:'학교', fill: new ol.style.Fill({color:'#fff'}), font:'bold 9px sans-serif'})
+  }));
+  const key = typeof VWORLD_API_KEY !== 'undefined' ? VWORLD_API_KEY : '';
+  new ol.Map({
+    target: 'school-map',
+    layers: [
+      new ol.layer.Tile({ source: new ol.source.XYZ({
+        url: `https://api.vworld.kr/req/wmts/1.0.0/${key}/Base/{z}/{y}/{x}.png`,
+        attributions: '© 국토정보플랫폼', maxZoom: 19,
+      })}),
+      new ol.layer.Vector({source: new ol.source.Vector({features: [markerFeature]})})
+    ],
+    view: new ol.View({center: coord, zoom: 15})
+  });
+}
+
+async function loadContacts(schoolId) {
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${schoolId}/all_contacts/`);
+    const tbody = document.getElementById('contact-tbody');
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted small">담당자 없음</td></tr>'; return; }
+    tbody.innerHTML = data.map(c => {
+      const srcBadge = c.source === 'incident'
+        ? '<span class="badge bg-warning text-dark ms-1" style="font-size:.6rem;">장애신고</span>'
+        : (c.is_primary ? '<span class="badge bg-primary ms-1" style="font-size:.6rem;">주</span>' : '');
+      return `<tr>
+        <td><small>${c.name}${srcBadge}</small></td>
+        <td><small class="text-muted">${c.position||'-'}</small></td>
+        <td><small>${c.phone||'-'}</small></td>
+        <td><small class="text-muted">${c.email||'-'}</small></td>
+      </tr>`;
+    }).join('');
+  } catch(e) {}
+}
+
+const CAT_COLOR = {'스위치':'bg-primary','PoE':'bg-info text-dark','AP':'bg-success','무선':'bg-success','라우터':'bg-warning text-dark','방화벽':'bg-danger'};
+function catBadge(cat) {
+  const color = Object.entries(CAT_COLOR).find(([k]) => cat.includes(k))?.[1] || 'bg-secondary';
+  return `<span class="badge ${color}" style="font-size:.65rem;">${cat}</span>`;
+}
+
+function setEquipFilter(keyword) {
+  _equipFilter = keyword; _equipPage = 1;
+  document.querySelectorAll('[id^="ebtn-"]').forEach(b => {
+    b.className = b.className.replace(/\bbtn-(primary|info|success|outline-\w+)\b/g,'').trim();
+  });
+  const map = {'':['ebtn-all','btn-primary'],'스위치':['ebtn-sw','btn-primary'],'PoE':['ebtn-poe','btn-info'],'AP':['ebtn-ap','btn-success']};
+  const [id, cls] = map[keyword] || ['ebtn-all','btn-primary'];
+  const btn = document.getElementById(id);
+  if (btn) btn.classList.add(cls);
+  ['ebtn-all','ebtn-sw','ebtn-poe','ebtn-ap'].filter(x=>x!==id).forEach(x=>{
+    const b = document.getElementById(x);
+    if (b) {
+      const outline = x==='ebtn-poe'?'btn-outline-info':x==='ebtn-ap'?'btn-outline-success':'btn-outline-primary';
+      b.classList.add(outline);
+    }
+  });
+  renderEquipTable();
+}
+
+function renderEquipTable() {
+  const filtered = _equipFilter ? _equipAll.filter(d=>d.category&&d.category.includes(_equipFilter)) : _equipAll;
+  const total = filtered.length;
+  const totalPg = Math.max(1, Math.ceil(total / EQUIP_PAGE_SIZE));
+  _equipPage = Math.min(_equipPage, totalPg);
+  const start = (_equipPage-1)*EQUIP_PAGE_SIZE;
+  const rows  = filtered.slice(start, start+EQUIP_PAGE_SIZE);
+  document.getElementById('equip-count').textContent = total + '대';
+  document.getElementById('equip-page-info').textContent = `${_equipPage} / ${totalPg}`;
+  document.getElementById('equip-prev').disabled = _equipPage <= 1;
+  document.getElementById('equip-next').disabled = _equipPage >= totalPg;
+  const tbody = document.getElementById('equip-tbody');
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-3 small">장비 없음</td></tr>'; return; }
+  tbody.innerHTML = rows.map(d => `<tr>
+    <td>${catBadge(d.category)}</td>
+    <td class="text-truncate" style="max-width:110px;" title="${d.model_name||''}">${d.model_name||'-'}</td>
+    <td class="text-truncate" style="max-width:80px;">${d.manufacturer||'-'}</td>
+    <td class="text-truncate" style="max-width:130px;" title="${d.install_location||''}">${d.install_location||'-'}</td>
+    <td><small class="text-muted">${d.device_id||'-'}</small></td>
+    <td><small>${d.network_type||'-'}</small></td>
+    <td><small>${d.speed||'-'}</small></td>
+    <td class="text-center"><small>${d.tier||'-'}</small></td>
+    <td class="text-center"><small>${d.origin||'-'}</small></td>
+    <td class="text-center"><span class="${d.mgmt==='Y'?'text-success':'text-muted'}">${d.mgmt||'-'}</span></td>
+    <td class="text-center"><small>${d.install_year||'-'}</small></td>
+  </tr>`).join('');
+}
+
+function changeEquipPage(delta) {
+  const filtered = _equipFilter ? _equipAll.filter(d=>d.category&&d.category.includes(_equipFilter)) : _equipAll;
+  const totalPg = Math.max(1,Math.ceil(filtered.length/EQUIP_PAGE_SIZE));
+  _equipPage = Math.max(1,Math.min(totalPg,_equipPage+delta));
+  renderEquipTable();
+}
+
+async function loadEquipment(schoolId) {
+  try {
+    _equipAll = await apiGet(`${API_BASE}/schools/schools/${schoolId}/equipment/`);
+    setEquipFilter('');
+  } catch(e) {
+    document.getElementById('equip-tbody').innerHTML = '<tr><td colspan="11" class="text-center text-danger py-3 small">로드 실패</td></tr>';
+  }
+}
+
+async function loadIncidents(schoolId) {
+  try {
+    const data = await apiGet(`${API_BASE}/incidents/incidents/`, {school:schoolId, page:incPage, page_size:8});
+    incTotal = Math.ceil((data.count||0)/8);
+    document.getElementById('incident-count').textContent = `총 ${data.count||0}건`;
+    document.getElementById('inc-page-info').textContent  = `${incPage} / ${incTotal||1}`;
+    document.getElementById('inc-prev').disabled = incPage <= 1;
+    document.getElementById('inc-next').disabled = incPage >= incTotal;
+    const tbody = document.getElementById('incident-tbody');
+    const items = data.results || [];
+    if (!items.length) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-2 small">장애 이력 없음</td></tr>'; return; }
+    tbody.innerHTML = items.map(i => `
+      <tr style="cursor:pointer;" onclick="location.href='/npms/incidents/${i.id}/'">
+        <td><small class="text-primary">${i.incident_number}</small></td>
+        <td><small>${i.category_name||'-'}</small></td>
+        <td>${STATUS_BADGE[i.status]||i.status}</td>
+        <td>${PRI_BADGE[i.priority]||i.priority}</td>
+        <td><small class="text-muted">${formatDate(i.received_at||i.created_at)}</small></td>
+      </tr>`).join('');
+  } catch(e) {}
+}
+
+function changeIncPage(d) {
+  incPage = Math.max(1,Math.min(incTotal,incPage+d));
+  if (currentSchoolId) loadIncidents(currentSchoolId);
+}
+
+async function saveContact() {
+  const body = {
+    school:     currentSchoolId,
+    name:       document.getElementById('c-name').value,
+    position:   document.getElementById('c-position').value,
+    phone:      document.getElementById('c-phone').value,
+    email:      document.getElementById('c-email').value,
+    is_primary: document.getElementById('c-primary').checked,
+  };
+  if (!body.name || !body.phone) { showToast('이름과 연락처는 필수입니다','warning'); return; }
+  try {
+    await apiPost(`${API_BASE}/schools/contacts/`, body);
+    bootstrap.Modal.getInstance(document.getElementById('contactModal')).hide();
+    showToast('담당자가 추가되었습니다','success');
+    loadContacts(currentSchoolId);
+  } catch(e) { showToast('저장 실패','error'); }
+}
+
+function showContactModal() {
+  if (!currentSchoolId) { showToast('학교를 먼저 선택하세요','warning'); return; }
+  ['c-name','c-position','c-phone','c-email'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('c-primary').checked = false;
+  new bootstrap.Modal(document.getElementById('contactModal')).show();
+}
+
+const NETDOC_CATEGORIES = [
+  {key:'구성도', label:'구성도', accept:'.pptx,.ppt', icon:'bi-file-earmark-ppt', iconColor:'text-danger', inline:false},
+  {key:'선번장', label:'선번장', accept:'.xlsx,.xlsm', icon:'bi-file-earmark-excel', iconColor:'text-success', inline:false},
+  {key:'랙실장도', label:'랙실장도', accept:'.xlsx,.xlsm', icon:'bi-file-earmark-excel', iconColor:'text-success', inline:false},
+  {key:'건물정보', label:'건물정보', accept:'.pdf', icon:'bi-file-earmark-pdf', iconColor:'text-danger', inline:true},
+  {key:'전산실랙', label:'전산실랙', accept:'.jpg,.jpeg,.png', icon:'bi-file-earmark-image', iconColor:'text-primary', inline:true},
+];
+
+async function loadNetworkDocs(schoolId) {
+  const box = document.getElementById('network-doc-list');
+  try {
+    const data = await apiGet(`${API_BASE}/schools/${schoolId}/network-docs/`);
+    const docs = data.docs || {};
+    const cards = [];
+    for (const cat of NETDOC_CATEGORIES) {
+      const files = docs[cat.key] || [];
+      const inputId = `netdoc-input-${cat.key}`;
+      if (cat.key === '전산실랙' && files.length > 0) {
+        files.forEach((file, idx) => {
+          const shortName = file.name.length > 20 ? file.name.substring(0,20)+'…' : file.name;
+          cards.push(`<div class="col-6 col-md-4">
+            <div class="card border h-100" style="min-height:80px;">
+              <div class="card-body p-2 d-flex flex-column align-items-center justify-content-center text-center gap-1">
+                <i class="bi ${cat.icon} ${cat.iconColor}" style="font-size:1.6rem;"></i>
+                <div class="fw-semibold" style="font-size:.75rem;">${cat.label}</div>
+                <a href="${file.url}" target="_blank" class="stretched-link text-decoration-none" title="${file.name}">
+                  <small class="text-muted" style="font-size:.65rem;">${shortName}</small>
+                </a>
+              </div>
+              ${idx===0?`<div class="card-footer p-1 text-end border-top-0" style="background:transparent;">
+                <button class="btn btn-xs btn-link p-0 text-muted" title="업로드"
+                        onclick="document.getElementById('${inputId}').click();event.stopPropagation();">
+                  <i class="bi bi-cloud-upload" style="font-size:.8rem;"></i>
+                </button>
+                <input type="file" id="${inputId}" accept="${cat.accept}" style="display:none"
+                       onchange="uploadNetworkDoc(this,'${cat.key}',${schoolId})">
+              </div>`:''}
+            </div>
+          </div>`);
+        });
+      } else {
+        const hasFile = files.length > 0;
+        const firstFile = files[0] || null;
+        const attrs = cat.inline ? `href="${firstFile?.url}" target="_blank"` : `href="${firstFile?.url}" download`;
+        const shortName = firstFile ? (firstFile.name.length>20?firstFile.name.substring(0,20)+'…':firstFile.name) : '';
+        cards.push(`<div class="col-6 col-md-4">
+          <div class="card border h-100" style="min-height:80px;">
+            <div class="card-body p-2 d-flex flex-column align-items-center justify-content-center text-center gap-1">
+              <i class="bi ${cat.icon} ${cat.iconColor}" style="font-size:1.6rem;"></i>
+              <div class="fw-semibold" style="font-size:.75rem;">${cat.label}</div>
+              ${hasFile
+                ?`<a ${attrs} class="stretched-link text-decoration-none" title="${firstFile.name}">
+                    <small class="text-muted" style="font-size:.65rem;">${shortName}</small>
+                  </a>`
+                :`<small class="text-muted" style="font-size:.65rem;">파일 없음</small>`}
+            </div>
+            <div class="card-footer p-1 text-end border-top-0" style="background:transparent;">
+              <button class="btn btn-xs btn-link p-0 text-muted" title="업로드"
+                      onclick="document.getElementById('${inputId}').click();event.stopPropagation();">
+                <i class="bi bi-cloud-upload" style="font-size:.8rem;"></i>
+              </button>
+              <input type="file" id="${inputId}" accept="${cat.accept}" style="display:none"
+                     onchange="uploadNetworkDoc(this,'${cat.key}',${schoolId})">
+            </div>
+          </div>
+        </div>`);
+      }
+    }
+    box.innerHTML = `<div class="row g-2">${cards.join('')}</div>`;
+  } catch(e) {
+    box.innerHTML = '<div class="text-center text-muted py-2 small">로드 실패</div>';
+  }
+}
+
+async function uploadNetworkDoc(input, docType, schoolId) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('doc_type', docType);
+  const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  try {
+    const resp = await fetch(`${API_BASE}/schools/${schoolId}/network-docs/`, {
+      method:'POST', headers:{'X-CSRFToken':csrf}, body:fd,
+    });
+    const data = await resp.json();
+    if (!resp.ok) { showToast(data.error||'업로드 실패','error'); return; }
+    showToast(`${data.name} 업로드 완료`,'success');
+    loadNetworkDocs(schoolId);
+  } catch(e) { showToast('업로드 오류','error'); }
+  input.value='';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB 3: 건물정보
+// ─────────────────────────────────────────────────────────────────────────────
+let _floorPlanData   = null;
+let _activeBldId     = null;
+let _activeFloorId   = null;
+let _currentRooms    = [];   // 현재 층 호실 (도면↔목록 토글용)
+
+// 줌·팬 상태
+let _fpScale = 1, _fpTx = 0, _fpTy = 0;
+function _applyFpTransform() {
+  const svg = document.getElementById('fp-svg');
+  if (svg) svg.style.transform = `translate(${_fpTx}px,${_fpTy}px) scale(${_fpScale})`;
+}
+function fpZoom(factor) {
+  const vp = document.getElementById('fp-viewport');
+  if (!vp) return;
+  const cx = vp.clientWidth / 2, cy = vp.clientHeight / 2;
+  _fpTx = cx - factor * (cx - _fpTx);
+  _fpTy = cy - factor * (cy - _fpTy);
+  _fpScale *= factor;
+  _applyFpTransform();
+}
+function fpReset() { _fpScale=1; _fpTx=0; _fpTy=0; _applyFpTransform(); }
+
+const ROOM_TYPE_COLOR = {
+  'class':   '#4A90D9',
+  'special': '#7B68EE',
+  'office':  '#5CB85C',
+  'toilet':  '#A0A0A0',
+  'support': '#D0D0D0',
+  'computer':'#F0AD4E',
+  'gym':     '#D9534F',
+  'other':   '#AAAAAA',
+};
+const ROOM_TYPE_LABEL = {
+  'class':'일반교실','special':'특별실','office':'교무행정실',
+  'toilet':'화장실','support':'지원공간','computer':'전산실',
+  'gym':'체육관','other':'기타',
+};
+
+async function loadBuildingInfo(schoolId) {
+  document.getElementById('building-placeholder').style.display = 'none';
+  document.getElementById('building-content').style.display     = '';
+  document.getElementById('bld-breadcrumb-name').textContent = currentSchoolName;
+  // CSV 다운로드 버튼 URL 갱신
+  const csvBtn = document.getElementById('btn-rooms-csv');
+  if (csvBtn) csvBtn.href = `${API_BASE}/schools/buildings/rooms_csv_download/?school=${schoolId}`;
+
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${schoolId}/floor_plan/`);
+    _floorPlanData = data;
+    _activeBldId   = null;
+    _activeFloorId = null;
+    renderBuildingTree(data.buildings || []);
+    renderVsdxLogs(data.vsdx_logs || []);
+    // 첫 번째 건물의 첫 번째 층 자동 선택
+    const firstBld = (data.buildings||[])[0];
+    if (firstBld) {
+      const firstFloor = (firstBld.floor_list||[])[0];
+      if (firstFloor) selectFloor(firstBld, firstFloor);
+      else selectBuilding(firstBld);
+    }
+  } catch(e) {
+    document.getElementById('building-tree').innerHTML = '<div class="p-3 text-danger small">로드 실패</div>';
+  }
+}
+
+function renderBuildingTree(buildings) {
+  const el = document.getElementById('building-tree');
+  if (!buildings.length) {
+    el.innerHTML = '<div class="p-3 text-muted small text-center">건물 정보가 없습니다.<br><small>VSDX 파일을 NAS에 업로드하거나 재파싱하세요.</small></div>';
+    return;
+  }
+  el.innerHTML = buildings.map(bld => {
+    const totalRooms = (bld.floor_list||[]).reduce((s,f)=>s+(f.rooms||[]).length, 0);
+    return `
+    <div class="bld-group mb-1">
+      <div class="bld-header d-flex align-items-center px-2 py-2 cursor-pointer border-bottom"
+           onclick="toggleBldTree(${bld.id})" style="background:#f8f9fa;">
+        <i class="bi bi-building me-2 text-primary"></i>
+        <span class="fw-semibold small flex-grow-1">${bld.name}</span>
+        <span class="badge bg-light text-muted border me-1" style="font-size:.6rem;">${bld.floors}층/${bld.basement?'B'+bld.basement:'-'}</span>
+        <span class="badge bg-secondary" style="font-size:.6rem;">${totalRooms}실</span>
+        <i class="bi bi-chevron-down ms-1" id="bld-toggle-${bld.id}" style="font-size:.6rem;"></i>
+      </div>
+      <ul class="list-unstyled mb-0" id="bld-floors-${bld.id}">
+        ${(bld.floor_list||[]).map(fl => `
+        <li>
+          <a href="#" class="tree-item d-flex align-items-center px-3 py-1 small text-decoration-none"
+             id="floor-item-${fl.id}"
+             onclick="selectFloor(getBld(${bld.id}), getFloor(${bld.id},${fl.id}));return false;">
+            <i class="bi bi-layers me-2 text-muted" style="font-size:.7rem;"></i>
+            <span class="flex-grow-1">${fl.floor_name}</span>
+            <span class="badge bg-light text-muted border" style="font-size:.6rem;">${(fl.rooms||[]).length}실</span>
+          </a>
+        </li>`).join('')}
+      </ul>
+    </div>`;
+  }).join('');
+}
+
+function getBld(bldId) {
+  return (_floorPlanData?.buildings||[]).find(b=>b.id===bldId);
+}
+function getFloor(bldId, floorId) {
+  const bld = getBld(bldId);
+  return (bld?.floor_list||[]).find(f=>f.id===floorId);
+}
+
+function toggleBldTree(bldId) {
+  const ul  = document.getElementById(`bld-floors-${bldId}`);
+  const ico = document.getElementById(`bld-toggle-${bldId}`);
+  if (!ul) return;
+  const open = ul.style.display !== 'none';
+  ul.style.display = open ? 'none' : '';
+  if (ico) ico.className = open ? 'bi bi-chevron-right ms-1' : 'bi bi-chevron-down ms-1';
+  ico && (ico.style.fontSize='.6rem');
+}
+
+function selectBuilding(bld) {
+  _activeBldId   = bld.id;
+  _activeFloorId = null;
+  document.getElementById('floor-plan-title').innerHTML =
+    `<i class="bi bi-building me-1"></i>${bld.name} — 건물 개요`;
+  renderBuildingSummary(bld);
+}
+
+function selectFloor(bld, fl) {
+  if (!bld || !fl) return;
+  _activeBldId   = bld.id;
+  _activeFloorId = fl.id;
+
+  // 트리 하이라이트
+  document.querySelectorAll('[id^="floor-item-"]').forEach(el => el.classList.remove('active'));
+  const item = document.getElementById(`floor-item-${fl.id}`);
+  if (item) item.classList.add('active');
+
+  document.getElementById('floor-plan-title').innerHTML =
+    `<i class="bi bi-grid-3x3 me-1"></i>${bld.name} — ${fl.floor_name}`;
+
+  const rooms = fl.rooms || [];
+  _currentRooms = rooms;
+  document.getElementById('floor-room-count').textContent = `${rooms.length}개 공간`;
+  document.getElementById('floor-room-count').style.display = rooms.length ? '' : 'none';
+
+  // VSDX 좌표 있는지 확인
+  const hasCoord = rooms.some(r => r.pos_x !== null && r.pos_y !== null);
+  if (hasCoord) {
+    renderFloorCanvas(rooms);
+  } else {
+    renderFloorTable(rooms, fl);
+  }
+}
+
+function renderBuildingSummary(bld) {
+  const body = document.getElementById('floor-plan-body');
+  const floors = bld.floor_list || [];
+  const totalRooms = floors.reduce((s,f)=>s+(f.rooms||[]).length, 0);
+  body.innerHTML = `
+    <div class="mb-3">
+      <div class="d-flex gap-3 flex-wrap mb-2">
+        <div class="text-center px-3 py-2 border rounded">
+          <div class="fw-bold text-primary fs-4">${bld.floors}</div>
+          <small class="text-muted">지상층수</small>
+        </div>
+        ${bld.basement?`<div class="text-center px-3 py-2 border rounded">
+          <div class="fw-bold text-secondary fs-4">${bld.basement}</div>
+          <small class="text-muted">지하층수</small>
+        </div>`:''}
+        <div class="text-center px-3 py-2 border rounded">
+          <div class="fw-bold text-success fs-4">${totalRooms}</div>
+          <small class="text-muted">전체 공간</small>
+        </div>
+      </div>
+      <table class="table table-sm table-bordered mt-2">
+        <thead class="table-light"><tr><th>층</th><th class="text-end">공간수</th><th>유형별 현황</th></tr></thead>
+        <tbody>
+          ${floors.map(fl => {
+            const typeCount = {};
+            (fl.rooms||[]).forEach(r => { typeCount[r.room_type] = (typeCount[r.room_type]||0)+1; });
+            const badges = Object.entries(typeCount).map(([t,n]) =>
+              `<span class="badge me-1" style="background:${ROOM_TYPE_COLOR[t]||'#888'};font-size:.6rem;">${ROOM_TYPE_LABEL[t]||t} ${n}</span>`
+            ).join('');
+            return `<tr>
+              <td class="fw-semibold">${fl.floor_name}</td>
+              <td class="text-end">${(fl.rooms||[]).length}</td>
+              <td>${badges||'<span class="text-muted small">-</span>'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderFloorCanvas(rooms) {
+  const body = document.getElementById('floor-plan-body');
+
+  // ── 잡음 필터링 ──────────────────────────────────────────────────────
+  // 1차: 좌표 있는 것만
+  const valid = rooms.filter(r => r.pos_x !== null && r.pos_y !== null && r.pos_w && r.pos_h);
+  if (!valid.length) { renderFloorTable(rooms); return; }
+
+  // 2차: 전체 범위 계산 후 면적 기준 상위 2% 제거 (제목블록·테두리 제거)
+  const areas = valid.map(r => r.pos_w * r.pos_h);
+  areas.sort((a, b) => a - b);
+  const pct98 = areas[Math.floor(areas.length * 0.98)];
+  // 3차: 가로세로 비율 15:1 이상 제거 (치수선·벽선)
+  const filtered = valid.filter(r => {
+    const area = r.pos_w * r.pos_h;
+    if (area > pct98) return false;
+    const ratio = Math.max(r.pos_w, r.pos_h) / Math.min(r.pos_w, r.pos_h);
+    if (ratio > 15) return false;
+    return true;
+  });
+  if (!filtered.length) { renderFloorTable(rooms); return; }
+
+  // ── 좌표 범위 ────────────────────────────────────────────────────────
+  const minX = Math.min(...filtered.map(r => r.pos_x - r.pos_w / 2));
+  const maxX = Math.max(...filtered.map(r => r.pos_x + r.pos_w / 2));
+  const minY = Math.min(...filtered.map(r => r.pos_y - r.pos_h / 2));
+  const maxY = Math.max(...filtered.map(r => r.pos_y + r.pos_h / 2));
+  const rangeX = maxX - minX || 1;
+  const rangeY = maxY - minY || 1;
+
+  const CANVAS_W = 900;
+  const CANVAS_H = Math.min(600, Math.max(300, Math.round(CANVAS_W * rangeY / rangeX)));
+  const scale    = Math.min(CANVAS_W / rangeX, CANVAS_H / rangeY);
+
+  // ── 범례 ─────────────────────────────────────────────────────────────
+  const usedTypes = [...new Set(filtered.map(r => r.room_type))];
+  const legendHtml = usedTypes.map(t => `
+    <span class="d-inline-flex align-items-center me-2 mb-1">
+      <span style="width:11px;height:11px;background:${ROOM_TYPE_COLOR[t]||'#888'};display:inline-block;margin-right:3px;border-radius:2px;border:1px solid rgba(0,0,0,.15);"></span>
+      <span style="font-size:.65rem;">${ROOM_TYPE_LABEL[t]||t}</span>
+    </span>`).join('');
+
+  // ── SVG 요소 생성 ────────────────────────────────────────────────────
+  const svgRects = filtered.map(r => {
+    const w  = Math.max(r.pos_w * scale, 2);
+    const h  = Math.max(r.pos_h * scale, 2);
+    const x  = (r.pos_x - r.pos_w / 2 - minX) * scale;
+    const y  = CANVAS_H - ((r.pos_y + r.pos_h / 2 - minY) * scale);
+    const color   = ROOM_TYPE_COLOR[r.room_type] || '#ccc';
+    const isSupport = r.room_type === 'support';
+    const fillOpacity  = isSupport ? '0.15' : '0.45';
+    const strokeOpacity = isSupport ? '0.4' : '0.9';
+    const label   = r.room_number ? `${r.room_number} ${r.name}` : r.name;
+    const tooltip = label.replace(/"/g, '&quot;');
+    // 텍스트는 충분히 큰 셀만 (w>35, h>14)
+    const showText = w > 35 && h > 14;
+    const fontSize = Math.min(11, Math.max(7, Math.floor(Math.min(w, h) / 4)));
+    const displayLabel = label.length > 10 ? label.substring(0, 9) + '…' : label;
+    return `<g class="fp-room" data-name="${tooltip}" style="cursor:pointer;">
+      <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}"
+            width="${w.toFixed(1)}" height="${h.toFixed(1)}"
+            fill="${color}" fill-opacity="${fillOpacity}"
+            stroke="${color}" stroke-opacity="${strokeOpacity}" stroke-width="1" rx="1"/>
+      ${showText ? `<text x="${(x+w/2).toFixed(1)}" y="${(y+h/2).toFixed(1)}"
+            text-anchor="middle" dominant-baseline="middle"
+            font-size="${fontSize}" fill="#222" font-family="sans-serif"
+            style="pointer-events:none;user-select:none;">${displayLabel}</text>` : ''}
+    </g>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-1">
+      <div class="d-flex flex-wrap">${legendHtml}</div>
+      <div class="d-flex align-items-center gap-2">
+        <small class="text-muted">${filtered.length}개 공간 표시 / 전체 ${rooms.length}개</small>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-secondary btn-xs" onclick="fpZoom(1.25)" title="확대">
+            <i class="bi bi-zoom-in"></i>
+          </button>
+          <button class="btn btn-outline-secondary btn-xs" onclick="fpZoom(0.8)" title="축소">
+            <i class="bi bi-zoom-out"></i>
+          </button>
+          <button class="btn btn-outline-secondary btn-xs" onclick="fpReset()" title="초기화">
+            <i class="bi bi-arrows-fullscreen"></i>
+          </button>
+        </div>
+        <button class="btn btn-sm btn-outline-primary btn-xs" onclick="renderFloorTable(_currentRooms, null)">
+          <i class="bi bi-list-ul me-1"></i>목록으로
+        </button>
+      </div>
+    </div>
+    <div id="fp-viewport" style="overflow:hidden;border:1px solid #dee2e6;background:#f8f9fa;border-radius:4px;cursor:grab;user-select:none;height:${CANVAS_H+20}px;">
+      <svg id="fp-svg" width="${CANVAS_W}" height="${CANVAS_H}"
+           style="display:block;transform-origin:0 0;"
+           xmlns="http://www.w3.org/2000/svg">
+        <rect width="${CANVAS_W}" height="${CANVAS_H}" fill="#fff"/>
+        ${svgRects}
+      </svg>
+    </div>
+    <div id="fp-tooltip" style="position:fixed;display:none;background:rgba(0,0,0,.75);color:#fff;padding:3px 8px;border-radius:4px;font-size:.78rem;pointer-events:none;z-index:9999;"></div>
+    <div class="mt-1 text-muted" style="font-size:.7rem;">
+      <i class="bi bi-mouse2 me-1"></i>휠: 확대/축소 &nbsp; 드래그: 이동 &nbsp; 호버: 공간명 확인
+    </div>`;
+
+  // ── 줌·팬 인터랙션 ───────────────────────────────────────────────────
+  _fpScale = 1; _fpTx = 0; _fpTy = 0;
+  _applyFpTransform();
+
+  const vp  = document.getElementById('fp-viewport');
+  const svg = document.getElementById('fp-svg');
+  const tip = document.getElementById('fp-tooltip');
+
+  // 휠 줌
+  vp.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.15 : 1/1.15;
+    const rect = vp.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    _fpTx = cx - factor * (cx - _fpTx);
+    _fpTy = cy - factor * (cy - _fpTy);
+    _fpScale *= factor;
+    _applyFpTransform();
+  }, {passive:false});
+
+  // 드래그 팬
+  let _drag = false, _dx = 0, _dy = 0;
+  vp.addEventListener('mousedown', e => { _drag=true; _dx=e.clientX-_fpTx; _dy=e.clientY-_fpTy; vp.style.cursor='grabbing'; });
+  window.addEventListener('mousemove', e => { if(!_drag) return; _fpTx=e.clientX-_dx; _fpTy=e.clientY-_dy; _applyFpTransform(); });
+  window.addEventListener('mouseup', () => { _drag=false; vp.style.cursor='grab'; });
+
+  // 호버 툴팁
+  svg.querySelectorAll('.fp-room').forEach(g => {
+    g.addEventListener('mouseenter', e => {
+      tip.textContent = g.dataset.name;
+      tip.style.display = 'block';
+    });
+    g.addEventListener('mousemove', e => {
+      tip.style.left = (e.clientX + 12) + 'px';
+      tip.style.top  = (e.clientY - 8)  + 'px';
+    });
+    g.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+  });
+}
+
+function renderFloorTable(rooms, fl) {
+  const body = document.getElementById('floor-plan-body');
+  if (!rooms.length) {
+    body.innerHTML = '<div class="text-center text-muted py-4 small">호실 정보 없음</div>';
+    return;
+  }
+  const usedTypes = [...new Set(rooms.map(r=>r.room_type))];
+  const legendHtml = usedTypes.map(t => `
+    <span class="d-inline-flex align-items-center me-2 mb-1">
+      <span style="width:12px;height:12px;background:${ROOM_TYPE_COLOR[t]||'#888'};display:inline-block;margin-right:3px;border-radius:2px;"></span>
+      <span style="font-size:.65rem;">${ROOM_TYPE_LABEL[t]||t}</span>
+    </span>`).join('');
+  const hasCoord = rooms.some(r => r.pos_x !== null && r.pos_y !== null);
+  body.innerHTML = `
+    <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-1">
+      <div class="d-flex flex-wrap">${legendHtml}</div>
+      ${hasCoord ? `<button class="btn btn-sm btn-outline-secondary btn-xs" onclick="renderFloorCanvas(_currentRooms)">
+        <i class="bi bi-grid me-1"></i>도면으로
+      </button>` : ''}
+    </div>
+    ${!hasCoord ? `<div class="alert alert-info py-2 px-3 small mb-2">
+      <i class="bi bi-info-circle me-1"></i>
+      VSDX 좌표 데이터가 없어 목록으로 표시합니다. VSDX 파일을 파싱하면 평면도가 표시됩니다.
+    </div>` : ''}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0" style="font-size:.78rem;">
+        <thead class="table-light">
+          <tr><th style="width:80px;">호실번호</th><th>교실명</th><th style="width:80px;">유형</th><th style="width:70px;">면적(㎡)</th></tr>
+        </thead>
+        <tbody>
+          ${rooms.map(r => {
+            const color = ROOM_TYPE_COLOR[r.room_type]||'#888';
+            return `<tr>
+              <td><small class="fw-semibold">${r.room_number||'-'}</small></td>
+              <td>${r.name}</td>
+              <td><span class="badge" style="background:${color};font-size:.6rem;">${ROOM_TYPE_LABEL[r.room_type]||r.room_type}</span></td>
+              <td class="text-end"><small>${r.area_m2||'-'}</small></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderVsdxLogs(logs) {
+  const el = document.getElementById('vsdx-log-area');
+  if (!logs.length) {
+    el.innerHTML = '<div class="p-3 text-muted small text-center">파싱 이력 없음 — NAS/건물정보_비지오 폴더에 VSDX 파일을 업로드하세요</div>';
+    return;
+  }
+  el.innerHTML = `<table class="table table-sm mb-0" style="font-size:.78rem;">
+    <thead class="table-light"><tr><th>파일명</th><th style="width:60px;">결과</th><th style="width:60px;">호실수</th><th style="width:130px;">처리일시</th><th>오류내용</th></tr></thead>
+    <tbody>
+      ${logs.map(l => `<tr>
+        <td class="text-truncate" style="max-width:200px;" title="${l.file_name}">${l.file_name}</td>
+        <td>${l.status==='success'?'<span class="badge bg-success">성공</span>':l.status==='fail'?'<span class="badge bg-danger">실패</span>':'<span class="badge bg-warning">부분</span>'}</td>
+        <td class="text-end">${l.room_count}</td>
+        <td><small class="text-muted">${l.imported_at}</small></td>
+        <td><small class="text-danger">${l.error_msg||''}</small></td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function triggerVsdxParse() {
+  if (!currentSchoolId) { showToast('학교를 먼저 선택하세요','warning'); return; }
+  const btn = document.getElementById('vsdx-trigger-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>처리 중...';
+  try {
+    const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+    const resp = await fetch(`${API_BASE}/schools/schools/${currentSchoolId}/trigger_vsdx/`, {
+      method:'POST', headers:{'X-CSRFToken':csrf,'Content-Type':'application/json'}, body:'{}'
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      showToast(data.error||'파싱 트리거 실패','error');
+    } else {
+      showToast(`${data.queued?.length||0}개 파일 파싱 큐 등록됨. 잠시 후 새로고침하세요.`,'success');
+    }
+  } catch(e) { showToast('요청 실패','error'); }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>VSDX 재파싱';
+}
+
+// 건물정보 탭 버튼 클릭 시 자동 로드
+document.getElementById('tab-building-btn').addEventListener('click', () => {
+  if (currentSchoolId) {
+    loadBuildingInfo(currentSchoolId);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 초기화
+// ─────────────────────────────────────────────────────────────────────────────
+(function init() {
+  loadFilterOptions();
+  loadSchoolTree();
+  loadSchools();
+
+  // URL 파라미터 처리
+  const params = new URLSearchParams(location.search);
+  const initTab    = params.get('tab')    || 'list';
+  const initSchool = params.get('school') ? parseInt(params.get('school')) : null;
+
+  if (initSchool) {
+    currentSchoolId = initSchool;
+    // 학교명은 API 로드 후 설정됨
+    showTab(initTab);
+    loadSchoolInfo(initSchool);
+    if (initTab === 'building') {
+      loadBuildingInfo(initSchool);
+    }
+  } else {
+    showTab('list');
+  }
+})();
+</script>
+<style>
+.nav-tabs .nav-link { color: #555; font-size: .875rem; }
+.nav-tabs .nav-link.active { color: #0d6efd; font-weight: 600; }
+.tab-pane-custom { }
+.tree-item { border-radius: 4px; color: inherit; }
+.tree-item:hover { background: #f0f4ff; }
+.tree-item.active { background: #e8f0fe; color: #0d6efd; font-weight: 600; }
+.tree-toggle { font-size: .6rem; line-height: 1; }
+.bld-header:hover { background: #eff3ff !important; cursor: pointer; }
+.cursor-pointer { cursor: pointer; }
+</style>
+{% endblock %}

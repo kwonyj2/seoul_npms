@@ -1,0 +1,98 @@
+name: NPMS CI/CD Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: npms_test_db
+          POSTGRES_USER: django
+          POSTGRES_PASSWORD: django_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: src
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run tests
+        working-directory: src
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DB_NAME: npms_test_db
+          DB_USER: django
+          DB_PASSWORD: django_password
+          DB_HOST: localhost
+          DB_PORT: 5432
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: ci-test-secret-key
+        run: |
+          python manage.py test --verbosity=2
+
+  deploy:
+    name: Deploy to Production
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd /home/kwonyj/network_pms
+
+            # 소스 업데이트
+            git pull origin main
+
+            # 마이그레이션
+            docker exec npms_web python manage.py migrate --noinput
+
+            # 정적 파일 수집
+            docker exec npms_web python manage.py collectstatic --noinput
+
+            # 컨테이너 재시작 (무중단: web만 재시작)
+            docker compose restart npms_web
+
+            # 배포 완료 알림
+            docker exec npms_web python manage.py shell -c \
+              "from core.tasks import notify_deploy_complete; notify_deploy_complete.delay()"
+
+      - name: Notify deployment failure
+        if: failure()
+        run: echo "Deployment FAILED - please check logs and run rollback if needed"

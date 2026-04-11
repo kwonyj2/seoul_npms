@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>QR 라벨 시트</title>
+<style>
+  body { font-family: 'Malgun Gothic', sans-serif; margin: 10mm; }
+  .label-grid { display: flex; flex-wrap: wrap; gap: 4mm; }
+  .label {
+    width: 60mm; border: 1px solid #ccc; padding: 3mm;
+    page-break-inside: avoid; border-radius: 2mm;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .label img { width: 44mm; height: 44mm; }
+  .label .asset-tag { font-size: 8pt; font-weight: bold; margin: 1mm 0 0; }
+  .label .model { font-size: 7pt; color: #555; }
+  .label .sn { font-size: 6pt; color: #888; }
+  .label .school { font-size: 7pt; color: #333; text-align: center; }
+  @media print {
+    .no-print { display: none; }
+    body { margin: 5mm; }
+  }
+</style>
+</head>
+<body>
+<div class="no-print" style="margin-bottom:8mm;">
+  <button onclick="window.print()" style="padding:6px 16px; font-size:13px;">
+    🖨️ 인쇄
+  </button>
+  <button onclick="window.close()" style="padding:6px 16px; font-size:13px; margin-left:8px;">
+    닫기
+  </button>
+  <span style="margin-left:16px; font-size:12px; color:#666;">총 {{ assets|length }}개 라벨</span>
+</div>
+
+<div class="label-grid">
+  {% for asset in assets %}
+  <div class="label">
+    <img src="{{ request.build_absolute_uri }}/assets/assets/{{ asset.id }}/qr_label/"
+         alt="QR-{{ asset.asset_tag }}"
+         onerror="this.src='data:image/svg+xml,<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; width=&quot;44&quot; height=&quot;44&quot;><rect width=&quot;44&quot; height=&quot;44&quot; fill=&quot;%23eee&quot;/><text x=&quot;22&quot; y=&quot;25&quot; text-anchor=&quot;middle&quot; font-size=&quot;8&quot;>QR</text></svg>'">
+    <div class="asset-tag">{{ asset.asset_tag|default:asset.serial_number }}</div>
+    <div class="model">{{ asset.asset_model.model_name }}</div>
+    <div class="sn">S/N: {{ asset.serial_number }}</div>
+    {% if asset.current_school %}
+    <div class="school">{{ asset.current_school.name }}</div>
+    {% else %}
+    <div class="school" style="color:#999;">창고</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+</body>
+</html>

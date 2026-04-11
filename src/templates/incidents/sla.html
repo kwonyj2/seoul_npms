@@ -1,0 +1,1035 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}SLA 관리{% endblock %}
+{% block page_title %}<i class="bi bi-shield-check me-2 text-success"></i>SLA 관리{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+  <!-- ① KPI 카드 — 탭 위 고정 -->
+  <div class="row g-2 mb-2" id="sla-kpi-row">
+    <div class="col-4 col-md-2">
+      <div class="card border-0 shadow-sm text-center py-2 h-100">
+        <div class="small text-muted" style="font-size:.72rem;">종합점수</div>
+        <div class="fs-5 fw-bold" id="kpi-total-score">-</div>
+      </div>
+    </div>
+    <div class="col-4 col-md-2">
+      <div class="card border-0 shadow-sm text-center py-2 h-100">
+        <div class="small text-muted" style="font-size:.72rem;">평가등급</div>
+        <div class="fw-bold" id="kpi-grade" style="font-size:.95rem;">-</div>
+      </div>
+    </div>
+    <div class="col-4 col-md-2">
+      <div class="card border-0 shadow-sm text-center py-2 h-100">
+        <div class="small text-muted" style="font-size:.72rem;">장비 가동률</div>
+        <div class="fw-bold text-primary" id="kpi-uptime" style="font-size:.95rem;">-</div>
+      </div>
+    </div>
+    <div class="col-4 col-md-2">
+      <div class="card border-0 shadow-sm text-center py-2 h-100">
+        <div class="small text-muted" style="font-size:.72rem;">장애건수</div>
+        <div class="fw-bold text-danger" id="kpi-fault-count" style="font-size:.95rem;">-</div>
+      </div>
+    </div>
+    <div class="col-4 col-md-2">
+      <div class="card border-0 shadow-sm text-center py-2 h-100">
+        <div class="small text-muted" style="font-size:.72rem;">반복장애</div>
+        <div class="fw-bold text-warning" id="kpi-recurrence" style="font-size:.95rem;">-</div>
+      </div>
+    </div>
+    <div class="col-4 col-md-2">
+      <div class="card border-0 shadow-sm text-center py-2 h-100">
+        <div class="small text-muted" style="font-size:.72rem;">서비스 만족도</div>
+        <div class="fw-bold text-success" id="kpi-satisfaction" style="font-size:.95rem;">-</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 통합 탭 패널 -->
+  <div class="card border-0 shadow-sm">
+
+    <!-- 탭 네비게이션 (스크롤 가능) -->
+    <div class="card-header p-0 bg-white border-bottom" style="overflow-x:auto; white-space:nowrap;">
+      <ul class="nav nav-tabs border-0 flex-nowrap" id="slaTabs" role="tablist" style="display:inline-flex; min-width:100%;">
+
+        <!-- 메인 탭 1개 (3개 섹션 통합) -->
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active px-3 py-2 fw-semibold" id="tab-main"
+                  data-bs-toggle="tab" data-bs-target="#pane-main" type="button" role="tab">
+            <i class="bi bi-speedometer2 me-1"></i><span style="font-size:.8rem;">SLA 현황</span>
+          </button>
+        </li>
+
+        <!-- 구분선 -->
+        <li class="nav-item d-flex align-items-center px-1">
+          <div style="width:1px; height:20px; background:#dee2e6;"></div>
+        </li>
+
+        <!-- 지표 9개 탭 -->
+        {% for ind in indicators %}
+        <li class="nav-item" role="presentation">
+          <button class="nav-link px-2 py-2" id="tab-{{ ind.key }}"
+                  data-bs-toggle="tab" data-bs-target="#pane-{{ ind.key }}"
+                  type="button" role="tab"
+                  onclick="onTabClick('{{ ind.key }}')">
+            <span style="font-size:.75rem;">{{ ind.label }}</span>
+            <span class="badge d-none ms-1" id="tab-badge-{{ ind.key }}" style="font-size:.58rem;"></span>
+          </button>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <!-- 탭 콘텐츠 -->
+    <div class="tab-content" id="slaTabContent">
+
+      <!-- ─── 탭 1: SLA 현황 (3개 섹션 통합) ─── -->
+      <div class="tab-pane fade show active" id="pane-main" role="tabpanel">
+        <div class="p-3">
+          <div class="row g-3">
+
+            <!-- 좌: 월간 SLA 이력 -->
+            <div class="col-12 col-xl-4">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold mb-0 small"><i class="bi bi-calendar3 me-1"></i>월간 SLA 이력</h6>
+                {% if user.role == 'superadmin' or user.role == 'admin' %}
+                <button class="btn btn-sm btn-success" style="font-size:.75rem;" onclick="openCalcModal()">
+                  <i class="bi bi-calculator me-1"></i>산출
+                </button>
+                {% endif %}
+              </div>
+              <div class="table-responsive" style="max-height:420px; overflow-y:auto;">
+                <table class="table table-sm table-hover mb-0">
+                  <thead class="table-light sticky-top">
+                    <tr>
+                      <th class="small">기간</th>
+                      <th class="text-end small">점수</th>
+                      <th class="text-center small">등급</th>
+                      <th class="text-end small">가동률</th>
+                      <th class="text-end small">장애</th>
+                      {% if user.role == 'superadmin' or user.role == 'admin' %}
+                      <th style="width:32px;"></th>
+                      {% endif %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for r in records %}
+                    <tr class="cursor-pointer" onclick="loadDetail({{ r.year }}, {{ r.month }})" id="hist-row-{{ r.year }}-{{ r.month }}">
+                      <td class="fw-semibold small">{{ r.year }}.{{ r.month|stringformat:"02d" }}</td>
+                      <td class="text-end fw-bold small
+                        {% if r.total_score >= 95 %}text-success
+                        {% elif r.total_score >= 85 %}text-primary
+                        {% else %}text-danger{% endif %}">
+                        {{ r.total_score|floatformat:1 }}
+                      </td>
+                      <td class="text-center">
+                        {% if r.grade == 'excellent' %}<span class="badge bg-success" style="font-size:.62rem;">탁월</span>
+                        {% elif r.grade == 'good'     %}<span class="badge bg-primary" style="font-size:.62rem;">우수</span>
+                        {% elif r.grade == 'normal'   %}<span class="badge bg-secondary" style="font-size:.62rem;">보통</span>
+                        {% elif r.grade == 'poor'     %}<span class="badge bg-warning text-dark" style="font-size:.62rem;">미흡</span>
+                        {% elif r.grade == 'bad'      %}<span class="badge bg-danger" style="font-size:.62rem;">불량</span>
+                        {% else %}<span class="badge bg-light text-muted" style="font-size:.62rem;">-</span>{% endif %}
+                      </td>
+                      <td class="text-end small">{{ r.uptime_pct|floatformat:2 }}%</td>
+                      <td class="text-end small">{{ r.fault_count }}건</td>
+                      {% if user.role == 'superadmin' or user.role == 'admin' %}
+                      <td class="text-center p-0" onclick="event.stopPropagation()">
+                        <button class="btn btn-link btn-sm text-danger p-0 px-1"
+                                title="삭제"
+                                onclick="deleteMonthly({{ r.year }}, {{ r.month }})">
+                          <i class="bi bi-trash3" style="font-size:.75rem;"></i>
+                        </button>
+                      </td>
+                      {% endif %}
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center py-4 text-muted small">
+                      산출 데이터 없음<br>
+                      <button class="btn btn-sm btn-outline-success mt-2" onclick="openCalcModal()">
+                        <i class="bi bi-calculator me-1"></i>지금 산출하기
+                      </button>
+                    </td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              <div class="small text-muted mt-1">
+                <i class="bi bi-hand-index me-1"></i>행 클릭 시 해당 월 지표가 오른쪽에 표시됩니다.
+              </div>
+            </div>
+
+            <!-- 우: 종합서비스 수준 관리지표 -->
+            <div class="col-12 col-xl-8">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold mb-0 small" id="sla-detail-title">
+                  <i class="bi bi-table me-1"></i>종합서비스 수준 관리지표
+                </h6>
+                <span id="sla-detail-grade-badge"></span>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0" style="table-layout:fixed; width:100%;">
+                  <colgroup>
+                    <col style="width:72px;">   <!-- 구분 -->
+                    <col>                        <!-- 관리지표 (가변) -->
+                    <col style="width:62px;">   <!-- 목표 -->
+                    <col style="width:62px;">   <!-- 최소 -->
+                    <col style="width:78px;">   <!-- 측정값 -->
+                    <col style="width:50px;">   <!-- 점수 -->
+                    <col style="width:54px;">   <!-- 가중치 -->
+                    <col style="width:54px;">   <!-- 환산 -->
+                  </colgroup>
+                  <thead class="table-light">
+                    <tr>
+                      <th class="small text-center" style="white-space:nowrap;">구분</th>
+                      <th class="small">관리지표
+                        <span class="text-muted ms-1" style="font-size:.6rem;">클릭→보고서</span>
+                      </th>
+                      <th class="text-center small" style="white-space:nowrap;">목표</th>
+                      <th class="text-center small" style="white-space:nowrap;">최소</th>
+                      <th class="text-center small" style="white-space:nowrap;">측정값</th>
+                      <th class="text-center small" style="white-space:nowrap;">점수</th>
+                      <th class="text-center small" style="white-space:nowrap;">가중치</th>
+                      <th class="text-center small" style="white-space:nowrap;">환산</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sla-kpi-tbody">
+                    <tr><td colspan="8" class="text-center py-4 text-muted small">
+                      좌측 이력에서 월을 선택하세요
+                    </td></tr>
+                  </tbody>
+                  <tfoot id="sla-kpi-tfoot"></tfoot>
+                </table>
+              </div>
+              <div class="d-none mt-1 small text-muted" id="sla-detail-footer">
+                <span id="sla-detail-memo"></span>
+                <span class="float-end" id="sla-detail-calc-time"></span>
+              </div>
+            </div>
+
+            <!-- 하단: 종합점수 추이 (전체 너비) -->
+            <div class="col-12">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold mb-0 small">
+                  <i class="bi bi-graph-up me-1 text-primary"></i>종합점수 추이 (최근 12개월)
+                </h6>
+                <div class="d-flex gap-2 flex-wrap">
+                  <span class="small"><span class="badge bg-success">탁월</span> ≥95</span>
+                  <span class="small"><span class="badge bg-primary">우수</span> ≥90</span>
+                  <span class="small"><span class="badge bg-secondary">보통</span> ≥85</span>
+                  <span class="small"><span class="badge bg-warning text-dark">미흡</span> ≥80</span>
+                  <span class="small"><span class="badge bg-danger">불량</span> &lt;80</span>
+                </div>
+              </div>
+              <div style="height:180px;">
+                <canvas id="sla-trend-chart"></canvas>
+              </div>
+            </div>
+
+          </div><!-- /row -->
+        </div>
+      </div>
+
+      <!-- ─── 탭 2~10: 지표별 분석 보고서 ─── -->
+      {% for ind in indicators %}
+      <div class="tab-pane fade" id="pane-{{ ind.key }}" role="tabpanel">
+        <div class="p-3" id="content-{{ ind.key }}">
+          <div class="text-center py-5 text-muted">
+            <i class="bi bi-bar-chart-line fs-2 d-block mb-2 text-primary opacity-50"></i>
+            <div class="small">
+              <strong>SLA 현황</strong> 탭에서 월 선택 후 관리지표 표에서 <strong>{{ ind.label }}</strong>을 클릭하거나<br>
+              월을 선택한 상태에서 이 탭을 클릭하면 분석 보고서가 표시됩니다.
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+
+    </div><!-- /tab-content -->
+  </div><!-- /card -->
+</div>
+
+
+<!-- ══ MODAL: SLA 월간 산출 ══ -->
+<div class="modal fade" id="calcModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-bold"><i class="bi bi-calculator me-1"></i>SLA 월간 지표 산출</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">연도</label>
+            <input type="number" id="calc-year" class="form-control form-control-sm"
+              value="{{ current_year }}" min="2020" max="2099">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">월</label>
+            <select id="calc-month" class="form-select form-select-sm">
+              {% for m in "123456789" %}{% endfor %}
+              <option value="1">1월</option><option value="2">2월</option>
+              <option value="3">3월</option><option value="4">4월</option>
+              <option value="5">5월</option><option value="6">6월</option>
+              <option value="7">7월</option><option value="8">8월</option>
+              <option value="9">9월</option><option value="10">10월</option>
+              <option value="11">11월</option><option value="12">12월</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">보안위규 건수 <span class="text-muted">(수동)</span></label>
+            <input type="number" id="calc-security" class="form-control form-control-sm" value="0" min="0">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">보안위규 내용</label>
+            <input type="text" id="calc-security-note" class="form-control form-control-sm" placeholder="없음">
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-semibold">비고</label>
+            <textarea id="calc-memo" class="form-control form-control-sm" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="alert alert-info small py-2 mt-2 mb-0">
+          <i class="bi bi-info-circle me-1"></i>
+          장애·반복·인적·만족도는 해당 월 <strong>완료 장애</strong>에서 자동 계산됩니다.<br>
+          예방점검은 <strong>진척관리</strong> 앱 데이터, 보안위규만 직접 입력하세요.
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-success" onclick="submitCalc()">
+          <i class="bi bi-calculator me-1"></i>산출 및 저장
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+/* 탭 스크롤 */
+#slaTabs { overflow-x: auto; scrollbar-width: thin; }
+#slaTabs::-webkit-scrollbar { height: 3px; }
+#slaTabs::-webkit-scrollbar-thumb { background: #dee2e6; }
+.nav-tabs .nav-link { white-space: nowrap; }
+/* 메인 탭 강조 */
+#tab-main {
+  font-weight: 600;
+  border-top: 3px solid transparent;
+}
+#tab-main.active {
+  border-top-color: #0d6efd;
+}
+/* 지표 탭 */
+#slaTabs .nav-link:not(#tab-main) {
+  color: #6c757d;
+  font-size: .75rem;
+  border-top: 3px solid transparent;
+}
+#slaTabs .nav-link.active:not(#tab-main) {
+  color: #198754;
+  border-top-color: #198754;
+}
+/* 지표 행 */
+.cursor-pointer { cursor: pointer; }
+.cursor-pointer:hover { background-color: #f0f4ff !important; }
+.ind-row-active { background-color: #e8f0ff !important; font-weight: 600; }
+/* 점수 색상 */
+.score-cell { font-weight: 600; }
+.score-a { color: #198754; }
+.score-b { color: #0d6efd; }
+.score-c { color: #6c757d; }
+.score-d { color: #fd7e14; }
+.score-f { color: #dc3545; }
+/* 보고서 */
+.report-section { border-left: 4px solid #0d6efd; padding-left: 12px; margin-bottom: 1rem; }
+.chart-box { position: relative; height: 200px; }
+.stat-card { border-radius: 8px; padding: 10px 14px; background: #f8f9fa; border: 1px solid #e9ecef; }
+.stat-card .val { font-size: 1.3rem; font-weight: 700; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const SLA_API      = '/npms/api/incidents';
+const CSRF         = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+let   currentYear  = null, currentMonth = null;
+let   currentSlaData = null;
+const chartInst    = {};
+const loadedCache  = {};
+
+// ══ 유틸 ══════════════════════════════════════════════
+function scoreClass(s) {
+  if (s == null) return '';
+  if (s >= 100) return 'score-a';
+  if (s >= 90)  return 'score-b';
+  if (s >= 80)  return 'score-c';
+  if (s >= 70)  return 'score-d';
+  return 'score-f';
+}
+function gradeBadge(grade, label) {
+  const cls = {excellent:'success',good:'primary',normal:'secondary',poor:'warning',bad:'danger'};
+  const tc  = grade === 'poor' ? 'text-dark' : '';
+  return `<span class="badge bg-${cls[grade]||'secondary'} ${tc}">${label}</span>`;
+}
+function makeChart(id, config) {
+  if (chartInst[id]) { chartInst[id].destroy(); delete chartInst[id]; }
+  const el = document.getElementById(id);
+  if (!el) return;
+  chartInst[id] = new Chart(el, config);
+}
+
+
+// ══ 지표 메타 ═════════════════════════════════════════
+const IND_META = {
+  uptime:      {label:'장비 가동률',       weight:20, goal:'99.98%', min:'99.85%'},
+  inspection:  {label:'예방점검 준수율',   weight:10, goal:'100%',   min:'97%'},
+  avg_fault:   {label:'평균 장애시간',     weight:10, goal:'240분',  min:'480분'},
+  fault_count: {label:'장애건수',          weight:10, goal:'5건',    min:'30건'},
+  overtime:    {label:'최대허용시간 초과', weight:10, goal:'0건',    min:'1건'},
+  human_error: {label:'인적장애 건수',     weight:10, goal:'0건',    min:'1건'},
+  recurrence:  {label:'반복장애 건수',     weight:10, goal:'3건',    min:'5건'},
+  security:    {label:'보안위규 건수',     weight:10, goal:'0건',    min:'1건'},
+  satisfaction:{label:'서비스 만족도',     weight:10, goal:'100%',   min:'97%'},
+};
+const IND_ORDER = Object.keys(IND_META);
+
+// ══ 종합 지표 로드 ════════════════════════════════════
+async function loadDetail(year, month) {
+  currentYear = year; currentMonth = month;
+  // 이력 행 강조
+  document.querySelectorAll('[id^="hist-row-"]').forEach(r => r.classList.remove('table-primary'));
+  const histRow = document.getElementById(`hist-row-${year}-${month}`);
+  if (histRow) histRow.classList.add('table-primary');
+  // 지표 탭 캐시 초기화
+  IND_ORDER.forEach(k => delete loadedCache[`${year}-${month}-${k}`]);
+
+  const res = await fetch(`${SLA_API}/sla/${year}/${month}/`);
+  if (!res.ok) { showToast('데이터를 불러올 수 없습니다.', 'danger'); return; }
+  currentSlaData = await res.json();
+  const d = currentSlaData;
+
+  // 제목 / 등급 배지
+  document.getElementById('sla-detail-title').innerHTML =
+    `<i class="bi bi-table me-1"></i>${year}년 ${String(month).padStart(2,'0')}월 종합서비스 수준 관리지표`;
+  document.getElementById('sla-detail-grade-badge').innerHTML =
+    d.grade ? gradeBadge(d.grade, d.grade_label) : '';
+
+  // KPI 카드 갱신
+  document.getElementById('kpi-total-score').textContent =
+    d.total_score != null ? d.total_score.toFixed(1)+'점' : '-';
+  document.getElementById('kpi-total-score').className = 'fw-bold fs-5 '+scoreClass(d.total_score);
+  document.getElementById('kpi-grade').textContent = d.grade_label || '-';
+  document.getElementById('kpi-uptime').textContent =
+    d.uptime_pct != null ? d.uptime_pct.toFixed(3)+'%' : '-';
+  document.getElementById('kpi-fault-count').textContent =
+    d.fault_count != null ? d.fault_count+'건' : '-';
+  document.getElementById('kpi-recurrence').textContent =
+    d.recurrence_count != null ? d.recurrence_count+'건' : '-';
+  document.getElementById('kpi-satisfaction').textContent =
+    d.satisfaction_pct != null ? d.satisfaction_pct.toFixed(1)+'%' : '-';
+
+  // 지표 표 rows 정의
+  const rows = [
+    ['운영관리','uptime',
+      d.uptime_pct != null ? d.uptime_pct.toFixed(3)+'%':'-', d.uptime_score],
+    ['운영관리','inspection',
+      d.inspection_pct != null
+        ? `${d.inspection_pct.toFixed(1)}% (${d.inspection_completed||0}/${d.inspection_total||0})`
+        : '-', d.inspection_score],
+    ['장애관리','avg_fault',
+      d.avg_fault_min != null ? d.avg_fault_min.toFixed(0)+'분':'-', d.avg_fault_score],
+    ['장애관리','fault_count',
+      d.fault_count != null ? d.fault_count+'건':'-', d.fault_count_score],
+    ['장애관리','overtime',
+      d.overtime_count != null ? d.overtime_count+'건':'-', d.overtime_score],
+    ['장애관리','human_error',
+      d.human_error_count != null ? d.human_error_count+'건':'-', d.human_error_score],
+    ['장애관리','recurrence',
+      d.recurrence_count != null ? d.recurrence_count+'건':'-', d.recurrence_score],
+    ['정보보안','security',
+      d.security_count != null ? d.security_count+'건':'-', d.security_score],
+    ['서비스','satisfaction',
+      d.satisfaction_pct != null
+        ? `${d.satisfaction_pct.toFixed(1)}% (${d.satisfaction_count||0}건)`
+        : '-', d.satisfaction_score],
+  ];
+
+  let prevCat='', html='';
+  rows.forEach(([cat, key, val, score]) => {
+    const m  = IND_META[key];
+    const w  = m.weight;
+    const wt = score != null ? (score*w/100) : 0;
+    const sc = scoreClass(score);
+    const catCell = cat !== prevCat
+      ? `<td rowspan="${rows.filter(r=>r[0]===cat).length}" class="text-center align-middle fw-semibold small bg-light">${cat}</td>`
+      : '';
+    prevCat = cat;
+    // 탭 배지 점수 갱신
+    const badge = document.getElementById(`tab-badge-${key}`);
+    if (badge) {
+      badge.textContent = score != null ? score.toFixed(0) : '-';
+      badge.className = `badge ms-1 bg-${score>=90?'success':score>=80?'warning':'danger'} ${score>=80?'text-dark':'text-white'}`;
+    }
+    html += `<tr class="cursor-pointer" id="ind-row-${key}"
+        onclick="openIndicatorTab('${key}')">
+      ${catCell}
+      <td class="small">${m.label}
+        <i class="bi bi-arrow-right-circle text-primary ms-1" style="font-size:.68rem;"></i>
+      </td>
+      <td class="text-center small text-muted">${m.goal}</td>
+      <td class="text-center small text-muted">${m.min}</td>
+      <td class="text-center small fw-semibold">${val}</td>
+      <td class="text-center score-cell ${sc}">${score != null ? score.toFixed(0) : '-'}</td>
+      <td class="text-center small text-muted">${w}%</td>
+      <td class="text-center score-cell ${sc}">${wt.toFixed(1)}</td>
+    </tr>`;
+  });
+  document.getElementById('sla-kpi-tbody').innerHTML = html;
+
+  const tsc = scoreClass(d.total_score);
+  document.getElementById('sla-kpi-tfoot').innerHTML = `
+    <tr class="table-light fw-bold">
+      <td colspan="6" class="text-center small fw-bold">종합점수</td>
+      <td class="text-center small">100%</td>
+      <td class="text-center ${tsc}">${d.total_score != null ? d.total_score.toFixed(2) : '-'}</td>
+    </tr>`;
+
+  const footer = document.getElementById('sla-detail-footer');
+  footer.classList.remove('d-none');
+  document.getElementById('sla-detail-memo').textContent = d.memo ? '비고: '+d.memo : '';
+  document.getElementById('sla-detail-calc-time').textContent = d.calculated_at ? '산출: '+d.calculated_at : '';
+
+  // 열려 있는 지표 탭이 있으면 자동 재로드
+  const activePane = document.querySelector('.tab-pane.show.active[id^="pane-"]:not(#pane-history):not(#pane-summary):not(#pane-trend)');
+  if (activePane) {
+    const key = activePane.id.replace('pane-','');
+    renderIndicatorContent(key);
+  }
+}
+
+// ══ 지표 행 클릭 ═════════════════════════════════════
+function openIndicatorTab(key) {
+  // 행 강조
+  document.querySelectorAll('[id^="ind-row-"]').forEach(r => r.classList.remove('ind-row-active'));
+  const row = document.getElementById(`ind-row-${key}`);
+  if (row) row.classList.add('ind-row-active');
+  // 탭 전환
+  const tabEl = document.getElementById(`tab-${key}`);
+  if (tabEl) bootstrap.Tab.getOrCreateInstance(tabEl).show();
+  // 스크롤 — 탭 상단으로
+  document.querySelector('.card').scrollIntoView({behavior:'smooth', block:'start'});
+  // 보고서 로드
+  renderIndicatorContent(key);
+}
+
+// ══ 탭 직접 클릭 ═════════════════════════════════════
+function onTabClick(key) {
+  if (!currentYear) {
+    showToast('먼저 SLA 현황 탭에서 월을 선택하세요.', 'warning');
+    bootstrap.Tab.getOrCreateInstance(document.getElementById('tab-main')).show();
+    return;
+  }
+  renderIndicatorContent(key);
+}
+
+// ══ 지표 보고서 렌더 ══════════════════════════════════
+async function renderIndicatorContent(key) {
+  const cacheKey = `${currentYear}-${currentMonth}-${key}`;
+  const container = document.getElementById(`content-${key}`);
+  if (!container || !currentYear) return;
+
+  let data = loadedCache[cacheKey];
+  if (!data) {
+    container.innerHTML = `<div class="text-center py-5 text-muted">
+      <div class="spinner-border spinner-border-sm me-2"></div>분석 데이터 로드 중...</div>`;
+    try {
+      const res = await fetch(`${SLA_API}/sla/${currentYear}/${currentMonth}/${key}/`);
+      if (!res.ok) throw new Error(res.status);
+      data = await res.json();
+      loadedCache[cacheKey] = data;
+    } catch(e) {
+      container.innerHTML = `<div class="text-center py-4 text-danger small">데이터 로드 실패 (${e.message})</div>`;
+      return;
+    }
+  }
+
+  const fn = RENDER_MAP[key];
+  const slaSnap = currentSlaData || {};
+  if (fn) {
+    fn(container, data, slaSnap);
+    // AI 보고서 비동기 로드 (렌더 완료 후)
+    loadAiReport(key, slaSnap, data);
+  }
+}
+
+// ══ 공통 보고서 헤더 ══════════════════════════════════
+function reportHeader(key, sla, statCards) {
+  const m  = IND_META[key];
+  const sc = sla[`${key}_score`] ?? null;
+  return `
+  <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <h6 class="fw-bold mb-0">${m.label} 분석 보고서</h6>
+    <span class="badge bg-secondary" style="font-size:.7rem;">${currentYear}년 ${String(currentMonth).padStart(2,'0')}월</span>
+    ${sc != null ? `<span class="fw-bold ${scoreClass(sc)}" style="font-size:1.1rem;">${sc.toFixed(0)}점</span>` : ''}
+    <span class="text-muted small">/ 가중치 ${m.weight}%</span>
+  </div>
+  <div class="row g-2 mb-3">${statCards}</div>`;
+}
+
+// ══ 분석 보고서 — AI 플레이스홀더 반환 ═══════════════════
+function analysisBlock(key, sla, data) {
+  const m     = IND_META[key];
+  const score = sla[`${key}_score`] ?? null;
+  const gc    = score!=null?(score>=90?'success':score>=80?'warning':'danger'):'secondary';
+  // AI 로드 후 채워질 플레이스홀더 반환
+  return `
+  <div class="card border-0 bg-light p-3" id="report-block-${key}">
+    <h6 class="fw-bold mb-2">
+      <i class="bi bi-robot me-1 text-primary"></i>AI 분석 보고서
+      <span class="spinner-border spinner-border-sm ms-2 text-secondary" id="report-spinner-${key}"></span>
+    </h6>
+    <div id="report-content-${key}">
+      <div class="text-center text-muted py-3 small">
+        <div class="spinner-border spinner-border-sm me-1"></div> AI가 데이터를 분석하고 있습니다...
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2 mt-2">
+      <span class="badge bg-${gc} ${gc==='warning'?'text-dark':''}">
+        ${score!=null?score.toFixed(0)+'점':'-'}
+      </span>
+      <span class="small text-muted">가중치 ${m.weight}% → 환산 ${score!=null?(score*m.weight/100).toFixed(1):'-'}점 기여</span>
+    </div>
+  </div>`;
+}
+
+// ══ AI 보고서 비동기 로드 ══════════════════════════════
+async function loadAiReport(key, sla, data) {
+  const contentEl  = document.getElementById(`report-content-${key}`);
+  const spinnerEl  = document.getElementById(`report-spinner-${key}`);
+  if (!contentEl) return;
+
+  try {
+    const res = await fetch(`${SLA_API}/sla/report/`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken': getCsrfToken()},
+      body: JSON.stringify({
+        indicator: key,
+        sla:       sla,
+        rows:      data.rows || [],
+        year:      currentYear,
+        month:     currentMonth,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const r = await res.json();
+    if (r.error) throw new Error(r.error);
+
+    contentEl.innerHTML = `
+      <div class="report-section">
+        <div class="small fw-semibold text-muted mb-1">총 평</div>
+        <p class="mb-0 small">${r.summary}</p>
+      </div>
+      <div class="report-section" style="border-color:#198754;">
+        <div class="small fw-semibold text-muted mb-1">세부 분석</div>
+        <p class="mb-0 small">${r.detail}</p>
+      </div>
+      <div class="report-section" style="border-color:#fd7e14;">
+        <div class="small fw-semibold text-muted mb-1">조치 및 대책</div>
+        <p class="mb-0 small">${r.action}</p>
+      </div>`;
+  } catch(e) {
+    contentEl.innerHTML = `<div class="text-muted small py-2">AI 보고서 생성 실패 (${e.message})</div>`;
+  } finally {
+    if (spinnerEl) spinnerEl.remove();
+  }
+}
+
+
+
+// ══ 지표별 렌더 맵 ════════════════════════════════════
+const RENDER_MAP = {
+
+  uptime(container, data, sla) {
+    const total=sla.uptime_total_min||1, fault=sla.uptime_fault_min||0, upMin=total-fault;
+    const sc = `
+      <div class="col-6 col-md-3"><div class="stat-card">
+        <div class="small text-muted">월 총 가동시간</div>
+        <div class="val text-primary">${(total/60).toFixed(0)}h</div>
+      </div></div>
+      <div class="col-6 col-md-3"><div class="stat-card">
+        <div class="small text-muted">서비스 중단</div>
+        <div class="val text-danger">${fault}분</div>
+      </div></div>
+      <div class="col-6 col-md-3"><div class="stat-card">
+        <div class="small text-muted">가동률</div>
+        <div class="val ${scoreClass(sla.uptime_score)}">${sla.uptime_pct!=null?sla.uptime_pct.toFixed(3)+'%':'-'}</div>
+      </div></div>
+      <div class="col-6 col-md-3"><div class="stat-card">
+        <div class="small text-muted">중단 장애</div>
+        <div class="val">${data.rows.length}건</div>
+      </div></div>`;
+    container.innerHTML = reportHeader('uptime',sla,sc)+`
+      <div class="row g-2 mb-3">
+        <div class="col-md-4"><div class="card border-0 bg-light p-2">
+          <div class="small fw-semibold text-center mb-1">가동시간 구성</div>
+          <div class="chart-box"><canvas id="chart-uptime-donut"></canvas></div>
+        </div></div>
+        <div class="col-md-8"><div class="card border-0 bg-light p-2">
+          <div class="small fw-semibold text-center mb-1">장애별 서비스 중단시간 (분)</div>
+          <div class="chart-box"><canvas id="chart-uptime-bar"></canvas></div>
+        </div></div>
+      </div>
+      <div class="table-responsive mb-3"><table class="table table-sm table-hover">
+        <thead class="table-light"><tr>
+          <th class="small">장애번호</th><th class="small">학교</th>
+          <th class="small text-center">접수일시</th><th class="small text-center">복구일시</th>
+          <th class="small text-end">중단시간(분)</th>
+        </tr></thead>
+        <tbody>${data.rows.length?data.rows.map(r=>`<tr>
+          <td><a href="/npms/incidents/${r.id}/" target="_blank" class="small">${r.number}</a></td>
+          <td class="small">${r.school}</td>
+          <td class="small text-center">${r.received_at}</td><td class="small text-center">${r.resolved_at}</td>
+          <td class="text-end fw-semibold ${r.duration_min>480?'text-danger':''}">${r.duration_min??'-'}</td>
+        </tr>`).join(''):`<tr><td colspan="5" class="text-center text-muted py-3 small">서비스 중단 장애 없음</td></tr>`}</tbody>
+      </table></div>
+      ${analysisBlock('uptime',sla,data)}`;
+    makeChart('chart-uptime-donut',{type:'doughnut',data:{labels:['정상 가동','서비스 중단'],datasets:[{data:[upMin,fault],backgroundColor:['#198754','#dc3545'],borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}});
+    const bLabels=data.rows.map(r=>r.number), bVals=data.rows.map(r=>r.duration_min||0);
+    makeChart('chart-uptime-bar',{type:'bar',data:{labels:bLabels,datasets:[{label:'중단(분)',data:bVals,backgroundColor:bVals.map(v=>v>480?'#dc3545':'#fd7e14'),borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  },
+
+  inspection(container, data, sla) {
+    const total=sla.inspection_total||0, done=sla.inspection_completed||0, undone=total-done;
+    const byS={done:{},undone:{}};
+    (data.rows||[]).forEach(r=>{ r.done?byS.done[r.school]=(byS.done[r.school]||0)+1:byS.undone[r.school]=(byS.undone[r.school]||0)+1; });
+    const sc=`
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">점검 대상</div><div class="val text-primary">${total}개교</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">완료</div><div class="val text-success">${done}개교</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">미완료</div><div class="val text-danger">${undone}개교</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">준수율</div><div class="val ${scoreClass(sla.inspection_score)}">${sla.inspection_pct!=null?sla.inspection_pct.toFixed(1)+'%':'-'}</div></div></div>`;
+    container.innerHTML=reportHeader('inspection',sla,sc)+`
+      <div class="row g-2 mb-3">
+        <div class="col-md-4"><div class="card border-0 bg-light p-2">
+          <div class="small fw-semibold text-center mb-1">완료율</div>
+          <div class="chart-box"><canvas id="chart-insp-donut"></canvas></div>
+        </div></div>
+        <div class="col-md-8"><div class="card border-0 bg-light p-2">
+          <div class="small fw-semibold text-center mb-1">학교별 점검 현황</div>
+          <div class="chart-box"><canvas id="chart-insp-bar"></canvas></div>
+        </div></div>
+      </div>
+      <div class="table-responsive mb-3"><table class="table table-sm table-hover">
+        <thead class="table-light"><tr>
+          <th class="small">점검계획</th><th class="small">학교</th>
+          <th class="small text-center">예정일</th><th class="small text-center">상태</th>
+        </tr></thead>
+        <tbody>${(data.rows||[]).length?(data.rows||[]).map(r=>`<tr>
+          <td class="small">${r.plan}</td><td class="small">${r.school}</td>
+          <td class="small text-center">${r.scheduled}</td>
+          <td class="text-center">${r.done?'<span class="badge bg-success">완료</span>':'<span class="badge bg-warning text-dark">미완료</span>'}</td>
+        </tr>`).join(''):`<tr><td colspan="4" class="text-center text-muted py-3 small">점검 데이터 없음</td></tr>`}</tbody>
+      </table></div>
+      ${analysisBlock('inspection',sla,data)}`;
+    makeChart('chart-insp-donut',{type:'doughnut',data:{labels:['완료','미완료'],datasets:[{data:[done,undone],backgroundColor:['#198754','#dc3545'],borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}});
+    const sNames=[...new Set((data.rows||[]).map(r=>r.school))].slice(0,12);
+    makeChart('chart-insp-bar',{type:'bar',data:{labels:sNames,datasets:[{label:'완료',data:sNames.map(s=>byS.done[s]||0),backgroundColor:'#198754',borderRadius:3},{label:'미완료',data:sNames.map(s=>byS.undone[s]||0),backgroundColor:'#dc3545',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true,ticks:{stepSize:1}}}}});
+  },
+
+  avg_fault(c,d,s)  { _faultReport(c,d,s,'avg_fault'); },
+  fault_count(c,d,s){ _faultReport(c,d,s,'fault_count'); },
+
+  overtime(container, data, sla) {
+    const cnt=data.rows.length, total=sla.fault_count||0;
+    const sc=`
+      <div class="col-6 col-md-4"><div class="stat-card"><div class="small text-muted">초과 건수</div><div class="val ${cnt>0?'text-danger':'text-success'}">${cnt}건</div></div></div>
+      <div class="col-6 col-md-4"><div class="stat-card"><div class="small text-muted">최대 초과</div><div class="val text-danger">${cnt?Math.max(...data.rows.map(r=>r.over_min)).toFixed(0)+'분':'-'}</div></div></div>
+      <div class="col-6 col-md-4"><div class="stat-card"><div class="small text-muted">평균 초과</div><div class="val">${cnt?(data.rows.reduce((s,r)=>s+r.over_min,0)/cnt).toFixed(0)+'분':'-'}</div></div></div>`;
+    container.innerHTML=reportHeader('overtime',sla,sc)+`
+      <div class="row g-2 mb-3">
+        <div class="col-md-4"><div class="card border-0 bg-light p-2">
+          <div class="small fw-semibold text-center mb-1">초과 비율</div>
+          <div class="chart-box"><canvas id="chart-ot-donut"></canvas></div>
+        </div></div>
+        <div class="col-md-8"><div class="card border-0 bg-light p-2">
+          <div class="small fw-semibold text-center mb-1">초과 장애별 조치시간 (기준 480분)</div>
+          <div class="chart-box"><canvas id="chart-ot-bar"></canvas></div>
+        </div></div>
+      </div>
+      <div class="table-responsive mb-3"><table class="table table-sm table-hover">
+        <thead class="table-light"><tr>
+          <th class="small">장애번호</th><th class="small">학교</th><th class="small">유형</th>
+          <th class="small text-center">접수</th><th class="small text-center">완료</th>
+          <th class="small text-end">조치(분)</th><th class="small text-end">초과(분)</th>
+        </tr></thead>
+        <tbody>${cnt?data.rows.map(r=>`<tr>
+          <td><a href="/npms/incidents/${r.id}/" target="_blank" class="small">${r.number}</a></td>
+          <td class="small">${r.school}</td><td class="small">${r.fault_type}</td>
+          <td class="small text-center">${r.received_at}</td><td class="small text-center">${r.completed_at}</td>
+          <td class="text-end fw-semibold">${r.biz_min}</td>
+          <td class="text-end fw-bold text-danger">+${r.over_min}</td>
+        </tr>`).join(''):`<tr><td colspan="7" class="text-center text-muted py-3 small">초과 장애 없음 — 최고 등급(A)</td></tr>`}</tbody>
+      </table></div>
+      ${analysisBlock('overtime',sla,data)}`;
+    makeChart('chart-ot-donut',{type:'doughnut',data:{labels:['초과','정상'],datasets:[{data:[cnt,Math.max(0,total-cnt)],backgroundColor:['#dc3545','#198754'],borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}});
+    const otL=data.rows.map(r=>r.number), otV=data.rows.map(r=>r.biz_min);
+    makeChart('chart-ot-bar',{type:'bar',data:{labels:otL,datasets:[{label:'조치(분)',data:otV,backgroundColor:'#dc3545',borderRadius:4},{label:'기준(480분)',data:otL.map(()=>480),type:'line',borderColor:'#fd7e14',borderDash:[5,3],borderWidth:2,pointRadius:0,fill:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true}}}});
+  },
+
+  human_error(c,d,s){ _flagReport(c,d,s,'human_error'); },
+  recurrence(c,d,s) { _flagReport(c,d,s,'recurrence'); },
+
+  security(container, data, sla) {
+    const cnt=sla.security_count||0, note=sla.security_note||'(내용 없음)';
+    const sc=`
+      <div class="col-6"><div class="stat-card"><div class="small text-muted">보안위규 건수</div><div class="val ${cnt>0?'text-danger':'text-success'}">${cnt}건</div></div></div>
+      <div class="col-6"><div class="stat-card"><div class="small text-muted">평가점수</div><div class="val ${scoreClass(sla.security_score)}">${sla.security_score??'-'}점</div></div></div>`;
+    container.innerHTML=reportHeader('security',sla,sc)+`
+      <div class="row g-2 mb-3">
+        <div class="col-md-4"><div class="card border-0 bg-light p-2">
+          <div class="small fw-semibold text-center mb-1">위규 현황</div>
+          <div class="chart-box"><canvas id="chart-sec-donut"></canvas></div>
+        </div></div>
+        <div class="col-md-8">
+          <div class="alert alert-${cnt>0?'warning':'success'} mb-2">
+            <h6 class="fw-bold small"><i class="bi bi-shield-${cnt>0?'exclamation':'check'} me-1"></i>보안위규 내역</h6>
+            <p class="mb-0 small">${note}</p>
+          </div>
+          <div class="alert alert-info small py-2 mb-0">
+            <i class="bi bi-info-circle me-1"></i>
+            목표: 0건(100점) / 1건(80점) / 2건 이상(60점)<br>
+            보안위규 건수는 SLA 산출 시 수동 입력한 값입니다.
+          </div>
+        </div>
+      </div>
+      ${analysisBlock('security',sla,data)}`;
+    makeChart('chart-sec-donut',{type:'doughnut',data:{labels:['위규 없음','위규 발생'],datasets:[{data:[Math.max(0,1-cnt),cnt],backgroundColor:['#198754','#dc3545'],borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}});
+  },
+
+  satisfaction(container, data, sla) {
+    const cnt=sla.satisfaction_count||0, pct=sla.satisfaction_pct;
+    const dist={1:0,2:0,3:0,4:0,5:0};
+    (data.rows||[]).forEach(r=>{ if(r.score) dist[r.score]=(dist[r.score]||0)+1; });
+    const byS={};
+    (data.rows||[]).forEach(r=>{ if(!byS[r.school]) byS[r.school]=[]; byS[r.school].push(r.score||0); });
+    const sNames=Object.keys(byS).sort((a,b)=>byS[b].reduce((s,v)=>s+v,0)/byS[b].length - byS[a].reduce((s,v)=>s+v,0)/byS[a].length).slice(0,10);
+    const sc=`
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">응답 건수</div><div class="val text-primary">${cnt}건</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">만족도</div><div class="val ${scoreClass(sla.satisfaction_score)}">${pct!=null?pct.toFixed(1)+'%':'-'}</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">5점 응답</div><div class="val text-success">${dist[5]}건</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">1~2점 응답</div><div class="val text-danger">${dist[1]+dist[2]}건</div></div></div>`;
+    container.innerHTML=reportHeader('satisfaction',sla,sc)+`
+      <div class="row g-2 mb-3">
+        <div class="col-md-5"><div class="card border-0 bg-light p-2">
+          <div class="small fw-semibold text-center mb-1">만족도 점수 분포</div>
+          <div class="chart-box"><canvas id="chart-sat-dist"></canvas></div>
+        </div></div>
+        <div class="col-md-7"><div class="card border-0 bg-light p-2">
+          <div class="small fw-semibold text-center mb-1">학교별 평균 만족도</div>
+          <div class="chart-box"><canvas id="chart-sat-school"></canvas></div>
+        </div></div>
+      </div>
+      <div class="table-responsive mb-3"><table class="table table-sm table-hover">
+        <thead class="table-light"><tr>
+          <th class="small">장애번호</th><th class="small">학교</th>
+          <th class="small text-center">완료일시</th>
+          <th class="small text-center">만족도</th><th class="small text-center">환산(%)</th>
+        </tr></thead>
+        <tbody>${(data.rows||[]).length?(data.rows||[]).map(r=>{
+          const stars='★'.repeat(r.score||0)+'☆'.repeat(5-(r.score||0));
+          return `<tr>
+            <td><a href="/npms/incidents/${r.id}/" target="_blank" class="small">${r.number}</a></td>
+            <td class="small">${r.school}</td>
+            <td class="small text-center">${r.completed_at}</td>
+            <td class="text-center"><span class="text-warning">${stars}</span> <small>${r.score}점</small></td>
+            <td class="text-center small">${r.score_pct??'-'}%</td>
+          </tr>`;}).join(''):`<tr><td colspan="5" class="text-center text-muted py-3 small">만족도 응답 없음</td></tr>`}</tbody>
+      </table></div>
+      ${analysisBlock('satisfaction',sla,data)}`;
+    makeChart('chart-sat-dist',{type:'bar',data:{labels:['1점','2점','3점','4점','5점'],datasets:[{label:'응답수',data:[dist[1],dist[2],dist[3],dist[4],dist[5]],backgroundColor:['#dc3545','#fd7e14','#ffc107','#0d6efd','#198754'],borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
+    const sAvgs=sNames.map(s=>{const a=byS[s];return+(a.reduce((x,v)=>x+v,0)/a.length).toFixed(2);});
+    makeChart('chart-sat-school',{type:'bar',data:{labels:sNames,datasets:[{label:'평균 만족도',data:sAvgs,backgroundColor:'#0d6efd',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{min:0,max:5}}}});
+  },
+};
+
+function _faultReport(container, data, sla, key) {
+  const rows=data.rows||[], avg=sla.avg_fault_min, cnt=sla.fault_count||0;
+  const typeCnt={}, dayCnt={};
+  rows.forEach(r=>{typeCnt[r.fault_type]=(typeCnt[r.fault_type]||0)+1; const d=(r.received_at||'').substring(0,5); dayCnt[d]=(dayCnt[d]||0)+1;});
+  const days=Object.keys(dayCnt).sort(), dayCnts=days.map(d=>dayCnt[d]);
+  const sc=`
+    <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">총 장애건수</div><div class="val text-danger">${cnt}건</div></div></div>
+    <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">평균 조치시간</div><div class="val ${avg>480?'text-danger':avg>240?'text-warning':'text-success'}">${avg!=null?avg.toFixed(0)+'분':'-'}</div></div></div>
+    <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">최장 조치시간</div><div class="val">${rows.length?Math.max(...rows.map(r=>r.biz_min||0)).toFixed(0)+'분':'-'}</div></div></div>
+    <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">유형 수</div><div class="val">${Object.keys(typeCnt).length}종</div></div></div>`;
+  container.innerHTML=reportHeader(key,sla,sc)+`
+    <div class="row g-2 mb-3">
+      <div class="col-md-4"><div class="card border-0 bg-light p-2">
+        <div class="small fw-semibold text-center mb-1">장애 유형별 비율</div>
+        <div class="chart-box"><canvas id="chart-${key}-pie"></canvas></div>
+      </div></div>
+      <div class="col-md-8"><div class="card border-0 bg-light p-2">
+        <div class="small fw-semibold text-center mb-1">일별 장애건수</div>
+        <div class="chart-box"><canvas id="chart-${key}-day"></canvas></div>
+      </div></div>
+    </div>
+    <div class="table-responsive mb-3"><table class="table table-sm table-hover">
+      <thead class="table-light"><tr>
+        <th class="small">장애번호</th><th class="small">학교</th><th class="small">유형</th>
+        <th class="small text-center">접수</th><th class="small text-center">완료</th>
+        <th class="small text-end">업무시간(분)</th>
+      </tr></thead>
+      <tbody>${rows.length?rows.map(r=>`<tr>
+        <td><a href="/npms/incidents/${r.id}/" target="_blank" class="small">${r.number}</a></td>
+        <td class="small">${r.school}</td><td class="small">${r.fault_type}</td>
+        <td class="small text-center">${r.received_at}</td><td class="small text-center">${r.completed_at}</td>
+        <td class="text-end fw-semibold ${r.biz_min>480?'text-danger':''}">${r.biz_min??'-'}</td>
+      </tr>`).join(''):`<tr><td colspan="6" class="text-center text-muted py-3 small">완료 장애 없음</td></tr>`}</tbody>
+    </table></div>
+    ${analysisBlock(key,sla,data)}`;
+  const colors=['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1','#fd7e14','#20c997'];
+  makeChart(`chart-${key}-pie`,{type:'pie',data:{labels:Object.keys(typeCnt),datasets:[{data:Object.values(typeCnt),backgroundColor:colors,borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}}});
+  makeChart(`chart-${key}-day`,{type:'bar',data:{labels:days,datasets:[{label:'장애건수',data:dayCnts,backgroundColor:'#0d6efd',borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
+}
+
+function _flagReport(container, data, sla, key) {
+  const rows=data.rows||[], cnt=rows.length, total=sla.fault_count||0, normal=Math.max(0,total-cnt);
+  const byS={};
+  rows.forEach(r=>{byS[r.school]=(byS[r.school]||0)+1;});
+  const sNames=Object.keys(byS).sort((a,b)=>byS[b]-byS[a]).slice(0,10);
+  const lbl=key==='human_error'?'인적장애':'반복장애';
+  const sc=`
+    <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">${lbl} 건수</div><div class="val ${cnt>0?'text-danger':'text-success'}">${cnt}건</div></div></div>
+    <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">전체 대비 비율</div><div class="val">${total?(cnt/total*100).toFixed(1)+'%':'-'}</div></div></div>
+    <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">피해 학교 수</div><div class="val">${Object.keys(byS).length}개교</div></div></div>
+    <div class="col-6 col-md-3"><div class="stat-card"><div class="small text-muted">평가점수</div><div class="val ${scoreClass(sla[key+'_score'])}">${sla[key+'_score']??'-'}점</div></div></div>`;
+  container.innerHTML=reportHeader(key,sla,sc)+`
+    <div class="row g-2 mb-3">
+      <div class="col-md-4"><div class="card border-0 bg-light p-2">
+        <div class="small fw-semibold text-center mb-1">${lbl} 비율</div>
+        <div class="chart-box"><canvas id="chart-${key}-donut"></canvas></div>
+      </div></div>
+      <div class="col-md-8"><div class="card border-0 bg-light p-2">
+        <div class="small fw-semibold text-center mb-1">학교별 ${lbl} 건수</div>
+        <div class="chart-box"><canvas id="chart-${key}-bar"></canvas></div>
+      </div></div>
+    </div>
+    <div class="table-responsive mb-3"><table class="table table-sm table-hover">
+      <thead class="table-light"><tr>
+        <th class="small">장애번호</th><th class="small">학교</th><th class="small">유형</th>
+        <th class="small text-center">접수</th><th class="small text-center">완료</th>
+        <th class="small text-end">업무시간(분)</th>
+      </tr></thead>
+      <tbody>${rows.length?rows.map(r=>`<tr>
+        <td><a href="/npms/incidents/${r.id}/" target="_blank" class="small">${r.number}</a></td>
+        <td class="small">${r.school}</td><td class="small">${r.fault_type}</td>
+        <td class="small text-center">${r.received_at}</td><td class="small text-center">${r.completed_at}</td>
+        <td class="text-end fw-semibold ${r.biz_min>480?'text-danger':''}">${r.biz_min??'-'}</td>
+      </tr>`).join(''):`<tr><td colspan="6" class="text-center text-muted py-3 small">${lbl} 없음</td></tr>`}</tbody>
+    </table></div>
+    ${analysisBlock(key,sla,data)}`;
+  makeChart(`chart-${key}-donut`,{type:'doughnut',data:{labels:[lbl,'일반장애'],datasets:[{data:[cnt,normal],backgroundColor:['#dc3545','#198754'],borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}});
+  makeChart(`chart-${key}-bar`,{type:'bar',data:{labels:sNames,datasets:[{label:lbl,data:sNames.map(s=>byS[s]),backgroundColor:'#dc3545',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{stepSize:1}}}}});
+}
+
+// ══ 월간 SLA 삭제 ════════════════════════════════════
+async function deleteMonthly(year, month) {
+  if (!confirm(`${year}년 ${month}월 SLA 데이터를 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.`)) return;
+  try {
+    const res = await fetch(`${SLA_API}/sla/${year}/${month}/delete/`, {
+      method: 'DELETE',
+      headers: { 'X-CSRFToken': CSRF },
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      showToast(d.error || '삭제 실패', 'danger');
+      return;
+    }
+    showToast(`${year}년 ${month}월 SLA 데이터가 삭제되었습니다.`, 'success');
+    // 현재 선택된 월이면 초기화
+    if (currentYear === year && currentMonth === month) {
+      currentYear = null; currentMonth = null; currentSlaData = null;
+      document.getElementById('sla-kpi-tbody').innerHTML =
+        '<tr><td colspan="8" class="text-center py-4 text-muted small">좌측 이력에서 월을 선택하세요</td></tr>';
+      document.getElementById('sla-kpi-tfoot').innerHTML = '';
+      document.getElementById('sla-detail-grade-badge').innerHTML = '';
+      document.getElementById('sla-detail-title').innerHTML =
+        '<i class="bi bi-table me-1"></i>종합서비스 수준 관리지표';
+      document.getElementById('sla-detail-footer').classList.add('d-none');
+    }
+    setTimeout(() => location.reload(), 800);
+  } catch(e) {
+    showToast('오류: ' + e.message, 'danger');
+  }
+}
+
+// ══ 산출 모달 ═════════════════════════════════════════
+function openCalcModal() {
+  const now = new Date();
+  document.getElementById('calc-year').value  = now.getFullYear();
+  document.getElementById('calc-month').value = now.getMonth()+1;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('calcModal')).show();
+}
+async function submitCalc() {
+  const year=parseInt(document.getElementById('calc-year').value);
+  const month=parseInt(document.getElementById('calc-month').value);
+  const sec=parseInt(document.getElementById('calc-security').value)||0;
+  const secNote=document.getElementById('calc-security-note').value;
+  const memo=document.getElementById('calc-memo').value;
+  try {
+    const res=await fetch(`${SLA_API}/sla/calculate/`,{method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
+      body:JSON.stringify({year,month,security_count:sec,security_note:secNote,memo})});
+    const d=await res.json();
+    if(!res.ok){showToast(d.error||'산출 실패','danger');return;}
+    bootstrap.Modal.getInstance(document.getElementById('calcModal')).hide();
+    showToast(`${year}년 ${month}월 SLA 산출 완료 — ${d.total_score}점 (${d.grade_label})`,'success');
+    setTimeout(()=>location.reload(),1500);
+  } catch(e){showToast('오류: '+e.message,'danger');}
+}
+
+// ══ 추이 차트 ═════════════════════════════════════════
+(function initTrendChart() {
+  const records = [
+    {% for r in records reversed %}
+    {label:'{{ r.year }}.{{ r.month|stringformat:"02d" }}', score:{{ r.total_score|default:"null" }}},
+    {% endfor %}
+  ];
+  if (!records.length) return;
+  const ctx = document.getElementById('sla-trend-chart');
+  if (!ctx) return;
+  new Chart(ctx, {
+    type:'line',
+    data:{
+      labels:records.map(r=>r.label),
+      datasets:[{
+        label:'종합점수', data:records.map(r=>r.score),
+        borderColor:'#0d6efd', backgroundColor:'rgba(13,110,253,0.07)',
+        tension:0.3, fill:true,
+        pointBackgroundColor:records.map(r=>r.score>=95?'#198754':r.score>=85?'#0d6efd':r.score>=80?'#fd7e14':'#dc3545'),
+        pointRadius:6, pointHoverRadius:8,
+      }],
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.parsed.y.toFixed(2)}점`}}},
+      scales:{
+        y:{min:60,max:100,ticks:{stepSize:5},grid:{color:'#eee'}},
+        x:{grid:{display:false}},
+      },
+    },
+  });
+})();
+
+// ══ 페이지 로드 시 최신 월 자동 로드 ═════════════════
+{% if records %}
+loadDetail({{ records.0.year }}, {{ records.0.month }});
+{% endif %}
+</script>
+{% endblock %}

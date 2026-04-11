@@ -1,0 +1,1953 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}통계 분석보고서{% endblock %}
+{% block page_title %}<i class="bi bi-bar-chart-line me-2"></i>통계 분석보고서{% endblock %}
+
+{% block extra_css %}
+<style>
+.report-wrap { background:#f1f5f9; min-height:100%; padding-bottom:40px; }
+
+/* 커버 */
+.report-cover {
+  background: linear-gradient(135deg,#1e3a5f 0%,#2563eb 60%,#3b82f6 100%);
+  color:#fff; padding:24px 24px 20px;
+}
+.cover-badge {
+  display:inline-block; background:rgba(255,255,255,.18);
+  border:1px solid rgba(255,255,255,.35); border-radius:20px;
+  padding:2px 12px; font-size:.7rem; letter-spacing:.5px; margin-bottom:8px;
+}
+
+/* KPI */
+.kpi-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:10px;
+            padding:12px 14px 0; }
+@media(max-width:900px){ .kpi-grid{ grid-template-columns:repeat(3,1fr); } }
+@media(max-width:540px){ .kpi-grid{ grid-template-columns:repeat(2,1fr); } }
+.kpi-card { background:#fff; border-radius:8px; padding:12px 14px;
+            box-shadow:0 1px 3px rgba(0,0,0,.08); border-top:3px solid #e5e7eb; }
+.kpi-card.c1 { border-top-color:#2563eb; }
+.kpi-card.c2 { border-top-color:#16a34a; }
+.kpi-card.c3 { border-top-color:#7c3aed; }
+.kpi-card.c4 { border-top-color:#d97706; }
+.kpi-card.c5 { border-top-color:#e11d48; }
+.kpi-card.c6 { border-top-color:#0d9488; }
+.kpi-label { font-size:.68rem; color:#6b7280; margin-bottom:3px; }
+.kpi-value { font-size:1.45rem; font-weight:700; line-height:1.1; }
+.kpi-unit  { font-size:.72rem; color:#9ca3af; }
+
+/* 탭 */
+.stat-tabs {
+  background:#fff; border-bottom:2px solid #e5e7eb;
+  margin:12px 14px 0; border-radius:8px 8px 0 0;
+  padding:0 12px; display:flex; overflow-x:auto;
+}
+.stab {
+  padding:10px 16px; font-size:.8rem; font-weight:600; color:#6b7280;
+  border-bottom:3px solid transparent; cursor:pointer; white-space:nowrap;
+  transition:color .15s,border-color .15s; margin-bottom:-2px;
+}
+.stab:hover { color:#2563eb; }
+.stab.active { color:#2563eb; border-bottom-color:#2563eb; }
+
+.tab-pane-stat { display:none; padding:14px; background:#fff;
+                 margin:0 14px; border-radius:0 0 8px 8px;
+                 box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.tab-pane-stat.active { display:block; }
+
+/* 섹션 */
+.sec-title {
+  font-size:.8rem; font-weight:700; color:#374151;
+  border-left:3px solid #2563eb; padding-left:8px; margin-bottom:10px;
+}
+.chart-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media(max-width:700px){ .chart-row-2{ grid-template-columns:1fr; } }
+.chart-box { background:#f8fafc; border:1px solid #e2e8f0; border-radius:7px; padding:12px; }
+.chart-box h6 { font-size:.75rem; font-weight:600; color:#374151; margin-bottom:8px; }
+
+/* 하이라이트 박스 */
+.hbox { border-radius:7px; padding:12px 14px; margin-top:12px;
+        border-left:4px solid; font-size:.8rem; }
+.hbox.info    { background:#eff6ff; border-color:#2563eb; color:#1e40af; }
+.hbox.success { background:#f0fdf4; border-color:#16a34a; color:#14532d; }
+.hbox.warning { background:#fffbeb; border-color:#d97706; color:#78350f; }
+.hbox ul { margin:4px 0 0; padding-left:16px; }
+.hbox ul li { margin-bottom:2px; }
+
+/* 히트맵 */
+.hm-table th { font-size:.7rem; background:#f1f5f9; text-align:center; white-space:nowrap; }
+.hm-table td { font-size:.73rem; text-align:center; font-weight:600; }
+.h0 { background:#dcfce7; color:#14532d; }
+.h1 { background:#bbf7d0; color:#14532d; }
+.h2 { background:#fef9c3; color:#713f12; }
+.h3 { background:#fde68a; color:#713f12; }
+.h4 { background:#fca5a5; color:#7f1d1d; }
+
+/* 피벗 테이블 — 대시보드 buildPivotHtml 동일 스타일 */
+.pivot-wrap { overflow-x:auto; }
+.pivot-table { font-size:.74rem; table-layout:fixed; width:100%; }
+.pivot-table th, .pivot-table td { text-align:center; padding:4px 5px; white-space:nowrap; }
+.pivot-table thead th { background:#212529; color:#fff; font-weight:600; }
+.pivot-table .row-lbl { text-align:left; background:#f1f5f9; font-weight:600; color:#374151; width:80px; }
+.pivot-table .sum-col { border-left:2px solid #6ea8fe !important; background:#eff6ff; font-weight:700; color:#1e40af; }
+.pivot-table .sum-row td { background:#212529; color:#fff; font-weight:700; }
+.pivot-table .sum-row .row-lbl { background:#1e3a5f; color:#fff; }
+.pv-sub { font-size:.64rem; display:block; line-height:1.2; }
+
+/* 진척 바 */
+.prog-bar { height:10px; border-radius:5px; background:#e5e7eb; overflow:hidden; }
+.prog-bar-fill { height:100%; border-radius:5px; transition:width .4s; }
+
+/* 종합보고서 */
+.rpt-head { padding:9px 14px; border-radius:7px 7px 0 0;
+            font-weight:700; font-size:.82rem; color:#fff; }
+.rpt-body { border:1px solid #e5e7eb; border-top:none;
+            border-radius:0 0 7px 7px; padding:14px; background:#fff;
+            font-size:.82rem; color:#374151; line-height:1.7; }
+
+/* 오류 알림 */
+#stat-error { display:none; margin:12px 14px 0; }
+
+@media print {
+  .report-cover .d-flex.gap-2, .stat-tabs { display:none !important; }
+  .tab-pane-stat { display:block !important; page-break-before:always; }
+  .tab-pane-stat:first-of-type { page-break-before:auto; }
+  #stat-error { display:none !important; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="report-wrap">
+
+  <!-- 커버 -->
+  <div class="report-cover">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+      <div>
+        <div class="cover-badge">STATISTICS REPORT</div>
+        <h5 class="fw-bold mb-1" style="font-size:1.1rem;">학교 네트워크 유지보수 통계 분석보고서</h5>
+        <div style="font-size:.78rem;opacity:.85;" id="cover-label">기간을 선택하고 조회하세요</div>
+      </div>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <select id="stat-year"  class="form-select form-select-sm" style="width:95px;"></select>
+        <select id="stat-month" class="form-select form-select-sm" style="width:88px;">
+          <option value="">전체 월</option>
+          <option value="1">1월</option><option value="2">2월</option>
+          <option value="3">3월</option><option value="4">4월</option>
+          <option value="5">5월</option><option value="6">6월</option>
+          <option value="7">7월</option><option value="8">8월</option>
+          <option value="9">9월</option><option value="10">10월</option>
+          <option value="11">11월</option><option value="12">12월</option>
+        </select>
+        <button class="btn btn-sm btn-light fw-semibold" onclick="loadStats()">
+          <i class="bi bi-search me-1"></i>조회
+        </button>
+        <button class="btn btn-sm btn-outline-light" onclick="window.print()">
+          <i class="bi bi-printer"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-light" id="btn-stat-excel" onclick="exportStatExcel()" disabled title="Excel 내보내기">
+          <i class="bi bi-file-earmark-excel"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 오류 표시 -->
+  <div id="stat-error" class="alert alert-danger mx-3 mt-2 py-2 small"></div>
+
+  <!-- KPI -->
+  <div class="kpi-grid">
+    <div class="kpi-card c1">
+      <div class="kpi-label">총 장애 건수</div>
+      <div class="kpi-value" id="kv-inc">-</div>
+      <div class="kpi-unit">건</div>
+    </div>
+    <div class="kpi-card c2">
+      <div class="kpi-label">처리 완료율</div>
+      <div class="kpi-value" id="kv-rate">-</div>
+      <div class="kpi-unit">%</div>
+    </div>
+    <div class="kpi-card c3">
+      <div class="kpi-label">SLA 평균점수</div>
+      <div class="kpi-value" id="kv-sla">-</div>
+      <div class="kpi-unit">점</div>
+    </div>
+    <div class="kpi-card c4">
+      <div class="kpi-label">평균 만족도</div>
+      <div class="kpi-value" id="kv-sat">-</div>
+      <div class="kpi-unit">/ 5점</div>
+    </div>
+    <div class="kpi-card c5">
+      <div class="kpi-label">장애 발생 학교</div>
+      <div class="kpi-value" id="kv-schools">-</div>
+      <div class="kpi-unit">개교</div>
+    </div>
+    <div class="kpi-card c6">
+      <div class="kpi-label">정상 출근율</div>
+      <div class="kpi-value" id="kv-att">-</div>
+      <div class="kpi-unit">%</div>
+    </div>
+  </div>
+
+  <!-- 탭 메뉴 -->
+  <div class="stat-tabs mt-2">
+    <div class="stab active"  data-tab="t-inc"   onclick="switchTab(this)"><i class="bi bi-exclamation-triangle me-1"></i>장애 현황</div>
+    <div class="stab"         data-tab="t-fault"  onclick="switchTab(this)"><i class="bi bi-diagram-3 me-1"></i>장애 유형 분석</div>
+    <div class="stab"         data-tab="t-sla"   onclick="switchTab(this)"><i class="bi bi-shield-check me-1"></i>SLA 분석</div>
+    <div class="stab"         data-tab="t-insp"  onclick="switchTab(this)"><i class="bi bi-clipboard2-check me-1"></i>점검 진척</div>
+    <div class="stab"         data-tab="t-ctr"   onclick="switchTab(this)"><i class="bi bi-building me-1"></i>지원청/학제별</div>
+    <div class="stab"         data-tab="t-wl"    onclick="switchTab(this)"><i class="bi bi-person-badge me-1"></i>인력 업무부하</div>
+    <div class="stab"         data-tab="t-hr"    onclick="switchTab(this)"><i class="bi bi-person-check me-1"></i>근태/만족도</div>
+    <div class="stab"         data-tab="t-rpt"   onclick="switchTab(this)"><i class="bi bi-file-earmark-text me-1"></i>종합보고서</div>
+  </div>
+
+  <!-- 탭 장애 유형 분석 -->
+  <div class="tab-pane-stat" id="t-fault">
+
+    <!-- ① 대분류 요약 차트 -->
+    <div class="sec-title mb-2">장애 대분류별 현황</div>
+    <div class="chart-row-2 mb-3">
+      <div class="chart-box">
+        <h6>대분류별 건수 (도넛)</h6>
+        <div style="max-width:300px;margin:0 auto;"><canvas id="ch-cat-donut" height="220"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <h6>대분류별 건수 및 완료율</h6>
+        <canvas id="ch-cat-bar" height="200"></canvas>
+      </div>
+    </div>
+
+    <!-- ② 대분류 × 교육청 피벗 -->
+    <div class="sec-title mb-2">
+      장애 대분류 × 교육청 피벗 분석표
+      <span class="ms-2 text-muted fw-normal" style="font-size:.7rem;">셀: 건수 / 대분류 내 교육청 비율</span>
+    </div>
+    <div class="chart-box mb-3">
+      <div class="pivot-wrap">
+        <table class="pivot-table table table-sm table-bordered table-hover mb-0" id="fault-pivot-table">
+          <thead><tr><th class="row-lbl">구분</th><th colspan="99">조회 중...</th></tr></thead>
+          <tbody><tr><td colspan="14" class="text-center text-muted py-3">데이터를 조회하세요</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ③ 대분류별 소분류 상세 -->
+    <div class="sec-title mb-2">장애 유형별 소분류 상세 분석</div>
+    <div id="fault-detail-wrap"></div>
+
+  </div>
+
+  <!-- 탭 1: 장애 현황 -->
+  <div class="tab-pane-stat active" id="t-inc">
+    <div class="sec-title mb-2">기간별 장애 접수 추이</div>
+    <div class="chart-box mb-3">
+      <canvas id="ch-trend" height="90"></canvas>
+    </div>
+    <div class="chart-row-2 mb-3">
+      <div class="chart-box">
+        <h6>장애 유형별</h6>
+        <div style="max-width:300px;margin:0 auto;"><canvas id="ch-type" height="220"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <h6>긴급도별</h6>
+        <div style="max-width:300px;margin:0 auto;"><canvas id="ch-prio" height="220"></canvas></div>
+      </div>
+    </div>
+    <div class="sec-title mb-2">장애 다발 학교 TOP 10</div>
+    <div class="chart-box mb-2">
+      <canvas id="ch-top" height="100"></canvas>
+    </div>
+    <div class="hbox info" id="hb-inc" style="display:none;">
+      <strong><i class="bi bi-lightbulb me-1"></i>장애 현황 분석</strong>
+      <ul id="hb-inc-list"></ul>
+    </div>
+  </div>
+
+  <!-- 탭 2: SLA 분석 -->
+  <div class="tab-pane-stat" id="t-sla">
+    <div class="sec-title mb-2">월별 SLA 점수 추이</div>
+    <div class="chart-box mb-3">
+      <canvas id="ch-sla-trend" height="90"></canvas>
+    </div>
+    <div class="sec-title mb-2">월별 SLA 상세 현황</div>
+    <div class="table-responsive mb-2">
+      <table class="table table-sm hm-table mb-0">
+        <thead>
+          <tr>
+            <th>월</th><th>종합점수</th><th>등급</th>
+            <th>가동률(%)</th><th>장애건수</th><th>평균처리(분)</th><th>만족도(%)</th>
+          </tr>
+        </thead>
+        <tbody id="sla-tbody"></tbody>
+      </table>
+    </div>
+    <div class="hbox success" id="hb-sla" style="display:none;">
+      <strong><i class="bi bi-shield-check me-1"></i>SLA 달성 현황</strong>
+      <ul id="hb-sla-list"></ul>
+    </div>
+  </div>
+
+  <!-- 탭 3: 점검 진척 -->
+  <div class="tab-pane-stat" id="t-insp">
+
+    <!-- ① 점검 종합 요약 카드 -->
+    <div id="insp-summary-cards" class="mb-3" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;"></div>
+
+    <!-- ② 유형별 요약 차트 -->
+    <div class="sec-title mb-2">점검 유형별 현황</div>
+    <div class="chart-row-2 mb-3">
+      <div class="chart-box">
+        <h6>유형별 진척률 (%)</h6>
+        <canvas id="ch-insp-rate" height="200"></canvas>
+      </div>
+      <div class="chart-box">
+        <h6>유형별 대상 / 완료 학교수</h6>
+        <canvas id="ch-insp-cnt" height="200"></canvas>
+      </div>
+    </div>
+
+    <!-- ③ 계획별 지원청 진척 피벗 -->
+    <div class="sec-title mb-2">계획별 지원청별 진척 현황
+      <span class="ms-2 text-muted fw-normal" style="font-size:.7rem;">계획 탭 선택 → 각 지원청의 완료/대상/진척률 표시</span>
+    </div>
+    <div class="chart-box mb-3">
+      <!-- 계획 탭 버튼 -->
+      <div id="insp-plan-tabs" class="d-flex gap-1 flex-wrap mb-2"></div>
+      <!-- 피벗 테이블 -->
+      <div class="pivot-wrap">
+        <table class="pivot-table table table-sm table-bordered mb-0" id="insp-pivot-table">
+          <thead>
+            <tr style="background:#212529;color:#fff;">
+              <th class="row-lbl" style="width:20%;">교육청</th>
+              <th class="text-center" style="width:13%;">대상 학교</th>
+              <th class="text-center" style="width:13%;">완료</th>
+              <th class="text-center" style="width:13%;">예정</th>
+              <th class="text-center" style="min-width:140px;">진척률</th>
+              <th class="text-center" style="width:12%;">인당 학교</th>
+            </tr>
+          </thead>
+          <tbody id="insp-pivot-tbody">
+            <tr><td colspan="6" class="text-center py-3 text-muted">계획을 선택하세요</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ④ 지원청별 자원 및 진척 종합 분석 -->
+    <div class="sec-title mb-2">지원청별 인원 · 학교수 대비 종합 분석
+      <span class="ms-2 text-muted fw-normal" style="font-size:.7rem;">인당 담당 학교수 / 진척률 비교 — 과부하/부진 자동 판별</span>
+    </div>
+    <div class="chart-row-2 mb-3">
+      <div class="chart-box">
+        <h6>인당 담당 학교수 <small class="text-muted">(학교수 ÷ 인력수, 빨강=30↑ 주황=25↑)</small></h6>
+        <canvas id="ch-insp-load" height="200"></canvas>
+      </div>
+      <div class="chart-box">
+        <h6>지원청별 학교수 vs 인력수</h6>
+        <canvas id="ch-insp-res" height="200"></canvas>
+      </div>
+    </div>
+    <div class="table-responsive mb-3">
+      <table class="pivot-table table table-sm table-bordered table-hover mb-0" id="insp-resource-table">
+        <thead>
+          <tr style="background:#212529;color:#fff;">
+            <th class="row-lbl">교육청</th>
+            <th class="text-center">인력(명)</th>
+            <th class="text-center">학교수</th>
+            <th class="text-center">인당 학교수</th>
+            <th class="text-center" id="insp-res-plan-header">진척률(%)</th>
+            <th class="text-center">완료</th>
+            <th class="text-center">미완료</th>
+            <th class="text-center">분석판정</th>
+          </tr>
+        </thead>
+        <tbody id="insp-resource-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- ⑤ 문제점 분석 하이라이트 -->
+    <div id="hb-insp-problem" class="hbox warning" style="display:none;">
+      <strong><i class="bi bi-exclamation-triangle me-1"></i>진척 부진 교육청 분석</strong>
+      <ul id="hb-insp-problem-list"></ul>
+    </div>
+    <div id="hb-insp-ok" class="hbox success mt-2" style="display:none;">
+      <strong><i class="bi bi-check-circle me-1"></i>우수 진척 교육청</strong>
+      <ul id="hb-insp-ok-list"></ul>
+    </div>
+
+    <!-- ⑥ 계획별 상세 테이블 -->
+    <div class="sec-title mb-2 mt-1">점검 계획별 상세 현황</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>계획명</th><th>유형</th><th>기간</th>
+            <th class="text-end">대상</th><th class="text-end">완료</th>
+            <th style="min-width:140px;">진척률</th><th>상태</th>
+          </tr>
+        </thead>
+        <tbody id="insp-tbody"></tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- 탭 4: 지원청/학제별 -->
+  <div class="tab-pane-stat" id="t-ctr">
+
+    <!-- ① 피벗 분석표 -->
+    <div class="sec-title mb-2">
+      지원청 × 학제별 장애 피벗 분석표
+      <span class="ms-2 text-muted fw-normal" style="font-size:.7rem;">
+        셀 표시: 건수 / 행% (지원청 내 비율) / 열% (학제 내 비율)
+      </span>
+    </div>
+    <div class="chart-box mb-3">
+      <div class="mb-2" style="font-size:.71rem;color:#6b7280;">
+        셀: <strong style="color:#212529;">건수</strong> &nbsp;/&nbsp;
+        <span style="color:#166534;">행%</span> (해당 학제 내 교육청 비율) &nbsp;/&nbsp;
+        <span style="color:#1d4ed8;">열%</span> (해당 교육청 내 학제 비율)
+      </div>
+      <div class="pivot-wrap">
+        <table class="pivot-table table table-sm table-bordered table-hover mb-0" id="pivot-table">
+          <thead><tr><th class="row-lbl">구분</th><th colspan="99">조회 중...</th></tr></thead>
+          <tbody><tr><td colspan="14" class="text-center text-muted py-3">데이터를 조회하세요</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ② 지원청별 차트 & 테이블 -->
+    <div class="sec-title mb-2">지원청별 장애 현황</div>
+    <div class="chart-row-2 mb-3">
+      <div class="chart-box">
+        <h6>지원청별 장애 건수</h6>
+        <canvas id="ch-ctr-cnt" height="200"></canvas>
+      </div>
+      <div class="chart-box">
+        <h6>지원청별 처리완료율 (%)</h6>
+        <canvas id="ch-ctr-rate" height="200"></canvas>
+      </div>
+    </div>
+    <div class="table-responsive mb-3">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>지원청</th>
+            <th class="text-end">장애</th>
+            <th class="text-end">완료</th>
+            <th class="text-end">완료율</th>
+          </tr>
+        </thead>
+        <tbody id="ctr-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- ③ 학제별 분포 -->
+    <div class="sec-title mb-2">학제별 장애 분포</div>
+    <div class="chart-row-2">
+      <div class="chart-box">
+        <h6>학제별 도넛</h6>
+        <div style="max-width:280px;margin:0 auto;"><canvas id="ch-schtype" height="220"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <table class="table table-sm mb-0">
+          <thead class="table-light"><tr><th>학제</th><th class="text-end">건수</th><th class="text-end">비율</th></tr></thead>
+          <tbody id="schtype-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 탭 인력 업무부하 -->
+  <div class="tab-pane-stat" id="t-wl">
+
+    <!-- 요약 카드 -->
+    <div id="wl-summary-cards" class="mb-3" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;"></div>
+
+    <!-- ① 지원청별 업무 누적 스택 바 -->
+    <div class="sec-title mb-2">지원청별 업무 부하 현황
+      <span class="ms-2 text-muted fw-normal" style="font-size:.7rem;">장애처리 + 점검 + 보고서 합산</span>
+    </div>
+    <div class="chart-box mb-3">
+      <canvas id="ch-wl-center" height="80"></canvas>
+    </div>
+
+    <!-- ② 인력별 총 업무량 수평 바 -->
+    <div class="sec-title mb-2">인력별 총 업무량 순위
+      <span class="ms-2 text-muted fw-normal" style="font-size:.7rem;">빨강=과부하(평균×1.5↑) 주황=주의(평균×1.2↑) 녹색=정상</span>
+    </div>
+    <div class="chart-box mb-3">
+      <canvas id="ch-wl-worker" height="160"></canvas>
+    </div>
+
+    <!-- ③ 지원청 그룹 × 인력별 상세표 -->
+    <div class="sec-title mb-2">지원청 · 인력별 업무 상세 현황</div>
+    <div class="table-responsive mb-3">
+      <table class="table table-sm table-bordered table-hover mb-0" style="font-size:.76rem;">
+        <thead style="background:#212529;color:#fff;">
+          <tr>
+            <th style="width:80px;">교육청</th>
+            <th style="width:75px;">이름</th>
+            <th class="text-center" style="width:60px;">장애처리</th>
+            <th class="text-center" style="width:60px;">정기점검</th>
+            <th class="text-center" style="width:60px;">특별점검</th>
+            <th class="text-center" style="width:60px;">기타점검</th>
+            <th class="text-center" style="width:60px;">네트워크포설</th>
+            <th class="text-center" style="width:60px;">보고서</th>
+            <th class="text-center" style="width:55px;">합계</th>
+            <th style="min-width:120px;">업무부하도</th>
+            <th class="text-center" style="width:55px;">판정</th>
+          </tr>
+        </thead>
+        <tbody id="wl-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- ④ 과부하 분석 하이라이트 -->
+    <div id="hb-wl-high" class="hbox warning" style="display:none;">
+      <strong><i class="bi bi-exclamation-triangle me-1"></i>과부하 인력 분석</strong>
+      <ul id="hb-wl-high-list"></ul>
+    </div>
+    <div id="hb-wl-low" class="hbox info mt-2" style="display:none;">
+      <strong><i class="bi bi-info-circle me-1"></i>업무 미배정 인력</strong>
+      <ul id="hb-wl-low-list"></ul>
+    </div>
+
+  </div>
+
+  <!-- 탭 5: 근태/만족도 -->
+  <div class="tab-pane-stat" id="t-hr">
+    <div class="sec-title mb-2">인력 근태 현황</div>
+    <div class="chart-row-2 mb-3">
+      <div class="chart-box">
+        <h6>근태 상태 분포</h6>
+        <div style="max-width:260px;margin:0 auto;"><canvas id="ch-att" height="220"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <h6>근태 요약</h6>
+        <div id="att-detail"></div>
+      </div>
+    </div>
+    <div class="sec-title mb-2">고객 만족도</div>
+    <div class="chart-row-2">
+      <div class="chart-box">
+        <h6>만족도 분포</h6>
+        <canvas id="ch-sat" height="160"></canvas>
+      </div>
+      <div class="chart-box">
+        <h6>만족도 요약</h6>
+        <div id="sat-detail"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 탭 6: 종합보고서 -->
+  <div class="tab-pane-stat" id="t-rpt">
+    <div class="mb-3">
+      <div class="rpt-head" style="background:#2563eb;"><i class="bi bi-journal-richtext me-2"></i>총평</div>
+      <div class="rpt-body" id="rpt-summary">데이터를 조회하면 자동으로 작성됩니다.</div>
+    </div>
+    <div class="mb-3">
+      <div class="rpt-head" style="background:#16a34a;"><i class="bi bi-graph-up me-2"></i>주요 성과 지표</div>
+      <div class="rpt-body" id="rpt-kpi">데이터를 조회하면 자동으로 작성됩니다.</div>
+    </div>
+    <div class="mb-3">
+      <div class="rpt-head" style="background:#d97706;"><i class="bi bi-lightbulb me-2"></i>개선 권고사항</div>
+      <div class="rpt-body" id="rpt-rec">데이터를 조회하면 자동으로 작성됩니다.</div>
+    </div>
+    <div class="mb-3">
+      <div class="rpt-head" style="background:#7c3aed;"><i class="bi bi-list-check me-2"></i>분야별 상세 분석</div>
+      <div class="rpt-body" id="rpt-detail">데이터를 조회하면 자동으로 작성됩니다.</div>
+    </div>
+  </div>
+
+</div><!-- /report-wrap -->
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script>
+'use strict';
+
+// datalabels 플러그인 등록 — 기본 off, 차트별로 enable
+Chart.register(ChartDataLabels);
+Chart.defaults.plugins.datalabels.display = false;
+
+// ── 차트 인스턴스 ────────────────────────────────────
+const _charts = {};
+function drawChart(id, cfg) {
+  if (_charts[id]) { _charts[id].destroy(); }
+  var el = document.getElementById(id);
+  if (!el) return;
+  _charts[id] = new Chart(el.getContext('2d'), cfg);
+}
+
+// ── 탭 전환 ─────────────────────────────────────────
+function switchTab(el) {
+  var tabId = el.getAttribute('data-tab');
+  document.querySelectorAll('.tab-pane-stat').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.stab').forEach(function(t){ t.classList.remove('active'); });
+  var pane = document.getElementById(tabId);
+  if (pane) pane.classList.add('active');
+  el.classList.add('active');
+}
+
+// ── 연도 옵션 ────────────────────────────────────────
+(function(){
+  var sel = document.getElementById('stat-year');
+  var y   = new Date().getFullYear();
+  for (var i = y; i >= y - 3; i--) {
+    var opt = document.createElement('option');
+    opt.value = i; opt.textContent = i + '년';
+    if (i === y) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  document.getElementById('stat-month').value = String(new Date().getMonth() + 1);
+})();
+
+// ── 유틸 ────────────────────────────────────────────
+var PAL = ['#2563eb','#16a34a','#d97706','#e11d48','#7c3aed',
+           '#0d9488','#0891b2','#9333ea','#c2410c','#4f46e5'];
+function N(n){ return (n || 0).toLocaleString(); }
+function pct(a, b){ return b > 0 ? Math.round(a / b * 100) : 0; }
+
+function showErr(msg) {
+  var el = document.getElementById('stat-error');
+  el.textContent = '오류: ' + msg;
+  el.style.display = 'block';
+}
+function hideErr() {
+  document.getElementById('stat-error').style.display = 'none';
+}
+
+// ── 메인 조회 ────────────────────────────────────────
+async function loadStats() {
+  hideErr();
+  var year  = document.getElementById('stat-year').value;
+  var month = document.getElementById('stat-month').value;
+  var url   = API_BASE + '/statistics/comprehensive/?year=' + year + (month ? '&month=' + month : '');
+
+  var data;
+  try {
+    var res = await fetch(url, { headers: { 'X-CSRFToken': CSRF_TOKEN } });
+    if (!res.ok) { showErr(res.status + ' ' + res.statusText); return; }
+    data = await res.json();
+  } catch(e) {
+    showErr('네트워크 오류 — ' + e.message);
+    return;
+  }
+
+  try { renderKPI(data); } catch(e) { console.error('KPI', e); }
+  try { renderTrend(data); } catch(e) { console.error('Trend', e); }
+  try { renderTypes(data); } catch(e) { console.error('Types', e); }
+  try { renderTopSchools(data); } catch(e) { console.error('Top', e); }
+  try { renderIncComment(data); } catch(e) { console.error('IncCmt', e); }
+  try { renderSLA(data); } catch(e) { console.error('SLA', e); }
+  try { renderInspection(data); } catch(e) { console.error('Insp', e); }
+  try { renderFaultAnalysis(data); } catch(e) { console.error('Fault', e); }
+  try { renderPivot(data);  } catch(e) { console.error('Pivot', e); }
+  try { renderCenter(data); } catch(e) { console.error('Center', e); }
+  try { renderWorkerWorkload(data); } catch(e) { console.error('WL', e); }
+  try { renderAttendance(data); } catch(e) { console.error('Att', e); }
+  try { renderSatisfaction(data); } catch(e) { console.error('Sat', e); }
+  try { renderReport(data); } catch(e) { console.error('Rpt', e); }
+
+  var lbl = (data.period && data.period.label) ? data.period.label : '';
+  var from = (data.period && data.period.date_from) ? data.period.date_from : '';
+  var to   = (data.period && data.period.date_to)   ? data.period.date_to   : '';
+  document.getElementById('cover-label').textContent =
+    '분석기간: ' + lbl + '  (' + from + ' ~ ' + to + ')';
+  var excelBtn = document.getElementById('btn-stat-excel');
+  if (excelBtn) excelBtn.disabled = false;
+}
+
+function exportStatExcel() {
+  var year  = document.getElementById('stat-year').value;
+  var month = document.getElementById('stat-month').value;
+  var params = 'year=' + year + (month ? '&month=' + month : '');
+  window.location.href = API_BASE + '/statistics/comprehensive/excel/?' + params;
+}
+
+// ── KPI ─────────────────────────────────────────────
+function renderKPI(data) {
+  var k = data.kpi || {};
+  document.getElementById('kv-inc').textContent    = N(k.total_incidents);
+  document.getElementById('kv-rate').textContent   = k.completed_rate != null ? k.completed_rate : '-';
+  document.getElementById('kv-sla').textContent    = k.avg_sla_score  != null ? k.avg_sla_score  : '-';
+  document.getElementById('kv-sat').textContent    = k.avg_satisfaction != null ? k.avg_satisfaction : '-';
+  document.getElementById('kv-schools').textContent = N(k.schools_served);
+  var att = data.attendance || {};
+  document.getElementById('kv-att').textContent =
+    att.total > 0 ? pct(att.normal, att.total) : '-';
+}
+
+// ── 추이 ─────────────────────────────────────────────
+function renderTrend(data) {
+  var t = data.trend || {};
+  drawChart('ch-trend', {
+    type: 'line',
+    data: {
+      labels: t.labels || [],
+      datasets: [
+        { label:'접수', data: t.total || [],
+          borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,.1)',
+          tension:.3, fill:true, pointRadius:4,
+          datalabels:{ display:true, align:'top', anchor:'end', color:'#2563eb',
+            font:{size:9,weight:'bold'}, formatter:function(v){ return v>0?v:''; } } },
+        { label:'완료', data: t.done  || [],
+          borderColor:'#16a34a', backgroundColor:'rgba(22,163,74,.1)',
+          tension:.3, fill:true, pointRadius:4,
+          datalabels:{ display:true, align:'bottom', anchor:'start', color:'#16a34a',
+            font:{size:9,weight:'bold'}, formatter:function(v){ return v>0?v:''; } } }
+      ]
+    },
+    options: {
+      responsive:true,
+      plugins:{
+        legend:{ position:'top', labels:{ boxWidth:12, font:{size:11} } },
+        datalabels:{ display:false }
+      },
+      scales:{ y:{ beginAtZero:true } }
+    }
+  });
+}
+
+// ── 도넛 공통 datalabels 옵션 ────────────────────────
+function donutDatalabels(total) {
+  return {
+    display: function(ctx) { return ctx.dataset.data[ctx.dataIndex] > 0; },
+    color: '#fff',
+    font: { size: 10, weight: 'bold' },
+    textStrokeColor: 'rgba(0,0,0,.3)',
+    textStrokeWidth: 2,
+    formatter: function(value) {
+      var pct = total > 0 ? Math.round(value / total * 100) : 0;
+      return value + '건\n(' + pct + '%)';
+    }
+  };
+}
+
+// ── 유형/긴급도 도넛 ────────────────────────────────
+function renderTypes(data) {
+  var rows = (data.by_type || []).slice(0, 8);
+  var total = rows.reduce(function(s,r){ return s+r.cnt; }, 0);
+  drawChart('ch-type', {
+    type:'doughnut',
+    data:{
+      labels: rows.map(function(r){ return r.label; }),
+      datasets:[{ data: rows.map(function(r){ return r.cnt; }),
+                  backgroundColor:PAL, borderWidth:2, borderColor:'#fff', hoverOffset:4 }]
+    },
+    options:{
+      responsive:true, cutout:'55%',
+      plugins:{
+        legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:10}, padding:5 } },
+        tooltip:{ callbacks:{ label: function(c){ return ' ' + c.label + ': ' + c.raw + '건'; } } },
+        datalabels: donutDatalabels(total)
+      }
+    }
+  });
+
+  var prows = data.by_priority || [];
+  var ptotal = prows.reduce(function(s,r){ return s+r.cnt; }, 0);
+  var PCOL  = { '긴급':'#e11d48','높음':'#f97316','보통':'#2563eb','낮음':'#16a34a' };
+  drawChart('ch-prio', {
+    type:'doughnut',
+    data:{
+      labels: prows.map(function(r){ return r.label; }),
+      datasets:[{
+        data: prows.map(function(r){ return r.cnt; }),
+        backgroundColor: prows.map(function(r){ return PCOL[r.label] || '#6b7280'; }),
+        borderWidth:2, borderColor:'#fff', hoverOffset:4
+      }]
+    },
+    options:{
+      responsive:true, cutout:'55%',
+      plugins:{
+        legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:10}, padding:5 } },
+        tooltip:{ callbacks:{ label: function(c){ return ' ' + c.label + ': ' + c.raw + '건'; } } },
+        datalabels: donutDatalabels(ptotal)
+      }
+    }
+  });
+}
+
+// ── TOP 10 학교 ──────────────────────────────────────
+function renderTopSchools(data) {
+  var rows = (data.top_schools || []).slice(0, 10).reverse();
+  drawChart('ch-top', {
+    type:'bar',
+    data:{
+      labels: rows.map(function(r){ return r.school; }),
+      datasets:[{ label:'장애건수', data: rows.map(function(r){ return r.cnt; }),
+                  backgroundColor:'#3b82f6', borderRadius:3 }]
+    },
+    options:{
+      indexAxis:'y', responsive:true,
+      plugins:{
+        legend:{display:false},
+        datalabels:{
+          display:true, anchor:'end', align:'right',
+          color:'#374151', font:{size:10,weight:'bold'},
+          formatter:function(v){ return v + '건'; }
+        }
+      },
+      scales:{ x:{ beginAtZero:true } },
+      layout:{ padding:{ right:30 } }
+    }
+  });
+}
+
+// ── 장애 코멘트 ──────────────────────────────────────
+function renderIncComment(data) {
+  var k    = data.kpi || {};
+  var list = [];
+  list.push('조회 기간 중 총 <strong>' + N(k.total_incidents) + '건</strong>의 장애가 접수되었으며, 처리 완료율은 <strong>' + k.completed_rate + '%</strong>입니다.');
+  var top = (data.by_type || [])[0];
+  if (top) {
+    var share = k.total_incidents ? Math.round(top.cnt / k.total_incidents * 100) : 0;
+    list.push('가장 빈번한 장애 유형은 <strong>' + top.label + '</strong>(' + top.cnt + '건, ' + share + '%)입니다.');
+  }
+  var ts = (data.top_schools || [])[0];
+  if (ts) list.push('장애 다발 학교는 <strong>' + ts.school + '</strong>(' + ts.cnt + '건)으로, 집중 점검이 필요합니다.');
+
+  var ul = document.getElementById('hb-inc-list');
+  ul.innerHTML = list.map(function(t){ return '<li>' + t + '</li>'; }).join('');
+  document.getElementById('hb-inc').style.display = 'block';
+}
+
+// ── SLA ─────────────────────────────────────────────
+function renderSLA(data) {
+  var months = data.sla_months || [];
+
+  drawChart('ch-sla-trend', {
+    type:'line',
+    data:{
+      labels: months.map(function(s){ return s.month + '월'; }),
+      datasets:[
+        { label:'종합점수', data: months.map(function(s){ return s.total_score; }),
+          borderColor:'#7c3aed', backgroundColor:'rgba(124,58,237,.1)',
+          tension:.3, fill:true, yAxisID:'y1' },
+        { label:'가동률(%)', data: months.map(function(s){ return s.uptime_pct; }),
+          borderColor:'#16a34a', tension:.3, fill:false, yAxisID:'y2' }
+      ]
+    },
+    options:{
+      responsive:true,
+      plugins:{ legend:{ position:'top', labels:{ boxWidth:12, font:{size:11} } } },
+      scales:{
+        y1:{ type:'linear', position:'left',  beginAtZero:false, min:50,
+             title:{ display:true, text:'SLA 점수' } },
+        y2:{ type:'linear', position:'right', min:90, max:100,
+             grid:{ drawOnChartArea:false }, title:{ display:true, text:'가동률(%)' } }
+      }
+    }
+  });
+
+  var tbody = document.getElementById('sla-tbody');
+  if (!months.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-3 text-muted">SLA 데이터 없음</td></tr>';
+    return;
+  }
+  var GCLS = { A:'h0', B:'h1', C:'h2', D:'h3', F:'h4' };
+  var rows = months.map(function(s) {
+    var sc = s.total_score;
+    var gcls = sc >= 90 ? 'h0' : sc >= 80 ? 'h1' : sc >= 70 ? 'h2' : 'h4';
+    var ugcls = (s.uptime_pct || 0) >= 99 ? 'h0' : (s.uptime_pct || 0) >= 98 ? 'h1' : 'h3';
+    return '<tr>'
+      + '<td>' + s.month + '월</td>'
+      + '<td class="' + gcls + '">' + (sc != null ? sc : '-') + '</td>'
+      + '<td class="' + (GCLS[s.grade] || '') + '">' + (s.grade || '-') + '</td>'
+      + '<td class="' + ugcls + '">' + (s.uptime_pct != null ? s.uptime_pct : '-') + '</td>'
+      + '<td>' + (s.fault_count != null ? s.fault_count : '-') + '</td>'
+      + '<td>' + (s.avg_fault_min != null ? Math.round(s.avg_fault_min) : '-') + '</td>'
+      + '<td>' + (s.satisfaction_pct != null ? s.satisfaction_pct : '-') + '</td>'
+      + '</tr>';
+  });
+  tbody.innerHTML = rows.join('');
+
+  var list = document.getElementById('hb-sla-list');
+  var items = [];
+  var kpi = data.kpi || {};
+  if (kpi.avg_sla_score) {
+    var grade = kpi.avg_sla_score >= 90 ? '우수(A)' : kpi.avg_sla_score >= 80 ? '양호(B)' : '개선 필요(C 이하)';
+    items.push('평균 SLA 점수 <strong>' + kpi.avg_sla_score + '점</strong> — ' + grade + ' 수준을 달성하였습니다.');
+  }
+  if (items.length) {
+    list.innerHTML = items.map(function(t){ return '<li>' + t + '</li>'; }).join('');
+    document.getElementById('hb-sla').style.display = 'block';
+  }
+}
+
+// ── 점검 진척 ────────────────────────────────────────
+var _inspPlans    = [];   // 전역 저장 (탭 전환 시 재사용)
+var _inspCenters  = [];
+var _inspResource = [];
+
+function inspRateColor(r) {
+  return r >= 90 ? '#16a34a' : r >= 70 ? '#d97706' : r > 0 ? '#e11d48' : '#d1d5db';
+}
+
+function renderInspection(data) {
+  var insp = data.inspection || {};
+  var plans   = insp.plans        || [];
+  var byType  = insp.by_type      || [];
+  var centers = insp.centers      || [];
+  var res     = insp.ctr_resource || [];
+  _inspPlans    = plans;
+  _inspCenters  = centers;
+  _inspResource = res;
+
+  // ① 요약 카드
+  var totalSchools = byType.reduce(function(s,r){ return s+r.total; }, 0);
+  var doneSchools  = byType.reduce(function(s,r){ return s+r.done;  }, 0);
+  var overallRate  = totalSchools > 0 ? Math.round(doneSchools/totalSchools*100) : 0;
+  var totalWorkers = res.reduce(function(s,r){ return s+r.workers; }, 0);
+  var rateColor = inspRateColor(overallRate);
+  var cards = document.getElementById('insp-summary-cards');
+  if (cards) {
+    cards.innerHTML =
+      '<div class="kpi-card" style="border-top-color:#2563eb;">'
+      + '<div class="kpi-label">점검 계획</div>'
+      + '<div class="kpi-value" style="color:#2563eb;">' + plans.length + '</div>'
+      + '<div class="kpi-unit">건</div></div>'
+      + '<div class="kpi-card" style="border-top-color:#7c3aed;">'
+      + '<div class="kpi-label">총 대상 학교</div>'
+      + '<div class="kpi-value" style="color:#7c3aed;">' + N(totalSchools) + '</div>'
+      + '<div class="kpi-unit">개교</div></div>'
+      + '<div class="kpi-card" style="border-top-color:' + rateColor + ';">'
+      + '<div class="kpi-label">종합 진척률</div>'
+      + '<div class="kpi-value" style="color:' + rateColor + ';">' + overallRate + '</div>'
+      + '<div class="kpi-unit">% (' + N(doneSchools) + '/' + N(totalSchools) + ')</div></div>'
+      + '<div class="kpi-card" style="border-top-color:#d97706;">'
+      + '<div class="kpi-label">투입 인력</div>'
+      + '<div class="kpi-value" style="color:#d97706;">' + totalWorkers + '</div>'
+      + '<div class="kpi-unit">명 (11개 지원청)</div></div>';
+  }
+
+  // ① 유형별 차트
+  drawChart('ch-insp-rate', {
+    type:'bar',
+    data:{
+      labels: byType.map(function(r){ return r.type_label; }),
+      datasets:[{ label:'진척률(%)',
+        data: byType.map(function(r){ return r.rate; }),
+        backgroundColor: byType.map(function(r){ return inspRateColor(r.rate); }),
+        borderRadius:4 }]
+    },
+    options:{ responsive:true,
+      plugins:{
+        legend:{display:false},
+        datalabels:{
+          display:true, anchor:'end', align:'end',
+          color:'#374151', font:{size:10,weight:'bold'},
+          formatter:function(v){ return v + '%'; }
+        }
+      },
+      scales:{ y:{ beginAtZero:true, max:100 } },
+      layout:{ padding:{ top:15 } }
+    }
+  });
+
+  drawChart('ch-insp-cnt', {
+    type:'bar',
+    data:{
+      labels: byType.map(function(r){ return r.type_label; }),
+      datasets:[
+        { label:'대상', data: byType.map(function(r){ return r.total; }),
+          backgroundColor:'#93c5fd', borderRadius:4 },
+        { label:'완료', data: byType.map(function(r){ return r.done; }),
+          backgroundColor:'#2563eb', borderRadius:4 }
+      ]
+    },
+    options:{ responsive:true,
+      plugins:{
+        legend:{ position:'top', labels:{ boxWidth:10, font:{size:10} } },
+        datalabels:{
+          display:true, anchor:'end', align:'end',
+          color:'#374151', font:{size:10,weight:'bold'},
+          formatter:function(v){ return v > 0 ? N(v) : ''; }
+        }
+      },
+      scales:{ y:{ beginAtZero:true } },
+      layout:{ padding:{ top:15 } }
+    }
+  });
+
+  // ② 계획 탭 버튼
+  var tabDiv = document.getElementById('insp-plan-tabs');
+  if (tabDiv) {
+    if (!plans.length) {
+      tabDiv.innerHTML = '<span class="text-muted small">점검 계획 없음</span>';
+    } else {
+      tabDiv.innerHTML = plans.map(function(p, i) {
+        var bc = inspRateColor(p.rate);
+        return '<button class="btn btn-sm' + (i===0?' btn-dark':' btn-outline-secondary') + '"'
+          + ' onclick="selectInspPlan(' + i + ',this)" style="font-size:.75rem;">'
+          + p.name
+          + ' <span class="badge ms-1" style="background:' + bc + ';">' + p.rate + '%</span>'
+          + '</button>';
+      }).join('');
+      selectInspPlan(0, tabDiv.querySelector('button'));
+    }
+  }
+
+  // ③ 인당 학교수 차트
+  drawChart('ch-insp-load', {
+    type:'bar',
+    data:{
+      labels: centers,
+      datasets:[{
+        label:'인당 학교수',
+        data: res.map(function(r){ return r.schools_per_worker; }),
+        backgroundColor: res.map(function(r){
+          var v = r.schools_per_worker || 0;
+          return v > 30 ? '#e11d48' : v > 25 ? '#d97706' : '#16a34a';
+        }),
+        borderRadius:4
+      }]
+    },
+    options:{ responsive:true,
+      plugins:{
+        legend:{display:false},
+        datalabels:{
+          display:true, anchor:'end', align:'end',
+          color:'#374151', font:{size:10,weight:'bold'},
+          formatter:function(v){ return v !== null ? v : '-'; }
+        }
+      },
+      scales:{ y:{ beginAtZero:true,
+                   title:{ display:true, text:'학교수/인' } } },
+      layout:{ padding:{ top:15 } }
+    }
+  });
+
+  drawChart('ch-insp-res', {
+    type:'bar',
+    data:{
+      labels: centers,
+      datasets:[
+        { label:'학교수', data: res.map(function(r){ return r.schools; }),
+          backgroundColor:'#93c5fd', borderRadius:3 },
+        { label:'인력(명)', data: res.map(function(r){ return r.workers; }),
+          backgroundColor:'#f97316', borderRadius:3 }
+      ]
+    },
+    options:{ responsive:true,
+      plugins:{
+        legend:{ position:'top', labels:{ boxWidth:10, font:{size:10} } },
+        datalabels:{
+          display:true, anchor:'end', align:'end',
+          color:'#374151', font:{size:9,weight:'bold'},
+          formatter:function(v){ return v > 0 ? v : ''; }
+        }
+      },
+      scales:{ y:{ beginAtZero:true } },
+      layout:{ padding:{ top:15 } }
+    }
+  });
+
+  // ④ 계획별 테이블
+  _renderInspTable(plans);
+
+  // 인원·학교수 대비 테이블은 계획 선택 후 렌더 (selectInspPlan 에서)
+}
+
+function selectInspPlan(idx, btnEl) {
+  // 탭 활성
+  document.querySelectorAll('#insp-plan-tabs button').forEach(function(b){
+    b.classList.remove('btn-dark'); b.classList.add('btn-outline-secondary');
+  });
+  if (btnEl) { btnEl.classList.remove('btn-outline-secondary'); btnEl.classList.add('btn-dark'); }
+
+  var plan = _inspPlans[idx];
+  if (!plan) return;
+
+  var cp = plan.center_progress || [];
+  var centers = _inspCenters;
+  var res     = _inspResource;
+  var tdCls   = 'text-center py-1 px-1';
+
+  var cpMap = {};
+  cp.forEach(function(r){ cpMap[r.center] = r; });
+
+  // 피벗 tbody
+  var tbody = '';
+  var sumTotal=0, sumDone=0, sumScheduled=0;
+  centers.forEach(function(cname) {
+    var r   = cpMap[cname] || { total:0, done:0, scheduled:0, rate:0, per_worker:null };
+    var bc  = inspRateColor(r.rate);
+    var pw  = r.per_worker !== null ? r.per_worker : '-';
+    sumTotal     += r.total;
+    sumDone      += r.done;
+    sumScheduled += r.scheduled;
+
+    var rateStr;
+    if (r.total > 0) {
+      rateStr = '<div class="d-flex align-items-center gap-1">'
+        + '<div class="prog-bar flex-grow-1"><div class="prog-bar-fill" style="width:' + r.rate + '%;background:' + bc + ';"></div></div>'
+        + '<span style="font-size:.73rem;min-width:42px;color:' + bc + ';font-weight:700;">' + r.rate + '%</span>'
+        + '</div>';
+    } else {
+      rateStr = '<span style="color:#9ca3af;font-size:.72rem;">대상없음</span>';
+    }
+
+    tbody += '<tr>'
+      + '<th class="row-lbl" style="' + (r.total===0 ? 'color:#9ca3af;' : '') + '">' + cname + '</th>'
+      + '<td class="' + tdCls + '" style="font-weight:600;">' + (r.total > 0 ? N(r.total) : '<span style="color:#9ca3af;">-</span>') + '</td>'
+      + '<td class="' + tdCls + '" style="color:' + (r.done>0?'#16a34a':'#9ca3af') + ';font-weight:700;">' + N(r.done) + '</td>'
+      + '<td class="' + tdCls + '" style="color:#d97706;">' + N(r.scheduled) + '</td>'
+      + '<td class="' + tdCls + '">' + rateStr + '</td>'
+      + '<td class="' + tdCls + '" style="font-size:.72rem;">' + pw + '</td>'
+      + '</tr>';
+  });
+
+  // 합계 행
+  var sumRate = sumTotal > 0 ? Math.round(sumDone/sumTotal*100) : 0;
+  var sumBc   = inspRateColor(sumRate);
+  tbody += '<tr class="sum-row"><th class="row-lbl">전체 합계</th>'
+    + '<td class="' + tdCls + '">' + N(sumTotal) + '</td>'
+    + '<td class="' + tdCls + ' fw-bold">' + N(sumDone) + '</td>'
+    + '<td class="' + tdCls + '">' + N(sumScheduled) + '</td>'
+    + '<td class="' + tdCls + '">'
+    + '<div class="d-flex align-items-center gap-1">'
+    + '<div class="prog-bar flex-grow-1" style="height:12px;"><div class="prog-bar-fill" style="width:' + sumRate + '%;background:' + sumBc + ';"></div></div>'
+    + '<span style="font-size:.75rem;min-width:42px;font-weight:700;">' + sumRate + '%</span>'
+    + '</div></td>'
+    + '<td class="' + tdCls + '">-</td></tr>';
+
+  var pivotTbody = document.getElementById('insp-pivot-tbody');
+  if (pivotTbody) pivotTbody.innerHTML = tbody;
+
+  // 인원·학교 대비 종합 테이블
+  document.getElementById('insp-res-plan-header').textContent = plan.name + ' 진척률(%)';
+  var resTbody = document.getElementById('insp-resource-tbody');
+  var avgLoad = (function(){
+    var t=0, c=0;
+    res.forEach(function(r){ if(r.schools_per_worker){ t+=r.schools_per_worker; c++; } });
+    return c ? (t/c).toFixed(1) : 0;
+  })();
+  var avgRate = sumTotal > 0 ? Math.round(sumDone/sumTotal*100) : 0;
+
+  resTbody.innerHTML = res.map(function(r) {
+    var cp2 = cpMap[r.center] || { total:0, done:0, rate:0 };
+    var load = r.schools_per_worker || 0;
+    var loadSty = load > 30 ? 'color:#e11d48;font-weight:700;' : load > 25 ? 'color:#d97706;font-weight:700;' : 'color:#16a34a;';
+    var rateSty = cp2.rate < avgRate && cp2.total > 0 ? 'color:#e11d48;font-weight:700;' : cp2.rate >= 90 ? 'color:#16a34a;font-weight:700;' : '';
+
+    // 분석 텍스트
+    var analysis = [];
+    if (load > avgLoad * 1.15) analysis.push('<span style="color:#e11d48;">과부하</span>');
+    if (cp2.rate < avgRate * 0.8 && cp2.total > 0) analysis.push('<span style="color:#e11d48;">진척부진</span>');
+    if (cp2.rate >= 90) analysis.push('<span style="color:#16a34a;">우수</span>');
+    if (load < avgLoad * 0.85) analysis.push('<span style="color:#2563eb;">여유</span>');
+
+    return '<tr>'
+      + '<th class="row-lbl">' + r.center + '</th>'
+      + '<td class="text-center">' + r.workers + '명</td>'
+      + '<td class="text-center">' + r.schools + '개교</td>'
+      + '<td class="text-center" style="' + loadSty + '">' + (load || '-') + '</td>'
+      + '<td class="text-center" style="' + rateSty + '">' + (cp2.total > 0 ? cp2.rate + '%' : '-') + '</td>'
+      + '<td class="text-center">' + N(cp2.done) + '</td>'
+      + '<td class="text-center">' + N(cp2.total - cp2.done) + '</td>'
+      + '<td class="text-center" style="font-size:.72rem;">' + (analysis.join(' ') || '<span style="color:#9ca3af;">정상</span>') + '</td>'
+      + '</tr>';
+  }).join('');
+
+  // 문제점 분석 하이라이트
+  var problems = [], goods = [];
+  res.forEach(function(r) {
+    var cp2 = cpMap[r.center] || { total:0, done:0, rate:0 };
+    var load = r.schools_per_worker || 0;
+    if (cp2.total > 0 && cp2.rate < avgRate * 0.8) {
+      problems.push('<strong>' + r.center + '</strong>: 진척률 ' + cp2.rate + '% (평균 ' + avgRate + '% 대비 부진)'
+        + (load > avgLoad * 1.1 ? ', 인당 학교수 ' + load + '개교로 업무 과부하 의심' : ''));
+    }
+    if (cp2.rate >= 90 && cp2.total > 0) {
+      goods.push('<strong>' + r.center + '</strong>: 진척률 ' + cp2.rate + '% (대상 ' + cp2.total + '개교 중 ' + cp2.done + '개교 완료)');
+    }
+  });
+
+  var pEl = document.getElementById('hb-insp-problem');
+  var oEl = document.getElementById('hb-insp-ok');
+  if (problems.length) {
+    document.getElementById('hb-insp-problem-list').innerHTML =
+      problems.map(function(t){ return '<li>' + t + '</li>'; }).join('');
+    pEl.style.display = 'block';
+  } else { pEl.style.display = 'none'; }
+
+  if (goods.length) {
+    document.getElementById('hb-insp-ok-list').innerHTML =
+      goods.map(function(t){ return '<li>' + t + '</li>'; }).join('');
+    oEl.style.display = 'block';
+  } else { oEl.style.display = 'none'; }
+}
+
+function _renderInspTable(plans) {
+  var tbody = document.getElementById('insp-tbody');
+  if (!tbody) return;
+  if (!plans.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-3 text-muted">점검 계획 없음</td></tr>';
+    return;
+  }
+  var ST_BADGE = { 'draft':'secondary', 'active':'primary', 'completed':'success' };
+  var ST_LABEL = { 'draft':'준비중', 'active':'진행중', 'completed':'완료' };
+  tbody.innerHTML = plans.map(function(p) {
+    var bc = inspRateColor(p.rate);
+    return '<tr>'
+      + '<td class="fw-semibold">' + p.name + '</td>'
+      + '<td><span class="badge bg-secondary">' + p.type_label + '</span></td>'
+      + '<td style="font-size:.72rem;">' + p.start_date + ' ~ ' + p.end_date + '</td>'
+      + '<td class="text-end">' + N(p.total) + '</td>'
+      + '<td class="text-end">' + N(p.done)  + '</td>'
+      + '<td><div class="d-flex align-items-center gap-1">'
+      +   '<div class="prog-bar flex-grow-1"><div class="prog-bar-fill" style="width:' + p.rate + '%;background:' + bc + ';"></div></div>'
+      +   '<span style="font-size:.72rem;min-width:36px;">' + p.rate + '%</span>'
+      + '</div></td>'
+      + '<td><span class="badge bg-' + (ST_BADGE[p.status]||'secondary') + '">' + (ST_LABEL[p.status]||p.status) + '</span></td>'
+      + '</tr>';
+  }).join('');
+}
+
+// ── 장애 유형 분석 ────────────────────────────────────
+function renderFaultAnalysis(data) {
+  var fa = data.fault_analysis || {};
+  var cats    = fa.categories || [];
+  var centers = fa.centers    || [];
+  var total   = fa.total      || 0;
+
+  // ① 도넛 차트
+  var catTotal = cats.reduce(function(s,c){ return s+c.total; }, 0);
+  drawChart('ch-cat-donut', {
+    type: 'doughnut',
+    data: {
+      labels: cats.map(function(c){ return c.name; }),
+      datasets: [{
+        data: cats.map(function(c){ return c.total; }),
+        backgroundColor: PAL, borderWidth:2, borderColor:'#fff', hoverOffset:4
+      }]
+    },
+    options: {
+      responsive:true, cutout:'55%',
+      plugins: {
+        legend: { position:'bottom', labels:{ boxWidth:10, font:{size:10}, padding:5 } },
+        tooltip: { callbacks:{ label: function(c){ return ' ' + c.label + ': ' + c.raw + '건'; } } },
+        datalabels: donutDatalabels(catTotal)
+      }
+    }
+  });
+
+  // ② 대분류 건수+완료율 그룹 막대
+  drawChart('ch-cat-bar', {
+    type: 'bar',
+    data: {
+      labels: cats.map(function(c){ return c.name; }),
+      datasets: [
+        { label:'장애건수', data: cats.map(function(c){ return c.total; }),
+          backgroundColor:'#93c5fd', borderRadius:3, yAxisID:'y1' },
+        { label:'완료율(%)', data: cats.map(function(c){ return c.completed_rate; }),
+          backgroundColor:'#16a34a', borderRadius:3, yAxisID:'y2', type:'line',
+          borderColor:'#16a34a', tension:.3, pointRadius:4,
+          datalabels:{ display:true, align:'top', anchor:'end', color:'#16a34a',
+            font:{size:9,weight:'bold'}, formatter:function(v){ return v+'%'; } } }
+      ]
+    },
+    options: {
+      responsive:true,
+      plugins:{
+        legend:{ position:'top', labels:{ boxWidth:10, font:{size:10} } },
+        datalabels:{
+          display:function(ctx){ return ctx.datasetIndex===0 && ctx.dataset.data[ctx.dataIndex]>0; },
+          anchor:'end', align:'end', color:'#374151', font:{size:9,weight:'bold'},
+          formatter:function(v){ return N(v); }
+        }
+      },
+      scales:{
+        y1:{ type:'linear', position:'left',  beginAtZero:true, title:{display:true,text:'건수'} },
+        y2:{ type:'linear', position:'right', min:0, max:100,
+             grid:{drawOnChartArea:false}, title:{display:true,text:'완료율(%)'} }
+      },
+      layout:{ padding:{ top:15 } }
+    }
+  });
+
+  // ③ 대분류 × 교육청 피벗
+  var fpt = document.getElementById('fault-pivot-table');
+  if (fpt && centers.length) {
+    var colW = (100 / (centers.length + 2)).toFixed(1) + '%';
+    var tdCls = 'text-center py-1 px-1';
+
+    fpt.querySelector('thead').innerHTML =
+      '<tr><th class="row-lbl" style="width:' + colW + ';">장애분류</th>'
+      + centers.map(function(c){ return '<th style="width:' + colW + ';">' + c + '</th>'; }).join('')
+      + '<th style="width:' + colW + ';border-left:2px solid #6ea8fe;">합계</th></tr>';
+
+    var ftBody = '';
+    cats.forEach(function(cat, ci) {
+      ftBody += '<tr>';
+      ftBody += '<th class="row-lbl" style="background:' + PAL[ci % PAL.length] + '1a;">'
+        + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'
+        + PAL[ci % PAL.length] + ';margin-right:5px;"></span>' + cat.name + '</th>';
+      cat.center_cells.forEach(function(cell) {
+        var sty = pvCellStyle(cell.pct);
+        ftBody += '<td class="' + tdCls + '" style="' + sty + '">';
+        if (cell.cnt === 0) {
+          ftBody += '<span style="color:#9ca3af;">0</span>';
+        } else {
+          ftBody += '<strong>' + N(cell.cnt) + '</strong>'
+            + '<span class="pv-sub"><span style="color:#166534;">' + cell.pct + '%</span></span>';
+        }
+        ftBody += '</td>';
+      });
+      ftBody += '<td class="' + tdCls + ' sum-col"><strong>' + N(cat.total) + '</strong>'
+        + '<span class="pv-sub">' + cat.pct + '%</span></td>';
+      ftBody += '</tr>';
+    });
+
+    // 합계 행
+    ftBody += '<tr class="sum-row"><th class="row-lbl">합계</th>';
+    centers.forEach(function(c, ci) {
+      var cTotal = cats.reduce(function(s, cat){ return s + (cat.center_cells[ci] ? cat.center_cells[ci].cnt : 0); }, 0);
+      var cPct   = total > 0 ? Math.round(cTotal / total * 100) : 0;
+      ftBody += '<td class="' + tdCls + '"><strong>' + N(cTotal) + '</strong>'
+        + '<span class="pv-sub" style="color:rgba(255,255,255,.75);">' + cPct + '%</span></td>';
+    });
+    ftBody += '<td class="' + tdCls + '"><strong>' + N(total) + '</strong>'
+      + '<span class="pv-sub" style="color:rgba(255,255,255,.75);">100%</span></td>';
+    ftBody += '</tr>';
+
+    fpt.querySelector('tbody').innerHTML = ftBody;
+  }
+
+  // ④ 소분류 상세 테이블 (대분류별 섹션)
+  var wrap = document.getElementById('fault-detail-wrap');
+  if (!wrap) return;
+
+  var detailHtml = '';
+  cats.forEach(function(cat, ci) {
+    var barColor = PAL[ci % PAL.length];
+    var subs = cat.subcategories || [];
+
+    // 소분류 건수 기준 정렬 (내림차순, 단 '소분류 미지정'은 맨 끝)
+    var sorted = subs.slice().sort(function(a, b) {
+      if (a.name === '소분류 미지정') return 1;
+      if (b.name === '소분류 미지정') return -1;
+      return b.cnt - a.cnt;
+    });
+
+    detailHtml += '<div class="mb-3">';
+    // 헤더
+    detailHtml += '<div class="d-flex align-items-center justify-content-between mb-1 px-1">'
+      + '<div class="fw-bold" style="font-size:.82rem;">'
+      + '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + barColor + ';margin-right:6px;"></span>'
+      + cat.name
+      + '<span class="badge ms-2" style="background:' + barColor + ';font-size:.68rem;">' + N(cat.total) + '건</span>'
+      + '<span class="text-muted ms-2" style="font-size:.72rem;">(전체의 ' + cat.pct + '% | 완료율 ' + cat.completed_rate + '%)</span>'
+      + '</div>'
+      + '</div>';
+
+    detailHtml += '<div class="table-responsive">'
+      + '<table class="table table-sm table-bordered table-hover mb-0" style="font-size:.76rem;">'
+      + '<thead><tr style="background:#212529;color:#fff;">'
+      + '<th style="width:35%;">소분류</th>'
+      + '<th class="text-end" style="width:12%;">건수</th>'
+      + '<th style="width:30%;">분류내 비율</th>'
+      + '<th class="text-end" style="width:12%;">전체 비율</th>'
+      + '</tr></thead><tbody>';
+
+    if (!sorted.length || (sorted.length === 1 && sorted[0].name === '소분류 미지정')) {
+      detailHtml += '<tr><td colspan="4" class="text-center text-muted py-2">소분류 데이터 없음</td></tr>';
+    } else {
+      sorted.forEach(function(sub) {
+        var barW = sub.cat_pct > 0 ? sub.cat_pct : 0;
+        var textCls = sub.cnt === 0 ? 'color:#9ca3af;' : '';
+        detailHtml += '<tr>'
+          + '<td style="' + textCls + '">' + sub.name + '</td>'
+          + '<td class="text-end fw-bold" style="' + textCls + '">' + N(sub.cnt) + '</td>'
+          + '<td>'
+          +   '<div class="d-flex align-items-center gap-1">'
+          +     '<div class="prog-bar flex-grow-1"><div class="prog-bar-fill" style="width:' + barW + '%;background:' + barColor + ';"></div></div>'
+          +     '<span style="font-size:.7rem;min-width:38px;text-align:right;' + textCls + '">' + sub.cat_pct + '%</span>'
+          +   '</div>'
+          + '</td>'
+          + '<td class="text-end" style="font-size:.7rem;color:#6b7280;">' + sub.total_pct + '%</td>'
+          + '</tr>';
+      });
+    }
+
+    detailHtml += '</tbody></table></div></div>';
+  });
+
+  wrap.innerHTML = detailHtml || '<div class="text-center text-muted py-3">장애 데이터 없음</div>';
+}
+
+// ── 피벗 분석표 (대시보드 buildPivotHtml 동일 스타일) ──────────
+function pvCellStyle(rowPct) {
+  // 행% 기준 배경색 (대시보드 rateStyle 참고, 건수 표현용)
+  if (rowPct === 0)  return '';
+  if (rowPct >= 40)  return 'color:#166534;background:#d1fae5;';
+  if (rowPct >= 20)  return 'color:#1d4ed8;background:#dbeafe;';
+  if (rowPct >= 10)  return 'color:#92400e;background:#fef3c7;';
+  return '';
+}
+
+function renderPivot(data) {
+  var pv = data.pivot || {};
+  var centers = pv.centers       || [];
+  var rows    = pv.rows          || [];
+  var cTotals = pv.center_totals || [];
+  var grand   = pv.grand_total   || 0;
+
+  var table = document.getElementById('pivot-table');
+  if (!table) return;
+
+  var N2   = centers.length;
+  var colW = (100 / (N2 + 2)).toFixed(1) + '%';
+  var tdCls = 'text-center py-1 px-1';
+
+  // thead — 헤더행: 구분 | 교육청들 | 합계
+  var headCells = centers.map(function(c) {
+    return '<th style="width:' + colW + ';">' + c + '</th>';
+  }).join('') + '<th style="width:' + colW + ';border-left:2px solid #6ea8fe;">합계</th>';
+  table.querySelector('thead').innerHTML =
+    '<tr><th class="row-lbl" style="width:' + colW + ';">학제 \\ 교육청</th>' + headCells + '</tr>';
+
+  // tbody — 행: 학제별
+  var tbodyHtml = '';
+  rows.forEach(function(row) {
+    tbodyHtml += '<tr>';
+    tbodyHtml += '<th class="row-lbl">' + row.type + '</th>';
+    row.cells.forEach(function(cell) {
+      var sty = pvCellStyle(cell.row_pct);
+      if (cell.cnt === 0) {
+        tbodyHtml += '<td class="' + tdCls + '" style="color:#9ca3af;">0</td>';
+      } else {
+        tbodyHtml += '<td class="' + tdCls + '" style="' + sty + '">'
+          + '<strong>' + N(cell.cnt) + '</strong>'
+          + '<span class="pv-sub">'
+          + '<span style="color:#166534;">' + cell.row_pct + '%</span>'
+          + ' / <span style="color:#1d4ed8;">' + cell.col_pct + '%</span>'
+          + '</span>'
+          + '</td>';
+      }
+    });
+    // 합계 열
+    tbodyHtml += '<td class="' + tdCls + ' sum-col">'
+      + '<strong>' + N(row.row_total) + '</strong>'
+      + '<span class="pv-sub">' + row.row_pct + '%</span>'
+      + '</td>';
+    tbodyHtml += '</tr>';
+  });
+
+  // 합계 행
+  tbodyHtml += '<tr class="sum-row">';
+  tbodyHtml += '<th class="row-lbl">합계</th>';
+  cTotals.forEach(function(ct) {
+    tbodyHtml += '<td class="' + tdCls + '">'
+      + '<strong>' + N(ct.cnt) + '</strong>'
+      + '<span class="pv-sub" style="color:rgba(255,255,255,.75);">' + ct.pct + '%</span>'
+      + '</td>';
+  });
+  tbodyHtml += '<td class="' + tdCls + '">'
+    + '<strong>' + N(grand) + '</strong>'
+    + '<span class="pv-sub" style="color:rgba(255,255,255,.75);">100%</span>'
+    + '</td>';
+  tbodyHtml += '</tr>';
+
+  table.querySelector('tbody').innerHTML = tbodyHtml;
+}
+
+// ── 지원청/학제별 ────────────────────────────────────
+function renderCenter(data) {
+  var rows = data.by_center || [];
+
+  drawChart('ch-ctr-cnt', {
+    type:'bar',
+    data:{
+      labels: rows.map(function(r){ return r.label; }),
+      datasets:[{ label:'장애건수', data: rows.map(function(r){ return r.cnt; }),
+                  backgroundColor:PAL, borderRadius:3 }]
+    },
+    options:{
+      responsive:true,
+      plugins:{
+        legend:{display:false},
+        datalabels:{
+          display:true, anchor:'end', align:'end',
+          color:'#374151', font:{size:10,weight:'bold'},
+          formatter:function(v){ return v > 0 ? N(v) + '건' : ''; }
+        }
+      },
+      scales:{ y:{ beginAtZero:true } },
+      layout:{ padding:{ top:15 } }
+    }
+  });
+
+  drawChart('ch-ctr-rate', {
+    type:'bar',
+    data:{
+      labels: rows.map(function(r){ return r.label; }),
+      datasets:[{
+        label:'완료율(%)',
+        data: rows.map(function(r){ return r.rate; }),
+        backgroundColor: rows.map(function(r){
+          return r.rate >= 95 ? '#16a34a' : r.rate >= 85 ? '#d97706' : '#e11d48';
+        }),
+        borderRadius:3
+      }]
+    },
+    options:{
+      responsive:true,
+      plugins:{
+        legend:{display:false},
+        datalabels:{
+          display:true, anchor:'end', align:'end',
+          color:'#374151', font:{size:10,weight:'bold'},
+          formatter:function(v){ return v > 0 ? v + '%' : '0%'; }
+        }
+      },
+      scales:{ y:{ beginAtZero:true, max:100 } },
+      layout:{ padding:{ top:15 } }
+    }
+  });
+
+  var tbody = document.getElementById('ctr-tbody');
+  tbody.innerHTML = rows.map(function(r) {
+    if (r.cnt === 0) {
+      return '<tr style="color:#9ca3af;">'
+        + '<td>' + r.label + '</td>'
+        + '<td class="text-end">0</td>'
+        + '<td class="text-end">0</td>'
+        + '<td class="text-end"><span class="badge bg-secondary">-</span></td>'
+        + '</tr>';
+    }
+    var bcls = r.rate >= 95 ? 'bg-success' : r.rate >= 85 ? 'bg-warning text-dark' : 'bg-danger';
+    return '<tr>'
+      + '<td class="fw-semibold">' + r.label + '</td>'
+      + '<td class="text-end">' + N(r.cnt) + '</td>'
+      + '<td class="text-end">' + N(r.done) + '</td>'
+      + '<td class="text-end"><span class="badge ' + bcls + '">' + r.rate + '%</span></td>'
+      + '</tr>';
+  }).join('') || '<tr><td colspan="4" class="text-center py-3 text-muted">데이터 없음</td></tr>';
+
+  // 학제별
+  var stRows = data.by_school_type || [];
+  var total  = stRows.reduce(function(s,r){ return s + r.cnt; }, 0);
+  drawChart('ch-schtype', {
+    type:'doughnut',
+    data:{
+      labels: stRows.map(function(r){ return r.label; }),
+      datasets:[{ data: stRows.map(function(r){ return r.cnt; }),
+                  backgroundColor:PAL, borderWidth:2, borderColor:'#fff', hoverOffset:4 }]
+    },
+    options:{
+      responsive:true, cutout:'55%',
+      plugins:{
+        legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:10}, padding:5 } },
+        datalabels: donutDatalabels(total)
+      }
+    }
+  });
+  var stBody = document.getElementById('schtype-tbody');
+  stBody.innerHTML = stRows.map(function(r) {
+    var zeroStyle = r.cnt === 0 ? 'color:#9ca3af;' : '';
+    return '<tr style="' + zeroStyle + '">'
+      + '<td>' + r.label + '</td>'
+      + '<td class="text-end">' + N(r.cnt) + '</td>'
+      + '<td class="text-end">' + pct(r.cnt, total) + '%</td></tr>';
+  }).join('') || '<tr><td colspan="3" class="text-center text-muted py-2">데이터 없음</td></tr>';
+}
+
+// ── 근태 ─────────────────────────────────────────────
+function renderAttendance(data) {
+  var att = data.attendance || {};
+  var total  = att.total  || 0;
+  var normal = att.normal || 0;
+  var late   = att.late   || 0;
+  var absent = att.absent || 0;
+  var other  = Math.max(0, total - normal - late - absent);
+
+  drawChart('ch-att', {
+    type:'doughnut',
+    data:{
+      labels:['정상','지각','결근','기타'],
+      datasets:[{
+        data:[normal, late, absent, other],
+        backgroundColor:['#16a34a','#d97706','#e11d48','#9ca3af'],
+        borderWidth:2, borderColor:'#fff', hoverOffset:4
+      }]
+    },
+    options:{
+      responsive:true, cutout:'55%',
+      plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:10}, padding:5 } } }
+    }
+  });
+
+  var rate = pct(normal, total);
+  var rateColor = rate >= 95 ? '#16a34a' : rate >= 85 ? '#d97706' : '#e11d48';
+  document.getElementById('att-detail').innerHTML =
+    '<div class="row g-2 text-center mt-1">'
+    + '<div class="col-6"><div class="small text-muted">총 근무기록</div><div class="fw-bold fs-5">' + N(total) + '</div></div>'
+    + '<div class="col-6"><div class="small text-muted">정상 출근율</div><div class="fw-bold fs-5" style="color:' + rateColor + '">' + rate + '%</div></div>'
+    + '<div class="col-4"><div class="small text-success">정상</div><div class="fw-semibold">' + N(normal) + '</div></div>'
+    + '<div class="col-4"><div class="small text-warning">지각</div><div class="fw-semibold">' + N(late)   + '</div></div>'
+    + '<div class="col-4"><div class="small text-danger">결근</div><div class="fw-semibold">'  + N(absent) + '</div></div>'
+    + '</div>';
+}
+
+// ── 만족도 ───────────────────────────────────────────
+function renderSatisfaction(data) {
+  var sat = data.satisfaction || {};
+  var by  = sat.by_score || {};
+  var scores = [5,4,3,2,1];
+
+  drawChart('ch-sat', {
+    type:'bar',
+    data:{
+      labels: scores.map(function(s){ return '★'.repeat(s); }),
+      datasets:[{
+        label:'응답수',
+        data: scores.map(function(s){ return by[String(s)] || 0; }),
+        backgroundColor:['#16a34a','#65a30d','#d97706','#f97316','#e11d48'],
+        borderRadius:3
+      }]
+    },
+    options:{
+      responsive:true, plugins:{ legend:{display:false} },
+      scales:{ y:{ beginAtZero:true } }
+    }
+  });
+
+  var avg     = sat.avg_score || 0;
+  var avgColor = avg >= 4 ? '#16a34a' : avg >= 3 ? '#d97706' : '#e11d48';
+  var resp    = sat.responded || 0;
+  var bars = scores.map(function(s) {
+    var cnt = by[String(s)] || 0;
+    var w   = resp > 0 ? Math.round(cnt / resp * 100) : 0;
+    var bc  = s >= 4 ? '#16a34a' : s === 3 ? '#d97706' : '#e11d48';
+    return '<div class="d-flex align-items-center gap-2 mb-1" style="font-size:.75rem;">'
+      + '<span style="width:45px;">' + '★'.repeat(s) + '</span>'
+      + '<div class="prog-bar flex-grow-1"><div class="prog-bar-fill" style="width:' + w + '%;background:' + bc + ';"></div></div>'
+      + '<span style="width:34px;text-align:right;">' + cnt + '건</span>'
+      + '</div>';
+  }).join('');
+
+  document.getElementById('sat-detail').innerHTML =
+    '<div class="row g-2 text-center mt-1">'
+    + '<div class="col-6"><div class="small text-muted">응답률</div>'
+    +   '<div class="fw-bold fs-5">' + (sat.response_rate || 0) + '%</div>'
+    +   '<div class="text-muted" style="font-size:.7rem;">' + N(resp) + ' / ' + N(sat.total) + '</div></div>'
+    + '<div class="col-6"><div class="small text-muted">평균 점수</div>'
+    +   '<div class="fw-bold fs-5" style="color:' + avgColor + '">' + avg + '</div>'
+    +   '<div class="text-muted" style="font-size:.7rem;">/ 5.0점</div></div>'
+    + '</div>'
+    + '<div class="mt-2 px-1">' + bars + '</div>';
+}
+
+// ── 인력 업무부하 ─────────────────────────────────────
+function renderWorkerWorkload(data) {
+  var wl = data.worker_workload || [];
+  if (!wl.length) return;
+
+  // 통계 계산
+  var totalWork = wl.reduce(function(s,w){ return s+w.total_work; }, 0);
+  var avgWork   = wl.length > 0 ? (totalWork / wl.length).toFixed(1) : 0;
+  var maxWorker = wl.reduce(function(a,b){ return b.total_work > a.total_work ? b : a; }, wl[0]);
+  var activeWorkers = wl.filter(function(w){ return w.total_work > 0; }).length;
+  var overloadCount = wl.filter(function(w){ return w.total_work >= avgWork * 1.5; }).length;
+
+  // 요약 카드
+  var cards = document.getElementById('wl-summary-cards');
+  if (cards) {
+    var avgColor = '#2563eb';
+    cards.innerHTML =
+      '<div class="kpi-card" style="border-top-color:#2563eb;">'
+      + '<div class="kpi-label">총 인력</div>'
+      + '<div class="kpi-value" style="color:#2563eb;">' + wl.length + '</div>'
+      + '<div class="kpi-unit">명 (활동: ' + activeWorkers + '명)</div></div>'
+      + '<div class="kpi-card" style="border-top-color:#7c3aed;">'
+      + '<div class="kpi-label">총 업무건수</div>'
+      + '<div class="kpi-value" style="color:#7c3aed;">' + N(totalWork) + '</div>'
+      + '<div class="kpi-unit">건</div></div>'
+      + '<div class="kpi-card" style="border-top-color:#16a34a;">'
+      + '<div class="kpi-label">1인 평균 업무</div>'
+      + '<div class="kpi-value" style="color:#16a34a;">' + avgWork + '</div>'
+      + '<div class="kpi-unit">건/인</div></div>'
+      + '<div class="kpi-card" style="border-top-color:' + (overloadCount>0?'#e11d48':'#16a34a') + ';">'
+      + '<div class="kpi-label">과부하 인력</div>'
+      + '<div class="kpi-value" style="color:' + (overloadCount>0?'#e11d48':'#16a34a') + ';">' + overloadCount + '</div>'
+      + '<div class="kpi-unit">명 (평균 1.5× 초과)</div></div>';
+  }
+
+  // 지원청별 집계
+  var centerMap = {};
+  wl.forEach(function(w) {
+    if (!centerMap[w.center]) {
+      centerMap[w.center] = { incidents:0, insp:0, rpt:0, workers:0 };
+    }
+    centerMap[w.center].incidents += w.incidents;
+    centerMap[w.center].insp      += w.insp_total;
+    centerMap[w.center].rpt       += w.rpt_total;
+    centerMap[w.center].workers++;
+  });
+  var CTR_ORDER = ['동부','서부','남부','북부','중부','강동송파','강서양천','강남서초','동작관악','성동광진','성북강북'];
+  var orderedCtrs = CTR_ORDER.filter(function(c){ return centerMap[c]; });
+  Object.keys(centerMap).forEach(function(c){ if (orderedCtrs.indexOf(c)<0) orderedCtrs.push(c); });
+
+  // ① 지원청별 스택바
+  drawChart('ch-wl-center', {
+    type: 'bar',
+    data: {
+      labels: orderedCtrs,
+      datasets: [
+        { label:'장애처리', data: orderedCtrs.map(function(c){ return centerMap[c].incidents; }),
+          backgroundColor:'#3b82f6', borderRadius:2 },
+        { label:'점검',     data: orderedCtrs.map(function(c){ return centerMap[c].insp; }),
+          backgroundColor:'#16a34a', borderRadius:2 },
+        { label:'보고서',   data: orderedCtrs.map(function(c){ return centerMap[c].rpt; }),
+          backgroundColor:'#d97706', borderRadius:2 }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position:'top', labels:{ boxWidth:12, font:{size:11} } },
+        datalabels: {
+          display: function(ctx) { return ctx.dataset.data[ctx.dataIndex] > 0; },
+          anchor:'center', align:'center', color:'#fff',
+          font:{ size:9, weight:'bold' },
+          formatter: function(v) { return v > 0 ? v : ''; }
+        }
+      },
+      scales: { x:{ stacked:true }, y:{ stacked:true, beginAtZero:true } }
+    }
+  });
+
+  // ② 인력별 총 업무량 수평 바 (상위 30명, 업무량 정렬)
+  var sorted = wl.slice().sort(function(a,b){ return b.total_work - a.total_work; }).slice(0, 40);
+  var avg = parseFloat(avgWork);
+  drawChart('ch-wl-worker', {
+    type: 'bar',
+    data: {
+      labels: sorted.map(function(w){ return w.center.slice(0,2) + '/' + w.name; }),
+      datasets: [
+        { label:'장애처리', data: sorted.map(function(w){ return w.incidents; }),
+          backgroundColor:'#3b82f6', borderRadius:2 },
+        { label:'점검',     data: sorted.map(function(w){ return w.insp_total; }),
+          backgroundColor:'#16a34a', borderRadius:2 },
+        { label:'보고서',   data: sorted.map(function(w){ return w.rpt_total; }),
+          backgroundColor:'#d97706', borderRadius:2 }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: {
+        legend: { position:'top', labels:{ boxWidth:12, font:{size:11} } },
+        datalabels: { display: false }
+      },
+      scales: {
+        x: { stacked:true, beginAtZero:true },
+        y: { stacked:true, ticks:{ font:{size:9} } }
+      }
+    }
+  });
+
+  // ③ 인력별 상세표 (지원청 그룹)
+  var tbody   = document.getElementById('wl-tbody');
+  var avgNum  = parseFloat(avgWork);
+  var html    = '';
+  var problems = [], lowList = [];
+  var prevCenter = null;
+
+  wl.forEach(function(w) {
+    var load = w.total_work;
+    var color, badge;
+    if (load >= avgNum * 1.5) {
+      color = '#e11d48'; badge = '<span class="badge" style="background:#e11d48;">과부하</span>';
+      problems.push('<strong>' + w.center + '/' + w.name + '</strong>: 총 ' + load + '건 (평균 ' + avgNum + '건 대비 ' + Math.round(load/avgNum*100) + '%)');
+    } else if (load >= avgNum * 1.2) {
+      color = '#d97706'; badge = '<span class="badge" style="background:#d97706;">주의</span>';
+    } else if (load > 0) {
+      color = '#16a34a'; badge = '<span class="badge" style="background:#16a34a;">정상</span>';
+    } else {
+      color = '#9ca3af'; badge = '<span class="badge bg-secondary">미배정</span>';
+      lowList.push('<strong>' + w.center + '/' + w.name + '</strong>: 업무 없음');
+    }
+
+    var maxLoad = wl.reduce(function(m, x){ return Math.max(m, x.total_work); }, 1);
+    var barW = maxLoad > 0 ? Math.round(load / maxLoad * 100) : 0;
+
+    // 지원청 그룹 행
+    if (w.center !== prevCenter) {
+      var cTotal = wl.filter(function(x){ return x.center===w.center; })
+                     .reduce(function(s,x){ return s+x.total_work; }, 0);
+      var cCount = wl.filter(function(x){ return x.center===w.center; }).length;
+      html += '<tr style="background:#f1f5f9;">'
+        + '<td colspan="2" class="fw-bold" style="font-size:.78rem;padding:4px 8px;">'
+        + '<i class="bi bi-building me-1 text-primary"></i>' + w.center
+        + ' <span class="text-muted fw-normal">(' + cCount + '명, 합계 ' + N(cTotal) + '건)</span></td>'
+        + '<td colspan="9"></td></tr>';
+      prevCenter = w.center;
+    }
+
+    // 점검 소계
+    var inspDetail = w.insp_detail || {};
+    var regular = (inspDetail['정기점검'] || {}).total || 0;
+    var special  = (inspDetail['특별점검'] || {}).total || 0;
+    var other    = w.insp_total - regular - special;
+    var cable    = (w.rpt_detail || {})['네트워크포설'] || 0;
+    var rptOther = w.rpt_total - cable;
+
+    html += '<tr>'
+      + '<td></td>'
+      + '<td class="fw-semibold">' + w.name + '</td>'
+      + '<td class="text-center">' + (w.incidents > 0 ? '<strong style="color:#3b82f6;">' + w.incidents + '</strong>' : '<span style="color:#9ca3af;">0</span>') + '</td>'
+      + '<td class="text-center">' + (regular > 0 ? '<strong style="color:#16a34a;">' + regular + '</strong>' : '<span style="color:#9ca3af;">0</span>') + '</td>'
+      + '<td class="text-center">' + (special > 0 ? '<strong style="color:#0891b2;">' + special + '</strong>' : '<span style="color:#9ca3af;">0</span>') + '</td>'
+      + '<td class="text-center">' + (other > 0 ? other : '<span style="color:#9ca3af;">0</span>') + '</td>'
+      + '<td class="text-center">' + (cable > 0 ? '<strong style="color:#d97706;">' + cable + '</strong>' : '<span style="color:#9ca3af;">0</span>') + '</td>'
+      + '<td class="text-center">' + (rptOther > 0 ? rptOther : '<span style="color:#9ca3af;">0</span>') + '</td>'
+      + '<td class="text-center fw-bold" style="color:' + color + ';">' + load + '</td>'
+      + '<td><div class="prog-bar"><div class="prog-bar-fill" style="width:' + barW + '%;background:' + color + ';"></div></div></td>'
+      + '<td class="text-center">' + badge + '</td>'
+      + '</tr>';
+  });
+
+  if (tbody) tbody.innerHTML = html ||
+    '<tr><td colspan="11" class="text-center py-3 text-muted">데이터 없음</td></tr>';
+
+  // ④ 하이라이트
+  var pEl = document.getElementById('hb-wl-high');
+  var lEl = document.getElementById('hb-wl-low');
+  if (problems.length) {
+    document.getElementById('hb-wl-high-list').innerHTML =
+      problems.map(function(t){ return '<li>' + t + '</li>'; }).join('');
+    pEl.style.display = 'block';
+  } else { pEl.style.display = 'none'; }
+
+  if (lowList.length) {
+    document.getElementById('hb-wl-low-list').innerHTML =
+      lowList.map(function(t){ return '<li>' + t + '</li>'; }).join('');
+    lEl.style.display = 'block';
+  } else { lEl.style.display = 'none'; }
+}
+
+// ── 종합보고서 ───────────────────────────────────────
+function renderReport(data) {
+  var kpi  = data.kpi        || {};
+  var att  = data.attendance || {};
+  var sat  = data.satisfaction || {};
+  var insp = data.inspection || {};
+  var period = data.period   || {};
+
+  var compRate = kpi.completed_rate || 0;
+  var slaScore = kpi.avg_sla_score;
+  var slaDesc  = slaScore >= 90 ? '우수(A)' : slaScore >= 80 ? '양호(B)' : (slaScore ? '개선 필요(C 이하)' : '미집계');
+  var attRate  = att.total > 0 ? pct(att.normal || 0, att.total) : null;
+
+  // 총평
+  var sumParts = [
+    '<strong>' + (period.label || '') + '</strong> 기간 중 학교 네트워크 유지보수 사업의 주요 성과를 종합 분석하였습니다.',
+    '총 <strong>' + N(kpi.total_incidents) + '건</strong>의 장애가 접수되었으며, 이 중 <strong>' + N(kpi.completed_count) + '건(' + compRate + '%)</strong>이 처리 완료되었습니다.',
+    slaScore ? 'SLA 종합점수는 평균 <strong>' + slaScore + '점(' + slaDesc + ')</strong> 수준을 달성하였습니다.' : '',
+    attRate !== null ? '인력 정상 출근율은 <strong>' + attRate + '%</strong>로 현장 서비스 연속성이 확보되었습니다.' : '',
+    sat.avg_score ? '고객 만족도는 평균 <strong>' + sat.avg_score + '점(5점 만점)</strong>을 달성하였습니다.' : ''
+  ].filter(Boolean);
+  document.getElementById('rpt-summary').innerHTML =
+    '<p style="line-height:1.9;">' + sumParts.join(' ') + '</p>';
+
+  // 주요 KPI
+  var inPlans  = insp.plans   || [];
+  var inByType = insp.by_type || [];
+  var totalInspSchools = inByType.reduce(function(s,r){ return s+r.total; }, 0);
+  var doneInspSchools  = inByType.reduce(function(s,r){ return s+r.done;  }, 0);
+  var kpiHtml =
+    '<div class="row g-3">'
+    + '<div class="col-md-6">'
+    + '<div class="fw-bold text-primary mb-1"><i class="bi bi-exclamation-triangle me-1"></i>장애 처리 현황</div>'
+    + '<ul class="mb-0" style="padding-left:18px;line-height:2;">'
+    + '<li>총 장애 접수: <strong>' + N(kpi.total_incidents) + '건</strong></li>'
+    + '<li>처리 완료: <strong>' + N(kpi.completed_count) + '건 (' + compRate + '%)</strong></li>'
+    + '<li>장애 발생 학교: <strong>' + N(kpi.schools_served) + '개교</strong></li>'
+    + '</ul></div>'
+    + '<div class="col-md-6">'
+    + '<div class="fw-bold text-success mb-1"><i class="bi bi-clipboard2-check me-1"></i>점검 진척 현황</div>'
+    + '<ul class="mb-0" style="padding-left:18px;line-height:2;">'
+    + '<li>점검 계획 수: <strong>' + inPlans.length + '건</strong></li>'
+    + '<li>총 대상 학교: <strong>' + N(totalInspSchools) + '개교</strong></li>'
+    + '<li>완료 학교: <strong>' + N(doneInspSchools) + '개교 (' + pct(doneInspSchools, totalInspSchools) + '%)</strong></li>'
+    + '</ul></div>'
+    + '<div class="col-md-6">'
+    + '<div class="fw-bold text-warning mb-1"><i class="bi bi-shield-check me-1"></i>SLA 현황</div>'
+    + '<ul class="mb-0" style="padding-left:18px;line-height:2;">'
+    + (slaScore ? '<li>평균 SLA: <strong>' + slaScore + '점 (' + slaDesc + ')</strong></li>' : '<li>SLA 데이터 없음</li>')
+    + '</ul></div>'
+    + '<div class="col-md-6">'
+    + '<div class="fw-bold text-info mb-1"><i class="bi bi-person-check me-1"></i>인력/만족도</div>'
+    + '<ul class="mb-0" style="padding-left:18px;line-height:2;">'
+    + (attRate !== null ? '<li>정상 출근율: <strong>' + attRate + '%</strong></li>' : '')
+    + (sat.avg_score ? '<li>평균 만족도: <strong>' + sat.avg_score + '점</strong></li>' : '')
+    + '</ul></div>'
+    + '</div>';
+  document.getElementById('rpt-kpi').innerHTML = kpiHtml;
+
+  // 권고사항
+  var recs = [];
+  if (compRate < 95) recs.push({ c:'#d97706', t:'장애 처리 완료율 ' + compRate + '%로 목표(95%) 미달 — 처리 지연 건에 대한 원인을 분석하고 인력 배치를 최적화하여 완료율 향상을 추진하였습니다.' });
+  if (slaScore && slaScore < 80) recs.push({ c:'#e11d48', t:'SLA 점수 ' + slaScore + '점으로 기준(80점) 미달 — 항목별 취약 지표를 집중 개선하여 서비스 수준을 향상시켰습니다.' });
+  if (att.absent) recs.push({ c:'#d97706', t:'결근 ' + N(att.absent) + '건 발생 — 대체 인력 투입 절차를 강화하고 서비스 공백을 최소화하였습니다.' });
+  if (sat.avg_score && sat.avg_score < 4) recs.push({ c:'#2563eb', t:'만족도 ' + sat.avg_score + '점으로 목표(4.0) 미달 — 민원 다발 학교 중심으로 현장 응대 품질 개선을 추진하였습니다.' });
+  inByType.forEach(function(r){ if (r.rate < 70) recs.push({ c:'#7c3aed', t: r.type_label + ' 진척률 ' + r.rate + '%로 저조 — 일정을 재편하여 집중 추진하였습니다.' }); });
+  if (!recs.length) recs.push({ c:'#16a34a', t:'전반적으로 목표 수준을 달성하였으며, 현재의 서비스 수준을 유지하도록 지속적인 모니터링을 추진하였습니다.' });
+
+  var recHtml = '<ul style="padding-left:18px;line-height:2.2;">'
+    + recs.map(function(r){
+        return '<li style="border-left:3px solid ' + r.c + ';padding-left:10px;margin-bottom:4px;">' + r.t + '</li>';
+      }).join('')
+    + '</ul>';
+  document.getElementById('rpt-rec').innerHTML = recHtml;
+
+  // 분야별 상세
+  var centers  = data.by_center  || [];
+  var stTypes  = data.by_school_type || [];
+  var stTotal  = stTypes.reduce(function(s,r){ return s + r.cnt; }, 0);
+
+  var ctrRows = centers.length ? centers.map(function(r) {
+    var grade = r.rate >= 95 ? '우수' : r.rate >= 85 ? '양호' : '개선 필요';
+    var gradeColor = r.rate >= 95 ? '#16a34a' : r.rate >= 85 ? '#d97706' : '#e11d48';
+    return '<tr>'
+      + '<td>' + r.label + '</td>'
+      + '<td class="text-end">' + N(r.cnt)  + '</td>'
+      + '<td class="text-end">' + N(r.done) + '</td>'
+      + '<td class="text-end"><strong style="color:' + gradeColor + '">' + r.rate + '%</strong></td>'
+      + '<td><small>' + grade + '</small></td>'
+      + '</tr>';
+  }).join('') : '<tr><td colspan="5" class="text-center text-muted">데이터 없음</td></tr>';
+
+  var stRows = stTypes.map(function(r) {
+    return '<tr><td>' + r.label + '</td>'
+      + '<td class="text-end">' + N(r.cnt) + '</td>'
+      + '<td class="text-end">' + pct(r.cnt, stTotal) + '%</td></tr>';
+  }).join('') || '<tr><td colspan="3" class="text-center text-muted">데이터 없음</td></tr>';
+
+  document.getElementById('rpt-detail').innerHTML =
+    '<div style="font-size:.8rem;">'
+    + '<div class="fw-bold mb-2"><i class="bi bi-building me-1 text-secondary"></i>지원청별 장애 처리 분석</div>'
+    + '<div class="table-responsive mb-3">'
+    + '<table class="table table-sm table-bordered mb-0" style="font-size:.77rem;">'
+    + '<thead class="table-light"><tr><th>지원청</th><th class="text-end">장애</th><th class="text-end">완료</th><th class="text-end">완료율</th><th>평가</th></tr></thead>'
+    + '<tbody>' + ctrRows + '</tbody></table></div>'
+    + '<div class="fw-bold mb-2"><i class="bi bi-mortarboard me-1 text-secondary"></i>학제별 장애 분포 분석</div>'
+    + '<div class="table-responsive">'
+    + '<table class="table table-sm table-bordered mb-0" style="font-size:.77rem;">'
+    + '<thead class="table-light"><tr><th>학제</th><th class="text-end">건수</th><th class="text-end">비율</th></tr></thead>'
+    + '<tbody>' + stRows + '</tbody></table></div>'
+    + '</div>';
+}
+
+// ── 초기 조회 ────────────────────────────────────────
+loadStats();
+</script>
+{% endblock %}

@@ -1,0 +1,907 @@
+import csv, io
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
+from django.views import View
+from django.http import JsonResponse, HttpResponse
+from rest_framework import viewsets, status, permissions
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.db.models import Q, Count
+from .models import (SupportCenter, SchoolType, School, SchoolBuilding,
+                     SchoolFloor, SchoolRoom, SchoolContact, VsdxImportLog)
+from .serializers import (
+    SupportCenterSerializer, SchoolTypeSerializer,
+    SchoolListSerializer, SchoolDetailSerializer, SchoolGISSerializer,
+    SchoolBuildingSerializer, SchoolContactSerializer
+)
+from core.permissions.roles import IsAdmin
+
+
+@login_required
+def school_list_view(request):
+    return render(request, 'schools/index.html')
+
+
+@login_required
+def school_map_view(request):
+    return render(request, 'schools/map.html')
+
+
+@login_required
+def school_detail_view(request, pk):
+    from django.shortcuts import redirect
+    tab = request.GET.get('tab', 'info')
+    return redirect(f'/npms/schools/list/?school={pk}&tab={tab}')
+
+
+@login_required
+def building_docs_api(request, pk):
+    """건물 정보 PDF 파일 목록 조회 / 업로드"""
+    import os
+    from django.conf import settings
+    from django.shortcuts import get_object_or_404
+    school = get_object_or_404(School, pk=pk)
+
+    doc_dir = os.path.join(settings.MEDIA_ROOT, 'data', '건물 정보', str(pk))
+    doc_url_base = f"{settings.MEDIA_URL}data/건물 정보/{pk}/"
+
+    if request.method == 'GET':
+        files = []
+        # pk 기반 서브폴더
+        if os.path.isdir(doc_dir):
+            for fname in sorted(os.listdir(doc_dir)):
+                if fname.lower().endswith('.pdf'):
+                    files.append({'name': fname, 'url': doc_url_base + fname})
+        # 기존 파일: media/data/건물 정보/건물정보_{학교명}.pdf
+        legacy_name = f'건물정보_{school.name}.pdf'
+        legacy_abs = os.path.join(settings.MEDIA_ROOT, 'data', '건물 정보', legacy_name)
+        if os.path.exists(legacy_abs):
+            legacy_url = f"{settings.MEDIA_URL}data/건물 정보/{legacy_name}"
+            if not any(f['name'] == legacy_name for f in files):
+                files.insert(0, {'name': legacy_name, 'url': legacy_url})
+        return JsonResponse({'files': files})
+
+    if request.method == 'POST':
+        upload = request.FILES.get('file')
+        if not upload:
+            return JsonResponse({'error': '파일을 선택하세요.'}, status=400)
+        if not upload.name.lower().endswith('.pdf'):
+            return JsonResponse({'error': 'PDF 파일만 업로드할 수 있습니다.'}, status=400)
+        os.makedirs(doc_dir, exist_ok=True)
+        dest = os.path.join(doc_dir, upload.name)
+        with open(dest, 'wb') as f:
+            for chunk in upload.chunks():
+                f.write(chunk)
+        return JsonResponse({'name': upload.name, 'url': doc_url_base + upload.name})
+
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
+# 네트워크 문서 카테고리 정의
+NETDOC_CATEGORIES = [
+    {
+        'key':      '구성도',
+        'folder':   '구성도',
+        'prefix':   '구성도_',
+        'exts':     ['.pptx', '.ppt'],
+        'accept':   '.pptx,.ppt',
+        'icon':     'ppt',
+    },
+    {
+        'key':      '선번장',
+        'folder':   '선번장',
+        'prefix':   '선번장_',
+        'exts':     ['.xlsx', '.xlsm'],
+        'accept':   '.xlsx,.xlsm',
+        'icon':     'xlsx',
+    },
+    {
+        'key':      '랙실장도',
+        'folder':   '랙실장도',
+        'prefix':   '랙실장도_',
+        'exts':     ['.xlsx', '.xlsm'],
+        'accept':   '.xlsx,.xlsm',
+        'icon':     'xlsx',
+    },
+    {
+        'key':      '건물정보',
+        'folder':   '건물 정보',
+        'prefix':   '건물정보_',
+        'exts':     ['.pdf'],
+        'accept':   '.pdf',
+        'icon':     'pdf',
+    },
+    {
+        'key':      '전산실랙',
+        'folder':   '전산실랙',
+        'prefix':   '전산실랙_',
+        'exts':     ['.jpg', '.jpeg', '.png'],
+        'accept':   '.jpg,.jpeg,.png',
+        'icon':     'image',
+    },
+]
+
+
+@login_required
+def network_docs_api(request, pk):
+    """네트워크 문서 목록 조회 / 업로드 (구성도·선번장·랙실장도·건물정보·전산실랙)"""
+    import os
+    from django.conf import settings
+    from django.shortcuts import get_object_or_404
+    school = get_object_or_404(School, pk=pk)
+
+    if request.method == 'GET':
+        from urllib.parse import quote
+        result = {}
+        for cat in NETDOC_CATEGORIES:
+            files = []
+            folder_abs = os.path.join(settings.MEDIA_ROOT, 'data', cat['folder'])
+            url_base   = f"{settings.MEDIA_URL}data/{quote(cat['folder'])}/"
+
+            # 1) 학교명 기반 레거시 파일
+            #    패턴: {prefix}{학교명}.ext  또는  {prefix}{학교명}_{번호}.ext
+            if os.path.isdir(folder_abs):
+                for fname in sorted(os.listdir(folder_abs)):
+                    if os.path.isdir(os.path.join(folder_abs, fname)):
+                        continue  # 서브폴더(pk) 건너뜀
+                    ext = os.path.splitext(fname)[1].lower()
+                    if not (fname.startswith(cat['prefix']) and ext in cat['exts']):
+                        continue
+                    # prefix 뒤에 학교명이 오는지 확인 (뒤에 _번호 있어도 매칭)
+                    school_part = fname[len(cat['prefix']):]
+                    if school_part.lower().startswith(school.name.lower()):
+                        files.append({'name': fname, 'url': url_base + quote(fname)})
+
+            # 2) pk 서브폴더 업로드 파일
+            pk_dir = os.path.join(folder_abs, str(pk))
+            pk_url_base = f"{settings.MEDIA_URL}data/{quote(cat['folder'])}/{pk}/"
+            if os.path.isdir(pk_dir):
+                for fname in sorted(os.listdir(pk_dir)):
+                    ext = os.path.splitext(fname)[1].lower()
+                    if ext in cat['exts']:
+                        files.append({'name': fname, 'url': pk_url_base + quote(fname)})
+
+            result[cat['key']] = files
+        return JsonResponse({'docs': result})
+
+    if request.method == 'POST':
+        doc_type = request.POST.get('doc_type', '')
+        upload = request.FILES.get('file')
+        if not upload:
+            return JsonResponse({'error': '파일을 선택하세요.'}, status=400)
+
+        cat = next((c for c in NETDOC_CATEGORIES if c['key'] == doc_type), None)
+        if not cat:
+            return JsonResponse({'error': '문서 유형이 올바르지 않습니다.'}, status=400)
+
+        ext = os.path.splitext(upload.name)[1].lower()
+        if ext not in cat['exts']:
+            return JsonResponse({'error': f"{cat['key']} 파일은 {', '.join(cat['exts'])} 형식만 허용됩니다."}, status=400)
+
+        from urllib.parse import quote
+        dest_dir = os.path.join(settings.MEDIA_ROOT, 'data', cat['folder'], str(pk))
+        os.makedirs(dest_dir, exist_ok=True)
+        dest = os.path.join(dest_dir, upload.name)
+        with open(dest, 'wb') as f:
+            for chunk in upload.chunks():
+                f.write(chunk)
+        url = f"{settings.MEDIA_URL}data/{quote(cat['folder'])}/{pk}/{quote(upload.name)}"
+        return JsonResponse({'name': upload.name, 'url': url, 'doc_type': doc_type})
+
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
+class SupportCenterViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = SupportCenter.objects.filter(is_active=True)
+    serializer_class = SupportCenterSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class SchoolTypeViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = SchoolType.objects.all()
+    serializer_class = SchoolTypeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class SchoolViewSet(viewsets.ModelViewSet):
+    queryset = School.objects.select_related('support_center', 'school_type').order_by('support_center', 'name')
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return SchoolListSerializer
+        if self.action == 'gis':
+            return SchoolGISSerializer
+        return SchoolDetailSerializer
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAdmin()]
+        return super().get_permissions()
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        params  = self.request.query_params
+        center  = params.get('center')
+        stype   = params.get('type')
+        q       = params.get('q')
+        school  = params.get('school')
+        if school:
+            qs = qs.filter(id=school)
+        elif center:
+            qs = qs.filter(support_center__code=center)
+        if stype and not school:
+            qs = qs.filter(school_type__code=stype)
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(address__icontains=q))
+        return qs
+
+    @action(detail=False, methods=['get'], pagination_class=None)
+    def filter(self, request):
+        """일정 등록용 학교 필터 (페이지네이션 없음 — center 필수)"""
+        center = request.query_params.get('center', '')
+        stype  = request.query_params.get('type', '')
+        if not center:
+            return Response({'error': '지원청(center)은 필수입니다.'}, status=400)
+        qs = School.objects.filter(
+            is_active=True,
+            support_center__code=center,
+        ).order_by('school_type__order', 'name')
+        if stype:
+            qs = qs.filter(school_type__code=stype)
+        data = [{'id': s.id, 'name': s.name,
+                  'type_code': s.school_type.code if s.school_type else ''} for s in qs]
+        return Response(data)
+
+    @action(detail=False, methods=['get'])
+    def tree(self, request):
+        """교육청 → 학제 → 학교 3단계 트리 데이터"""
+        from collections import defaultdict
+        centers = list(SupportCenter.objects.filter(is_active=True).order_by('id').values('id', 'code', 'name'))
+        schools = School.objects.filter(is_active=True).order_by('name').values(
+            'id', 'name', 'support_center_id',
+            'school_type__id', 'school_type__name', 'school_type__order'
+        )
+
+        # {center_id: {type_id: [school, ...]}}
+        grouped = defaultdict(lambda: defaultdict(list))
+        type_meta = {}  # type_id → {name, order}
+        for s in schools:
+            tid = s['school_type__id']
+            type_meta[tid] = {'name': s['school_type__name'], 'order': s['school_type__order']}
+            grouped[s['support_center_id']][tid].append({'id': s['id'], 'name': s['name']})
+
+        result = []
+        for c in centers:
+            by_type = grouped.get(c['id'], {})
+            types = []
+            for tid, tinfo in sorted(type_meta.items(), key=lambda x: x[1]['order']):
+                schools_in = by_type.get(tid, [])
+                if not schools_in:
+                    continue
+                types.append({
+                    'id':      tid,
+                    'name':    tinfo['name'],
+                    'schools': sorted(schools_in, key=lambda s: s['name']),
+                    'count':   len(schools_in),
+                })
+            result.append({
+                'id':    c['id'],
+                'code':  c['code'],
+                'name':  c['name'],
+                'count': sum(t['count'] for t in types),
+                'types': types,
+            })
+        return Response(result)
+
+    @action(detail=False, methods=['get'])
+    def gis(self, request):
+        """카카오맵 마커 데이터"""
+        from django.db.models import Count, Q
+        qs = self.get_queryset().filter(lat__isnull=False, lng__isnull=False).annotate(
+            _active_incidents=Count('incidents', filter=~Q(incidents__status='completed'))
+        )
+        return Response(SchoolGISSerializer(qs, many=True).data)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """지원청×학제 통계 (대시보드용)"""
+        data = School.objects.filter(is_active=True).values(
+            'support_center__name', 'school_type__name'
+        ).annotate(count=Count('id')).order_by('support_center__id', 'school_type__order')
+        return Response(list(data))
+
+    @action(detail=True, methods=['get'])
+    def equipment(self, request, pk=None):
+        """학교 장비 목록"""
+        from .models import SchoolEquipment
+        school = self.get_object()
+        qs = school.equipment_list.order_by('category', 'device_id')
+        data = list(qs.values(
+            'id', 'category', 'model_name', 'manufacturer',
+            'install_location', 'device_id', 'network_type',
+            'speed', 'tier', 'origin', 'mgmt', 'install_year'
+        ))
+        return Response(data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
+    def equipment_to_assets(self, request, pk=None):
+        """SchoolEquipment → Asset 일괄 변환 (슈퍼어드민/관리자 전용)"""
+        from datetime import date
+        from apps.assets.models import AssetCategory, AssetModel, Asset, AssetHistory
+
+        school = self.get_object()
+        equips = school.equipment_list.all()
+        if not equips.exists():
+            return Response({'message': '변환할 장비 목록이 없습니다.'})
+
+        # SchoolEquipment.category → AssetCategory.code 매핑
+        cat_map = {
+            '스위치':    'switch',
+            'switch':    'switch',
+            'PoE스위치': 'poe_switch',
+            'PoE':       'poe_switch',
+            'poe':       'poe_switch',
+            'AP':        'ap',
+            'ap':        'ap',
+            '무선AP':    'ap',
+            '라우터':    'router',
+            'router':    'router',
+            '서버':      'server',
+            'server':    'server',
+        }
+
+        created_count = 0
+        skipped = []
+
+        for eq in equips:
+            cat_code = cat_map.get(eq.category.strip(), 'switch')
+            try:
+                cat = AssetCategory.objects.get(code=cat_code)
+            except AssetCategory.DoesNotExist:
+                cat = AssetCategory.objects.filter(code='switch').first()
+
+            mfr   = eq.manufacturer or '미상'
+            model = eq.model_name   or '미상'
+            asset_model, _ = AssetModel.objects.get_or_create(
+                manufacturer=mfr,
+                model_name=model,
+                defaults={'category': cat}
+            )
+
+            # 고유 식별자: device_id 우선, 없으면 학교ID+순번으로 생성
+            sn = eq.device_id.strip() if eq.device_id and eq.device_id.strip() else f'EQ-{school.id}-{eq.id}'
+            installed_date = date(eq.install_year, 1, 1) if eq.install_year else None
+
+            asset, created = Asset.objects.get_or_create(
+                serial_number=sn,
+                defaults={
+                    'asset_model':      asset_model,
+                    'status':           'installed',
+                    'current_school':   school,
+                    'install_location': eq.install_location or '',
+                    'installed_at':     installed_date,
+                    'asset_tag':        sn[:50],
+                }
+            )
+            if created:
+                AssetHistory.objects.create(
+                    asset=asset,
+                    action='install',
+                    from_location='학교장비목록 가져오기',
+                    to_location=f'{school.name} {eq.install_location or ""}',
+                    worker=request.user,
+                    note=f'SchoolEquipment 일괄 변환 (망:{eq.network_type} 속도:{eq.speed})',
+                )
+                created_count += 1
+            else:
+                skipped.append({'sn': sn, 'reason': '이미 등록된 S/N'})
+
+        return Response({
+            'created': created_count,
+            'skipped_count': len(skipped),
+            'skipped': skipped[:20],  # 최대 20건만 반환
+        })
+
+    @action(detail=True, methods=['get'])
+    def buildings(self, request, pk=None):
+        school = self.get_object()
+        return Response(SchoolBuildingSerializer(school.buildings.all(), many=True).data)
+
+    @action(detail=True, methods=['get'])
+    def contacts(self, request, pk=None):
+        school = self.get_object()
+        return Response(SchoolContactSerializer(school.contacts.all(), many=True).data)
+
+    @action(detail=True, methods=['get'])
+    def all_contacts(self, request, pk=None):
+        """등록 담당자 + 장애 이력 신고자 통합 목록"""
+        from apps.incidents.models import Incident
+
+        school = self.get_object()
+
+        # 1) 등록된 담당자
+        result = []
+        registered_phones = set()
+        for c in school.contacts.all():
+            result.append({
+                'name':       c.name,
+                'position':   c.position or '',
+                'phone':      c.phone,
+                'email':      c.email or '',
+                'is_primary': c.is_primary,
+                'source':     'registered',
+            })
+            if c.phone:
+                registered_phones.add(c.phone.replace('-', '').strip())
+
+        # 2) 장애 이력 신고자 (등록 담당자와 전화번호 중복 제외)
+        reporters = (
+            Incident.objects
+            .filter(school=school)
+            .exclude(requester_name='')
+            .values('requester_name', 'requester_phone', 'requester_position')
+            .distinct()
+            .order_by('requester_name')
+        )
+        seen = set()
+        for r in reporters:
+            phone_norm = (r['requester_phone'] or '').replace('-', '').strip()
+            key = (r['requester_name'], phone_norm)
+            if key in seen:
+                continue
+            seen.add(key)
+            if phone_norm and phone_norm in registered_phones:
+                continue
+            result.append({
+                'name':       r['requester_name'],
+                'position':   r['requester_position'] or '',
+                'phone':      r['requester_phone'] or '',
+                'email':      '',
+                'is_primary': False,
+                'source':     'incident',
+            })
+
+        return Response(result)
+
+    @action(detail=True, methods=['get'])
+    def inspection_history(self, request, pk=None):
+        """학교별 점검 이력 (SchoolInspection + 완료 Report)"""
+        school = self.get_object()
+
+        from apps.progress.models import SchoolInspection
+        from apps.reports.models import Report
+
+        PLAN_TYPE_LABELS = {
+            'regular': '정기점검', 'special': '특별점검',
+            'quarterly': '분기점검', 'project': '사업점검',
+            'survey': '실태조사', 'followup': '사후점검',
+        }
+        STATUS_LABELS = {
+            'scheduled': '예정', 'in_progress': '진행중',
+            'completed': '완료', 'cancelled': '취소',
+        }
+
+        # SchoolInspection 이력 (최근 20건)
+        insp_qs = SchoolInspection.objects.filter(
+            school=school
+        ).select_related('plan', 'assigned_worker').order_by('-plan__start_date')[:20]
+
+        inspections = []
+        for si in insp_qs:
+            inspections.append({
+                'plan_name':   si.plan.name,
+                'plan_type':   PLAN_TYPE_LABELS.get(si.plan.plan_type, si.plan.plan_type),
+                'start_date':  si.plan.start_date.isoformat(),
+                'end_date':    si.plan.end_date.isoformat(),
+                'status':      STATUS_LABELS.get(si.status, si.status),
+                'status_code': si.status,
+                'worker':      si.assigned_worker.name if si.assigned_worker else '-',
+                'inspect_date': si.inspect_date.isoformat() if si.inspect_date else None,
+                'note':        si.note or '',
+            })
+
+        # 완료 정기점검 보고서 (최근 10건)
+        rpt_qs = Report.objects.filter(
+            school=school,
+            template__report_type='regular',
+            status='completed',
+        ).select_related('created_by').order_by('-completed_at')[:10]
+
+        reports = [{
+            'title':        r.title,
+            'completed_at': r.completed_at.strftime('%Y-%m-%d') if r.completed_at else '-',
+            'created_by':   r.created_by.name if r.created_by else '-',
+        } for r in rpt_qs]
+
+        return Response({'inspections': inspections, 'reports': reports})
+
+    @action(detail=True, methods=['get'])
+    def floor_plan(self, request, pk=None):
+        """건물·층·호실 트리 + 평면도 좌표 (건물정보 탭용)"""
+        school = self.get_object()
+        result = []
+        for bld in school.buildings.prefetch_related(
+            'floor_list__rooms'
+        ).order_by('order'):
+            floors = []
+            for fl in bld.floor_list.order_by('-floor_num'):
+                rooms = []
+                for rm in fl.rooms.order_by('room_number', 'name'):
+                    rooms.append({
+                        'id':          rm.id,
+                        'name':        rm.name,
+                        'room_number': rm.room_number,
+                        'room_type':   rm.room_type,
+                        'area_m2':     float(rm.area_m2) if rm.area_m2 else None,
+                        'pos_x':       float(rm.pos_x)   if rm.pos_x   else None,
+                        'pos_y':       float(rm.pos_y)   if rm.pos_y   else None,
+                        'pos_w':       float(rm.pos_w)   if rm.pos_w   else None,
+                        'pos_h':       float(rm.pos_h)   if rm.pos_h   else None,
+                    })
+                floors.append({
+                    'id':         fl.id,
+                    'floor_num':  fl.floor_num,
+                    'floor_name': fl.floor_name,
+                    'rooms':      rooms,
+                })
+            result.append({
+                'id':       bld.id,
+                'name':     bld.name,
+                'floors':   bld.floors,
+                'basement': bld.basement,
+                'floor_list': floors,
+            })
+        # VSDX 임포트 로그 (최근 5건)
+        from django.utils import timezone as tz
+        logs = VsdxImportLog.objects.filter(school=school).order_by('-imported_at')[:5]
+        log_data = [{'file_name': l.file_name, 'status': l.status,
+                     'room_count': l.room_count,
+                     'imported_at': tz.localtime(l.imported_at).strftime('%Y-%m-%d %H:%M'),
+                     'error_msg': l.error_msg} for l in logs]
+        return Response({'buildings': result, 'vsdx_logs': log_data})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
+    def trigger_vsdx(self, request, pk=None):
+        """VSDX 수동 재파싱 트리거 (관리자 전용)"""
+        import os
+        from django.conf import settings
+        from .tasks import import_vsdx_file
+
+        school = self.get_object()
+        vsdx_folder = os.path.join(
+            getattr(settings, 'NAS_MEDIA_ROOT', '/app/nas/media/npms'),
+            'data', '건물정보_비지오'
+        )
+        # 학교명과 일치하는 파일 검색
+        matched = []
+        if os.path.isdir(vsdx_folder):
+            for fname in os.listdir(vsdx_folder):
+                if fname.lower().endswith('.vsdx') and school.name in fname:
+                    import_vsdx_file.delay(os.path.join(vsdx_folder, fname))
+                    matched.append(fname)
+        if not matched:
+            return Response({'error': f'{school.name} VSDX 파일 없음'}, status=404)
+        return Response({'queued': matched})
+
+    @action(detail=True, methods=['get'])
+    def rooms_for_select(self, request, pk=None):
+        """사진·장애접수 등 타 앱용 cascade 셀렉트 데이터
+        ?building=건물ID&floor=층ID"""
+        school    = self.get_object()
+        bld_id    = request.query_params.get('building')
+        floor_id  = request.query_params.get('floor')
+
+        if floor_id:
+            rooms = SchoolRoom.objects.filter(
+                floor_id=floor_id
+            ).exclude(room_type='support').order_by('room_number', 'name')
+            return Response([{'id': r.id, 'name': r.name,
+                               'room_number': r.room_number} for r in rooms])
+
+        if bld_id:
+            floors = SchoolFloor.objects.filter(
+                building_id=bld_id
+            ).order_by('-floor_num')
+            return Response([{'id': f.id, 'floor_name': f.floor_name,
+                               'floor_num': f.floor_num} for f in floors])
+
+        # 건물 목록
+        buildings = school.buildings.order_by('order')
+        return Response([{'id': b.id, 'name': b.name} for b in buildings])
+
+    @action(detail=True, methods=['post'], url_path='add_building')
+    def add_building(self, request, pk=None):
+        """건물 신규 추가 (사진/장애 등록 모달에서 직접 입력 시)"""
+        school = self.get_object()
+        name = (request.data.get('name') or '').strip()
+        if not name:
+            return Response({'error': '건물명을 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
+        bld, _ = SchoolBuilding.objects.get_or_create(school=school, name=name, defaults={'order': 99})
+        return Response({'id': bld.id, 'name': bld.name})
+
+    @action(detail=True, methods=['post'], url_path='add_floor')
+    def add_floor(self, request, pk=None):
+        """층 신규 추가"""
+        building_id = request.data.get('building_id')
+        floor_name  = (request.data.get('floor_name') or '').strip()
+        if not building_id or not floor_name:
+            return Response({'error': '건물ID와 층이름을 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            building = SchoolBuilding.objects.get(pk=building_id)
+        except SchoolBuilding.DoesNotExist:
+            return Response({'error': '건물을 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+        floor, _ = SchoolFloor.objects.get_or_create(
+            building=building, floor_name=floor_name,
+            defaults={'floor_num': SchoolFloor.objects.filter(building=building).count() + 1}
+        )
+        return Response({'id': floor.id, 'floor_name': floor.floor_name})
+
+    @action(detail=True, methods=['post'], url_path='add_room')
+    def add_room(self, request, pk=None):
+        """교실 신규 추가"""
+        floor_id  = request.data.get('floor_id')
+        room_name = (request.data.get('room_name') or '').strip()
+        if not floor_id or not room_name:
+            return Response({'error': '층ID와 교실명을 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            floor = SchoolFloor.objects.get(pk=floor_id)
+        except SchoolFloor.DoesNotExist:
+            return Response({'error': '층을 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+        room, _ = SchoolRoom.objects.get_or_create(
+            floor=floor, name=room_name,
+            defaults={'room_type': 'other'}
+        )
+        return Response({'id': room.id, 'name': room.name})
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
+    def csv_upload(self, request):
+        """학교 CSV 업로드 (학교명,교육지원청,학제,주소,위도,경도)
+        mode: add_update(기본) | reset(초기화 후 입력)
+        """
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'error': '파일이 없습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        mode = request.data.get('mode', 'add_update')
+        if mode == 'reset':
+            School.objects.all().update(is_active=False)
+        reader = csv.DictReader(io.StringIO(file.read().decode('utf-8-sig')))
+        created, updated, errors = 0, 0, []
+        for row in reader:
+            try:
+                center = SupportCenter.objects.get(name=row['교육지원청'])
+                stype  = SchoolType.objects.get(name=row['학제'])
+                school, is_new = School.objects.update_or_create(
+                    name=row['학교명'], support_center=center,
+                    defaults={
+                        'school_type': stype,
+                        'address':     row.get('주소', ''),
+                        'lat':         row.get('위도') or None,
+                        'lng':         row.get('경도') or None,
+                        'phone':       row.get('전화번호', ''),
+                        'is_active':   True,
+                    }
+                )
+                if is_new:
+                    created += 1
+                else:
+                    updated += 1
+            except Exception as e:
+                errors.append({'row': row, 'error': str(e)})
+        return Response({'created': created, 'updated': updated, 'errors': errors})
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
+    def contacts_csv_upload(self, request):
+        """교직원(담당자) CSV 업로드 (학교명,성명,직위,전화번호,이메일)
+        mode: add_update(기본) | reset(학교별 담당자 초기화 후 입력)
+        """
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'error': '파일이 없습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        mode = request.data.get('mode', 'add_update')
+        try:
+            content = file.read().decode('utf-8-sig')
+        except UnicodeDecodeError:
+            content = file.read().decode('cp949', errors='replace')
+        reader = csv.DictReader(io.StringIO(content))
+        rows = list(reader)
+        if mode == 'reset':
+            school_names = {r.get('학교명', '').strip() for r in rows if r.get('학교명')}
+            School.objects.filter(name__in=school_names).prefetch_related('contacts')
+            from apps.schools.models import SchoolContact
+            SchoolContact.objects.filter(school__name__in=school_names).delete()
+        from apps.schools.models import SchoolContact
+        created, updated, errors = 0, 0, []
+        for row in rows:
+            try:
+                school = School.objects.get(name=row['학교명'].strip())
+                phone  = row.get('전화번호', '').strip()
+                name   = row.get('성명', '').strip()
+                if not name:
+                    errors.append({'row': row, 'error': '성명 필수'})
+                    continue
+                contact, is_new = SchoolContact.objects.update_or_create(
+                    school=school, name=name,
+                    defaults={
+                        'position': row.get('직위', '').strip(),
+                        'phone':    phone,
+                        'email':    row.get('이메일', '').strip(),
+                    }
+                )
+                if is_new:
+                    created += 1
+                else:
+                    updated += 1
+            except School.DoesNotExist:
+                errors.append({'row': row, 'error': f"학교 없음: {row.get('학교명')}"})
+            except Exception as e:
+                errors.append({'row': row, 'error': str(e)})
+        return Response({'created': created, 'updated': updated, 'errors': errors})
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAdmin])
+    def contacts_csv_download(self, request):
+        """교직원(담당자) CSV 다운로드"""
+        from apps.schools.models import SchoolContact
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="contacts.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['학교명', '교육지원청', '성명', '직위', '전화번호', '이메일'])
+        for c in SchoolContact.objects.select_related('school', 'school__support_center').order_by('school__name', 'name'):
+            writer.writerow([
+                c.school.name,
+                c.school.support_center.name if c.school.support_center else '',
+                c.name, c.position, c.phone, c.email,
+            ])
+        return response
+
+    @action(detail=False, methods=['get'])
+    def csv_download(self, request):
+        """학교 목록 CSV 다운로드"""
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="schools.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['학교명', '교육지원청', '학제', '주소', '위도', '경도', '전화번호'])
+        for s in School.objects.select_related('support_center', 'school_type').filter(is_active=True):
+            writer.writerow([s.name, s.support_center.name, s.school_type.name,
+                             s.address, s.lat, s.lng, s.phone])
+        return response
+
+
+class SchoolBuildingViewSet(viewsets.ModelViewSet):
+    queryset = SchoolBuilding.objects.select_related('school')
+    serializer_class = SchoolBuildingSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        school_id = self.request.query_params.get('school')
+        qs = super().get_queryset()
+        if school_id:
+            qs = qs.filter(school_id=school_id)
+        return qs
+
+    @action(detail=False, methods=['get'])
+    def csv_download(self, request):
+        """건물명 CSV 다운로드"""
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="buildings.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['학교명', '건물명', '교육지원청', '학제', '층수'])
+        for b in SchoolBuilding.objects.select_related('school', 'school__support_center', 'school__school_type'):
+            writer.writerow([
+                b.school.name,
+                b.name,
+                b.school.support_center.name if b.school.support_center else '',
+                b.school.school_type.name    if b.school.school_type    else '',
+                b.floor_count if hasattr(b, 'floor_count') else '',
+            ])
+        return response
+
+    @action(detail=False, methods=['get'])
+    def rooms_csv_download(self, request):
+        """건물·층·호실 전체 CSV 다운로드
+        ?school=학교ID  (생략 시 전체 — 슈퍼관리자 전용)
+        ?center=지원청코드
+        """
+        from urllib.parse import quote
+        school_id = request.query_params.get('school')
+        center    = request.query_params.get('center')
+
+        # 전체 다운로드는 슈퍼관리자 전용
+        if not school_id and getattr(request.user, 'role', '') != 'superadmin':
+            return Response({'error': '전체 다운로드는 슈퍼관리자만 가능합니다.'}, status=403)
+
+        qs = SchoolRoom.objects.select_related(
+            'floor__building__school',
+            'floor__building__school__support_center',
+            'floor__building__school__school_type',
+        ).order_by(
+            'floor__building__school__support_center__name',
+            'floor__building__school__name',
+            'floor__building__name',
+            '-floor__floor_num',
+            'room_number',
+            'name',
+        )
+        if school_id:
+            qs = qs.filter(floor__building__school_id=school_id)
+        if center:
+            qs = qs.filter(floor__building__school__support_center__code=center)
+
+        # 파일명 결정: 건물정보_학교명.csv 또는 건물정보_전체.csv
+        if school_id:
+            school_obj = School.objects.filter(pk=school_id).first()
+            label = school_obj.name if school_obj else school_id
+        else:
+            label = '전체'
+        fname_ascii = quote(f'건물정보_{label}.csv', safe='')
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = f"attachment; filename*=UTF-8''{fname_ascii}"
+        import re as _re
+        _date_pat = _re.compile(r'^\d{1,2}[-/]\d{1,2}$')
+
+        def _safe(v):
+            """Excel 날짜 자동변환 방지: '1-4' → ="1-4" """
+            s = str(v) if v is not None else ''
+            if _date_pat.match(s):
+                return f'="{s}"'
+            return s
+
+        writer = csv.writer(response)
+        writer.writerow([
+            '교육지원청', '학제', '학교명',
+            '건물명', '지상층수', '지하층수',
+            '층명', '층번호',
+            '호실번호', '호실명', '유형',
+            '면적(㎡)',
+        ])
+        ROOM_TYPE_KO = {
+            'class': '학급교실', 'special': '특별교실', 'office': '교무/행정',
+            'toilet': '화장실', 'support': '기타',
+        }
+        for rm in qs:
+            fl  = rm.floor
+            bld = fl.building
+            sch = bld.school
+            writer.writerow([
+                sch.support_center.name if sch.support_center else '',
+                sch.school_type.name    if sch.school_type    else '',
+                sch.name,
+                bld.name, bld.floors, bld.basement,
+                fl.floor_name, fl.floor_num,
+                _safe(rm.room_number), _safe(rm.name),
+                ROOM_TYPE_KO.get(rm.room_type, rm.room_type),
+                float(rm.area_m2) if rm.area_m2 else '',
+            ])
+        return response
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
+    def csv_upload(self, request):
+        """건물명 CSV 업로드 (학교명,건물명)
+        mode: add_update(기본) | reset(학교별 건물 초기화 후 입력)
+        """
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'error': '파일 없음'}, status=status.HTTP_400_BAD_REQUEST)
+        mode = request.data.get('mode', 'add_update')
+        content = file.read().decode('utf-8-sig')
+        reader = csv.DictReader(io.StringIO(content))
+        rows = list(reader)
+        if mode == 'reset':
+            school_names = {r.get('학교명', '').strip() for r in rows if r.get('학교명')}
+            SchoolBuilding.objects.filter(school__name__in=school_names).delete()
+        created, updated, errors = 0, 0, []
+        for row in rows:
+            try:
+                school = School.objects.get(name=row['학교명'].strip())
+                _, is_new = SchoolBuilding.objects.update_or_create(
+                    school=school, name=row['건물명'].strip(),
+                    defaults={'floors': int(row['층수']) if row.get('층수', '').strip().isdigit() else 1}
+                )
+                if is_new:
+                    created += 1
+                else:
+                    updated += 1
+            except Exception as e:
+                errors.append({'row': row, 'error': str(e)})
+        return Response({'created': created, 'updated': updated, 'errors': errors})

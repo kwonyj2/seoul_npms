@@ -1,0 +1,1492 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}대시보드{% endblock %}
+{% block page_title %}<i class="bi bi-speedometer2 me-2"></i>통합 관제 대시보드{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* 접속자 목록 행 고정 높이 */
+  #online-list .list-group-item { min-height:38px; max-height:38px; overflow:hidden; }
+  /* 버튼 xs */
+  .btn-xs { padding:1px 7px; font-size:11px; line-height:1.6; }
+  /* SLA 탭 버튼 */
+  .sla-tab-btn {
+    flex:1; padding:4px 4px; font-size:11px; line-height:1.4;
+    background:transparent; border:none; border-bottom:2px solid transparent;
+    color:#6c757d; cursor:pointer; transition:all .15s;
+  }
+  .sla-tab-btn:hover { background:#f0f0f0; color:#212529; }
+  .sla-tab-btn.active { color:#e65c00; border-bottom-color:#e65c00; font-weight:600; background:#fff; }
+  /* SLA 목록 아이템 */
+  .sla-item {
+    border-left:3px solid transparent;
+    padding:5px 8px; border-bottom:1px solid #f0f0f0;
+    transition:background .12s;
+  }
+  .sla-item:hover { background:#fafafa; }
+  .sla-item:last-child { border-bottom:none; }
+  .sla-item.sev-critical { border-left-color:#dc3545; }
+  .sla-item.sev-high     { border-left-color:#fd7e14; }
+  .sla-item.sev-medium   { border-left-color:#ffc107; }
+  .sla-item.sev-low      { border-left-color:#0dcaf0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+  <!-- ① 상단 KPI 카드 (5개) -->
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-4 col-xl">
+      <div class="kpi-card card border-0 shadow-sm h-100">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="kpi-label text-muted">총 학교</div>
+              <div class="kpi-value" id="kpi-schools">-</div>
+            </div>
+            <div class="kpi-icon bg-primary-subtle text-primary"><i class="bi bi-building"></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl">
+      <div class="kpi-card card border-0 shadow-sm h-100">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="kpi-label text-muted">미처리 장애</div>
+              <div class="kpi-value text-danger" id="kpi-active">-</div>
+            </div>
+            <div class="kpi-icon bg-danger-subtle text-danger"><i class="bi bi-exclamation-triangle"></i></div>
+          </div>
+          <div class="mt-1">
+            <small class="text-muted">접수 <span id="kpi-received" class="fw-bold text-warning">-</span> /
+            배정 <span id="kpi-assigned" class="fw-bold text-info">-</span> /
+            처리중 <span id="kpi-processing" class="fw-bold text-primary">-</span></small>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl">
+      <div class="kpi-card card border-0 shadow-sm h-100">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="kpi-label text-muted">SLA 준수율</div>
+              <div class="kpi-value text-success" id="kpi-sla">-<small class="fs-6">%</small></div>
+            </div>
+            <div class="kpi-icon bg-success-subtle text-success"><i class="bi bi-shield-check"></i></div>
+          </div>
+          <div class="progress mt-2" style="height:4px;">
+            <div class="progress-bar bg-success" id="sla-bar" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl">
+      <div class="kpi-card card border-0 shadow-sm h-100">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="kpi-label text-muted">현재 접속자</div>
+              <div class="kpi-value" id="kpi-online">-</div>
+            </div>
+            <div class="kpi-icon bg-info-subtle text-info"><i class="bi bi-people-fill"></i></div>
+          </div>
+          <div class="mt-1">
+            <small class="text-muted">활성 인력 <span id="kpi-workers" class="fw-bold">-</span>명</small>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl">
+      <div class="kpi-card card border-0 shadow-sm h-100">
+        <div class="card-body p-3">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="kpi-label text-muted">오늘 장애</div>
+              <div class="kpi-value text-primary" id="kpi-today">-</div>
+            </div>
+            <div class="kpi-icon bg-primary-subtle text-primary"><i class="bi bi-calendar-day"></i></div>
+          </div>
+          <div class="mt-1">
+            <small class="text-muted">완료 <span id="kpi-today-done" class="fw-bold text-success">-</span>건</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ② 본문 2열 레이아웃 (좌: 지도+장애현황 / 우: 인력+자재) -->
+  <div class="row g-2">
+
+    <!-- 좌측: 장애현황 실시간 목록 -->
+    <div class="col-12 col-xl-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header d-flex align-items-center justify-content-between py-2 bg-white border-bottom">
+          <span class="fw-semibold"><i class="bi bi-exclamation-triangle text-danger me-1"></i>장애현황 실시간</span>
+          <a href="/npms/incidents/list/" class="btn btn-xs btn-outline-primary">전체보기</a>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" style="table-layout:fixed;width:100%;">
+            <colgroup>
+              <col style="width:24%;">
+              <col style="width:20%;">
+              <col style="width:28%;">
+              <col style="width:15%;">
+              <col style="width:13%;">
+            </colgroup>
+            <thead class="table-light">
+              <tr>
+                <th>접수번호</th>
+                <th>지원청</th>
+                <th>학교명</th>
+                <th>상태</th>
+                <th>경과</th>
+                <th style="width:28px;"></th>
+              </tr>
+            </thead>
+            <tbody id="incident-tbody">
+              <tr><td colspan="6" class="text-center text-muted py-3">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer py-1 d-flex justify-content-between align-items-center bg-white border-top">
+          <small class="text-muted" id="dash-inc-pageinfo">-</small>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary btn-xs" id="dash-inc-prev" onclick="dashIncPage(-1)" disabled>
+              <i class="bi bi-chevron-left"></i>
+            </button>
+            <button class="btn btn-outline-secondary btn-xs" id="dash-inc-next" onclick="dashIncPage(1)">
+              <i class="bi bi-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 중앙: 카카오맵 GIS -->
+    <div class="col-12 col-xl-5">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header d-flex align-items-center justify-content-between py-2 bg-white border-bottom">
+          <span class="fw-semibold"><i class="bi bi-map text-primary me-1"></i>GIS 학교/인력 지도</span>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary btn-xs" onclick="mapShowAll()">전체</button>
+            <button class="btn btn-outline-danger btn-xs" onclick="mapShowIncidents()">장애</button>
+            <button class="btn btn-outline-success btn-xs" onclick="mapShowWorkers()">인력</button>
+          </div>
+        </div>
+        <div id="vworld-map" style="height:420px; position:relative;">
+          <div id="map-popup" style="
+            display:none; position:absolute; background:#fff; border:1px solid #ccc;
+            border-radius:6px; padding:0; box-shadow:0 2px 8px rgba(0,0,0,.2);
+            z-index:1000; min-width:150px; font-size:12px;">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 우측: 접속자 + SLA 경고 (전체 고정 틀) -->
+    <div class="col-12 col-xl-3 d-flex flex-column" style="gap:8px;">
+
+      <!-- 접속자: 5행 고정 (헤더40+바디190+푸터35=265px) -->
+      <div class="card border-0 shadow-sm flex-shrink-0" style="height:265px;">
+        <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
+          <span class="fw-semibold"><i class="bi bi-people text-info me-1"></i>현재 접속자 <span id="online-count-badge" class="badge bg-info ms-1">0</span></span>
+        </div>
+        <div class="card-body p-0" style="height:190px;overflow:hidden;">
+          <ul class="list-group list-group-flush" id="online-list">
+            <li class="list-group-item text-muted small py-2">로딩 중...</li>
+          </ul>
+        </div>
+        <div class="card-footer py-1 d-flex justify-content-between align-items-center bg-white border-top">
+          <small class="text-muted" id="online-pageinfo">-</small>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary btn-xs" id="online-prev" onclick="onlinePage(-1)" disabled><i class="bi bi-chevron-left"></i></button>
+            <button class="btn btn-outline-secondary btn-xs" id="online-next" onclick="onlinePage(1)"><i class="bi bi-chevron-right"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SLA 경고: JS가 높이 명시 적용 (id=sla-card) -->
+      <div id="sla-card" class="card border-0 shadow-sm" style="overflow:hidden;">
+
+        <div id="sla-card-hdr" class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
+          <span class="fw-semibold"><i class="bi bi-bell-fill text-warning me-1"></i>SLA 경고</span>
+          <div id="sla-header-pills" class="d-flex gap-1"></div>
+        </div>
+
+        <div id="sla-card-tabs" class="d-flex border-bottom bg-light" style="font-size:11px;">
+          <button class="sla-tab-btn active" id="stab-overview" onclick="slaTab('overview')">
+            <i class="bi bi-pie-chart-fill me-1"></i>전체
+          </button>
+          <button class="sla-tab-btn" id="stab-resolve" onclick="slaTab('resolve')">
+            처리초과 <span id="sla-cnt-resolve" class="badge bg-danger ms-1">0</span>
+          </button>
+          <button class="sla-tab-btn" id="stab-arrival" onclick="slaTab('arrival')">
+            도착초과 <span id="sla-cnt-arrival" class="badge bg-warning text-dark ms-1">0</span>
+          </button>
+        </div>
+
+        <!-- 전체 탭: 도넛 + 요약 바 -->
+        <div id="sla-panel-overview" style="overflow:hidden;display:flex;align-items:center;padding:8px;gap:12px;">
+          <div style="flex-shrink:0;text-align:center;">
+            <svg id="sla-donut-svg" viewBox="0 0 80 80" width="82" height="82">
+              <circle cx="40" cy="40" r="28" fill="none" stroke="#e9ecef" stroke-width="14"/>
+              <circle id="sla-donut-ok"  cx="40" cy="40" r="28" fill="none" stroke="#198754" stroke-width="14"
+                      stroke-dasharray="0 175.9" stroke-linecap="round" transform="rotate(-90 40 40)"/>
+              <circle id="sla-donut-bad" cx="40" cy="40" r="28" fill="none" stroke="#dc3545" stroke-width="14"
+                      stroke-dasharray="0 175.9" stroke-linecap="round" transform="rotate(-90 40 40)"/>
+              <text id="sla-donut-pct" x="40" y="38" text-anchor="middle" font-size="13" font-weight="bold" fill="#212529">-</text>
+              <text x="40" y="52" text-anchor="middle" font-size="8" fill="#6c757d">준수율</text>
+            </svg>
+            <div style="font-size:9px;color:#6c757d;margin-top:2px;">{% now "n" %}월 완료건</div>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="margin-bottom:8px;">
+              <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;">
+                <span><i class="bi bi-clock-history" style="color:#dc3545;"></i> 처리초과</span>
+                <span id="sla-ov-resolve-cnt" style="font-weight:700;color:#dc3545;">0</span>
+              </div>
+              <div style="height:7px;background:#f0f0f0;border-radius:4px;overflow:hidden;">
+                <div id="sla-ov-resolve-bar" style="height:100%;background:#dc3545;border-radius:4px;width:0%;transition:width .4s;"></div>
+              </div>
+            </div>
+            <div style="margin-bottom:8px;">
+              <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;">
+                <span><i class="bi bi-geo-alt-fill" style="color:#fd7e14;"></i> 도착초과</span>
+                <span id="sla-ov-arrival-cnt" style="font-weight:700;color:#fd7e14;">0</span>
+              </div>
+              <div style="height:7px;background:#f0f0f0;border-radius:4px;overflow:hidden;">
+                <div id="sla-ov-arrival-bar" style="height:100%;background:#fd7e14;border-radius:4px;width:0%;transition:width .4s;"></div>
+              </div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;">
+                <span><i class="bi bi-exclamation-triangle" style="color:#0d6efd;"></i> 미처리</span>
+                <span id="sla-ov-active-cnt" style="font-weight:700;color:#0d6efd;">0</span>
+              </div>
+              <div style="height:7px;background:#f0f0f0;border-radius:4px;overflow:hidden;">
+                <div id="sla-ov-active-bar" style="height:100%;background:#0d6efd;border-radius:4px;width:100%;transition:width .4s;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 처리초과 탭 -->
+        <div id="sla-panel-resolve" style="display:none;overflow:hidden;">
+          <div id="sla-list-resolve" style="overflow:hidden;"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 8px;background:#f8f9fa;border-top:1px solid #dee2e6;height:26px;flex-shrink:0;">
+            <small class="text-muted" id="sla-resolve-pageinfo">-</small>
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-outline-secondary btn-xs" id="sla-resolve-prev" onclick="slaPage('resolve',-1)"><i class="bi bi-chevron-left"></i></button>
+              <button class="btn btn-outline-secondary btn-xs" id="sla-resolve-next" onclick="slaPage('resolve',1)"><i class="bi bi-chevron-right"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 도착초과 탭 -->
+        <div id="sla-panel-arrival" style="display:none;overflow:hidden;">
+          <div id="sla-list-arrival" style="overflow:hidden;"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 8px;background:#f8f9fa;border-top:1px solid #dee2e6;height:26px;flex-shrink:0;">
+            <small class="text-muted" id="sla-arrival-pageinfo">-</small>
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-outline-secondary btn-xs" id="sla-arrival-prev" onclick="slaPage('arrival',-1)"><i class="bi bi-chevron-left"></i></button>
+              <button class="btn btn-outline-secondary btn-xs" id="sla-arrival-next" onclick="slaPage('arrival',1)"><i class="bi bi-chevron-right"></i></button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /sla-card -->
+    </div><!-- /우측 컬럼 -->
+  </div>
+
+  <!-- ② 분기 진척현황 + 오늘의 점검계획 -->
+  <div class="row g-2 mt-1">
+
+    <!-- 좌측: 분기 진척현황 (탭) -->
+    <div class="col-12 col-xl-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header d-flex align-items-center justify-content-between py-2 bg-white border-bottom">
+          <span class="fw-semibold"><i class="bi bi-bar-chart-steps text-success me-1"></i>분기 진척현황</span>
+          <a href="/npms/progress/" class="btn btn-xs btn-outline-secondary">전체</a>
+        </div>
+        <!-- 탭 네비게이션 -->
+        <div class="border-bottom px-2 pt-1" id="plan-tabs-nav">
+          <div class="text-muted small py-1">로딩 중...</div>
+        </div>
+        <!-- 탭 컨텐츠 -->
+        <div class="card-body p-2" id="plan-stats-content" style="overflow-y:auto;max-height:220px;"></div>
+      </div>
+    </div>
+
+    <!-- 우측: 오늘의 점검계획 -->
+    <div class="col-12 col-xl-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header d-flex align-items-center justify-content-between py-2 bg-white border-bottom">
+          <span class="fw-semibold"><i class="bi bi-calendar-day text-primary me-1"></i>오늘의 점검계획 <span class="text-muted fw-normal small" id="today-date-badge"></span></span>
+          <span id="today-summary-badge" class="badge bg-secondary"></span>
+        </div>
+        <!-- 탭 네비게이션 -->
+        <div class="border-bottom px-2 pt-1" id="today-tabs-nav">
+          <div class="text-muted small py-1">로딩 중...</div>
+        </div>
+        <!-- 탭 컨텐츠 -->
+        <div class="card-body p-2" id="today-stats-content" style="overflow-y:auto;max-height:220px;"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ③ 장애현황 + 인력 근태현황 -->
+  <div class="row g-2 mt-1">
+
+    <!-- 장애현황 (일/주/월 탭) -->
+    <div class="col-12 col-xl-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header d-flex align-items-center justify-content-between py-2 bg-white border-bottom">
+          <span class="fw-semibold"><i class="bi bi-exclamation-triangle text-danger me-1"></i>장애현황 <span class="text-muted fw-normal small" id="inc-date-badge"></span></span>
+          <span id="inc-stats-badge" class="badge bg-secondary"></span>
+        </div>
+        <!-- 탭 -->
+        <div class="border-bottom px-2 pt-1">
+          <ul class="nav nav-tabs border-0" style="flex-wrap:nowrap;">
+            <li class="nav-item"><button class="nav-link active py-1 px-2 small" onclick="loadIncidentStats('day', this)">일</button></li>
+            <li class="nav-item"><button class="nav-link py-1 px-2 small" onclick="loadIncidentStats('week', this)">주</button></li>
+            <li class="nav-item"><button class="nav-link py-1 px-2 small" onclick="loadIncidentStats('month', this)">월</button></li>
+            <li class="nav-item"><button class="nav-link py-1 px-2 small" onclick="loadIncidentStats('quarter', this)">분기</button></li>
+            <li class="nav-item"><button class="nav-link py-1 px-2 small" onclick="loadIncidentStats('half', this)">반기</button></li>
+            <li class="nav-item"><button class="nav-link py-1 px-2 small" onclick="loadIncidentStats('year', this)">년</button></li>
+          </ul>
+        </div>
+        <div class="card-body p-2" id="inc-stats-content" style="overflow-x:auto;max-height:220px;">
+          <div class="text-muted small text-center py-3">로딩 중...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 인력 근태현황 -->
+    <div class="col-12 col-xl-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header d-flex align-items-center justify-content-between py-2 bg-white border-bottom">
+          <span class="fw-semibold"><i class="bi bi-person-check text-success me-1"></i>인력 근태현황 <span class="text-muted fw-normal small" id="att-date-badge"></span></span>
+          <span id="att-summary-badge" class="badge bg-secondary"></span>
+        </div>
+        <!-- 탭 -->
+        <div class="border-bottom px-2 pt-1">
+          <ul class="nav nav-tabs border-0" style="flex-wrap:nowrap;">
+            <li class="nav-item"><button class="nav-link active py-1 px-2 small" onclick="loadAttendanceStats('day', this)">일</button></li>
+            <li class="nav-item"><button class="nav-link py-1 px-2 small" onclick="loadAttendanceStats('week', this)">주</button></li>
+            <li class="nav-item"><button class="nav-link py-1 px-2 small" onclick="loadAttendanceStats('month', this)">월</button></li>
+            <li class="nav-item"><button class="nav-link py-1 px-2 small" onclick="loadAttendanceStats('quarter', this)">분기</button></li>
+            <li class="nav-item"><button class="nav-link py-1 px-2 small" onclick="loadAttendanceStats('half', this)">반기</button></li>
+            <li class="nav-item"><button class="nav-link py-1 px-2 small" onclick="loadAttendanceStats('year', this)">년</button></li>
+          </ul>
+        </div>
+
+        <div class="card-body p-2" id="att-stats-content" style="overflow-x:auto;max-height:220px;">
+          <div class="text-muted small text-center py-3">로딩 중...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ④ 유관기관 -->
+  <div class="row mt-2">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body py-2">
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <small class="text-muted fw-semibold me-1">유관기관:</small>
+            {% for name, url in related_sites %}
+              <a href="{{ url }}" target="_blank" class="badge bg-light text-secondary text-decoration-none border">{{ name }}</a>
+            {% endfor %}
+            <span class="ms-2 badge bg-danger text-white border">
+              <i class="bi bi-telephone-fill me-1"></i>네트워크 장애 신고: 1551-5596
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const PRIORITY_COLOR = {critical:'danger', high:'warning', medium:'primary', low:'secondary'};
+const STATUS_BADGE = {
+  received:'<span class="badge bg-warning text-dark">접수</span>',
+  assigned:'<span class="badge bg-info text-dark">배정</span>',
+  moving:'<span class="badge bg-primary">이동</span>',
+  arrived:'<span class="badge bg-purple">도착</span>',
+  processing:'<span class="badge bg-primary">처리중</span>',
+  completed:'<span class="badge bg-success">완료</span>',
+};
+
+// ── 장애현황 페이지네이션 ─────────────────────────────────────────────────
+const DASH_INC_PER_PAGE = 13;
+let dashIncData = [], dashIncCurPage = 1;
+
+function renderIncidentTable() {
+  const tbody = document.getElementById('incident-tbody');
+  const total = dashIncData.length;
+  const totalPages = Math.max(1, Math.ceil(total / DASH_INC_PER_PAGE));
+  dashIncCurPage = Math.min(dashIncCurPage, totalPages);
+  const start = (dashIncCurPage - 1) * DASH_INC_PER_PAGE;
+  const page  = dashIncData.slice(start, start + DASH_INC_PER_PAGE);
+
+  document.getElementById('dash-inc-pageinfo').textContent = `${dashIncCurPage}/${totalPages} (${total}건)`;
+  document.getElementById('dash-inc-prev').disabled = dashIncCurPage <= 1;
+  document.getElementById('dash-inc-next').disabled = dashIncCurPage >= totalPages;
+
+  if (!page.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">오늘 장애 없음</td></tr>';
+    return;
+  }
+  tbody.innerHTML = page.map(i => {
+    const hasCoord = i.school_lat && i.school_lng;
+    const mapBtn = hasCoord
+      ? `<button class="btn btn-xs p-0 border-0 bg-transparent text-primary"
+                 title="${i.school_name} 지도 보기"
+                 onclick="event.stopPropagation();focusSchoolOnMap(${i.school_id},${i.school_lat},${i.school_lng},'${i.school_name.replace(/'/g,"\\'").replace(/\\/g,'\\\\')}')">
+           <i class="bi bi-geo-alt-fill" style="font-size:.85rem;"></i>
+         </button>`
+      : `<i class="bi bi-geo-alt text-muted" style="font-size:.85rem;opacity:.4;" title="좌표 미등록"></i>`;
+    return `
+    <tr class="cursor-pointer${i.status === 'completed' ? ' table-success opacity-75' : ''}"
+        onclick="location.href='/npms/incidents/${i.id}/'">
+      <td class="text-truncate"><span class="badge bg-${PRIORITY_COLOR[i.priority]||'secondary'}">${i.incident_number.slice(-6)}</span></td>
+      <td class="text-truncate" title="${i.center_name||''}">${i.center_name||'-'}</td>
+      <td class="text-truncate" title="${i.school_name}">${i.school_name}</td>
+      <td>${STATUS_BADGE[i.status]||i.status}</td>
+      <td><small class="${i.elapsed_min>60&&i.status!=='completed'?'text-danger fw-bold':'text-muted'}">${i.elapsed_min}분</small></td>
+      <td class="text-center" style="width:28px;">${mapBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+function dashIncPage(delta) {
+  dashIncCurPage += delta;
+  renderIncidentTable();
+}
+
+// ── 접속자 페이지네이션 ───────────────────────────────────────────────────
+const ONLINE_PER_PAGE = 5;
+let onlineData = [], onlineCurPage = 1;
+
+function renderOnlineList() {
+  const ul = document.getElementById('online-list');
+  const total = onlineData.length;
+  const totalPages = Math.max(1, Math.ceil(total / ONLINE_PER_PAGE));
+  onlineCurPage = Math.min(onlineCurPage, totalPages);
+  const start = (onlineCurPage - 1) * ONLINE_PER_PAGE;
+  const page  = onlineData.slice(start, start + ONLINE_PER_PAGE);
+
+  document.getElementById('online-count-badge').textContent = total;
+  document.getElementById('online-pageinfo').textContent    = `${onlineCurPage}/${totalPages}`;
+  document.getElementById('online-prev').disabled = onlineCurPage <= 1;
+  document.getElementById('online-next').disabled = onlineCurPage >= totalPages;
+
+  if (!page.length) {
+    ul.innerHTML = '<li class="list-group-item small text-muted py-1">접속자 없음</li>';
+    return;
+  }
+  ul.innerHTML = page.map(u => `
+    <li class="list-group-item py-1 px-2 d-flex align-items-center justify-content-between gap-1" style="min-height:0;">
+      <span class="small fw-semibold text-nowrap"><i class="bi bi-circle-fill text-success me-1" style="font-size:.45rem;vertical-align:middle;"></i>${u.user__name}</span>
+      <small class="text-muted text-nowrap">${u.role_display || ''}</small>
+      <small class="badge bg-light text-primary border text-nowrap">${u.current_page || '접속중'}</small>
+      <small class="text-muted text-nowrap">${u.last_active || ''}</small>
+    </li>`).join('');
+}
+
+function onlinePage(delta) {
+  onlineCurPage += delta;
+  renderOnlineList();
+}
+
+// ── 렌더링 (WebSocket / REST 공용) ────────────────────────────────────────
+function renderDashboard(d) {
+  // KPI
+  document.getElementById('kpi-schools').textContent    = d.school_count?.toLocaleString() ?? '-';
+  document.getElementById('kpi-active').textContent     = (d.incidents.received + d.incidents.assigned + d.incidents.processing) || 0;
+  document.getElementById('kpi-received').textContent   = d.incidents.received ?? 0;
+  document.getElementById('kpi-assigned').textContent   = d.incidents.assigned ?? 0;
+  document.getElementById('kpi-processing').textContent = d.incidents.processing ?? 0;
+  const slaRate = d.incidents.sla_rate;
+  const slaEl   = document.getElementById('kpi-sla');
+  if (slaRate === null || slaRate === undefined) {
+    slaEl.innerHTML = '-<small class="fs-6">%</small>';
+    document.getElementById('sla-bar').style.width = '0%';
+  } else {
+    slaEl.innerHTML = `${slaRate}<small class="fs-6">%</small>`;
+    slaEl.className = `kpi-value ${slaRate >= 80 ? 'text-success' : slaRate >= 50 ? 'text-warning' : 'text-danger'}`;
+    document.getElementById('sla-bar').style.width = `${slaRate}%`;
+    document.getElementById('sla-bar').className   = `progress-bar ${slaRate >= 80 ? 'bg-success' : slaRate >= 50 ? 'bg-warning' : 'bg-danger'}`;
+  }
+  document.getElementById('kpi-online').textContent     = d.online_count ?? 0;
+  document.getElementById('kpi-workers').textContent    = d.active_workers ?? 0;
+  document.getElementById('kpi-today').textContent      = d.incidents.today ?? 0;
+  document.getElementById('kpi-today-done').textContent = d.incidents.today_completed ?? 0;
+
+  // 헤더 뱃지
+  document.getElementById('hdr-received').textContent   = d.incidents.received ?? 0;
+  document.getElementById('hdr-processing').textContent = d.incidents.processing ?? 0;
+  document.getElementById('hdr-sla').textContent        = slaRate !== null && slaRate !== undefined ? slaRate : '-';
+  document.getElementById('hdr-online').textContent     = d.online_count ?? 0;
+  const badge = document.getElementById('badge-incidents');
+  if (badge) badge.textContent = d.incidents.received > 0 ? d.incidents.received : '';
+
+  // 장애 목록 (페이지네이션)
+  dashIncData = d.recent_incidents || [];
+  dashIncCurPage = 1;
+  renderIncidentTable();
+
+  // 접속자 목록 (페이지네이션)
+  onlineData = d.online_users || [];
+  onlineCurPage = 1;
+  renderOnlineList();
+
+  // SLA 경고 카드 — 도넛 + 탭 렌더
+  const incActive = (d.incidents.received ?? 0) + (d.incidents.assigned ?? 0) + (d.incidents.processing ?? 0);
+  _updateDonut(slaRate);
+  renderSlaAlerts(d.sla_warnings, incActive);
+}
+
+/* ══════════════════════════════════════════════════════
+   SLA 경고 카드 — 3탭 (전체/처리초과/도착초과)
+   ══════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   SLA 경고 카드 — JS 높이 고정 + 3탭 동일 크기
+   ══════════════════════════════════════════════════════════════ */
+let _slaData = null;
+
+/* ── 1. 레이아웃 고정: incident 카드 높이 측정 후 SLA 카드·패널에 적용 ── */
+function fixSlaLayout() {
+  const incCard    = document.getElementById('incident-tbody')?.closest('.card');
+  const onlineCard = document.getElementById('online-list')?.closest('.card');
+  const slaCard    = document.getElementById('sla-card');
+  if (!incCard || !onlineCard || !slaCard) return;
+
+  const incH    = Math.round(incCard.getBoundingClientRect().height);
+  const onlineH = Math.round(onlineCard.getBoundingClientRect().height);
+  const gap     = 8;
+  const slaH    = Math.max(140, incH - onlineH - gap);
+
+  // SLA 카드 고정
+  slaCard.style.height    = slaH + 'px';
+  slaCard.style.minHeight = slaH + 'px';
+  slaCard.style.maxHeight = slaH + 'px';
+  slaCard.style.overflow  = 'hidden';
+
+  // 3개 패널 모두 동일한 픽셀 높이
+  const hdrH  = Math.round(document.getElementById('sla-card-hdr')?.getBoundingClientRect().height  || 42);
+  const tabH  = Math.round(document.getElementById('sla-card-tabs')?.getBoundingClientRect().height || 30);
+  const panelH = Math.max(60, slaH - hdrH - tabH);
+
+  ['overview','resolve','arrival'].forEach(t => {
+    const p = document.getElementById('sla-panel-' + t);
+    if (!p) return;
+    p.style.height    = panelH + 'px';
+    p.style.minHeight = panelH + 'px';
+    p.style.maxHeight = panelH + 'px';
+    p.style.overflow  = 'hidden';
+  });
+
+  // 처리/도착 패널: flex column — 리스트는 페이지네이션 푸터 제외한 높이
+  ['resolve','arrival'].forEach(t => {
+    const p = document.getElementById('sla-panel-' + t);
+    if (p && p.style.display !== 'none') p.style.flexDirection = 'column';
+    const l = document.getElementById('sla-list-' + t);
+    if (l) { l.style.height = Math.max(40, panelH - SLA_PGFT_H) + 'px'; l.style.overflow = 'hidden'; }
+  });
+}
+
+/* ── 2. 탭 전환 ── */
+function slaTab(tab) {
+  ['overview','resolve','arrival'].forEach(t => {
+    document.getElementById('stab-' + t).classList.toggle('active', t === tab);
+    const p = document.getElementById('sla-panel-' + t);
+    if (t !== tab) { p.style.display = 'none'; return; }
+    p.style.display = (t === 'overview') ? 'flex' : 'flex';
+    if (t !== 'overview') p.style.flexDirection = 'column';
+  });
+  // 탭 전환 후 페이지 재렌더 (높이 측정)
+  if (tab === 'resolve' || tab === 'arrival') {
+    requestAnimationFrame(() => _renderSlaPage(tab));
+  }
+}
+
+/* ── 3. 도넛 SVG ── */
+function _updateDonut(rate) {
+  const C   = 2 * Math.PI * 28;
+  const pct = (rate === null || rate === undefined) ? null : rate;
+  const okEl  = document.getElementById('sla-donut-ok');
+  const badEl = document.getElementById('sla-donut-bad');
+  const pctEl = document.getElementById('sla-donut-pct');
+  if (pct === null) {
+    okEl.setAttribute('stroke-dasharray',  `0 ${C}`);
+    badEl.setAttribute('stroke-dasharray', `0 ${C}`);
+    pctEl.textContent = '-'; pctEl.setAttribute('fill','#6c757d'); return;
+  }
+  const ok = C * pct / 100;
+  okEl.setAttribute('stroke-dasharray',  `${ok.toFixed(1)} ${C}`);
+  okEl.setAttribute('stroke-dashoffset', '0');
+  badEl.setAttribute('stroke-dasharray',  `${(C-ok).toFixed(1)} ${C}`);
+  badEl.setAttribute('stroke-dashoffset', (-ok).toFixed(1));
+  pctEl.textContent = pct + '%';
+  pctEl.setAttribute('fill', pct >= 80 ? '#198754' : pct >= 50 ? '#fd7e14' : '#dc3545');
+}
+
+/* ── 4. 전체 탭 요약 바 ── */
+function _updateOverviewBars(w, incActive) {
+  const rc    = w?.resolve_count ?? 0;
+  const ac    = w?.arrival_count ?? 0;
+  const total = Math.max(incActive, rc, ac, 1);
+  document.getElementById('sla-ov-resolve-cnt').textContent  = rc;
+  document.getElementById('sla-ov-arrival-cnt').textContent  = ac;
+  document.getElementById('sla-ov-active-cnt').textContent   = incActive;
+  document.getElementById('sla-ov-resolve-bar').style.width  = Math.round(rc / total * 100) + '%';
+  document.getElementById('sla-ov-arrival-bar').style.width  = Math.round(ac / total * 100) + '%';
+  document.getElementById('sla-ov-active-bar').style.width   = Math.round(incActive / total * 100) + '%';
+  const pills = document.getElementById('sla-header-pills');
+  if (pills) pills.innerHTML = (rc === 0 && ac === 0)
+    ? '<span class="badge bg-success" style="font-size:9px;"><i class="bi bi-check2"></i> 정상</span>'
+    : (rc > 0 ? `<span class="badge bg-danger" style="font-size:9px;">처리 ${rc}</span>` : '') +
+      (ac > 0 ? `<span class="badge bg-warning text-dark" style="font-size:9px;">도착 ${ac}</span>` : '');
+}
+
+/* ── 5. 처리초과/도착초과 탭 (페이지네이션) ── */
+const SLA_ROW_H  = 34;   // 고정 행 높이(px)
+const SLA_PGFT_H = 26;   // 페이지네이션 푸터 높이
+
+let slaCurPageResolve = 1, slaCurPageArrival = 1;
+let _slaResolveItems = [], _slaArrivalItems = [];
+
+function slaPage(type, delta) {
+  if (type === 'resolve') slaCurPageResolve += delta;
+  else slaCurPageArrival += delta;
+  _renderSlaPage(type);
+}
+
+function _renderSlaPage(type) {
+  const items   = type === 'resolve' ? _slaResolveItems : _slaArrivalItems;
+  const curPage = type === 'resolve' ? slaCurPageResolve : slaCurPageArrival;
+  const listEl  = document.getElementById('sla-list-' + type);
+  _buildSlaRows(items, listEl, type, curPage);
+}
+
+function _overdueLabel(om) {
+  const hh = Math.floor(om / 60), mm = om % 60;
+  if (hh >= 24) return `${Math.floor(hh/24)}일 ${hh%24}h`;
+  return hh > 0 ? `${hh}h ${mm}m` : `${mm}분`;
+}
+
+function _sevStyle(om) {
+  if (om >= 1440) return { bar:'#dc3545', bg:'#fff5f5', bd:'#f5c6cb', txt:'#dc3545' };
+  if (om >= 480)  return { bar:'#fd7e14', bg:'#fff8f0', bd:'#ffd8b0', txt:'#c45c00' };
+  if (om >= 120)  return { bar:'#ffc107', bg:'#fffdf0', bd:'#ffe69c', txt:'#7a5000' };
+  return           { bar:'#0dcaf0', bg:'#f0fbff', bd:'#b6edfa', txt:'#087990' };
+}
+
+function _buildSlaRows(items, listEl, type, curPage) {
+  if (!items || !items.length) {
+    listEl.innerHTML =
+      `<div style="height:100%;display:flex;align-items:center;justify-content:center;
+                   flex-direction:column;color:#6c757d;gap:6px;padding:16px 0;">
+         <i class="bi bi-check-circle-fill" style="font-size:24px;color:#198754;"></i>
+         <span style="font-size:12px;">해당 없음</span>
+       </div>`;
+    _updateSlaPagination(type, 0, 1, 1);
+    return;
+  }
+
+  // 리스트 영역 높이 기준 페이지당 행 수 계산
+  const panelEl  = document.getElementById('sla-panel-' + type);
+  const panelH   = (panelEl?.getBoundingClientRect().height || (SLA_ROW_H * 4 + SLA_PGFT_H));
+  const listH    = panelH - SLA_PGFT_H;
+  const perPage  = Math.max(1, Math.floor(listH / SLA_ROW_H));
+
+  const total      = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  if (type === 'resolve') slaCurPageResolve = Math.min(slaCurPageResolve, totalPages);
+  else slaCurPageArrival = Math.min(slaCurPageArrival, totalPages);
+  const page = type === 'resolve' ? slaCurPageResolve : slaCurPageArrival;
+
+  const start = (page - 1) * perPage;
+  const show  = items.slice(start, start + perPage);
+  const maxMin = Math.max(...show.map(r => r.overdue_min || 0), 1);
+  // 실제 표시 행 수에 맞춰 행 높이 균등 분배 (최소 SLA_ROW_H)
+  const rowH = Math.max(SLA_ROW_H, Math.floor(listH / show.length));
+
+  const rows = show.map((r, idx) => {
+    const om  = r.overdue_min || 0;
+    const pct = Math.min(96, Math.round(om / maxMin * 100));
+    const s   = _sevStyle(om);
+    const lbl = _overdueLabel(om);
+    const rank = start + idx + 1;
+    return `
+      <div style="height:${rowH}px;min-height:${rowH}px;max-height:${rowH}px;
+                  display:flex;flex-direction:column;justify-content:center;gap:2px;
+                  padding:0 8px;overflow:hidden;
+                  border-left:4px solid ${s.bar};background:${s.bg};
+                  border-bottom:1px solid ${s.bd};">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:4px;min-width:0;">
+          <div style="display:flex;align-items:center;gap:4px;min-width:0;overflow:hidden;">
+            <span style="display:inline-flex;align-items:center;justify-content:center;
+                         width:16px;height:16px;border-radius:50%;
+                         background:${s.bar};color:#fff;
+                         font-size:9px;font-weight:700;flex-shrink:0;">${rank}</span>
+            <span style="font-size:10px;font-weight:600;overflow:hidden;
+                         text-overflow:ellipsis;white-space:nowrap;color:#212529;"
+                  title="${r.school}">${r.school}</span>
+          </div>
+          <span style="font-size:10px;font-weight:700;color:${s.txt};
+                       white-space:nowrap;flex-shrink:0;">${lbl}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <div style="flex:1;height:5px;background:#e9ecef;border-radius:3px;overflow:hidden;">
+            <div style="width:${pct}%;height:100%;background:${s.bar};
+                        border-radius:3px;transition:width .5s ease;"></div>
+          </div>
+          <span style="font-size:9px;color:#6c757d;white-space:nowrap;flex-shrink:0;">${r.target}</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  listEl.innerHTML = rows;
+  _updateSlaPagination(type, total, page, totalPages);
+}
+
+function _updateSlaPagination(type, total, page, totalPages) {
+  const info = document.getElementById('sla-' + type + '-pageinfo');
+  const prev = document.getElementById('sla-' + type + '-prev');
+  const next = document.getElementById('sla-' + type + '-next');
+  if (info) info.textContent = total > 0 ? `${page}/${totalPages} (${total}건)` : '없음';
+  if (prev) prev.disabled = (page <= 1);
+  if (next) next.disabled = (page >= totalPages);
+}
+
+/* ── 6. 메인 진입점 ── */
+function renderSlaAlerts(w, incActive) {
+  _slaData = w;
+  _slaResolveItems = w?.resolve_overdue || [];
+  _slaArrivalItems = w?.arrival_overdue || [];
+  slaCurPageResolve = 1;
+  slaCurPageArrival = 1;
+  document.getElementById('sla-cnt-resolve').textContent = w?.resolve_count ?? 0;
+  document.getElementById('sla-cnt-arrival').textContent = w?.arrival_count ?? 0;
+  _updateOverviewBars(w, incActive);
+  // 레이아웃 확정 후 행 렌더 (requestAnimationFrame으로 높이 측정 보장)
+  requestAnimationFrame(() => {
+    fixSlaLayout();
+    _renderSlaPage('resolve');
+    _renderSlaPage('arrival');
+  });
+}
+
+// ── REST 폴백 ─────────────────────────────────────────────────────────────
+async function fetchDashboard() {
+  try {
+    const res = await fetch(`${API_BASE}/dashboard/summary/`, {headers: {'X-CSRFToken': CSRF_TOKEN}});
+    if (res.ok) renderDashboard(await res.json());
+  } catch (e) {
+    console.error('Dashboard fetch error:', e);
+  }
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────
+let ws, wsPingTimer, wsFallbackTimer, wsReconnectDelay = 1000;
+const WS_URL = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/npms/ws/dashboard/';
+
+function connectWS() {
+  if (ws && ws.readyState < 2) return;  // CONNECTING 또는 OPEN 상태면 중복 연결 방지
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    wsReconnectDelay = 1000;
+    clearInterval(wsFallbackTimer);
+    wsFallbackTimer = null;
+    wsPingTimer = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type: 'ping'}));
+    }, 30000);
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'dashboard.update') renderDashboard(msg.data);
+    } catch (err) {
+      console.error('WS parse error:', err);
+    }
+  };
+
+  ws.onclose = () => {
+    clearInterval(wsPingTimer);
+    // WS 끊기면 REST 폴링으로 폴백
+    if (!wsFallbackTimer) {
+      fetchDashboard();
+      wsFallbackTimer = setInterval(fetchDashboard, 10000);
+    }
+    // 지수 백오프 재연결 (최대 30초)
+    setTimeout(connectWS, wsReconnectDelay);
+    wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+window.addEventListener('beforeunload', () => {
+  clearInterval(wsPingTimer);
+  clearInterval(wsFallbackTimer);
+  if (ws) ws.close();
+});
+
+// ── 지도 초기화 (OpenLayers + 브이월드 WMTS 타일) ──────────────────────
+let map, markerSource, allFeatures = [];
+
+function makeSchoolFeature(s) {
+  const hasAlert = s.active_incidents > 0;
+  const bg = hasAlert ? '#dc3545' : '#0d6efd';
+  const feature = new ol.Feature({
+    geometry: new ol.geom.Point(ol.proj.fromLonLat([parseFloat(s.lng), parseFloat(s.lat)]))
+  });
+  feature.setStyle(new ol.style.Style({
+    image: new ol.style.Circle({
+      radius: 11,
+      fill: new ol.style.Fill({color: bg}),
+      stroke: new ol.style.Stroke({color: '#fff', width: 2})
+    }),
+    text: new ol.style.Text({
+      text: hasAlert ? String(s.active_incidents) : '●',
+      fill: new ol.style.Fill({color: '#fff'}),
+      font: 'bold 10px sans-serif'
+    })
+  }));
+  feature.set('info', `
+    <div style="padding:8px 12px;font-size:12px;min-width:150px;line-height:1.7;">
+      <b>${s.name}</b><br>
+      ${s.support_center_name || ''} | ${s.school_type_name || ''}<br>
+      ${hasAlert
+        ? `<span style="color:#dc3545;font-weight:bold;">⚠ 장애 ${s.active_incidents}건</span>`
+        : '<span style="color:#198754;">정상</span>'}
+      <br><a href="/npms/schools/${s.id}/" style="font-size:11px;">상세보기</a>
+      <br><span style="font-size:10px;color:#888;cursor:pointer;" onclick="document.getElementById('map-popup').style.display='none'">닫기</span>
+    </div>`);
+  feature.set('schoolId', s.id);
+  feature._hasAlert = hasAlert;
+  feature._lat = parseFloat(s.lat);
+  feature._lng = parseFloat(s.lng);
+  return feature;
+}
+
+function makeVworldTileLayer() {
+  const key = typeof VWORLD_API_KEY !== 'undefined' ? VWORLD_API_KEY : '';
+  return new ol.layer.Tile({
+    source: new ol.source.XYZ({
+      url: `https://api.vworld.kr/req/wmts/1.0.0/${key}/Base/{z}/{y}/{x}.png`,
+      attributions: '© 국토정보플랫폼',
+      maxZoom: 19,
+    })
+  });
+}
+
+function initMap() {
+  if (typeof ol === 'undefined') return;
+  markerSource = new ol.source.Vector();
+  map = new ol.Map({
+    target: 'vworld-map',
+    pixelRatio: window.devicePixelRatio || 1,
+    layers: [
+      makeVworldTileLayer(),
+      new ol.layer.Vector({source: markerSource})
+    ],
+    view: new ol.View({
+      center: ol.proj.fromLonLat([126.9860, 37.5540]),
+      zoom: 11,
+      minZoom: 9,
+      maxZoom: 19,
+    })
+  });
+
+  const popupEl = document.getElementById('map-popup');
+  const popupOverlay = new ol.Overlay({element: popupEl, autoPan: true});
+  map.addOverlay(popupOverlay);
+
+  map.on('click', function(evt) {
+    const feature = map.forEachFeatureAtPixel(evt.pixel, f => f);
+    if (feature && feature.get('info')) {
+      popupEl.innerHTML = feature.get('info');
+      popupEl.style.display = 'block';
+      popupOverlay.setPosition(feature.getGeometry().getCoordinates());
+    } else {
+      popupEl.style.display = 'none';
+      popupOverlay.setPosition(undefined);
+    }
+  });
+
+  loadSchoolMarkers();
+}
+
+async function loadSchoolMarkers() {
+  if (!map || !markerSource) return;
+  try {
+    const res = await fetch(`${API_BASE}/schools/schools/gis/`);
+    if (!res.ok) return;
+    const schools = await res.json();
+    markerSource.clear();
+    allFeatures = [];
+    schools.forEach(s => {
+      if (!s.lat || !s.lng) return;
+      const f = makeSchoolFeature(s);
+      allFeatures.push(f);  // markerSource에는 바로 추가 안 함
+    });
+    mapShowAll(true);  // 초기: 뷰 리셋 없이 마커만 표시
+  } catch(e) { console.error('GIS load error:', e); }
+}
+
+// ── 장애 테이블 → 지도 포커스 ─────────────────────────────────────────────
+let _focusedFeature = null;   // 이전 강조 feature 원복용
+
+async function focusSchoolOnMap(schoolId, lat, lng, schoolName) {
+  if (!map) return;
+  // 마커가 아직 안 로드된 경우 먼저 로드
+  if (!allFeatures.length) await loadSchoolMarkers();
+
+  // 해당 학교 feature 탐색
+  const feature = allFeatures.find(f => f.get('schoolId') == schoolId);  // == : 타입 불일치 허용
+
+  // 지도에 해당 마커가 없으면 일시 추가 (정상 학교 등)
+  if (feature && !markerSource.getFeatures().includes(feature)) {
+    markerSource.addFeature(feature);
+  }
+
+  // 이전 강조 feature 원복
+  if (_focusedFeature && _focusedFeature !== feature) {
+    const wasFocused = _focusedFeature;
+    const wasAlert = wasFocused._hasAlert;
+    wasFocused.setStyle(new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 11,
+        fill:   new ol.style.Fill({color: wasAlert ? '#dc3545' : '#0d6efd'}),
+        stroke: new ol.style.Stroke({color: '#fff', width: 2})
+      }),
+      text: new ol.style.Text({
+        text: wasAlert ? String(wasFocused.get('info').match(/장애 (\d+)건/)?.[1] || '!') : '●',
+        fill: new ol.style.Fill({color: '#fff'}),
+        font: 'bold 10px sans-serif'
+      })
+    }));
+  }
+
+  // 선택 학교 강조 스타일 적용
+  if (feature) {
+    feature.setStyle(new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 16,
+        fill:   new ol.style.Fill({color: '#f97316'}),
+        stroke: new ol.style.Stroke({color: '#fff', width: 3})
+      }),
+      text: new ol.style.Text({
+        text: '★',
+        fill: new ol.style.Fill({color: '#fff'}),
+        font: 'bold 13px sans-serif'
+      })
+    }));
+    _focusedFeature = feature;
+  }
+
+  // 지도 뷰 이동 (애니메이션)
+  const coord = ol.proj.fromLonLat([lng, lat]);
+  map.getView().animate({ center: coord, zoom: 15, duration: 600 });
+
+  // 팝업 표시 (feature 없으면 학교명만)
+  const popupEl = document.getElementById('map-popup');
+  const popupOverlay = map.getOverlays().getArray()[0];
+  if (feature) {
+    popupEl.innerHTML = feature.get('info');
+  } else if (schoolName) {
+    popupEl.innerHTML = `<div style="padding:8px 12px;font-size:12px;min-width:130px;line-height:1.7;">
+      <b>${schoolName}</b><br>
+      <span style="font-size:10px;color:#888;cursor:pointer;" onclick="document.getElementById('map-popup').style.display='none'">닫기</span>
+    </div>`;
+  }
+  if (feature || schoolName) {
+    popupEl.style.display = 'block';
+    if (popupOverlay) popupOverlay.setPosition(coord);
+  }
+
+  // GIS 지도 패널로 스크롤
+  const mapEl = document.getElementById('vworld-map');
+  if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// 지도 뷰 초기화 공통 함수 (서울 전역, 줌 11)
+function _mapResetView() {
+  if (!map) return;
+  // 강조 마커 스타일 원복
+  if (_focusedFeature) {
+    const f = _focusedFeature;
+    f.setStyle(new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 11,
+        fill:   new ol.style.Fill({color: f._hasAlert ? '#dc3545' : '#0d6efd'}),
+        stroke: new ol.style.Stroke({color: '#fff', width: 2})
+      }),
+      text: new ol.style.Text({
+        text: f._hasAlert ? '!' : '●',
+        fill: new ol.style.Fill({color: '#fff'}),
+        font: 'bold 10px sans-serif'
+      })
+    }));
+    _focusedFeature = null;
+  }
+  // 팝업 닫기
+  const popupEl = document.getElementById('map-popup');
+  if (popupEl) popupEl.style.display = 'none';
+  const popupOverlay = map.getOverlays().getArray()[0];
+  if (popupOverlay) popupOverlay.setPosition(undefined);
+  // 서울 전역 뷰로 복귀
+  map.getView().animate({ center: ol.proj.fromLonLat([126.9860, 37.5540]), zoom: 11, duration: 500 });
+}
+
+// 전체: 장애(빨간) 마커만 표시 (정상 학교 파란 마커 제외)
+function mapShowAll(fromInit = false) {
+  if (!markerSource) return;
+  if (!fromInit) _mapResetView();
+  markerSource.clear();
+  allFeatures.filter(f => f._hasAlert).forEach(f => markerSource.addFeature(f));
+}
+
+// 장애: 장애 마커만
+function mapShowIncidents(fromInit = false) {
+  if (!markerSource) return;
+  if (!fromInit) _mapResetView();
+  markerSource.clear();
+  allFeatures.filter(f => f._hasAlert).forEach(f => markerSource.addFeature(f));
+}
+
+// 인력: 실시간 GPS 우선, 없으면 홈위치 (30초마다 갱신)
+let workerFeatures = [];
+let _workerGisTimer = null;
+
+async function mapShowWorkers() {
+  if (!markerSource) return;
+  _mapResetView();
+  markerSource.clear();
+  workerFeatures = [];
+  await _loadWorkerGis();
+  if (_workerGisTimer) clearInterval(_workerGisTimer);
+  _workerGisTimer = setInterval(_loadWorkerGis, 30000);
+}
+
+async function _loadWorkerGis() {
+  if (!markerSource) return;
+  try {
+    const res = await fetch(`${API_BASE}/dashboard/workers-gis/`);
+    if (!res.ok) return;
+    const workers = await res.json();
+    // 현재 인력 마커만 제거 후 재추가
+    workerFeatures.forEach(f => markerSource.removeFeature(f));
+    workerFeatures = [];
+    workers.forEach(w => {
+      const isRealtime = w.location_type === 'realtime';
+      const color = isRealtime ? (w.status === 'moving' ? '#10b981' : '#f59e0b') : '#94a3b8';
+      const f = new ol.Feature({
+        geometry: new ol.geom.Point(ol.proj.fromLonLat([w.lng, w.lat]))
+      });
+      f.setStyle(new ol.style.Style({
+        image: new ol.style.Circle({
+          radius: isRealtime ? 12 : 9,
+          fill:   new ol.style.Fill({color}),
+          stroke: new ol.style.Stroke({color: '#fff', width: 2}),
+        }),
+        text: new ol.style.Text({
+          text: w.name.slice(0,1),
+          fill: new ol.style.Fill({color: '#fff'}),
+          font: `bold ${isRealtime?11:9}px sans-serif`,
+        }),
+      }));
+      const devIcon = w.device_type === 'mobile' ? '📱' : w.device_type === 'pc' ? '🖥' : '';
+      const statusStr = isRealtime
+        ? `<span style="color:${color};font-weight:700;">${w.status==='moving'?'이동중':'정지'}</span> ${devIcon}`
+        : '<span style="color:#94a3b8;">홈위치(GPS미수신)</span>';
+      const timeStr = w.updated_at ? new Date(w.updated_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : '';
+      f.set('info', `
+        <div style="padding:8px 12px;font-size:12px;min-width:140px;line-height:1.8;">
+          <b>${w.name}</b> <span style="font-size:.7rem;color:#64748b;">${w.center_name||''}</span><br>
+          ${w.role==='worker'?'현장기사':'상주인력'} · ${statusStr}<br>
+          ${timeStr ? `<span style="font-size:10px;color:#888;">${timeStr}</span><br>` : ''}
+          ${w.phone ? `<span style="color:#555;font-size:10px;">${w.phone}</span>` : ''}
+          <br><span style="font-size:10px;color:#3b82f6;cursor:pointer;" onclick="document.getElementById('map-popup').style.display='none'">닫기</span>
+        </div>`);
+      f._isWorker = true;
+      markerSource.addFeature(f);
+      workerFeatures.push(f);
+    });
+  } catch(e) { console.error('Worker GIS error:', e); }
+}
+
+window.addEventListener('load', initMap);
+window.addEventListener('resize', () => { fixSlaLayout(); });
+
+fetchDashboard();  // 즉시 REST로 초기 데이터 로드
+connectWS();       // WebSocket 연결 (이후 서버 push로 갱신)
+
+// ── 장애현황 (일/주/월 탭) ────────────────────────────────────────────────
+async function loadIncidentStats(period, btnEl) {
+  if (btnEl) {
+    document.querySelectorAll('.nav-tabs .nav-link').forEach(b => {
+      if (b.closest('#inc-stats-content') === null && b.parentElement.closest('.card') === btnEl.parentElement.closest('.card'))
+        b.classList.remove('active');
+    });
+    // simpler: remove active from sibling tabs only
+    btnEl.closest('ul').querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
+    btnEl.classList.add('active');
+  }
+  const content = document.getElementById('inc-stats-content');
+  content.innerHTML = '<div class="text-muted small text-center py-2">로딩 중...</div>';
+  try {
+    const res = await fetch(`${API_BASE}/dashboard/incidents-stats/?period=${period}`);
+    if (!res.ok) return;
+    const d = await res.json();
+    renderIncidentPivot(d);
+  } catch(e) { content.innerHTML = '<div class="text-danger small text-center py-2">로드 실패</div>'; }
+}
+
+function renderIncidentPivot(d) {
+  const content = document.getElementById('inc-stats-content');
+  const grand   = d.grand || {};
+  document.getElementById('inc-date-badge').textContent = d.period_label ? `(${d.period_label})` : '';
+  const badge   = document.getElementById('inc-stats-badge');
+  badge.textContent = `발생 ${grand.total||0} / 처리 ${grand.completed||0}`;
+  badge.className   = `badge ${grand.total ? 'bg-danger' : 'bg-secondary'}`;
+
+  const CENTER_ORDER = ['동부','서부','남부','북부','중부','강동송파','강서양천','강남서초','동작관악','성동광진','성북강북'];
+  const dataMap = Object.fromEntries((d.by_center||[]).map(c => [c.name, c]));
+  const sorted  = CENTER_ORDER.map(n => dataMap[n] || {name:n, total:0, completed:0, pending:0, rate:0});
+  (d.by_center||[]).filter(c => !CENTER_ORDER.includes(c.name)).forEach(c => sorted.push(c));
+
+  content.innerHTML = buildPivotHtml(sorted, [
+    { label:'장애', labelCls:'table-secondary', rowCls:'table-light',
+      cells: sorted.map(c=>c.total||0), grand: grand.total||0 },
+    { label:'처리', labelCls:'text-success', rowCls:'',
+      cellStyle:'color:#166534;font-weight:600;',
+      cells: sorted.map(c=>c.completed||0), grand: grand.completed||0 },
+    { label:'미처리', labelCls:'text-danger', rowCls:'',
+      cellStyle:'color:#991b1b;font-weight:600;',
+      cells: sorted.map(c=>c.pending||0), grand: grand.pending||0 },
+    { label:'처리율', labelCls:'text-warning-emphasis', isRate:true,
+      cells: sorted.map(c=>c.rate||0), grand: grand.rate||0 },
+  ]);
+}
+
+const TAB_PERIOD_MAP = {'일':'day','주':'week','월':'month','분기':'quarter','반기':'half','년':'year'};
+
+loadIncidentStats('day', null);
+setInterval(() => {
+  const txt = document.querySelector('#inc-stats-content')?.closest('.card')?.querySelector('.nav-link.active')?.textContent?.trim();
+  loadIncidentStats(TAB_PERIOD_MAP[txt] || 'day', null);
+}, 60000);
+
+// ── 인력 근태현황 ──────────────────────────────────────────────────────────
+async function loadAttendanceStats(period, btnEl) {
+  period = period || 'day';
+  if (btnEl) {
+    btnEl.closest('ul').querySelectorAll('.nav-link').forEach(b => b.classList.remove('active'));
+    btnEl.classList.add('active');
+  }
+  const content = document.getElementById('att-stats-content');
+  content.innerHTML = '<div class="text-muted small text-center py-2">로딩 중...</div>';
+  try {
+    const res = await fetch(`${API_BASE}/dashboard/attendance-stats/?period=${period}`);
+    if (!res.ok) return;
+    const d = await res.json();
+    renderAttendancePivot(d);
+    // 카드 버튼 + 헤더 버튼 상태 동기화
+    updateCardAttendanceBtn(d.my_status);
+    if (typeof updateAttendanceBtn === 'function') updateAttendanceBtn(d.my_status);
+  } catch(e) { content.innerHTML = '<div class="text-danger small text-center py-2">로드 실패</div>'; }
+}
+
+function renderAttendancePivot(d) {
+  const content = document.getElementById('att-stats-content');
+  const grand   = d.grand || {};
+  document.getElementById('att-date-badge').textContent = d.period_label ? `(${d.period_label})` : '';
+  const badge = document.getElementById('att-summary-badge');
+  badge.textContent = `출근 ${grand.checked_in||0}/${grand.total||0}`;
+  badge.className   = `badge ${grand.total ? 'bg-success' : 'bg-secondary'}`;
+
+  const CENTER_ORDER = ['동부','서부','남부','북부','중부','강동송파','강서양천','강남서초','동작관악','성동광진','성북강북','교육청'];
+  const dataMap = Object.fromEntries((d.by_center||[]).map(c => [c.name, c]));
+  const sorted  = CENTER_ORDER.map(n => dataMap[n] || {name:n, total:0, checked_in:0, leave:0, rate:0});
+  (d.by_center||[]).filter(c => !CENTER_ORDER.includes(c.name)).forEach(c => sorted.push(c));
+
+  content.innerHTML = buildPivotHtml(sorted, [
+    { label:'인원', labelCls:'table-secondary', rowCls:'table-light',
+      cells: sorted.map(c=>c.total||0), grand: grand.total||0 },
+    { label:'출근', labelCls:'text-success', rowCls:'',
+      cellStyle:'color:#166534;font-weight:600;',
+      cells: sorted.map(c=>c.checked_in||0), grand: grand.checked_in||0 },
+    { label:'연차', labelCls:'text-secondary', rowCls:'',
+      cellStyle:'color:#6b7280;',
+      cells: sorted.map(c=>c.leave||0), grand: grand.leave||0 },
+    { label:'근태율', labelCls:'text-warning-emphasis', isRate:true,
+      cells: sorted.map(c=>c.rate||0), grand: grand.rate||0 },
+  ]);
+}
+
+function updateCardAttendanceBtn(status) {
+  const btn = document.getElementById('checkin-btn');
+  const st  = document.getElementById('checkin-status');
+  if (!btn) return;
+  if (status === 'checked_in') {
+    btn.innerHTML = '<i class="bi bi-box-arrow-right me-1"></i>퇴근';
+    btn.className = 'btn btn-sm btn-warning';
+    btn.disabled  = false;
+    if (st) st.textContent = '출근 처리됨';
+  } else if (status === 'checked_out') {
+    btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>퇴근완료';
+    btn.className = 'btn btn-sm btn-outline-secondary';
+    btn.disabled  = true;
+    if (st) st.textContent = '퇴근 처리됨';
+  } else if (status === 'leave') {
+    btn.innerHTML = '연차';
+    btn.className = 'btn btn-sm btn-outline-secondary';
+    btn.disabled  = true;
+    if (st) st.textContent = '연차 처리됨';
+  } else {
+    btn.innerHTML = '<i class="bi bi-box-arrow-in-right me-1"></i>출근';
+    btn.className = 'btn btn-sm btn-success';
+    btn.disabled  = false;
+    if (st) st.textContent = '';
+  }
+}
+
+async function cardAttendanceAction() {
+  const btn = document.getElementById('checkin-btn');
+  if (!btn || btn.disabled) return;
+  const isCheckout = btn.innerHTML.includes('퇴근') && !btn.innerHTML.includes('완료');
+  btn.disabled = true;
+  try {
+    const url = isCheckout ? `${API_BASE}/dashboard/checkout/` : `${API_BASE}/dashboard/checkin/`;
+    let gps = {};
+    if (navigator.geolocation) {
+      await new Promise(resolve => navigator.geolocation.getCurrentPosition(
+        p => { gps = {lat: p.coords.latitude, lng: p.coords.longitude}; resolve(); },
+        () => resolve(), {timeout: 5000}
+      ));
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {'X-CSRFToken': getCsrfToken(), 'Content-Type': 'application/json'},
+      body: JSON.stringify(gps),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      const newStatus = isCheckout ? 'checked_out' : 'checked_in';
+      updateCardAttendanceBtn(newStatus);
+      if (typeof updateAttendanceBtn === 'function') updateAttendanceBtn(newStatus);
+      loadAttendanceStats('day', null);
+    } else {
+      btn.disabled = false;
+    }
+  } catch(e) { btn.disabled = false; }
+}
+
+loadAttendanceStats('day', null);
+setInterval(() => {
+  const txt = document.querySelector('#att-stats-content')?.closest('.card')?.querySelector('.nav-link.active')?.textContent?.trim();
+  loadAttendanceStats(TAB_PERIOD_MAP[txt] || 'day', null);
+}, 60000);
+
+// ── 피벗 테이블 공용 헬퍼 ──────────────────────────────────────────────────
+function rateStyle(pct) {
+  if (pct >= 80) return 'color:#166534;background:#d1fae5;font-weight:700;';
+  if (pct >= 50) return 'color:#1d4ed8;background:#dbeafe;font-weight:700;';
+  if (pct >= 20) return 'color:#92400e;background:#fef3c7;font-weight:700;';
+  return 'color:#991b1b;background:#fee2e2;font-weight:700;';
+}
+
+function buildPivotHtml(centers, rowDefs) {
+  const N    = centers.length + 2;
+  const colW = (100 / N).toFixed(1) + '%';
+  const th   = 'text-center align-middle py-1 px-1';
+  const td   = 'text-center py-1 px-1';
+
+  const headRow = centers.map(c =>
+    `<th class="${th}" style="width:${colW};">${c.name}</th>`
+  ).join('') + `<th class="${th}" style="width:${colW};border-left:2px solid #6ea8fe;">합계</th>`;
+
+  const body = rowDefs.map(r => {
+    const cells = centers.map((c, i) => {
+      const v = r.cells[i];
+      const s = r.isRate ? rateStyle(v) : (r.cellStyle || '');
+      const fmt = r.isRate ? `${v}%` : v;
+      return `<td class="${td}" style="${s}">${fmt ?? 0}</td>`;
+    }).join('');
+    const gv   = r.grand;
+    const gs   = r.isRate ? rateStyle(gv) : 'background:#eff6ff;font-weight:700;';
+    const gfmt = r.isRate ? `${gv}%` : gv;
+    const gcell = `<td class="${td} fw-bold" style="border-left:2px solid #6ea8fe;${gs}">${gfmt ?? 0}</td>`;
+    return `<tr class="${r.rowCls||''}"><th class="${td} fw-semibold ${r.labelCls||''}" style="width:${colW};">${r.label}</th>${cells}${gcell}</tr>`;
+  }).join('');
+
+  return `<div style="overflow-x:auto;"><table class="table table-sm table-bordered table-hover mb-0" style="font-size:0.74rem;table-layout:fixed;width:100%;"><thead class="table-dark"><tr><th class="${th}" style="width:${colW};">구분</th>${headRow}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+// ── 점검계획 탭 + 지원청별 진척현황 ───────────────────────────────────────
+let _activePlanId = null;
+
+function renderPlanTabs(plans) {
+  const nav = document.getElementById('plan-tabs-nav');
+  if (!plans || !plans.length) {
+    nav.innerHTML = '<div class="text-muted small py-1 px-1">진행중인 점검계획 없음</div>';
+    document.getElementById('plan-stats-content').innerHTML = '';
+    return;
+  }
+  nav.innerHTML = `<ul class="nav nav-tabs border-0" style="flex-wrap:nowrap;overflow-x:auto;">
+    ${plans.map((p, i) => `
+      <li class="nav-item text-nowrap">
+        <button class="nav-link py-1 px-2 small${i === 0 ? ' active' : ''}"
+                onclick="selectPlanTab(${p.id}, this)">
+          ${p.name}
+          <span class="badge bg-success ms-1" style="font-size:.65rem;">${p.pct}%</span>
+        </button>
+      </li>`).join('')}
+  </ul>`;
+  selectPlanTab(plans[0].id, nav.querySelector('.nav-link'));
+}
+
+async function selectPlanTab(planId, btnEl) {
+  document.querySelectorAll('#plan-tabs-nav .nav-link').forEach(b => b.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+  _activePlanId = planId;
+
+  const content = document.getElementById('plan-stats-content');
+  content.innerHTML = '<div class="text-muted small text-center py-2">로딩 중...</div>';
+  try {
+    const data = await apiGet(`${API_BASE}/progress/plans/${planId}/stats/`);
+    renderPlanStats(data);
+  } catch(e) {
+    content.innerHTML = '<div class="text-danger small text-center py-2">통계 로드 실패</div>';
+  }
+}
+
+function renderPlanStats(data) {
+  const content = document.getElementById('plan-stats-content');
+  const byCenter = data.by_center || [];
+
+  const CENTER_ORDER = ['동부','서부','남부','북부','중부','강동송파','강서양천','강남서초','동작관악','성동광진','성북강북'];
+  const dataMap = Object.fromEntries(byCenter.map(c => [c.name, c]));
+  const sorted  = CENTER_ORDER.map(n => dataMap[n] || {name:n, total:0, completed:0});
+  byCenter.filter(c => !CENTER_ORDER.includes(c.name)).forEach(c => sorted.push(c));
+
+  const sumTotal = sorted.reduce((s,c) => s+(c.total||0), 0);
+  const sumDone  = sorted.reduce((s,c) => s+(c.completed||0), 0);
+  const sumPct   = sumTotal ? Math.round(sumDone/sumTotal*100) : 0;
+
+  content.innerHTML = buildPivotHtml(sorted, [
+    { label:'목표', labelCls:'table-secondary', rowCls:'table-light',
+      cells: sorted.map(c=>c.total||0), grand: sumTotal },
+    { label:'점검', labelCls:'text-success', rowCls:'',
+      cellStyle:'color:#166534;font-weight:600;',
+      cells: sorted.map(c=>c.completed||0), grand: sumDone },
+    { label:'진척', labelCls:'text-warning-emphasis', isRate:true,
+      cells: sorted.map(c => c.total ? Math.round(c.completed/c.total*100) : 0),
+      grand: sumPct },
+  ]);
+}
+
+// ── 오늘의 점검계획 (탭 기반) ────────────────────────────────────────────
+let _todayPlansData = [];
+
+function renderTodayTabs(plans, todayDate) {
+  const nav = document.getElementById('today-tabs-nav');
+  document.getElementById('today-date-badge').textContent = todayDate ? `(${todayDate})` : '';
+
+  if (!plans || !plans.length) {
+    nav.innerHTML = '<div class="text-muted small py-1 px-1">진행중인 점검계획 없음</div>';
+    document.getElementById('today-stats-content').innerHTML = '';
+    document.getElementById('today-summary-badge').textContent = '';
+    return;
+  }
+
+  _todayPlansData = plans;
+  nav.innerHTML = `<ul class="nav nav-tabs border-0" style="flex-wrap:nowrap;overflow-x:auto;">
+    ${plans.map((p, i) => `
+      <li class="nav-item text-nowrap">
+        <button class="nav-link py-1 px-2 small${i === 0 ? ' active' : ''}"
+                onclick="selectTodayTab(${i}, this)">
+          ${p.name}
+          <span class="badge bg-primary ms-1" style="font-size:.65rem;">${p.today_completed}/${p.today_total}</span>
+        </button>
+      </li>`).join('')}
+  </ul>`;
+
+  selectTodayTab(0, nav.querySelector('.nav-link'));
+}
+
+function selectTodayTab(idx, btnEl) {
+  document.querySelectorAll('#today-tabs-nav .nav-link').forEach(b => b.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+
+  const plan = _todayPlansData[idx];
+  if (!plan) return;
+
+  const total = plan.today_total || 0;
+  const done  = plan.today_completed || 0;
+  const badge = document.getElementById('today-summary-badge');
+  badge.textContent = `${done}/${total} 완료`;
+  badge.className   = `badge ${total ? 'bg-primary' : 'bg-secondary'}`;
+
+  renderTodayPlanStats(plan.today_by_center || [], total, done);
+}
+
+function renderTodayPlanStats(byCenter, total, done) {
+  const content = document.getElementById('today-stats-content');
+
+  const CENTER_ORDER = ['동부','서부','남부','북부','중부','강동송파','강서양천','강남서초','동작관악','성동광진','성북강북'];
+  const dataMap = Object.fromEntries(byCenter.map(c => [c.name, c]));
+  const sorted  = CENTER_ORDER.map(n => dataMap[n] || {name:n, total:0, completed:0});
+  byCenter.filter(c => !CENTER_ORDER.includes(c.name)).forEach(c => sorted.push(c));
+
+  const sumPct = total ? Math.round(done/total*100) : 0;
+
+  content.innerHTML = buildPivotHtml(sorted, [
+    { label:'목표', labelCls:'table-secondary', rowCls:'table-light',
+      cells: sorted.map(c=>c.total||0), grand: total },
+    { label:'점검', labelCls:'text-success', rowCls:'',
+      cellStyle:'color:#166534;font-weight:600;',
+      cells: sorted.map(c=>c.completed||0), grand: done },
+    { label:'진척', labelCls:'text-warning-emphasis', isRate:true,
+      cells: sorted.map(c => c.total ? Math.round(c.completed/c.total*100) : 0),
+      grand: sumPct },
+  ]);
+}
+
+// ── 일정관리 영역 ──────────────────────────────────────────────────────────
+async function loadSchedule() {
+  try {
+    const res = await fetch(`${API_BASE}/dashboard/schedule/`);
+    if (!res.ok) return;
+    const d = await res.json();
+
+    // 좌측: 분기 진척현황 탭
+    renderPlanTabs(d.active_plans);
+
+    // 우측: 오늘의 점검계획 (탭)
+    renderTodayTabs(d.active_plans, d.today_date);
+  } catch(e) { console.error('Schedule load error:', e); }
+}
+
+loadSchedule();
+setInterval(loadSchedule, 120000);  // 2분마다 갱신
+</script>
+{% endblock %}

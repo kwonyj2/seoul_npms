@@ -1,0 +1,1394 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}업무 일정{% endblock %}
+{% block page_title %}<i class="bi bi-calendar3 me-2"></i>업무 일정{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+<style>
+/* ════════════════════════════════════════════════════
+   KPI 카드
+════════════════════════════════════════════════════ */
+.sched-kpi-row {
+  display:grid; grid-template-columns:repeat(6,1fr); gap:10px;
+  padding:14px 16px 0;
+}
+@media(max-width:960px){ .sched-kpi-row{ grid-template-columns:repeat(3,1fr); } }
+@media(max-width:560px){ .sched-kpi-row{ grid-template-columns:repeat(2,1fr); } }
+
+.sched-kpi {
+  background:#fff; border-radius:12px; padding:14px 16px 12px;
+  box-shadow:0 1px 4px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04);
+  display:flex; align-items:center; gap:12px; overflow:hidden; position:relative;
+  transition:transform .15s, box-shadow .15s;
+}
+.sched-kpi:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.1); }
+.sched-kpi::after {
+  content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:12px 12px 0 0;
+}
+.sched-kpi.c1::after{background:#2563eb;} .sched-kpi.c2::after{background:#16a34a;}
+.sched-kpi.c3::after{background:#0891b2;} .sched-kpi.c4::after{background:#7c3aed;}
+.sched-kpi.c5::after{background:#e11d48;} .sched-kpi.c6::after{background:#d97706;}
+
+.sched-kpi .kpi-icon {
+  width:38px; height:38px; border-radius:10px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:1.1rem;
+}
+.sched-kpi.c1 .kpi-icon{background:#eff6ff;color:#2563eb;}
+.sched-kpi.c2 .kpi-icon{background:#f0fdf4;color:#16a34a;}
+.sched-kpi.c3 .kpi-icon{background:#ecfeff;color:#0891b2;}
+.sched-kpi.c4 .kpi-icon{background:#faf5ff;color:#7c3aed;}
+.sched-kpi.c5 .kpi-icon{background:#fff1f2;color:#e11d48;}
+.sched-kpi.c6 .kpi-icon{background:#fffbeb;color:#d97706;}
+.sched-kpi .kpi-text { min-width:0; }
+.sched-kpi .label { font-size:.67rem; color:#6b7280; white-space:nowrap; margin-bottom:1px; }
+.sched-kpi .val   { font-size:1.5rem; font-weight:800; line-height:1; letter-spacing:-.02em; }
+.sched-kpi .unit  { font-size:.67rem; color:#9ca3af; margin-left:2px; }
+.sched-kpi.c1 .val{color:#2563eb;} .sched-kpi.c2 .val{color:#16a34a;}
+.sched-kpi.c3 .val{color:#0891b2;} .sched-kpi.c4 .val{color:#7c3aed;}
+.sched-kpi.c5 .val{color:#e11d48;} .sched-kpi.c6 .val{color:#d97706;}
+
+/* ════════════════════════════════════════════════════
+   레이아웃
+════════════════════════════════════════════════════ */
+.sched-body {
+  display:grid; grid-template-columns:256px 1fr; gap:12px;
+  padding:12px 16px 20px;
+}
+@media(max-width:820px){ .sched-body{ grid-template-columns:1fr; } }
+
+/* ════════════════════════════════════════════════════
+   좌측 트리 패널
+════════════════════════════════════════════════════ */
+.tree-panel {
+  background:#fff; border-radius:12px;
+  box-shadow:0 1px 4px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04);
+  display:flex; flex-direction:column; overflow:hidden;
+  max-height:calc(100vh - 210px);
+}
+.tree-header {
+  padding:12px 14px 10px; border-bottom:1px solid #f0f0f0; flex-shrink:0;
+  font-size:.78rem; font-weight:700; color:#1e293b;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.tree-all-btn {
+  font-size:.68rem; padding:2px 10px; border-radius:20px;
+  border:1px solid #e2e8f0; background:#f8fafc; color:#64748b;
+  cursor:pointer; transition:all .12s; font-weight:600;
+}
+.tree-all-btn:hover { background:#e0f2fe; border-color:#7dd3fc; color:#0369a1; }
+.tree-search { padding:8px 10px; border-bottom:1px solid #f0f0f0; flex-shrink:0; }
+.tree-search input {
+  width:100%; border:1px solid #e2e8f0; border-radius:8px;
+  padding:6px 10px 6px 30px; font-size:.77rem; outline:none;
+  background:#f8fafc url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%239ca3af' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.243 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z'/%3E%3C/svg%3E") no-repeat 9px center;
+  transition:border-color .15s, box-shadow .15s;
+}
+.tree-search input:focus { border-color:#2563eb; background-color:#fff; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+.tree-body { flex:1; overflow-y:auto; padding:4px 0; }
+.tree-body::-webkit-scrollbar { width:4px; }
+.tree-body::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:4px; }
+
+.center-node {
+  padding:6px 12px 5px; cursor:pointer; user-select:none;
+  display:flex; align-items:center; transition:background .1s;
+}
+.center-node:hover { background:#f8fafc; }
+.center-node .cname {
+  font-size:.76rem; font-weight:700; color:#334155; flex:1;
+  letter-spacing:.01em;
+}
+.center-node .cbadge {
+  font-size:.62rem; background:#e2e8f0; color:#64748b;
+  border-radius:20px; padding:1px 8px; margin-left:4px; font-weight:600;
+}
+.center-node .toggle-icon { font-size:.68rem; color:#94a3b8; margin-left:4px; transition:transform .15s; }
+.center-node.open .toggle-icon { transform:rotate(0deg); }
+
+.worker-list { display:none; }
+.worker-list.open { display:block; }
+.worker-item {
+  padding:5px 12px 5px 28px; cursor:pointer; font-size:.75rem;
+  color:#475569; display:flex; align-items:center; gap:7px;
+  transition:background .1s; border-left:2px solid transparent;
+}
+.worker-item:hover { background:#f0f7ff; }
+.worker-item.active {
+  background:#eff6ff; color:#1d4ed8; font-weight:700;
+  border-left-color:#2563eb;
+}
+.worker-item .wdot {
+  width:6px; height:6px; border-radius:50%; background:#cbd5e1; flex-shrink:0;
+}
+.worker-item.active .wdot { background:#2563eb; }
+.worker-item .wbadge {
+  font-size:.6rem; background:#f0fdf4; color:#15803d;
+  border-radius:4px; padding:1px 6px; margin-left:auto; font-weight:600;
+  white-space:nowrap;
+}
+
+/* ════════════════════════════════════════════════════
+   우측 캘린더 패널
+════════════════════════════════════════════════════ */
+.cal-panel {
+  background:#fff; border-radius:12px;
+  box-shadow:0 1px 4px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04);
+  display:flex; flex-direction:column; overflow:hidden; min-height:0;
+}
+.cal-header {
+  padding:10px 14px; border-bottom:1px solid #f0f0f0;
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex-shrink:0;
+  background:linear-gradient(to right, #fafbff, #fff);
+}
+.cal-worker-badge {
+  background:linear-gradient(135deg,#dbeafe,#ede9fe); color:#1e40af;
+  border-radius:20px; padding:3px 12px 3px 8px; font-size:.74rem; font-weight:700;
+  display:none; align-items:center; gap:4px; border:1px solid rgba(37,99,235,.15);
+}
+.cal-nav { display:flex; align-items:center; gap:3px; }
+.cal-nav button {
+  border:1px solid #e2e8f0; background:#fff; border-radius:7px;
+  padding:4px 10px; font-size:.75rem; cursor:pointer; color:#64748b;
+  transition:all .12s;
+}
+.cal-nav button:hover { background:#f0f7ff; border-color:#bfdbfe; color:#2563eb; }
+.cal-nav .cal-title {
+  font-size:.92rem; font-weight:800; color:#0f172a;
+  min-width:120px; text-align:center; letter-spacing:-.01em;
+}
+.view-tabs {
+  display:flex; gap:2px; background:#f1f5f9; border-radius:8px; padding:3px;
+  border:1px solid #e2e8f0;
+}
+.view-tab {
+  padding:4px 14px; font-size:.74rem; font-weight:600; color:#64748b;
+  border-radius:6px; cursor:pointer; transition:all .15s; border:none; background:none;
+}
+.view-tab.active {
+  background:#fff; color:#2563eb;
+  box-shadow:0 1px 4px rgba(0,0,0,.1), 0 0 0 1px rgba(37,99,235,.12);
+}
+.cal-body { flex:1; padding:12px; overflow:auto; }
+
+/* ════════════════════════════════════════════════════
+   FullCalendar 달력 디자인
+════════════════════════════════════════════════════ */
+.fc .fc-toolbar { display:none !important; }
+
+/* 테이블 border */
+.fc .fc-scrollgrid { border-color:#e5e7eb !important; border-radius:8px; overflow:hidden; }
+.fc .fc-scrollgrid td, .fc .fc-scrollgrid th { border-color:#e5e7eb !important; }
+
+/* 요일 헤더 */
+.fc .fc-col-header { background:#f8fafc; }
+.fc .fc-col-header-cell-cushion {
+  font-size:.72rem; font-weight:700; color:#64748b;
+  padding:7px 4px; text-decoration:none !important; text-transform:uppercase; letter-spacing:.04em;
+}
+
+/* 토요일 헤더 */
+.fc .fc-col-header-cell.fc-day-sat .fc-col-header-cell-cushion { color:#2563eb !important; }
+/* 일요일 헤더 */
+.fc .fc-col-header-cell.fc-day-sun .fc-col-header-cell-cushion { color:#dc2626 !important; }
+
+/* 날짜 셀 */
+.fc .fc-daygrid-day { min-height:90px; }
+.fc .fc-daygrid-day-number {
+  font-size:.75rem; color:#374151; font-weight:600;
+  padding:6px 8px 2px; text-decoration:none !important;
+  width:26px; height:26px; display:flex; align-items:center; justify-content:center;
+  margin:3px 3px 0 auto; border-radius:50%;
+  transition:background .12s, color .12s;
+}
+.fc .fc-daygrid-day-number:hover { background:#e0f2fe; color:#0369a1; }
+
+/* 토요일 날짜 */
+.fc .fc-day-sat .fc-daygrid-day-number { color:#2563eb !important; }
+/* 일요일 날짜 */
+.fc .fc-day-sun .fc-daygrid-day-number { color:#dc2626 !important; }
+
+/* 토요일 셀 배경 */
+.fc .fc-day-sat { background:rgba(239,246,255,.5) !important; }
+/* 일요일 셀 배경 */
+.fc .fc-day-sun { background:rgba(255,241,242,.5) !important; }
+
+/* 오늘 */
+.fc .fc-day-today { background:rgba(37,99,235,.035) !important; }
+.fc .fc-day-today .fc-daygrid-day-number {
+  background:#2563eb !important; color:#fff !important;
+  font-weight:800; box-shadow:0 2px 6px rgba(37,99,235,.4);
+}
+
+/* 공휴일 날짜 숫자 */
+.fc .fc-day-holiday .fc-daygrid-day-number { color:#dc2626 !important; font-weight:800; }
+/* 공휴일명 */
+.holiday-label {
+  font-size:.6rem; color:#dc2626; font-weight:600; line-height:1;
+  padding:0 6px 2px; letter-spacing:-.01em; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;
+}
+
+/* 이벤트 */
+.fc .fc-daygrid-event {
+  border-radius:4px !important; margin-bottom:2px !important;
+  overflow:hidden !important; max-width:100% !important;
+  border:none !important; box-shadow:0 1px 2px rgba(0,0,0,.12);
+}
+.fc .fc-daygrid-event-harness { overflow:hidden !important; }
+.fc .fc-daygrid-more-link {
+  font-size:.67rem; color:#2563eb; font-weight:700;
+  background:rgba(37,99,235,.07); border-radius:4px; padding:1px 5px;
+}
+.fc .fc-daygrid-more-link:hover { background:rgba(37,99,235,.14); }
+.fc .fc-daygrid-day-events { overflow:hidden !important; padding:0 2px 4px !important; }
+
+/* 주 뷰 */
+.fc .fc-timegrid-slot-label { font-size:.68rem; color:#94a3b8; }
+.fc .fc-timegrid-col.fc-day-sat { background:rgba(239,246,255,.5) !important; }
+.fc .fc-timegrid-col.fc-day-sun { background:rgba(255,241,242,.5) !important; }
+.fc .fc-timegrid-col.fc-day-today { background:rgba(37,99,235,.03) !important; }
+
+/* 리스트 뷰 */
+.fc .fc-list-day-cushion { background:#f8fafc !important; padding:7px 14px; }
+.fc .fc-list-day-text,
+.fc .fc-list-day-side-text { font-size:.78rem; font-weight:700; color:#334155; text-decoration:none !important; }
+.fc-list-day.fc-day-sat .fc-list-day-text,
+.fc-list-day.fc-day-sat .fc-list-day-side-text { color:#2563eb !important; }
+.fc-list-day.fc-day-sun .fc-list-day-text,
+.fc-list-day.fc-day-sun .fc-list-day-side-text { color:#dc2626 !important; }
+.fc-list-day.fc-day-holiday .fc-list-day-text { color:#dc2626 !important; }
+.fc .fc-list-event:hover td { background:#f0f7ff !important; }
+.fc .fc-list-event-title a { font-size:.78rem; color:#0f172a; text-decoration:none; }
+.fc .fc-list-event-dot { border-radius:2px !important; width:10px; height:10px; }
+.fc .fc-list-table td { border-color:#f0f0f0 !important; padding:7px 14px; }
+
+/* 이전/다음 달 셀 숨김 */
+.fc .fc-day-other { display:none !important; }
+
+/* 리스트 뷰 공휴일명 인라인 배지 */
+.fc-list-day .holiday-label {
+  display:inline-block; font-size:.62rem; color:#dc2626; font-weight:600;
+  background:rgba(220,38,38,.07); border-radius:4px; padding:1px 6px;
+  vertical-align:middle;
+}
+
+/* ── 상태별 이벤트 스타일 ── */
+/* 완료: 흐리게 + 텍스트 줄긋기 */
+.fc-event-completed { opacity:.72 !important; }
+.fc-event-completed .ev-label { text-decoration:line-through; }
+/* 취소: 더 흐리게 */
+.fc-event-cancelled { opacity:.45 !important; }
+.fc-event-cancelled .ev-label { text-decoration:line-through; }
+/* 진행중: 좌측 흰 점 펄스 */
+.ev-inprogress-dot {
+  display:inline-block; width:6px; height:6px; border-radius:50%;
+  background:#fff; margin-right:3px; vertical-align:middle;
+  animation:pulse-dot 1.4s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100%{ opacity:1; transform:scale(1); }
+  50%{ opacity:.4; transform:scale(.7); }
+}
+
+/* ── 상태 변경 배지 ── */
+.status-badge {
+  display:inline-flex; align-items:center; gap:4px;
+  font-size:.72rem; font-weight:700; border-radius:6px; padding:3px 10px;
+}
+.status-badge.planned    { background:#eff6ff; color:#1d4ed8; }
+.status-badge.in_progress{ background:#fef3c7; color:#92400e; }
+.status-badge.completed  { background:#f0fdf4; color:#15803d; }
+.status-badge.cancelled  { background:#fef2f2; color:#b91c1c; }
+
+/* ── 등록 모달 ── */
+.modal-label { font-size:.78rem; font-weight:600; color:#374151; margin-bottom:3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="background:#f1f5f9;min-height:100%;padding-bottom:20px;">
+
+  <!-- KPI 카드 -->
+  <div class="sched-kpi-row">
+    <div class="sched-kpi c1">
+      <div class="kpi-icon"><i class="bi bi-people-fill"></i></div>
+      <div class="kpi-text">
+        <div class="label">총 인력</div>
+        <div><span class="val" id="kpi-total">-</span><span class="unit">명</span></div>
+      </div>
+    </div>
+    <div class="sched-kpi c2">
+      <div class="kpi-icon"><i class="bi bi-person-check-fill"></i></div>
+      <div class="kpi-text">
+        <div class="label">오늘 출근</div>
+        <div><span class="val" id="kpi-checkin">-</span><span class="unit">명</span></div>
+      </div>
+    </div>
+    <div class="sched-kpi c3">
+      <div class="kpi-icon"><i class="bi bi-clipboard-check-fill"></i></div>
+      <div class="kpi-text">
+        <div class="label">오늘 정기점검</div>
+        <div><span class="val" id="kpi-regular">-</span><span class="unit">건</span></div>
+      </div>
+    </div>
+    <div class="sched-kpi c4">
+      <div class="kpi-icon"><i class="bi bi-clipboard2-pulse-fill"></i></div>
+      <div class="kpi-text">
+        <div class="label">오늘 특별점검</div>
+        <div><span class="val" id="kpi-special">-</span><span class="unit">건</span></div>
+      </div>
+    </div>
+    <div class="sched-kpi c5">
+      <div class="kpi-icon"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div class="kpi-text">
+        <div class="label">오늘 장애</div>
+        <div><span class="val" id="kpi-incident">-</span><span class="unit">건</span></div>
+      </div>
+    </div>
+    <div class="sched-kpi c6">
+      <div class="kpi-icon"><i class="bi bi-three-dots-vertical"></i></div>
+      <div class="kpi-text">
+        <div class="label">기타 수행</div>
+        <div><span class="val" id="kpi-other">-</span><span class="unit">건</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 본문: 트리 + 캘린더 -->
+  <div class="sched-body">
+
+    <!-- 좌측: 지원청-인력 트리 -->
+    <div class="tree-panel">
+      <div class="tree-header">
+        <i class="bi bi-diagram-3 me-1 text-primary"></i>지원청 · 인력
+        <button class="btn btn-xs btn-outline-secondary float-end" style="font-size:.7rem;padding:1px 7px;" onclick="selectAllWorkers()" title="전체 보기">전체</button>
+      </div>
+      <div class="tree-search">
+        <input type="text" id="worker-search" placeholder="인력 이름 검색..." oninput="filterWorkers(this.value)">
+      </div>
+      <div class="tree-body" id="worker-tree"></div>
+    </div>
+
+    <!-- 우측: 캘린더 -->
+    <div class="cal-panel">
+      <div class="cal-header">
+        <!-- 선택 인력 배지 -->
+        <div class="cal-worker-badge" id="selected-worker-badge">
+          <i class="bi bi-person-fill me-1"></i><span id="selected-worker-name">전체</span>
+        </div>
+        <!-- 년/월 이동 -->
+        <div class="cal-nav ms-auto">
+          <button onclick="navCalendar(-1)"><i class="bi bi-chevron-left"></i></button>
+          <span class="cal-title" id="cal-title-display">-</span>
+          <button onclick="navCalendar(1)"><i class="bi bi-chevron-right"></i></button>
+          <button onclick="gotoToday()" style="padding:3px 10px;color:#2563eb;">오늘</button>
+        </div>
+        <!-- 년/월 직접 선택 -->
+        <select id="sel-year" class="form-select form-select-sm" style="width:85px;font-size:.77rem;" onchange="gotoYearMonth()"></select>
+        <select id="sel-month" class="form-select form-select-sm" style="width:72px;font-size:.77rem;" onchange="gotoYearMonth()">
+          {% for m in "123456789101112"|make_list %}{% endfor %}
+        </select>
+        <!-- 일 뷰 날짜 선택 (일 탭 활성 시만 표시) -->
+        <input type="date" id="day-picker" class="form-control form-control-sm"
+          style="width:140px;font-size:.77rem;display:none;" onchange="gotoDatePicker(this.value)">
+        <!-- 뷰 탭 -->
+        <div class="view-tabs">
+          <button class="view-tab active" id="vt-month" onclick="changeView('dayGridMonth',this)">달</button>
+          <button class="view-tab"        id="vt-week"  onclick="changeView('timeGridWeek',this)">주</button>
+          <button class="view-tab"        id="vt-day"   onclick="changeView('timeGridDay',this)">일</button>
+          <button class="view-tab"        id="vt-list"  onclick="changeView('listWeek',this)">리스트</button>
+        </div>
+        {% if user.role in 'superadmin,admin' %}
+        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#scheduleModal" style="font-size:.76rem;padding:4px 12px;">
+          <i class="bi bi-plus-lg me-1"></i>일정 등록
+        </button>
+        {% endif %}
+      </div>
+      <div class="cal-body">
+        <div id="work-calendar"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 일정 등록/수정 모달 -->
+<div class="modal fade" id="scheduleModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold" id="sched-modal-title">
+          <i class="bi bi-calendar-plus me-1 text-primary"></i>일정 등록
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <input type="hidden" id="sched-id" value="">
+      <div class="modal-body">
+        <div class="row g-2">
+
+          <!-- 왼쪽: 담당자 -->
+          <div class="col-md-6">
+            <div class="modal-label">지원청 <span class="text-muted fw-normal">(담당자 필터)</span></div>
+            <select id="sched-center-filter" class="form-select form-select-sm mb-1" onchange="onCenterFilterChange()">
+              <option value="">전체 지원청</option>
+            </select>
+            <div class="modal-label mt-1">담당자 <span class="text-danger">*</span></div>
+            <select id="sched-worker" class="form-select form-select-sm">
+              <option value="">담당자 선택...</option>
+            </select>
+          </div>
+
+          <!-- 오른쪽: 업무유형 -->
+          <div class="col-md-6">
+            <div class="modal-label">업무 유형 <span class="text-danger">*</span></div>
+            <select id="sched-type" class="form-select form-select-sm"></select>
+          </div>
+
+          <!-- 시작/종료 -->
+          <div class="col-md-6">
+            <div class="modal-label">시작일시 <span class="text-danger">*</span></div>
+            <input type="datetime-local" id="sched-start" class="form-control form-control-sm">
+          </div>
+          <div class="col-md-6">
+            <div class="modal-label">종료일시</div>
+            <input type="datetime-local" id="sched-end" class="form-control form-control-sm">
+          </div>
+
+          <!-- 학교 필터 -->
+          <div class="col-12">
+            <div class="modal-label">학교 <span class="text-muted fw-normal">(선택)</span></div>
+            <div class="row g-1 mb-1">
+              <div class="col-5">
+                <select id="sched-school-center" class="form-select form-select-sm" onchange="onSchoolFilterChange()">
+                  <option value="">지원청 선택 (필수)...</option>
+                </select>
+              </div>
+              <div class="col-4">
+                <select id="sched-school-type" class="form-select form-select-sm" onchange="onSchoolFilterChange()">
+                  <option value="">전체 학제</option>
+                </select>
+              </div>
+              <div class="col-3">
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="clearSchoolFilter()">초기화</button>
+              </div>
+            </div>
+            <select id="sched-school" class="form-select form-select-sm">
+              <option value="">학교 선택...</option>
+            </select>
+          </div>
+
+          <!-- 제목, 메모 -->
+          <div class="col-12">
+            <div class="modal-label">일정 제목</div>
+            <input type="text" id="sched-title" class="form-control form-control-sm" placeholder="비워두면 자동생성">
+          </div>
+          <div class="col-12">
+            <div class="modal-label">메모</div>
+            <textarea id="sched-note" class="form-control form-control-sm" rows="2"></textarea>
+          </div>
+
+        </div>
+      </div>
+      <div class="modal-footer py-2 d-flex justify-content-between">
+        <div>
+          <button class="btn btn-sm btn-outline-danger" id="sched-delete-btn"
+            style="display:none;" onclick="deleteScheduleFromModal()">
+            <i class="bi bi-trash me-1"></i>삭제
+          </button>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+          <button class="btn btn-sm btn-primary" onclick="submitSchedule()">
+            <i class="bi bi-check-lg me-1"></i><span id="sched-submit-label">등록</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 일정 상세/상태변경 모달 -->
+<div class="modal fade" id="eventModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2" id="ev-modal-header">
+        <h6 class="modal-title fw-semibold" id="ev-modal-title">일정 상세</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pb-2" id="ev-modal-body" style="font-size:.82rem;"></div>
+      <!-- 상태 변경 영역 (권한 있을 때만 표시) -->
+      <div class="px-3 pb-2" id="ev-status-footer" style="display:none;">
+        <div style="font-size:.72rem;font-weight:700;color:#374151;margin-bottom:4px;">상태 변경</div>
+        <div class="d-flex gap-2 flex-wrap" id="ev-status-btns"></div>
+      </div>
+      <!-- 편집/삭제 버튼 -->
+      <div class="modal-footer py-2 d-flex justify-content-between" id="ev-edit-footer" style="display:none!important;">
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteScheduleFromDetail()">
+          <i class="bi bi-trash me-1"></i>삭제
+        </button>
+        <button class="btn btn-sm btn-outline-primary" onclick="openEditFromDetail()">
+          <i class="bi bi-pencil me-1"></i>수정
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<script>
+'use strict';
+
+// ── 전역 상태 ─────────────────────────────────────────
+var _calendar     = null;
+var _selectedWid  = null;   // 선택된 인력 ID (null=전체)
+var _treeData     = [];     // 원본 트리 데이터
+var _holidays     = {};     // "YYYY-MM-DD" → 공휴일명
+var _loadedHolYears = {};   // 이미 로드된 연도 캐시
+
+// ── 현재 로그인 사용자 정보 (Django 템플릿) ───────────
+var ME_ROLE = '{{ user.role }}';
+var ME_ID   = {{ user.id|default:'null' }};
+var ME_NAME = '{{ user.name|default:user.username }}';
+
+// 업무유형 색상/아이콘 매핑
+var TYPE_META = {
+  'regular_check':  { color:'#0891b2', icon:'bi-clipboard-check', label:'정기점검' },
+  'special_check':  { color:'#7c3aed', icon:'bi-clipboard2-pulse', label:'특별점검' },
+  'incident':       { color:'#e11d48', icon:'bi-exclamation-triangle', label:'장애처리' },
+  'cable':          { color:'#d97706', icon:'bi-ethernet', label:'네트워크포설' },
+  'switch_install': { color:'#16a34a', icon:'bi-hdd-network', label:'스위치설치' },
+  'edu_request':    { color:'#2563eb', icon:'bi-building', label:'교육청요구' },
+  'other':          { color:'#6b7280', icon:'bi-three-dots', label:'기타' },
+};
+
+// ── 초기화 ────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  initYearMonthSelects();
+  var curYear = new Date().getFullYear();
+
+  var isAdmin = (ME_ROLE === 'superadmin' || ME_ROLE === 'admin');
+
+  if (!isAdmin) {
+    // 현장기사/재직자: 트리 패널 숨기고, 자신을 자동 선택
+    var treePanel = document.querySelector('.tree-panel');
+    if (treePanel) treePanel.style.display = 'none';
+    document.querySelector('.sched-body').style.gridTemplateColumns = '1fr';
+
+    _selectedWid = ME_ID;
+    // 배지 표시
+    document.getElementById('selected-worker-name').textContent = ME_NAME;
+    document.getElementById('selected-worker-badge').style.display = 'inline-flex';
+    // 전체보기 버튼도 숨김 (트리 패널 내부이므로 자동 처리됨)
+  }
+
+  loadHolidays(curYear).then(function() { initCalendar(); });
+  loadKPI();
+  if (isAdmin) {
+    loadCenterTree();
+  }
+  loadScheduleTypes();
+  loadWorkersForModal();
+  loadCentersForModal();
+  loadSchoolTypesForModal();
+});
+
+// ── 년/월 셀렉트 초기화 ──────────────────────────────
+function initYearMonthSelects() {
+  var selY = document.getElementById('sel-year');
+  var selM = document.getElementById('sel-month');
+  var now  = new Date();
+  for (var y = now.getFullYear() - 1; y <= now.getFullYear() + 1; y++) {
+    var opt = document.createElement('option');
+    opt.value = y; opt.textContent = y + '년';
+    if (y === now.getFullYear()) opt.selected = true;
+    selY.appendChild(opt);
+  }
+  for (var m = 1; m <= 12; m++) {
+    var opt2 = document.createElement('option');
+    opt2.value = m; opt2.textContent = m + '월';
+    if (m === now.getMonth() + 1) opt2.selected = true;
+    selM.appendChild(opt2);
+  }
+}
+
+// ── 공휴일 로딩 ────────────────────────────────────────
+function loadHolidays(year) {
+  if (_loadedHolYears[year]) return Promise.resolve();
+  return fetch(API_BASE + '/progress/holidays/?year=' + year + '&page_size=100', {
+    headers: { 'X-CSRFToken': CSRF_TOKEN }
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d) {
+    _loadedHolYears[year] = true;
+    var list = d.results || d;
+    list.forEach(function(h) {
+      if (!h.is_active) return;
+      if (h.is_recurring && h.month && h.day) {
+        // 현재 ±1 연도 범위 등록
+        for (var y = year - 1; y <= year + 1; y++) {
+          var mm = ('0' + h.month).slice(-2);
+          var dd = ('0' + h.day).slice(-2);
+          _holidays[y + '-' + mm + '-' + dd] = h.name;
+        }
+      } else if (!h.is_recurring && h.specific_date) {
+        _holidays[h.specific_date] = h.name;
+      }
+    });
+  })
+  .catch(function(){});
+}
+
+// ── FullCalendar 초기화 ───────────────────────────────
+function initCalendar() {
+  var el = document.getElementById('work-calendar');
+  _calendar = new FullCalendar.Calendar(el, {
+    locale:      'ko',
+    initialView: 'dayGridMonth',
+    headerToolbar: false,
+    dayMaxEvents: 4,
+    firstDay: 0,
+    moreLinkContent: function(arg) {
+      return { html: '<span style="font-size:.67rem;font-weight:700;">+' + arg.num + '개 더</span>' };
+    },
+    showNonCurrentDates: false,
+    fixedWeekCount: false,
+    // 날짜 숫자에서 "일" 제거
+    dayCellContent: function(arg) {
+      return { html: '<a class="fc-daygrid-day-number">' + arg.date.getDate() + '</a>' };
+    },
+    // 이벤트 클래스: 상태별
+    eventClassNames: function(arg) {
+      var st = (arg.event.extendedProps || {}).status || '';
+      if (st === 'completed')   return ['fc-event-completed'];
+      if (st === 'cancelled')   return ['fc-event-cancelled'];
+      return [];
+    },
+    // 빈 날짜 셀/타임 슬롯 클릭 → 일정 추가
+    dateClick: function(info) {
+      var isAdmin = (ME_ROLE === 'superadmin' || ME_ROLE === 'admin');
+      openNewScheduleModal(info.dateStr, info.date, isAdmin);
+    },
+    events: function(info, success, failure) {
+      // 현재 월의 이벤트만 요청 (info.start/end 는 달력 그리드 전체 범위)
+      var params = { start: info.startStr, end: info.endStr };
+      if (_selectedWid) params.worker = _selectedWid;
+      fetch(API_BASE + '/workforce/schedules/calendar/?' + new URLSearchParams(params), {
+        headers: { 'X-CSRFToken': CSRF_TOKEN }
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(d){ success(d); })
+      .catch(failure);
+    },
+    // 공휴일: DOM 마운트 후 라벨 삽입 + 클래스 추가
+    dayCellDidMount: function(arg) {
+      var key = arg.date.getFullYear()
+        + '-' + ('0'+(arg.date.getMonth()+1)).slice(-2)
+        + '-' + ('0'+arg.date.getDate()).slice(-2);
+      var holName = _holidays[key];
+      if (!holName) return;
+      arg.el.classList.add('fc-day-holiday');
+      // 날짜 숫자 영역 아래에 휴일명 삽입
+      var top = arg.el.querySelector('.fc-daygrid-day-top');
+      if (top) {
+        var label = document.createElement('div');
+        label.className = 'holiday-label';
+        label.textContent = holName;
+        top.appendChild(label);
+      }
+      // 리스트 뷰: .fc-list-day-cushion 안에도 삽입
+      var cushion = arg.el.querySelector('.fc-list-day-cushion');
+      if (cushion) {
+        var lbl2 = document.createElement('span');
+        lbl2.className = 'holiday-label ms-2';
+        lbl2.textContent = holName;
+        cushion.appendChild(lbl2);
+      }
+    },
+    eventContent: function(arg) {
+      return renderEventContent(arg);
+    },
+    eventClick: function(info) {
+      showEventDetail(info.event);
+    },
+    datesSet: function(info) {
+      _currentView = info.view.type;
+      updateCalTitle(info.view.currentStart);
+      syncYearMonthSelect(info.view.currentStart);
+      var y = info.view.currentStart.getFullYear();
+      if (!_loadedHolYears[y]) {
+        loadHolidays(y).then(function(){ _calendar.render(); });
+      }
+    },
+    height: 'auto',
+  });
+  _calendar.render();
+}
+
+// ── 이벤트 렌더링 ─────────────────────────────────────
+function renderEventContent(arg) {
+  var ev     = arg.event;
+  var props  = ev.extendedProps || {};
+  var code   = props.type_code || '';
+  var meta   = TYPE_META[code] || TYPE_META['other'];
+  var view   = arg.view.type;
+  var school = props.school || '';
+  var worker = props.worker || '';
+  var timeStr = '';
+
+  if (ev.start) {
+    var h = ev.start.getHours();
+    var mi = ev.start.getMinutes();
+    timeStr = ('0'+h).slice(-2) + ':' + ('0'+mi).slice(-2);
+  }
+
+  var st      = props.status || 'planned';
+  var isDone  = (st === 'completed');
+  var isCancel= (st === 'cancelled');
+  var isGoing = (st === 'in_progress');
+
+  var html;
+  if (view === 'dayGridMonth') {
+    var labelText = school ? (school + ' ' + meta.label) : (ev.title || meta.label);
+    html = '<div style="font-size:.71rem;padding:1px 5px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;line-height:1.6;">'
+      + (isGoing ? '<span class="ev-inprogress-dot"></span>' : '')
+      + (timeStr ? '<span style="opacity:.65;margin-right:3px;">' + timeStr + '</span>' : '')
+      + '<span class="ev-label">' + labelText + '</span>'
+      + '</div>';
+  } else if (view === 'timeGridWeek' || view === 'timeGridDay') {
+    html = '<div style="font-size:.72rem;padding:2px 4px;line-height:1.5;">'
+      + (isGoing ? '<span class="ev-inprogress-dot"></span>' : '')
+      + '<div><i class="bi ' + meta.icon + ' me-1"></i>'
+      + '<strong class="ev-label">' + (school || ev.title || '') + '</strong></div>'
+      + '<div style="opacity:.75;">' + meta.label + '</div>'
+      + (worker && !_selectedWid ? '<div style="opacity:.6;">' + worker + '</div>' : '')
+      + '</div>';
+  } else {
+    // listWeek
+    html = '<span style="font-size:.78rem;">'
+      + (isGoing ? '<span class="ev-inprogress-dot" style="background:' + meta.color + ';"></span>' : '')
+      + '<i class="bi ' + meta.icon + ' me-1" style="color:' + meta.color + ';opacity:' + (isDone||isCancel ? '.5' : '1') + ';"></i>'
+      + (school ? '<strong class="ev-label">' + school + '</strong> ' : '')
+      + '<span style="color:#64748b;" class="ev-label">' + meta.label + '</span>'
+      + (worker && !_selectedWid ? ' <span style="color:#94a3b8;font-size:.72rem;">(' + worker + ')</span>' : '')
+      + '</span>';
+  }
+  return { html: html };
+}
+
+// ── 상태 레이블/아이콘 ────────────────────────────────
+var STATUS_META = {
+  'planned':     { label:'예정',   icon:'bi-calendar2-check', cls:'planned' },
+  'in_progress': { label:'진행중', icon:'bi-play-circle-fill', cls:'in_progress' },
+  'completed':   { label:'완료',   icon:'bi-check-circle-fill', cls:'completed' },
+  'cancelled':   { label:'취소',   icon:'bi-x-circle-fill',    cls:'cancelled' },
+};
+
+// ── 일정 상세 팝업 ─────────────────────────────────────
+var _currentEventId = null;
+
+function showEventDetail(ev) {
+  var props  = ev.extendedProps || {};
+  var code   = props.type_code || '';
+  var meta   = TYPE_META[code] || TYPE_META['other'];
+  var sMeta  = STATUS_META[props.status] || STATUS_META['planned'];
+  _currentEventId = ev.id;
+
+  var startStr = '', endStr = '';
+  if (ev.start) {
+    startStr = ev.start.toLocaleDateString('ko-KR') + ' '
+      + ('0'+ev.start.getHours()).slice(-2) + ':' + ('0'+ev.start.getMinutes()).slice(-2);
+  }
+  if (ev.end) {
+    endStr = ev.end.toLocaleDateString('ko-KR') + ' '
+      + ('0'+ev.end.getHours()).slice(-2) + ':' + ('0'+ev.end.getMinutes()).slice(-2);
+  }
+
+  // 헤더 색상 (상태 반영)
+  var headerColor = (props.status === 'completed' || props.status === 'cancelled') ? '#94a3b8' : meta.color;
+  document.getElementById('ev-modal-header').style.borderBottom = '3px solid ' + headerColor;
+  document.getElementById('ev-modal-title').innerHTML =
+    '<i class="bi ' + meta.icon + ' me-1" style="color:' + headerColor + ';"></i>'
+    + (props.type_name || meta.label);
+
+  document.getElementById('ev-modal-body').innerHTML =
+    '<div class="mb-2">'
+      + '<span class="status-badge ' + sMeta.cls + '">'
+      + '<i class="bi ' + sMeta.icon + '"></i>' + sMeta.label
+      + '</span>'
+    + '</div>'
+    + '<div class="mb-1"><i class="bi bi-clock me-1 text-muted"></i>'
+      + startStr + (endStr && endStr !== startStr ? ' ~ ' + endStr : '') + '</div>'
+    + (props.school ? '<div class="mb-1"><i class="bi bi-building me-1 text-muted"></i>' + props.school + '</div>' : '')
+    + (props.worker ? '<div class="mb-1"><i class="bi bi-person me-1 text-muted"></i>' + props.worker + '</div>' : '')
+    + (props.description ? '<div class="mt-2 p-2 bg-light rounded small" style="white-space:pre-line;">' + props.description + '</div>' : '');
+
+  // 상태 변경 버튼: 관리자 or 본인 일정
+  var canEdit = (ME_ROLE === 'superadmin' || ME_ROLE === 'admin')
+             || (props.worker_id && props.worker_id === ME_ID);
+  var statusFooter = document.getElementById('ev-status-footer');
+  var editFooter   = document.getElementById('ev-edit-footer');
+
+  if (canEdit) {
+    statusFooter.style.display = 'block';
+    var btns = '';
+    var statusOrder = ['planned', 'in_progress', 'completed', 'cancelled'];
+    statusOrder.forEach(function(st) {
+      var sm = STATUS_META[st];
+      var isActive = (st === props.status);
+      btns += '<button class="btn btn-sm status-badge ' + sm.cls
+        + (isActive ? ' fw-bold shadow-sm' : ' opacity-75')
+        + '" onclick="updateScheduleStatus(\'' + st + '\')"'
+        + (isActive ? ' disabled' : '') + '>'
+        + '<i class="bi ' + sm.icon + ' me-1"></i>' + sm.label
+        + (isActive ? ' ✓' : '')
+        + '</button>';
+    });
+    document.getElementById('ev-status-btns').innerHTML = btns;
+    editFooter.style.removeProperty('display');
+  } else {
+    statusFooter.style.display = 'none';
+    editFooter.style.display = 'none';
+  }
+
+  var modal = new bootstrap.Modal(document.getElementById('eventModal'));
+  modal.show();
+}
+
+// ── 상태 변경 ────────────────────────────────────────
+async function updateScheduleStatus(newStatus) {
+  if (!_currentEventId) return;
+  try {
+    var r = await fetch(API_BASE + '/workforce/schedules/' + _currentEventId + '/update_status/', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (r.ok) {
+      var d = await r.json();
+      showToast(d.status_label + '(으)로 변경되었습니다.', 'success');
+      bootstrap.Modal.getInstance(document.getElementById('eventModal')).hide();
+      _calendar.refetchEvents();
+    } else {
+      var err = await r.json();
+      showToast(err.error || '변경 실패', 'error');
+    }
+  } catch(e) {
+    showToast('오류가 발생했습니다.', 'error');
+  }
+}
+
+// ── 캘린더 네비게이션 ─────────────────────────────────
+function navCalendar(dir) {
+  if (dir > 0) _calendar.next(); else _calendar.prev();
+}
+function gotoToday() {
+  _calendar.today();
+}
+function gotoYearMonth() {
+  var y = document.getElementById('sel-year').value;
+  var m = document.getElementById('sel-month').value;
+  _calendar.gotoDate(y + '-' + ('0'+m).slice(-2) + '-01');
+}
+var _currentView = 'dayGridMonth';
+
+function updateCalTitle(dt) {
+  var d = dt instanceof Date ? dt : new Date(dt);
+  var pad = function(n){ return ('0'+n).slice(-2); };
+  var title;
+  if (_currentView === 'timeGridDay') {
+    var days = ['일','월','화','수','목','금','토'];
+    title = d.getFullYear() + '년 ' + (d.getMonth()+1) + '월 ' + d.getDate() + '일 ('
+          + days[d.getDay()] + ')';
+    // 날짜 picker 동기화
+    var dp = document.getElementById('day-picker');
+    dp.value = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+  } else {
+    title = d.getFullYear() + '년 ' + (d.getMonth()+1) + '월';
+  }
+  document.getElementById('cal-title-display').textContent = title;
+}
+
+function syncYearMonthSelect(dt) {
+  var d = dt instanceof Date ? dt : new Date(dt);
+  document.getElementById('sel-year').value  = d.getFullYear();
+  document.getElementById('sel-month').value = d.getMonth() + 1;
+}
+
+function changeView(viewName, btnEl) {
+  _currentView = viewName;
+  _calendar.changeView(viewName);
+  document.querySelectorAll('.view-tab').forEach(function(b){ b.classList.remove('active'); });
+  if (btnEl) btnEl.classList.add('active');
+
+  // 일 뷰: 날짜 picker 표시 / 년월 셀렉트 숨김
+  var isDayView = (viewName === 'timeGridDay');
+  document.getElementById('day-picker').style.display = isDayView ? '' : 'none';
+  document.getElementById('sel-year').style.display   = isDayView ? 'none' : '';
+  document.getElementById('sel-month').style.display  = isDayView ? 'none' : '';
+
+  // 일 뷰로 전환 시 현재 날짜로 초기화
+  if (isDayView) {
+    var cur = _calendar.getDate();
+    var pad = function(n){ return ('0'+n).slice(-2); };
+    document.getElementById('day-picker').value =
+      cur.getFullYear() + '-' + pad(cur.getMonth()+1) + '-' + pad(cur.getDate());
+  }
+}
+
+function gotoDatePicker(val) {
+  if (val) _calendar.gotoDate(val);
+}
+
+// ── KPI 로드 ─────────────────────────────────────────
+async function loadKPI() {
+  try {
+    var r = await fetch(API_BASE + '/workforce/today-kpi/', { headers:{'X-CSRFToken':CSRF_TOKEN} });
+    var d = await r.json();
+    document.getElementById('kpi-total').textContent   = d.total_workers  || 0;
+    document.getElementById('kpi-checkin').textContent  = d.today_checkin  || 0;
+    document.getElementById('kpi-regular').textContent  = d.today_regular  || 0;
+    document.getElementById('kpi-special').textContent  = d.today_special  || 0;
+    document.getElementById('kpi-incident').textContent = d.today_incident || 0;
+    document.getElementById('kpi-other').textContent    = d.today_other    || 0;
+  } catch(e) {}
+}
+
+// ── 지원청-인력 트리 ──────────────────────────────────
+async function loadCenterTree() {
+  try {
+    var r = await fetch(API_BASE + '/workforce/center-tree/', { headers:{'X-CSRFToken':CSRF_TOKEN} });
+    var d = await r.json();
+    _treeData = d.centers || [];
+    renderTree(_treeData);
+  } catch(e) {
+    document.getElementById('worker-tree').innerHTML =
+      '<div class="text-muted small px-3 py-2">트리 로딩 실패</div>';
+  }
+}
+
+function renderTree(centers) {
+  var html = '';
+  centers.forEach(function(c) {
+    var wcount = c.workers ? c.workers.length : 0;
+    html += '<div class="center-node" onclick="toggleCenter(this,\'' + c.name + '\')">'
+      + '<span class="cname"><i class="bi bi-building me-1 text-primary" style="font-size:.72rem;"></i>' + c.name + '</span>'
+      + '<span class="cbadge">' + wcount + '명</span>'
+      + '<i class="bi bi-chevron-down toggle-icon ms-1"></i>'
+      + '</div>'
+      + '<div class="worker-list open" id="wlist-' + c.name + '">';
+    (c.workers || []).forEach(function(w) {
+      html += '<div class="worker-item" data-wid="' + w.id + '" data-name="' + w.name + '"'
+        + ' onclick="selectWorker(' + w.id + ',\'' + w.name + '\',this)">'
+        + '<span class="wdot"></span>'
+        + w.name
+        + '<span class="wbadge">' + (w.role_label || '') + '</span>'
+        + '</div>';
+    });
+    html += '</div>';
+  });
+  document.getElementById('worker-tree').innerHTML = html;
+}
+
+function toggleCenter(el, cname) {
+  var list = document.getElementById('wlist-' + cname);
+  if (!list) return;
+  var icon = el.querySelector('.toggle-icon');
+  if (list.classList.toggle('open')) {
+    if (icon) { icon.classList.remove('bi-chevron-right'); icon.classList.add('bi-chevron-down'); }
+  } else {
+    if (icon) { icon.classList.remove('bi-chevron-down'); icon.classList.add('bi-chevron-right'); }
+  }
+}
+
+function selectWorker(wid, wname, el) {
+  // 이전 선택 해제
+  document.querySelectorAll('.worker-item').forEach(function(i){ i.classList.remove('active'); });
+  if (el) el.classList.add('active');
+
+  _selectedWid = wid;
+
+  // 배지 업데이트
+  document.getElementById('selected-worker-name').textContent = wname;
+  document.getElementById('selected-worker-badge').style.display = 'inline-flex';
+
+  _calendar.refetchEvents();
+}
+
+function selectAllWorkers() {
+  document.querySelectorAll('.worker-item').forEach(function(i){ i.classList.remove('active'); });
+  _selectedWid = null;
+  document.getElementById('selected-worker-badge').style.display = 'none';
+  _calendar.refetchEvents();
+}
+
+// ── 인력 검색 ─────────────────────────────────────────
+function filterWorkers(q) {
+  q = q.trim().toLowerCase();
+  if (!q) { renderTree(_treeData); return; }
+
+  var filtered = _treeData.map(function(c) {
+    var workers = (c.workers || []).filter(function(w) {
+      return w.name.toLowerCase().indexOf(q) >= 0;
+    });
+    return { id: c.id, name: c.name, workers: workers };
+  }).filter(function(c){ return c.workers.length > 0; });
+
+  renderTree(filtered);
+  // 검색 결과는 모두 열기
+  filtered.forEach(function(c) {
+    var list = document.getElementById('wlist-' + c.name);
+    if (list) list.classList.add('open');
+  });
+}
+
+// ── 전역: 센터/학교 타입 캐시 ──────────────────────────
+var _centers       = [];   // [{id,code,name}, ...]
+var _schoolTypes   = [];   // [{id,code,name}, ...]
+var _allWorkers    = [];   // [{id,name,role,center_id,center_name}, ...]
+var _schoolCache   = {};   // centerCode → [{id,name,type_code}, ...]  (클라이언트 캐시)
+
+// ── 초기 데이터 로드 ──────────────────────────────────
+async function loadCentersForModal() {
+  try {
+    var r = await fetch(API_BASE + '/schools/centers/?page_size=50', {headers:{'X-CSRFToken':CSRF_TOKEN}});
+    var d = await r.json();
+    _centers = d.results || d;
+    var selCF  = document.getElementById('sched-center-filter');
+    var selSC  = document.getElementById('sched-school-center');
+    _centers.forEach(function(c) {
+      selCF.innerHTML += '<option value="' + c.id + '" data-code="' + c.code + '">' + c.name + '</option>';
+      selSC.innerHTML += '<option value="' + c.code + '">' + c.name + '</option>';
+    });
+  } catch(e) {}
+}
+
+async function loadSchoolTypesForModal() {
+  try {
+    var r = await fetch(API_BASE + '/schools/types/?page_size=20', {headers:{'X-CSRFToken':CSRF_TOKEN}});
+    var d = await r.json();
+    _schoolTypes = d.results || d;
+    var sel = document.getElementById('sched-school-type');
+    _schoolTypes.forEach(function(t) {
+      sel.innerHTML += '<option value="' + t.code + '">' + t.name + '</option>';
+    });
+  } catch(e) {}
+}
+
+async function loadWorkersForModal() {
+  try {
+    var r = await fetch(API_BASE + '/workforce/center-tree/', {headers:{'X-CSRFToken':CSRF_TOKEN}});
+    var d = await r.json();
+    _allWorkers = [];
+    (d.centers || []).forEach(function(c) {
+      (c.workers || []).forEach(function(w) {
+        _allWorkers.push({id: w.id, name: w.name, role: w.role,
+          center_id: c.id, center_name: c.name});
+      });
+    });
+    _renderWorkerSelect(null);
+  } catch(e) {}
+}
+
+function _renderWorkerSelect(centerId) {
+  var sel = document.getElementById('sched-worker');
+  var filtered = centerId
+    ? _allWorkers.filter(function(w){ return w.center_id == centerId; })
+    : _allWorkers;
+  sel.innerHTML = '<option value="">담당자 선택...</option>';
+  filtered.forEach(function(w) {
+    sel.innerHTML += '<option value="' + w.id + '">'
+      + (centerId ? '' : '[' + w.center_name + '] ')
+      + w.name + '</option>';
+  });
+  if (_selectedWid && !centerId) sel.value = _selectedWid;
+}
+
+function onCenterFilterChange() {
+  var sel = document.getElementById('sched-center-filter');
+  var centerId = sel.value || null;
+  _renderWorkerSelect(centerId);
+}
+
+async function onSchoolFilterChange() {
+  var centerCode = document.getElementById('sched-school-center').value;
+  var typeCode   = document.getElementById('sched-school-type').value;
+  var sel        = document.getElementById('sched-school');
+  var prev       = sel.value;
+
+  if (!centerCode) {
+    sel.innerHTML = '<option value="">지원청을 먼저 선택하세요</option>';
+    sel.disabled = false;
+    return;
+  }
+
+  // ── 캐시 확인: 이미 로드된 지원청이면 API 호출 없이 즉시 필터 ──
+  if (_schoolCache[centerCode]) {
+    _renderSchoolSelect(sel, _schoolCache[centerCode], typeCode, prev);
+    return;
+  }
+
+  // ── 첫 로드: API 호출 (지원청 전체 학교, 학제 필터 없이) ──
+  sel.innerHTML = '<option value="">불러오는 중...</option>';
+  sel.disabled  = true;
+  try {
+    var r = await fetch(
+      API_BASE + '/schools/schools/filter/?center=' + encodeURIComponent(centerCode),
+      { headers: { 'X-CSRFToken': CSRF_TOKEN } }
+    );
+    var schools = await r.json();
+    // type_code 포함하도록 schools API에서 이미 반환 (없으면 별도 처리 불필요)
+    _schoolCache[centerCode] = schools;
+    _renderSchoolSelect(sel, schools, typeCode, prev);
+  } catch(e) {
+    sel.innerHTML = '<option value="">로딩 실패</option>';
+    sel.disabled  = false;
+  }
+}
+
+function _renderSchoolSelect(sel, allSchools, typeCode, prevValue) {
+  var filtered = typeCode
+    ? allSchools.filter(function(s){ return s.type_code === typeCode; })
+    : allSchools;
+  var html = '<option value="">학교 선택 (' + filtered.length + '개)</option>';
+  filtered.forEach(function(s) {
+    html += '<option value="' + s.id + '">' + s.name + '</option>';
+  });
+  sel.innerHTML = html;
+  sel.disabled  = false;
+  if (prevValue) sel.value = prevValue;
+}
+
+function clearSchoolFilter() {
+  document.getElementById('sched-school-center').value = '';
+  document.getElementById('sched-school-type').value   = '';
+  document.getElementById('sched-school').innerHTML    = '<option value="">지원청을 먼저 선택하세요</option>';
+  document.getElementById('sched-school').disabled     = false;
+  document.getElementById('sched-school').value        = '';
+}
+
+async function loadScheduleTypes() {
+  try {
+    var r = await fetch(API_BASE + '/workforce/schedule-types/', {headers:{'X-CSRFToken':CSRF_TOKEN}});
+    var d = await r.json();
+    var types = d.results || d;
+    var sel = document.getElementById('sched-type');
+    sel.innerHTML = '<option value="">업무유형 선택...</option>';
+    types.forEach(function(t) {
+      sel.innerHTML += '<option value="' + t.id + '">' + t.name + '</option>';
+    });
+  } catch(e) {}
+}
+
+// ── 새 일정 등록 모달 열기 ────────────────────────────
+function openNewScheduleModal(dateStr, dateObj, isAdmin) {
+  if (!isAdmin && ME_ROLE !== 'worker' && ME_ROLE !== 'resident') return;
+  _resetSchedModal();
+  document.getElementById('sched-modal-title').innerHTML =
+    '<i class="bi bi-calendar-plus me-1 text-primary"></i>일정 등록';
+  document.getElementById('sched-submit-label').textContent = '등록';
+  document.getElementById('sched-delete-btn').style.display = 'none';
+
+  // 날짜 및 시간 선택에 pre-fill
+  var dt = dateObj instanceof Date ? dateObj : new Date(dateStr);
+  var pad = function(n){ return ('0'+n).slice(-2); };
+  var localDt = dt.getFullYear() + '-' + pad(dt.getMonth()+1) + '-' + pad(dt.getDate())
+    + 'T' + pad(dt.getHours()) + ':' + pad(dt.getMinutes());
+  document.getElementById('sched-start').value = localDt;
+  // 종료 = 시작 + 1시간
+  var endDt = new Date(dt.getTime() + 3600000);
+  document.getElementById('sched-end').value = endDt.getFullYear() + '-' + pad(endDt.getMonth()+1)
+    + '-' + pad(endDt.getDate()) + 'T' + pad(endDt.getHours()) + ':' + pad(endDt.getMinutes());
+
+  // 비관리자: 본인 pre-select
+  if (ME_ROLE !== 'superadmin' && ME_ROLE !== 'admin') {
+    document.getElementById('sched-worker').innerHTML =
+      '<option value="' + ME_ID + '" selected>' + ME_NAME + '</option>';
+  } else if (_selectedWid) {
+    document.getElementById('sched-worker').value = _selectedWid;
+  }
+
+  new bootstrap.Modal(document.getElementById('scheduleModal')).show();
+}
+
+// ── 기존 일정 수정 모달 열기 ─────────────────────────
+async function openEditFromDetail() {
+  if (!_currentEventId) return;
+  bootstrap.Modal.getInstance(document.getElementById('eventModal')).hide();
+  try {
+    var r = await fetch(API_BASE + '/workforce/schedules/' + _currentEventId + '/', {headers:{'X-CSRFToken':CSRF_TOKEN}});
+    var ws = await r.json();
+    _resetSchedModal();
+    document.getElementById('sched-id').value = ws.id;
+    document.getElementById('sched-modal-title').innerHTML =
+      '<i class="bi bi-pencil me-1 text-warning"></i>일정 수정';
+    document.getElementById('sched-submit-label').textContent = '저장';
+    document.getElementById('sched-delete-btn').style.display = 'inline-flex';
+
+    // 담당자: 현재 값 set
+    var wSel = document.getElementById('sched-worker');
+    // 해당 담당자가 없을 경우 임시 option 추가
+    if (!wSel.querySelector('option[value="' + ws.worker + '"]')) {
+      wSel.innerHTML += '<option value="' + ws.worker + '">' + ws.worker_name + '</option>';
+    }
+    wSel.value = ws.worker;
+
+    // 업무유형
+    document.getElementById('sched-type').value = ws.schedule_type;
+    // 시작/종료 (datetime-local 형식으로 변환)
+    var toLocal = function(iso) {
+      var d = new Date(iso);
+      var pad = function(n){ return ('0'+n).slice(-2); };
+      return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
+        + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    };
+    document.getElementById('sched-start').value = toLocal(ws.start_dt);
+    document.getElementById('sched-end').value   = toLocal(ws.end_dt);
+    document.getElementById('sched-title').value = ws.title || '';
+    document.getElementById('sched-note').value  = ws.description || '';
+
+    // 학교: 현재 값
+    if (ws.school) {
+      var sSel = document.getElementById('sched-school');
+      if (!sSel.querySelector('option[value="' + ws.school + '"]')) {
+        sSel.innerHTML += '<option value="' + ws.school + '">' + ws.school_name + '</option>';
+      }
+      sSel.value = ws.school;
+    }
+
+    new bootstrap.Modal(document.getElementById('scheduleModal')).show();
+  } catch(e) {
+    showToast('일정 로딩 실패', 'error');
+  }
+}
+
+function _resetSchedModal() {
+  document.getElementById('sched-id').value    = '';
+  document.getElementById('sched-start').value = '';
+  document.getElementById('sched-end').value   = '';
+  document.getElementById('sched-title').value = '';
+  document.getElementById('sched-note').value  = '';
+  document.getElementById('sched-center-filter').value = '';
+  document.getElementById('sched-school-center').value = '';
+  document.getElementById('sched-school-type').value   = '';
+  document.getElementById('sched-school').innerHTML = '<option value="">지원청을 먼저 선택하세요</option>';
+  document.getElementById('sched-school').disabled  = false;
+  _renderWorkerSelect(null);
+}
+
+// ── 일정 저장 (등록 or 수정) ─────────────────────────
+async function submitSchedule() {
+  var id     = document.getElementById('sched-id').value;
+  var worker = document.getElementById('sched-worker').value;
+  var type   = document.getElementById('sched-type').value;
+  var start  = document.getElementById('sched-start').value;
+  var end    = document.getElementById('sched-end').value;
+  var school = document.getElementById('sched-school').value;
+  var title  = document.getElementById('sched-title').value;
+  var note   = document.getElementById('sched-note').value;
+
+  if (!worker || !type || !start) {
+    showToast('담당자·업무유형·시작일시는 필수입니다.', 'warning');
+    return;
+  }
+  var payload = {
+    worker:        parseInt(worker),
+    schedule_type: parseInt(type),
+    title:         title || '',
+    start_dt:      start,
+    end_dt:        end || start,
+    description:   note,
+  };
+  if (school) payload.school = parseInt(school);
+
+  var isEdit = !!id;
+  try {
+    var r = await fetch(
+      API_BASE + '/workforce/schedules/' + (isEdit ? id + '/' : ''),
+      {
+        method:  isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type':'application/json', 'X-CSRFToken':CSRF_TOKEN },
+        body:    JSON.stringify(payload),
+      }
+    );
+    if (r.ok) {
+      bootstrap.Modal.getInstance(document.getElementById('scheduleModal')).hide();
+      showToast(isEdit ? '일정이 수정되었습니다.' : '일정이 등록되었습니다.', 'success');
+      loadKPI();
+      _calendar.refetchEvents();
+    } else {
+      var err = await r.json();
+      showToast((isEdit ? '수정' : '등록') + ' 실패: ' + JSON.stringify(err), 'error');
+    }
+  } catch(e) {
+    showToast('오류가 발생했습니다.', 'error');
+  }
+}
+
+// ── 삭제 (모달에서) ───────────────────────────────────
+async function deleteScheduleFromModal() {
+  var id = document.getElementById('sched-id').value;
+  if (!id || !confirm('이 일정을 삭제하시겠습니까?\n연결된 진척관리 항목도 초기화됩니다.')) return;
+  await _doDelete(id);
+  bootstrap.Modal.getInstance(document.getElementById('scheduleModal')).hide();
+}
+
+async function deleteScheduleFromDetail() {
+  if (!_currentEventId || !confirm('이 일정을 삭제하시겠습니까?\n연결된 진척관리 항목도 초기화됩니다.')) return;
+  await _doDelete(_currentEventId);
+  bootstrap.Modal.getInstance(document.getElementById('eventModal')).hide();
+}
+
+async function _doDelete(id) {
+  try {
+    var r = await fetch(API_BASE + '/workforce/schedules/' + id + '/', {
+      method: 'DELETE', headers: {'X-CSRFToken': CSRF_TOKEN}
+    });
+    if (r.ok || r.status === 204) {
+      showToast('일정이 삭제되었습니다.', 'success');
+      loadKPI();
+      _calendar.refetchEvents();
+    } else {
+      showToast('삭제 실패', 'error');
+    }
+  } catch(e) {
+    showToast('오류가 발생했습니다.', 'error');
+  }
+}
+
+// ── GPS 출퇴근 ────────────────────────────────────────
+{% if user.role == 'worker' or user.role == 'resident' %}
+function getPosition() {
+  return new Promise(function(resolve, reject) {
+    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy:true, timeout:10000 });
+  });
+}
+async function checkIn() {
+  try {
+    var pos = await getPosition();
+    var r = await fetch(API_BASE + '/workforce/attendance/check_in/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+    });
+    if (r.ok) { showToast('출근 기록됨', 'success'); loadKPI(); }
+    else showToast('출근 실패', 'error');
+  } catch(e) { showToast(e.message || '위치 오류', 'error'); }
+}
+async function checkOut() {
+  try {
+    var pos = await getPosition();
+    var r = await fetch(API_BASE + '/workforce/attendance/check_out/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+    });
+    if (r.ok) { showToast('퇴근 기록됨', 'success'); loadKPI(); }
+    else showToast('퇴근 실패', 'error');
+  } catch(e) { showToast(e.message || '위치 오류', 'error'); }
+}
+{% endif %}
+</script>
+{% endblock %}

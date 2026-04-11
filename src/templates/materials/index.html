@@ -1,0 +1,3287 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}자재 관리{% endblock %}
+{% block page_title %}<i class="bi bi-boxes me-2"></i>자재 관리{% endblock %}
+
+{% block extra_css %}
+<style>
+/* 자재관리 테이블 헤더 고정 */
+.table-responsive { max-height: calc(100vh - 280px); overflow-y: auto; }
+.table-responsive thead.sticky-top th { position: sticky; top: 0; z-index: 10; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+  <!-- KPI (admin/superadmin) -->
+  {% if user.role == 'superadmin' or user.role == 'admin' %}
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body p-3">
+          <div class="small text-muted">등록 품목 수</div>
+          <div class="fs-5 fw-bold text-primary" id="kpi-items">-</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body p-3">
+          <div class="small text-muted">부족 품목</div>
+          <div class="fs-5 fw-bold text-danger" id="kpi-low">-</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body p-3">
+          <div class="small text-muted">오늘 입고</div>
+          <div class="fs-5 fw-bold text-success" id="kpi-in">-</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body p-3">
+          <div class="small text-muted">오늘 출고</div>
+          <div class="fs-5 fw-bold text-warning" id="kpi-out">-</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- 탭 메뉴 -->
+  <ul class="nav nav-tabs mb-2" id="mat-tabs">
+    {% if user.role == 'superadmin' or user.role == 'admin' %}
+    <li class="nav-item">
+      <button class="nav-link active" id="btn-stats" onclick="switchTab('stats')">
+        <i class="bi bi-table me-1"></i>통계
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="btn-items" onclick="switchTab('items')">
+        <i class="bi bi-list-ul me-1"></i>자재 품목
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="btn-warehouse" onclick="switchTab('warehouse')">
+        <i class="bi bi-building me-1"></i>창고 재고
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="btn-inbound" onclick="switchTab('inbound')">
+        <i class="bi bi-box-arrow-in-down text-success me-1"></i>입고 이력
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="btn-outbound" onclick="switchTab('outbound')">
+        <i class="bi bi-box-arrow-up text-warning me-1"></i>출고 이력
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="btn-center" onclick="switchTab('center')">
+        <i class="bi bi-diagram-3 me-1"></i>센터별 재고
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="btn-low" onclick="switchTab('low')">
+        <i class="bi bi-exclamation-triangle text-danger me-1"></i>부족 알림
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="btn-admin-cinbound" onclick="switchTab('admin-cinbound')">
+        <i class="bi bi-box-arrow-in-down text-success me-1"></i>센터별 입고이력
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="btn-admin-creturn" onclick="switchTab('admin-creturn')">
+        <i class="bi bi-arrow-return-left text-warning me-1"></i>센터별 반납이력
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="btn-admin-coutbound" onclick="switchTab('admin-coutbound')">
+        <i class="bi bi-box-arrow-right text-danger me-1"></i>센터별 출고이력
+      </button>
+    </li>
+    {% else %}
+    <li class="nav-item">
+      <button class="nav-link active" id="btn-center" onclick="switchTab('center')">
+        <i class="bi bi-diagram-3 me-1"></i>{% if user.support_center %}{{ user.support_center.name }} 재고{% else %}센터 재고{% endif %}
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="btn-my-inbound" onclick="switchTab('my-inbound')">
+        <i class="bi bi-box-arrow-in-down text-success me-1"></i>{% if user.support_center %}{{ user.support_center.name }} 입고이력{% else %}창고 입고이력{% endif %}
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" id="btn-center-out" onclick="switchTab('center-out')">
+        <i class="bi bi-box-arrow-right text-danger me-1"></i>{% if user.support_center %}{{ user.support_center.name }} 출고{% else %}센터 출고{% endif %}
+      </button>
+    </li>
+    {% endif %}
+  </ul>
+
+  <!-- ===== 통계 탭 ===== -->
+  <div id="tab-stats" {% if user.role != 'superadmin' and user.role != 'admin' %}class="d-none"{% endif %}>
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="fw-semibold"><i class="bi bi-table me-1"></i>자재 보유 현황 통계</span>
+        <button class="btn btn-sm btn-success text-white" onclick="downloadAllExcel()" title="모든 탭 데이터를 시트별로 다운로드">
+          <i class="bi bi-file-earmark-excel me-1"></i>전체 Excel 다운로드
+        </button>
+      </div>
+      <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
+        <input type="text" id="stats-search" class="form-control form-control-sm" style="max-width:200px;" placeholder="품목명/코드 검색..." oninput="filterStatsTable()">
+        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('stats-search').value='';filterStatsTable()">초기화</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered table-hover mb-0" id="stats-table">
+          <thead class="table-light sticky-top" id="stats-thead"></thead>
+          <tbody id="stats-tbody"><tr><td colspan="5" class="text-center py-4 text-muted">로딩 중...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 자재 품목 탭 ===== -->
+  <div id="tab-items" class="d-none">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="fw-semibold"><i class="bi bi-list-ul me-1"></i>자재 품목 목록</span>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('items')">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="downloadCsvTemplate()">
+            <i class="bi bi-download me-1"></i>CSV 양식
+          </button>
+          <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#bulkImportModal">
+            <i class="bi bi-upload me-1"></i>일괄 등록
+          </button>
+          <button class="btn btn-sm btn-primary" onclick="openItemModal(null)">
+            <i class="bi bi-plus-lg me-1"></i>품목 등록
+          </button>
+        </div>
+      </div>
+      <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
+        <input type="text" id="item-search" class="form-control form-control-sm" style="max-width:200px;" placeholder="품목명 검색..."
+          onkeydown="if(event.key==='Enter'){_pg.items=1;loadItems()}">
+        <select id="item-cat-filter" class="form-select form-select-sm" style="max-width:150px;" onchange="_pg.items=1;loadItems()">
+          <option value="">전체 분류</option>
+        </select>
+        <button class="btn btn-sm btn-outline-primary" onclick="_pg.items=1;loadItems()">검색</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('item-search').value='';document.getElementById('item-cat-filter').value='';_pg.items=1;loadItems()">초기화</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th style="width:100px;">자재코드</th>
+              <th style="width:110px;">분류</th>
+              <th style="width:150px;">품목명</th>
+              <th style="width:140px;">규격</th>
+              <th style="width:55px;">단위</th>
+              <th style="width:70px;" class="text-end">최소재고</th>
+              <th style="width:70px;" class="text-end">창고재고</th>
+              <th style="width:50px;"></th>
+            </tr>
+          </thead>
+          <tbody id="items-tbody">
+            <tr><td colspan="8" class="text-center py-4 text-muted">로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="items-pagination" class="px-3 py-2 border-top"></div>
+    </div>
+  </div>
+
+  <!-- ===== 창고 재고 탭 ===== -->
+  <div id="tab-warehouse" class="d-none">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="fw-semibold"><i class="bi bi-building me-1"></i>창고 재고 현황</span>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('warehouse')">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+          </button>
+          <button class="btn btn-sm btn-primary" onclick="openInboundModal()">
+            <i class="bi bi-plus-lg me-1"></i>입고 등록
+          </button>
+        </div>
+      </div>
+      <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
+        <input type="text" id="wh-search" class="form-control form-control-sm" style="max-width:200px;" placeholder="품목명 검색..."
+          onkeydown="if(event.key==='Enter'){_pg.warehouse=1;loadWarehouse()}">
+        <select id="wh-cat-filter" class="form-select form-select-sm" style="max-width:150px;" onchange="_pg.warehouse=1;loadWarehouse()">
+          <option value="">전체 분류</option>
+        </select>
+        <button class="btn btn-sm btn-outline-primary" onclick="_pg.warehouse=1;loadWarehouse()">검색</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('wh-search').value='';document.getElementById('wh-cat-filter').value='';_pg.warehouse=1;loadWarehouse()">초기화</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th style="width:100px;">자재코드</th>
+              <th style="width:110px;">분류</th>
+              <th style="width:150px;">품목명</th>
+              <th style="width:130px;">규격</th>
+              <th style="width:55px;">단위</th>
+              <th style="width:70px;" class="text-end">재고</th>
+              <th style="width:70px;" class="text-end">최소수량</th>
+              <th style="width:70px;">상태</th>
+            </tr>
+          </thead>
+          <tbody id="warehouse-tbody">
+            <tr><td colspan="8" class="text-center py-4 text-muted">로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="warehouse-pagination" class="px-3 py-2 border-top"></div>
+    </div>
+  </div>
+
+  <!-- ===== 입고 이력 탭 ===== -->
+  <div id="tab-inbound" class="d-none">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="fw-semibold"><i class="bi bi-box-arrow-in-down text-success me-1"></i>창고 입고 이력</span>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('inbound')">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="downloadInboundTemplate()">
+            <i class="bi bi-download me-1"></i>CSV 양식
+          </button>
+          <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#bulkInboundModal">
+            <i class="bi bi-upload me-1"></i>일괄 입고
+          </button>
+          <button class="btn btn-sm btn-outline-primary" id="btn-bulk-sign" onclick="openBulkSign()" style="display:none;">
+            <i class="bi bi-pen me-1"></i>선택 서명 (<span id="bulk-sign-count">0</span>건)
+          </button>
+          <button class="btn btn-sm btn-success" onclick="openInboundModal()">
+            <i class="bi bi-plus-lg me-1"></i>입고 등록
+          </button>
+        </div>
+      </div>
+      <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
+        <input type="text" id="ib-search" class="form-control form-control-sm" style="max-width:200px;" placeholder="품목명 검색..."
+          onkeydown="if(event.key==='Enter'){_pg.inbound=1;loadInboundHistory()}">
+        <select id="ib-cat-filter" class="form-select form-select-sm" style="max-width:150px;" onchange="_pg.inbound=1;loadInboundHistory()">
+          <option value="">전체 분류</option>
+        </select>
+        <button class="btn btn-sm btn-outline-primary" onclick="_pg.inbound=1;loadInboundHistory()">검색</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('ib-search').value='';document.getElementById('ib-cat-filter').value='';_pg.inbound=1;loadInboundHistory()">초기화</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th style="width:28px;"><input type="checkbox" id="inbound-check-all" onclick="toggleAllInboundCheck(this)"></th>
+              <th style="width:120px;">입고번호</th>
+              <th style="width:80px;">자재코드</th>
+              <th style="width:80px;">분류</th>
+              <th style="width:150px;">품목명</th>
+              <th style="width:90px;">규격</th>
+              <th style="width:45px;">단위</th>
+              <th style="width:50px;" class="text-end">수량</th>
+              <th style="width:75px;">공급업체</th>
+              <th style="width:80px;">인계자</th>
+              <th style="width:80px;">인수자</th>
+              <th style="width:75px;">입고일</th>
+              <th style="width:60px;">등록자</th>
+              <th style="width:115px;"></th>
+            </tr>
+          </thead>
+          <tbody id="inbound-tbody">
+            <tr><td colspan="14" class="text-center py-4 text-muted">로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="inbound-pagination" class="px-3 py-2 border-top"></div>
+    </div>
+  </div>
+
+  <!-- ===== 출고 이력 탭 ===== -->
+  <div id="tab-outbound" class="d-none">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="fw-semibold"><i class="bi bi-box-arrow-up text-warning me-1"></i>창고 출고 이력</span>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-primary" id="btn-bulk-outbound-sign" onclick="openBulkOutboundSign()" style="display:none;">
+            <i class="bi bi-pen me-1"></i>선택 서명 (<span id="bulk-outbound-sign-count">0</span>건)
+          </button>
+          <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('outbound')">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="downloadOutboundTemplate()">
+            <i class="bi bi-download me-1"></i>CSV 양식
+          </button>
+          <button class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#bulkOutboundModal">
+            <i class="bi bi-upload me-1"></i>일괄 출고
+          </button>
+          <button class="btn btn-sm btn-warning text-white" onclick="loadMaterials(); loadCenterSelect(); openOutboundModal()">
+            <i class="bi bi-plus-lg me-1"></i>출고 등록
+          </button>
+        </div>
+      </div>
+      <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
+        <input type="text" id="ob-search" class="form-control form-control-sm" style="max-width:200px;" placeholder="품목명 검색..."
+          onkeydown="if(event.key==='Enter'){_pg.outbound=1;loadOutboundHistory()}">
+        <select id="ob-cat-filter" class="form-select form-select-sm" style="max-width:150px;" onchange="_pg.outbound=1;loadOutboundHistory()">
+          <option value="">전체 분류</option>
+        </select>
+        <select id="ob-center-filter" class="form-select form-select-sm" style="max-width:160px;" onchange="_pg.outbound=1;loadOutboundHistory()">
+          <option value="">전체 출고대상</option>
+        </select>
+        <button class="btn btn-sm btn-outline-primary" onclick="_pg.outbound=1;loadOutboundHistory()">검색</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('ob-search').value='';document.getElementById('ob-cat-filter').value='';document.getElementById('ob-center-filter').value='';_pg.outbound=1;loadOutboundHistory()">초기화</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th style="width:28px;"><input type="checkbox" id="outbound-check-all" onclick="toggleAllOutboundCheck(this)"></th>
+              <th style="width:120px;">출고번호</th>
+              <th style="width:80px;">자재코드</th>
+              <th style="width:80px;">분류</th>
+              <th style="width:150px;">품목명</th>
+              <th style="width:90px;">규격</th>
+              <th style="width:45px;">단위</th>
+              <th style="width:50px;" class="text-end">수량</th>
+              <th style="width:80px;">출고대상</th>
+              <th style="width:80px;">인계자</th>
+              <th style="width:80px;">인수자</th>
+              <th style="width:75px;">출고일</th>
+              <th style="width:60px;">담당자</th>
+              <th style="width:115px;"></th>
+            </tr>
+          </thead>
+          <tbody id="outbound-tbody">
+            <tr><td colspan="14" class="text-center py-4 text-muted">로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="outbound-pagination" class="px-3 py-2 border-top"></div>
+    </div>
+  </div>
+
+  <!-- ===== 센터별 재고 탭 ===== -->
+  <div id="tab-center" {% if user.role == 'resident' %}{% else %}class="d-none"{% endif %}>
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
+        <span class="fw-semibold">
+          <i class="bi bi-diagram-3 me-1"></i>
+          {% if user.role == 'resident' %}내 센터 재고{% else %}센터별 재고 현황{% endif %}
+        </span>
+        <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('center')">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+      {% if user.role == 'superadmin' or user.role == 'admin' %}
+      <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
+        <select id="center-filter" class="form-select form-select-sm" style="max-width:180px;" onchange="_pg.center=1;loadCenterInventory()">
+          <option value="">전체 지원청</option>
+        </select>
+        <select id="center-cat-filter" class="form-select form-select-sm" style="max-width:150px;" onchange="_pg.center=1;loadCenterInventory()">
+          <option value="">전체 분류</option>
+        </select>
+        <input type="text" id="center-material-q" class="form-control form-control-sm" style="max-width:200px;" placeholder="품목명 검색..."
+          onkeydown="if(event.key==='Enter'){_pg.center=1;loadCenterInventory()}">
+        <button class="btn btn-sm btn-outline-primary" onclick="_pg.center=1;loadCenterInventory()">검색</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('center-material-q').value='';document.getElementById('center-filter').value='';document.getElementById('center-cat-filter').value='';_pg.center=1;loadCenterInventory()">초기화</button>
+      </div>
+      {% endif %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              {% if user.role == 'superadmin' or user.role == 'admin' %}<th style="width:130px;">지원청</th>{% endif %}
+              <th style="width:100px;">자재코드</th>
+              <th style="width:110px;">분류</th>
+              <th style="width:150px;">품목명</th>
+              <th style="width:130px;">규격</th>
+              <th style="width:55px;">단위</th>
+              <th style="width:70px;" class="text-end">재고</th>
+              <th style="width:120px;">갱신일시</th>
+            </tr>
+          </thead>
+          <tbody id="center-tbody">
+            <tr><td colspan="5" class="text-center py-4 text-muted">로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="center-pagination" class="px-3 py-2 border-top"></div>
+    </div>
+  </div>
+
+  <!-- ===== 부족 알림 탭 ===== -->
+  <div id="tab-low" class="d-none">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
+        <span class="fw-semibold"><i class="bi bi-exclamation-triangle text-danger me-1"></i>재고 부족 품목</span>
+        <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('low')">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th style="width:100px;">자재코드</th>
+              <th style="width:110px;">분류</th>
+              <th style="width:150px;">품목명</th>
+              <th style="width:130px;">규격</th>
+              <th style="width:55px;">단위</th>
+              <th style="width:70px;" class="text-end">재고</th>
+              <th style="width:70px;" class="text-end">최소수량</th>
+              <th style="width:70px;">상태</th>
+            </tr>
+          </thead>
+          <tbody id="low-stock-tbody">
+            <tr><td colspan="8" class="text-center py-4 text-muted">로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="low-pagination" class="px-3 py-2 border-top"></div>
+    </div>
+  </div>
+
+  <!-- ===== 관리자: 센터별 입고이력 (창고→센터) ===== -->
+  <div id="tab-admin-cinbound" class="d-none">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="fw-semibold"><i class="bi bi-diagram-3 text-success me-1"></i>센터별 입고이력 (창고 → 센터)</span>
+        <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('admin-cinbound')">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+      <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
+        <select id="acib-center-filter" class="form-select form-select-sm" style="max-width:180px;" onchange="_pg['admin-cinbound']=1;loadAdminCenterInbound()">
+          <option value="">전체 지원청</option>
+        </select>
+        <select id="acib-cat-filter" class="form-select form-select-sm" style="max-width:150px;" onchange="_pg['admin-cinbound']=1;loadAdminCenterInbound()">
+          <option value="">전체 분류</option>
+        </select>
+        <input type="text" id="acib-search" class="form-control form-control-sm" style="max-width:180px;" placeholder="품목명 검색..."
+          onkeydown="if(event.key==='Enter'){_pg['admin-cinbound']=1;loadAdminCenterInbound()}">
+        <button class="btn btn-sm btn-outline-primary" onclick="_pg['admin-cinbound']=1;loadAdminCenterInbound()">검색</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('acib-center-filter').value='';document.getElementById('acib-cat-filter').value='';document.getElementById('acib-search').value='';_pg['admin-cinbound']=1;loadAdminCenterInbound()">초기화</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th style="width:120px;">출고번호</th>
+              <th style="width:110px;">수령 지원청</th>
+              <th style="width:75px;">자재코드</th>
+              <th style="width:75px;">분류</th>
+              <th style="width:150px;">품목명</th>
+              <th style="width:85px;">규격</th>
+              <th style="width:42px;">단위</th>
+              <th style="width:50px;" class="text-end">수량</th>
+              <th style="width:75px;">인계자</th>
+              <th style="width:75px;">인수자</th>
+              <th style="width:75px;">출고일</th>
+            </tr>
+          </thead>
+          <tbody id="admin-cinbound-tbody">
+            <tr><td colspan="11" class="text-center py-4 text-muted">로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="admin-cinbound-pagination" class="px-3 py-2 border-top"></div>
+    </div>
+  </div>
+
+  <!-- ===== 관리자: 센터별 반납 입고이력 (현장→센터) ===== -->
+  <div id="tab-admin-creturn" class="d-none">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="fw-semibold"><i class="bi bi-arrow-return-left text-warning me-1"></i>센터별 반납 입고이력 (현장 → 센터)</span>
+        <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('admin-creturn')">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+      <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
+        <select id="acrt-center-filter" class="form-select form-select-sm" style="max-width:180px;" onchange="_pg['admin-creturn']=1;loadAdminCenterReturn()">
+          <option value="">전체 지원청</option>
+        </select>
+        <select id="acrt-cat-filter" class="form-select form-select-sm" style="max-width:150px;" onchange="_pg['admin-creturn']=1;loadAdminCenterReturn()">
+          <option value="">전체 분류</option>
+        </select>
+        <input type="text" id="acrt-search" class="form-control form-control-sm" style="max-width:180px;" placeholder="품목명 검색..."
+          onkeydown="if(event.key==='Enter'){_pg['admin-creturn']=1;loadAdminCenterReturn()}">
+        <button class="btn btn-sm btn-outline-primary" onclick="_pg['admin-creturn']=1;loadAdminCenterReturn()">검색</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('acrt-center-filter').value='';document.getElementById('acrt-cat-filter').value='';document.getElementById('acrt-search').value='';_pg['admin-creturn']=1;loadAdminCenterReturn()">초기화</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th style="width:130px;">반납번호</th>
+              <th style="width:110px;">반납 센터</th>
+              <th style="width:75px;">자재코드</th>
+              <th style="width:75px;">분류</th>
+              <th style="width:150px;">품목명</th>
+              <th style="width:85px;">규격</th>
+              <th style="width:42px;">단위</th>
+              <th style="width:50px;" class="text-end">수량</th>
+              <th style="width:100px;">반납 출처(학교)</th>
+              <th style="width:75px;">인계자</th>
+              <th style="width:75px;">인수자</th>
+              <th style="width:80px;">반납일</th>
+            </tr>
+          </thead>
+          <tbody id="admin-creturn-tbody">
+            <tr><td colspan="12" class="text-center py-4 text-muted">로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="admin-creturn-pagination" class="px-3 py-2 border-top"></div>
+    </div>
+  </div>
+
+  <!-- ===== 관리자: 센터별 출고이력 (센터→현장) ===== -->
+  <div id="tab-admin-coutbound" class="d-none">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="fw-semibold"><i class="bi bi-diagram-3 text-danger me-1"></i>센터별 출고이력 (센터 → 현장)</span>
+        <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('admin-coutbound')">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+      <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
+        <select id="acob-center-filter" class="form-select form-select-sm" style="max-width:180px;" onchange="_pg['admin-coutbound']=1;loadAdminCenterOutbound()">
+          <option value="">전체 지원청</option>
+        </select>
+        <select id="acob-cat-filter" class="form-select form-select-sm" style="max-width:150px;" onchange="_pg['admin-coutbound']=1;loadAdminCenterOutbound()">
+          <option value="">전체 분류</option>
+        </select>
+        <input type="text" id="acob-search" class="form-control form-control-sm" style="max-width:180px;" placeholder="품목명 검색..."
+          onkeydown="if(event.key==='Enter'){_pg['admin-coutbound']=1;loadAdminCenterOutbound()}">
+        <button class="btn btn-sm btn-outline-primary" onclick="_pg['admin-coutbound']=1;loadAdminCenterOutbound()">검색</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('acob-center-filter').value='';document.getElementById('acob-cat-filter').value='';document.getElementById('acob-search').value='';_pg['admin-coutbound']=1;loadAdminCenterOutbound()">초기화</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th style="width:120px;">출고번호</th>
+              <th style="width:110px;">출고 지원청</th>
+              <th style="width:75px;">자재코드</th>
+              <th style="width:75px;">분류</th>
+              <th style="width:150px;">품목명</th>
+              <th style="width:85px;">규격</th>
+              <th style="width:42px;">단위</th>
+              <th style="width:50px;" class="text-end">수량</th>
+              <th style="width:90px;">출고대상(현장)</th>
+              <th style="width:75px;">인계자</th>
+              <th style="width:75px;">인수자</th>
+              <th style="width:75px;">출고일</th>
+            </tr>
+          </thead>
+          <tbody id="admin-coutbound-tbody">
+            <tr><td colspan="12" class="text-center py-4 text-muted">로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="admin-coutbound-pagination" class="px-3 py-2 border-top"></div>
+    </div>
+  </div>
+
+  <!-- ===== resident: 센터 입고 이력 탭 ===== -->
+  <div id="tab-my-inbound" class="d-none">
+    <!-- 창고→센터 입고 (관리자 생성, 읽기 전용) -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
+        <span class="fw-semibold"><i class="bi bi-box-arrow-in-down text-success me-1"></i>창고 → {% if user.support_center %}{{ user.support_center.name }}{% else %}우리 센터{% endif %} 입고 이력</span>
+        <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('my-inbound')">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th style="width:130px;">출고번호</th>
+              <th style="width:80px;">자재코드</th>
+              <th style="width:80px;">분류</th>
+              <th style="width:150px;">품목명</th>
+              <th style="width:90px;">규격</th>
+              <th style="width:45px;">단위</th>
+              <th style="width:55px;" class="text-end">수량</th>
+              <th style="width:75px;">인계자</th>
+              <th style="width:75px;">인수자</th>
+              <th style="width:85px;">입고일</th>
+              <th style="width:75px;">출고담당자</th>
+            </tr>
+          </thead>
+          <tbody id="my-inbound-tbody">
+            <tr><td colspan="9" class="text-center py-4 text-muted">로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- 현장→센터 반납 입고 (센터 자체 등록/수정) -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
+        <span class="fw-semibold"><i class="bi bi-box-arrow-in-right text-warning me-1"></i>현장 반납 입고 이력</span>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('center-return')">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+          </button>
+          <button class="btn btn-sm btn-warning text-white" onclick="openCenterReturnModal(null)">
+            <i class="bi bi-plus-lg me-1"></i>반납 입고 등록
+          </button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th style="width:130px;">반납번호</th>
+              <th style="width:80px;">자재코드</th>
+              <th style="width:80px;">분류</th>
+              <th style="width:150px;">품목명</th>
+              <th style="width:90px;">규격</th>
+              <th style="width:45px;">단위</th>
+              <th style="width:55px;" class="text-end">수량</th>
+              <th style="width:95px;">반납출처(학교)</th>
+              <th style="width:75px;">인계자</th>
+              <th style="width:75px;">인수자</th>
+              <th style="width:85px;">반납일</th>
+              <th style="width:55px;"></th>
+            </tr>
+          </thead>
+          <tbody id="center-return-tbody">
+            <tr><td colspan="10" class="text-center py-4 text-muted">로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== resident: 센터 출고 탭 ===== -->
+  <div id="tab-center-out" class="d-none">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
+        <span class="fw-semibold"><i class="bi bi-box-arrow-right text-danger me-1"></i>센터 → 현장/기사 출고</span>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('center-out')">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+          </button>
+          <button class="btn btn-sm btn-danger text-white"
+            onclick="openCenterOutModal()">
+            <i class="bi bi-plus-lg me-1"></i>출고 등록
+          </button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th style="width:130px;">출고번호</th>
+              <th style="width:80px;">자재코드</th>
+              <th style="width:80px;">분류</th>
+              <th style="width:150px;">품목명</th>
+              <th style="width:90px;">규격</th>
+              <th style="width:45px;">단위</th>
+              <th style="width:55px;" class="text-end">수량</th>
+              <th style="width:95px;">출고학교</th>
+              <th style="width:75px;">인계자</th>
+              <th style="width:75px;">인수자</th>
+              <th style="width:85px;">출고일</th>
+              <th style="width:45px;"></th>
+            </tr>
+          </thead>
+          <tbody id="center-out-tbody">
+            <tr><td colspan="12" class="text-center py-4 text-muted">로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+
+<!-- ===== 자재 품목 등록/수정 모달 ===== -->
+<div class="modal fade" id="itemModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold" id="itemModalTitle">자재 품목 등록</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="item-id">
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">분류 <span class="text-danger">*</span></label>
+            <select id="item-category" class="form-select form-select-sm">
+              <option value="">분류 선택...</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">자재코드 <span class="text-danger">*</span></label>
+            <input type="text" id="item-code" class="form-control form-control-sm" placeholder="예: CAB-UTP-001">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">자재명 <span class="text-danger">*</span></label>
+            <input type="text" id="item-name" class="form-control form-control-sm" placeholder="예: UTP CAT6 케이블">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">규격/사양</label>
+            <input type="text" id="item-spec" class="form-control form-control-sm" placeholder="예: 305m Roll">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">단위</label>
+            <select id="item-unit" class="form-select form-select-sm">
+              <option value="ea">개(EA)</option>
+              <option value="m">미터(m)</option>
+              <option value="roll">롤(Roll)</option>
+              <option value="set">세트(Set)</option>
+              <option value="box">박스(Box)</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">최소재고</label>
+            <input type="number" id="item-minstock" class="form-control form-control-sm" min="0" value="0">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">공급업체</label>
+            <input type="text" id="item-supplier" class="form-control form-control-sm">
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-semibold">비고</label>
+            <textarea id="item-note" class="form-control form-control-sm" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-danger me-auto" id="item-delete-btn" onclick="deleteItem()" style="display:none;">
+          <i class="bi bi-trash me-1"></i>삭제
+        </button>
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-primary" onclick="submitItem()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== CSV 일괄 등록 모달 ===== -->
+<div class="modal fade" id="bulkImportModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-upload me-1"></i>자재 품목 일괄 등록 (CSV)</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info py-2 mb-3">
+          <div class="fw-semibold mb-2"><i class="bi bi-info-circle me-1"></i>CSV 파일 형식 (1행: 헤더, 2행~: 데이터)</div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-2 small">
+              <thead class="table-dark">
+                <tr>
+                  <th>분류코드</th><th>자재코드</th><th>자재명</th><th>규격</th>
+                  <th>단위</th><th>최소재고</th><th>공급업체</th><th>비고</th>
+                </tr>
+              </thead>
+              <tbody class="table-light">
+                <tr>
+                  <td>cable</td><td>CAB-UTP-001</td><td>UTP CAT6 케이블</td><td>305m Roll</td>
+                  <td>roll</td><td>5</td><td>한국정보통신</td><td></td>
+                </tr>
+                <tr>
+                  <td>connector</td><td>CON-RJ45-001</td><td>RJ45 커넥터</td><td>8P8C</td>
+                  <td>ea</td><td>50</td><td></td><td></td>
+                </tr>
+                <tr>
+                  <td>equipment</td><td>EQP-SW-024</td><td>스위치 24포트</td><td>GS324T</td>
+                  <td>ea</td><td>2</td><td>넷기어</td><td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="small">
+            <b>분류코드</b>: cable / connector / tool / equipment / other &nbsp;&nbsp;
+            <b>단위</b>: ea(개) / m(미터) / roll(롤) / set(세트) / box(박스)<br>
+            자재코드가 중복이면 기존 정보를 덮어씁니다.
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">CSV 파일 선택 <span class="text-danger">*</span></label>
+          <input type="file" id="csv-file" class="form-control form-control-sm" accept=".csv">
+        </div>
+        <button class="btn btn-sm btn-outline-secondary mb-2" onclick="downloadCsvTemplate()">
+          <i class="bi bi-download me-1"></i>빈 양식 다운로드
+        </button>
+        <div id="bulk-result"></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">닫기</button>
+        <button class="btn btn-sm btn-success" onclick="submitBulkImport()">
+          <i class="bi bi-upload me-1"></i>일괄 등록 실행
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== 입고 등록 모달 ===== -->
+<div class="modal fade" id="inboundModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-box-arrow-in-down text-success me-1"></i>자재 입고 등록</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">입고 유형 <span class="text-danger">*</span></label>
+          <div class="d-flex gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="ib-type" id="ib-type-normal" value="normal" checked onchange="onIbTypeChange()">
+              <label class="form-check-label small" for="ib-type-normal">일반 입고 (납품)</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="ib-type" id="ib-type-return" value="return" onchange="onIbTypeChange()">
+              <label class="form-check-label small" for="ib-type-return">반납 입고 (센터→창고)</label>
+            </div>
+          </div>
+        </div>
+        <div class="mb-2" id="ib-center-wrap" style="display:none;">
+          <label class="form-label small fw-semibold">반납 센터 <span class="text-danger">*</span></label>
+          <select id="ib-from-center" class="form-select form-select-sm">
+            <option value="">-- 센터 선택 --</option>
+          </select>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">품목 <span class="text-danger">*</span></label>
+          <select id="ib-material" class="form-select form-select-sm">
+            <option value="">품목 선택...</option>
+          </select>
+          <div class="form-text">품목이 없으면 <b>자재 품목</b> 탭에서 먼저 등록해 주세요.</div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-4">
+            <label class="form-label small fw-semibold">수량 <span class="text-danger">*</span></label>
+            <input type="number" id="ib-qty" class="form-control form-control-sm" min="1" value="1">
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold">단가</label>
+            <input type="number" id="ib-unit-price" class="form-control form-control-sm" min="0" value="0" placeholder="0">
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold">입고일</label>
+            <input type="date" id="ib-date" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="mb-2" id="ib-supplier-wrap">
+          <label class="form-label small fw-semibold">공급업체</label>
+          <input type="text" id="ib-supplier" class="form-control form-control-sm" placeholder="업체명">
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold" id="ib-handover-label">인계자 (납품)</label>
+            <input type="text" id="ib-handover" class="form-control form-control-sm" placeholder="담당자 이름">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인계자 연락처</label>
+            <input type="text" id="ib-handover-phone" class="form-control form-control-sm" placeholder="010-0000-0000">
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인수자 (창고)</label>
+            <select id="ib-receiver-sel" class="form-select form-select-sm" onchange="applyMatPersonSelect('ib-receiver-sel','ib-receiver','ib-receiver-phone')">
+              <option value="">-- 선택 --</option>
+            </select>
+            <input type="hidden" id="ib-receiver">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인수자 연락처</label>
+            <input type="text" id="ib-receiver-phone" class="form-control form-control-sm" placeholder="010-0000-0000">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">비고</label>
+          <textarea id="ib-note" class="form-control form-control-sm" rows="2"></textarea>
+        </div>
+        <div class="alert alert-success py-2 small mb-0" id="ib-alert">
+          <i class="bi bi-info-circle me-1"></i>입고 등록 시 창고 재고가 자동 증가됩니다.
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-success" onclick="submitInbound()">입고 등록</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== 입고 수정 모달 ===== -->
+<div class="modal fade" id="inboundEditModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-pencil text-primary me-1"></i>입고 수정</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="ie-id">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">입고번호</label>
+          <input type="text" id="ie-number" class="form-control form-control-sm" readonly>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">품목</label>
+          <input type="text" id="ie-material-name" class="form-control form-control-sm" readonly>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">수량 <span class="text-danger">*</span></label>
+            <input type="number" id="ie-qty" class="form-control form-control-sm" min="1">
+            <div class="form-text text-warning small">수량 변경 시 창고 재고가 자동 조정됩니다</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">입고일</label>
+            <input type="date" id="ie-date" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">공급업체</label>
+          <input type="text" id="ie-supplier" class="form-control form-control-sm">
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인계자</label>
+            <input type="text" id="ie-handover" class="form-control form-control-sm">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인수자</label>
+            <input type="text" id="ie-receiver" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">비고</label>
+          <textarea id="ie-note" class="form-control form-control-sm" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-danger me-auto" onclick="deleteInbound()">
+          <i class="bi bi-trash me-1"></i>삭제
+        </button>
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-primary" onclick="submitInboundEdit()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== 출고 수정 모달 ===== -->
+<div class="modal fade" id="outboundEditModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-pencil text-warning me-1"></i>출고 수정</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="oe-id">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">출고번호</label>
+          <input type="text" id="oe-number" class="form-control form-control-sm" readonly>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">품목</label>
+          <input type="text" id="oe-material-name" class="form-control form-control-sm" readonly>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">수량 <span class="text-danger">*</span></label>
+            <input type="number" id="oe-qty" class="form-control form-control-sm" min="1">
+            <div class="form-text text-warning small">수량 변경 시 창고·센터 재고가 자동 조정됩니다</div>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">출고일</label>
+            <input type="date" id="oe-date" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인계자</label>
+            <input type="text" id="oe-handover" class="form-control form-control-sm">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인수자</label>
+            <input type="text" id="oe-receiver" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">비고</label>
+          <textarea id="oe-note" class="form-control form-control-sm" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-danger me-auto" onclick="deleteOutbound()">
+          <i class="bi bi-trash me-1"></i>삭제
+        </button>
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-warning text-white" onclick="submitOutboundEdit()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== 전자서명 모달 ===== -->
+<div class="modal fade" id="signModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold" id="signModalTitle"><i class="bi bi-pen me-1"></i>전자 서명</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="sign-type">
+        <input type="hidden" id="sign-id">
+        <input type="hidden" id="sign-bulk-ids"> <!-- 일괄서명용 -->
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인계자 성명</label>
+            <input type="text" id="sign-handover-name" class="form-control form-control-sm" placeholder="인계자 이름">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인계자 연락처</label>
+            <input type="text" id="sign-handover-phone" class="form-control form-control-sm" placeholder="010-0000-0000">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인수자 성명</label>
+            <input type="text" id="sign-receiver-name" class="form-control form-control-sm" placeholder="인수자 이름">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인수자 연락처</label>
+            <input type="text" id="sign-receiver-phone" class="form-control form-control-sm" placeholder="010-0000-0000">
+          </div>
+        </div>
+        <div class="row g-3">
+          <div class="col-6">
+            <label class="form-label small fw-semibold text-center d-block">인계자 서명</label>
+            <div class="border rounded" style="background:#fff;">
+              <canvas id="sign-canvas-handover" width="300" height="130" style="display:block;cursor:crosshair;touch-action:none;"></canvas>
+            </div>
+            <button class="btn btn-xs btn-outline-secondary w-100 mt-1" onclick="clearSign('handover')">지우기</button>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold text-center d-block">인수자 서명</label>
+            <div class="border rounded" style="background:#fff;">
+              <canvas id="sign-canvas-receiver" width="300" height="130" style="display:block;cursor:crosshair;touch-action:none;"></canvas>
+            </div>
+            <button class="btn btn-xs btn-outline-secondary w-100 mt-1" onclick="clearSign('receiver')">지우기</button>
+          </div>
+        </div>
+        <div class="alert alert-info py-2 mt-3 small mb-0" id="sign-bulk-info" style="display:none;">
+          <i class="bi bi-check2-square me-1"></i><span id="sign-bulk-count"></span>건 선택 — 동일 서명이 모두 적용됩니다.
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-primary" onclick="saveSignAndGenPdf()">
+          <i class="bi bi-file-earmark-pdf me-1"></i>서명저장 후 PDF 생성
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== 출고 등록 모달 ===== -->
+<div class="modal fade" id="outboundModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-box-arrow-up text-warning me-1"></i>자재 출고 등록</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">품목 <span class="text-danger">*</span></label>
+          <select id="ob-material" class="form-select form-select-sm">
+            <option value="">품목 선택...</option>
+          </select>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">수량 <span class="text-danger">*</span></label>
+            <input type="number" id="ob-qty" class="form-control form-control-sm" min="1" value="1">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">출고일</label>
+            <input type="date" id="ob-date" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">출고 대상 지원청 <span class="text-danger">*</span></label>
+          <select id="ob-center" class="form-select form-select-sm" onchange="onMatObCenterChange()">
+            <option value="">지원청 선택...</option>
+          </select>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인계자</label>
+            <select id="ob-handover-sel" class="form-select form-select-sm" onchange="applyMatPersonSelect('ob-handover-sel','ob-handover','ob-handover-phone')">
+              <option value="">-- 선택 --</option>
+            </select>
+            <input type="hidden" id="ob-handover">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인계자 연락처</label>
+            <input type="text" id="ob-handover-phone" class="form-control form-control-sm" placeholder="010-0000-0000">
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인수자</label>
+            <select id="ob-receiver-sel" class="form-select form-select-sm" onchange="applyMatPersonSelect('ob-receiver-sel','ob-receiver','ob-receiver-phone')">
+              <option value="">-- 선택 --</option>
+            </select>
+            <input type="hidden" id="ob-receiver">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인수자 연락처</label>
+            <input type="text" id="ob-receiver-phone" class="form-control form-control-sm" placeholder="010-0000-0000">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">비고</label>
+          <textarea id="ob-note" class="form-control form-control-sm" rows="2"></textarea>
+        </div>
+        <div class="alert alert-warning py-2 small mb-0">
+          <i class="bi bi-info-circle me-1"></i>출고 등록 시 창고 재고 자동 감소 + 해당 지원청 재고 자동 증가
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-warning text-white" onclick="submitOutbound()">출고 등록</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== 센터 출고 등록 모달 (resident용) ===== -->
+<div class="modal fade" id="centerOutModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold" id="centerOutModalTitle"><i class="bi bi-box-arrow-right text-danger me-1"></i>센터 출고 등록</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="co-id">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">품목 <span class="text-danger">*</span></label>
+          <select id="co-material" class="form-select form-select-sm">
+            <option value="">품목 선택...</option>
+          </select>
+          <div class="form-text" id="co-material-hint">내 센터 재고 품목만 표시됩니다.</div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">수량 <span class="text-danger">*</span></label>
+            <input type="number" id="co-qty" class="form-control form-control-sm" min="1" value="1">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">출고일</label>
+            <input type="date" id="co-date" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">출고 학교 <span class="text-muted">(선택)</span></label>
+          <div class="row g-1 mb-1">
+            <div class="col-5">
+              <select id="co-center" class="form-select form-select-sm" onchange="onCenterChange('co')">
+                <option value="">지원청 선택...</option>
+              </select>
+            </div>
+            <div class="col-4">
+              <select id="co-school-type" class="form-select form-select-sm" onchange="onSchoolTypeChange('co')">
+                <option value="">학제 선택...</option>
+              </select>
+            </div>
+            <div class="col-3">
+              <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="clearSchoolSelect('co')" title="학교 선택 초기화">
+                <i class="bi bi-x"></i>
+              </button>
+            </div>
+          </div>
+          <select id="co-school" class="form-select form-select-sm">
+            <option value="">학교 선택...</option>
+          </select>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인계자</label>
+            <select id="co-handover" class="form-select form-select-sm" onchange="applyMatPersonSelect('co-handover','co-handover-name','co-handover-phone')">
+              <option value="">인계자 선택...</option>
+            </select>
+            <input type="text" id="co-handover-name" class="form-control form-control-sm mt-1 d-none" placeholder="이름 직접 입력">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인계자 연락처</label>
+            <input type="text" id="co-handover-phone" class="form-control form-control-sm" placeholder="010-0000-0000">
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인수자</label>
+            <select id="co-receiver" class="form-select form-select-sm" onchange="applyMatPersonSelect('co-receiver','co-receiver-name','co-receiver-phone')">
+              <option value="">인수자 선택...</option>
+            </select>
+            <input type="text" id="co-receiver-name" class="form-control form-control-sm mt-1 d-none" placeholder="이름 직접 입력">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인수자 연락처</label>
+            <input type="text" id="co-receiver-phone" class="form-control form-control-sm" placeholder="010-0000-0000">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">비고</label>
+          <textarea id="co-note" class="form-control form-control-sm" rows="2"></textarea>
+        </div>
+        <div class="alert alert-info py-2 small mb-0">
+          <i class="bi bi-info-circle me-1"></i>출고 등록 시 내 센터 재고가 자동 감소됩니다.
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-danger me-auto" id="co-delete-btn" onclick="deleteCenterOutbound()" style="display:none;">삭제</button>
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-danger text-white" id="co-save-btn" onclick="submitCenterOutbound()">출고 등록</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== 센터 반납 입고 등록/수정 모달 ===== -->
+<div class="modal fade" id="centerReturnModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold" id="centerReturnModalTitle"><i class="bi bi-box-arrow-in-right text-warning me-1"></i>반납 입고 등록</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="cr-id">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">품목 <span class="text-danger">*</span></label>
+          <select id="cr-material" class="form-select form-select-sm">
+            <option value="">품목 선택...</option>
+          </select>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">수량 <span class="text-danger">*</span></label>
+            <input type="number" id="cr-qty" class="form-control form-control-sm" min="1" value="1">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">반납일 <span class="text-danger">*</span></label>
+            <input type="date" id="cr-date" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">반납 출처 학교 <span class="text-muted">(선택)</span></label>
+          <div class="row g-1 mb-1">
+            <div class="col-5">
+              <select id="cr-center" class="form-select form-select-sm" onchange="onCenterChange('cr')">
+                <option value="">지원청 선택...</option>
+              </select>
+            </div>
+            <div class="col-4">
+              <select id="cr-school-type" class="form-select form-select-sm" onchange="onSchoolTypeChange('cr')">
+                <option value="">학제 선택...</option>
+              </select>
+            </div>
+            <div class="col-3">
+              <button type="button" class="btn btn-sm btn-outline-secondary w-100" onclick="clearSchoolSelect('cr')" title="학교 선택 초기화">
+                <i class="bi bi-x"></i>
+              </button>
+            </div>
+          </div>
+          <select id="cr-school" class="form-select form-select-sm">
+            <option value="">학교 선택...</option>
+          </select>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인계자</label>
+            <select id="cr-handover" class="form-select form-select-sm" onchange="applyMatPersonSelect('cr-handover','cr-handover-name','cr-handover-phone')">
+              <option value="">인계자 선택...</option>
+            </select>
+            <input type="text" id="cr-handover-name" class="form-control form-control-sm mt-1 d-none" placeholder="이름 직접 입력">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인계자 연락처</label>
+            <input type="text" id="cr-handover-phone" class="form-control form-control-sm" placeholder="010-0000-0000">
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인수자</label>
+            <select id="cr-receiver" class="form-select form-select-sm" onchange="applyMatPersonSelect('cr-receiver','cr-receiver-name','cr-receiver-phone')">
+              <option value="">인수자 선택...</option>
+            </select>
+            <input type="text" id="cr-receiver-name" class="form-control form-control-sm mt-1 d-none" placeholder="이름 직접 입력">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">인수자 연락처</label>
+            <input type="text" id="cr-receiver-phone" class="form-control form-control-sm" placeholder="010-0000-0000">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">비고</label>
+          <textarea id="cr-note" class="form-control form-control-sm" rows="2"></textarea>
+        </div>
+        <div class="alert alert-warning py-2 small mb-0">
+          <i class="bi bi-info-circle me-1"></i>반납 입고 등록 시 센터 재고가 자동 증가됩니다.
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-danger me-auto" id="cr-delete-btn" onclick="deleteCenterReturn()" style="display:none;">삭제</button>
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-warning text-white" onclick="submitCenterReturn()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== 입고 일괄 등록 모달 ===== -->
+<div class="modal fade" id="bulkInboundModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-upload text-success me-1"></i>자재 입고 일괄 등록 (CSV)</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info py-2 mb-3">
+          <div class="fw-semibold mb-2"><i class="bi bi-info-circle me-1"></i>CSV 파일 형식</div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-2 small">
+              <thead class="table-dark">
+                <tr><th>자재코드</th><th>수량</th><th>입고일</th><th>공급업체</th><th>인계자</th><th>인수자</th><th>비고</th></tr>
+              </thead>
+              <tbody class="table-light">
+                <tr><td>CAB-UTP-001</td><td>10</td><td>2026-04-03</td><td>한국정보통신</td><td>홍길동</td><td>김철수</td><td></td></tr>
+                <tr><td>CON-RJ45-001</td><td>100</td><td>2026-04-03</td><td></td><td>홍길동</td><td>김철수</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="small text-muted">
+            <b>자재코드</b>: 품목 탭에 등록된 코드 &nbsp;|&nbsp;
+            <b>입고일</b>: YYYY-MM-DD 형식 (비우면 오늘) &nbsp;|&nbsp;
+            <b>인계자</b>: 자재를 넘겨준 사람 &nbsp;|&nbsp;
+            <b>인수자</b>: 자재를 받은 사람 &nbsp;|&nbsp;
+            같은 품목을 여러 행에 써도 됩니다 (모두 누적 입고)
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">CSV 파일 선택 <span class="text-danger">*</span></label>
+          <input type="file" id="inbound-csv-file" class="form-control form-control-sm" accept=".csv">
+        </div>
+        <button class="btn btn-sm btn-outline-secondary mb-2" onclick="downloadInboundTemplate()">
+          <i class="bi bi-download me-1"></i>빈 양식 다운로드
+        </button>
+        <div id="bulk-inbound-result"></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">닫기</button>
+        <button class="btn btn-sm btn-success" onclick="submitBulkInbound()">
+          <i class="bi bi-upload me-1"></i>일괄 입고 등록
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== 출고 일괄 등록 모달 ===== -->
+<div class="modal fade" id="bulkOutboundModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-upload text-warning me-1"></i>자재 출고 일괄 등록 (CSV)</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning py-2 mb-3">
+          <div class="fw-semibold mb-2"><i class="bi bi-info-circle me-1"></i>CSV 파일 형식</div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-2 small">
+              <thead class="table-dark">
+                <tr><th>자재코드</th><th>수량</th><th>출고일</th><th>지원청코드</th><th>인계자</th><th>인수자</th><th>비고</th></tr>
+              </thead>
+              <tbody class="table-light">
+                <tr><td>CAB-UTP-001</td><td>5</td><td>2026-04-03</td><td>dongbu</td><td>김철수</td><td>이영희</td><td></td></tr>
+                <tr><td>CON-RJ45-001</td><td>50</td><td>2026-04-03</td><td>seobu</td><td>김철수</td><td>박민수</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="small">
+            <b>지원청코드</b>: <span id="center-code-hint">dongbu·seobu·nambu·bukbu·jungbu·gangdong·gangseo·gangnam·dongjak·seongdong·seongbuk</span><br>
+            출고 즉시 창고 재고 감소 + 해당 지원청 재고 자동 증가
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">CSV 파일 선택 <span class="text-danger">*</span></label>
+          <input type="file" id="outbound-csv-file" class="form-control form-control-sm" accept=".csv">
+        </div>
+        <button class="btn btn-sm btn-outline-secondary mb-2" onclick="downloadOutboundTemplate()">
+          <i class="bi bi-download me-1"></i>빈 양식 다운로드 (지원청코드 목록 포함)
+        </button>
+        <div id="bulk-outbound-result"></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">닫기</button>
+        <button class="btn btn-sm btn-warning text-white" onclick="submitBulkOutbound()">
+          <i class="bi bi-upload me-1"></i>일괄 출고 등록
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// USER_ROLE 은 base.html 에서 이미 선언됨
+const IS_ADMIN  = (USER_ROLE === 'superadmin' || USER_ROLE === 'admin');
+const PAGE_SIZE = 25;
+const _pg = { stats:1, items:1, warehouse:1, inbound:1, outbound:1, center:1, low:1, 'admin-cinbound':1, 'admin-creturn':1, 'admin-coutbound':1 };
+
+// ── 페이지네이션 헬퍼 ─────────────────────────────────
+function renderPagination(containerId, count, tab) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const page = _pg[tab] || 1;
+  const totalPages = Math.ceil(count / PAGE_SIZE);
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  const pages = [];
+  for (let p = 1; p <= totalPages; p++) {
+    if (p === 1 || p === totalPages || (p >= page - 2 && p <= page + 2)) pages.push(p);
+  }
+  let items = '', prev = null;
+  for (const p of pages) {
+    if (prev && p - prev > 1) items += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+    items += `<li class="page-item ${p === page ? 'active' : ''}">
+      <button class="page-link" onclick="gotoPage('${tab}',${p})">${p}</button></li>`;
+    prev = p;
+  }
+  el.innerHTML = `<nav><ul class="pagination pagination-sm mb-0 justify-content-center">
+    <li class="page-item ${page<=1?'disabled':''}"><button class="page-link" onclick="gotoPage('${tab}',${page-1})">‹</button></li>
+    ${items}
+    <li class="page-item ${page>=totalPages?'disabled':''}"><button class="page-link" onclick="gotoPage('${tab}',${page+1})">›</button></li>
+  </ul></nav>
+  <div class="text-center text-muted small mt-1">총 ${count.toLocaleString()}건 (${page}/${totalPages}페이지)</div>`;
+}
+
+function gotoPage(tab, page) {
+  _pg[tab] = page;
+  if      (tab==='items')     loadItems();
+  else if (tab==='warehouse') loadWarehouse();
+  else if (tab==='inbound')   loadInboundHistory();
+  else if (tab==='outbound')  loadOutboundHistory();
+  else if (tab==='center')    loadCenterInventory();
+  else if (tab==='low')               loadLowStock();
+  else if (tab==='admin-cinbound')    loadAdminCenterInbound();
+  else if (tab==='admin-creturn')     loadAdminCenterReturn();
+  else if (tab==='admin-coutbound')   loadAdminCenterOutbound();
+}
+
+// ── 탭 전환 ──────────────────────────────────────────
+const ALL_TABS = ['stats','items','warehouse','inbound','outbound','center','low','admin-cinbound','admin-creturn','admin-coutbound','my-inbound','center-out'];
+function switchTab(tab) {
+  ALL_TABS.forEach(t => {
+    const el = document.getElementById('tab-' + t);
+    if (el) el.classList.toggle('d-none', t !== tab);
+  });
+  document.querySelectorAll('#mat-tabs .nav-link').forEach(btn => {
+    btn.classList.toggle('active', btn.id === 'btn-' + tab);
+  });
+  if (_pg[tab] !== undefined) _pg[tab] = 1;
+  if      (tab === 'stats')      loadStats();
+  else if (tab === 'items')      loadItems();
+  else if (tab === 'warehouse')  loadWarehouse();
+  else if (tab === 'inbound')    loadInboundHistory();
+  else if (tab === 'outbound')   { loadOutboundHistory(); loadOutboundCenterFilter(); }
+  else if (tab === 'center')     loadCenterInventory();
+  else if (tab === 'low')        loadLowStock();
+  else if (tab === 'admin-cinbound')  { loadAdminCenterInbound();  loadAdminCenterFilters(); }
+  else if (tab === 'admin-creturn')   { loadAdminCenterReturn();   loadAdminCenterFilters(); }
+  else if (tab === 'admin-coutbound') { loadAdminCenterOutbound(); loadAdminCenterFilters(); }
+  else if (tab === 'my-inbound') { loadMyInbound(); loadCenterReturnHistory(); }
+  else if (tab === 'center-out') loadCenterOutboundHistory();
+}
+
+// numFmt, formatDate — npms.js 전역 함수 사용
+
+// ── 통계 탭 ──────────────────────────────────────────
+let _statsData = null;
+
+async function loadStats() {
+  const tbody = document.getElementById('stats-tbody');
+  const thead = document.getElementById('stats-thead');
+  if (!tbody || !thead) return;
+  tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>로딩 중...</td></tr>';
+  try {
+    const [whData, cinvData, centersData] = await Promise.all([
+      apiGet(API_BASE + '/materials/warehouse/', { no_page: 1 }),
+      apiGet(API_BASE + '/materials/center/',    { no_page: 1 }),
+      apiGet(API_BASE + '/schools/centers/',     { page_size: 50 }),
+    ]);
+    const whList     = whData.results    || whData;
+    const cinvList   = cinvData.results  || cinvData;
+    const CENTER_ORDER = ['dongbu','seobu','nambu','bukbu','jungbu','gangdong','gangseo','gangnam','dongjak','seongdong','seongbuk'];
+    const centerList = (centersData.results || centersData)
+                        .sort((a, b) => {
+                          const ai = CENTER_ORDER.indexOf(a.code);
+                          const bi = CENTER_ORDER.indexOf(b.code);
+                          if (ai === -1 && bi === -1) return a.name.localeCompare(b.name, 'ko');
+                          if (ai === -1) return 1;
+                          if (bi === -1) return -1;
+                          return ai - bi;
+                        });
+
+    const centerIds   = centerList.map(c => c.id);
+    const centerNames = centerList.map(c => c.name);
+
+    // center inventory map: material_id → { center_id: qty }
+    const cinvMap = {};
+    cinvList.forEach(ci => {
+      if (!cinvMap[ci.material]) cinvMap[ci.material] = {};
+      cinvMap[ci.material][ci.support_center] = ci.quantity;
+    });
+
+    const rows = whList.map(w => ({
+      id:          w.material,
+      code:        w.material_code  || '',
+      category:    w.category_name  || '',
+      name:        w.material_name  || '',
+      warehouseQty: w.quantity ?? 0,
+      centerQtys:  cinvMap[w.material] || {},
+    }));
+    rows.sort((a, b) => a.code.localeCompare(b.code));
+
+    _statsData = { rows, centerIds, centerNames };
+
+    // header
+    const colSpan = 3 + centerNames.length + 1;
+    // 전체 컬럼 수에 따라 균등 폭 계산: 자재코드·분류 각 90px, 품목명 150px, 수량열 균등
+    const qCols   = centerNames.length + 1; // 지원청 + 중앙
+    const qWidth  = 65; // 수량열 균등 폭
+    document.getElementById('stats-table').style.minWidth = (90+90+150 + qCols*qWidth) + 'px';
+    thead.innerHTML = `<tr>
+      <th style="width:90px;">자재코드</th>
+      <th style="width:90px;">분류</th>
+      <th style="width:150px;">품목명</th>
+      ${centerNames.map(n => `<th style="width:${qWidth}px;text-align:center;">${n}</th>`).join('')}
+      <th style="width:${qWidth}px;text-align:center;background:#fffde7;color:#7b5e00;">중앙(창고)</th>
+    </tr>`;
+
+    renderStatsRows(rows, centerIds);
+  } catch(e) {
+    const colSpan = document.getElementById('stats-thead')?.querySelector('tr')?.children.length || 5;
+    tbody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center text-danger py-3">데이터 로드 실패</td></tr>`;
+    console.error('loadStats:', e);
+  }
+}
+
+function renderStatsRows(rows, centerIds) {
+  const tbody = document.getElementById('stats-tbody');
+  if (!rows.length) {
+    const colSpan = 3 + centerIds.length + 1;
+    tbody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center text-muted py-3">데이터 없음</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td class="text-nowrap"><small class="text-muted">${r.code}</small></td>
+    <td class="text-nowrap"><small>${r.category}</small></td>
+    <td class="fw-semibold text-truncate" style="max-width:150px;" title="${r.name}">${r.name}</td>
+    ${centerIds.map(cid => {
+      const q = r.centerQtys[cid] ?? 0;
+      return `<td class="text-center">${q > 0 ? `<span class="fw-bold">${q}</span>` : '<span class="text-muted">-</span>'}</td>`;
+    }).join('')}
+    <td class="text-center fw-bold" style="background:#fffde7;">${r.warehouseQty > 0 ? r.warehouseQty : '<span class="text-muted fw-normal">-</span>'}</td>
+  </tr>`).join('');
+}
+
+function filterStatsTable() {
+  if (!_statsData) return;
+  const q = (document.getElementById('stats-search')?.value || '').trim().toLowerCase();
+  const filtered = q
+    ? _statsData.rows.filter(r => r.name.toLowerCase().includes(q) || r.code.toLowerCase().includes(q))
+    : _statsData.rows;
+  renderStatsRows(filtered, _statsData.centerIds);
+}
+
+// ── 자재 품목 탭 ──────────────────────────────────────
+async function loadItems() {
+  const q   = (document.getElementById('item-search')?.value || '').trim();
+  const cat = document.getElementById('item-cat-filter')?.value || '';
+  try {
+    const data  = await apiGet(API_BASE + '/materials/items/', { q, category: cat, page: _pg.items, page_size: PAGE_SIZE });
+    const items = data.results || data;
+    const count = data.count ?? items.length;
+    const kpi   = document.getElementById('kpi-items');
+    if (kpi) kpi.textContent = count;
+    const tbody = document.getElementById('items-tbody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">등록된 품목이 없습니다. 오른쪽 상단 <b>품목 등록</b> 버튼을 눌러 추가하세요.</td></tr>';
+      renderPagination('items-pagination', 0, 'items');
+      return;
+    }
+    tbody.innerHTML = items.map(i => {
+      const isLow = i.min_stock > 0 && (i.warehouse_qty || 0) <= i.min_stock;
+      return `<tr>
+        <td><small class="text-muted">${i.code || '-'}</small></td>
+        <td><small>${i.category_name || '-'}</small></td>
+        <td class="fw-semibold text-truncate" style="max-width:150px;" title="${i.name||''}">${i.name}</td>
+        <td><small class="text-muted">${i.spec || '-'}</small></td>
+        <td><small>${i.unit || 'ea'}</small></td>
+        <td class="text-end"><small>${numFmt(i.min_stock)}</small></td>
+        <td class="text-end fw-bold ${isLow ? 'text-danger' : ''}">${numFmt(i.warehouse_qty)}</td>
+        <td class="text-center">
+          <button class="btn btn-xs btn-outline-primary" onclick='editItem(${JSON.stringify(i)})'>수정</button>
+        </td>
+      </tr>`;
+    }).join('');
+    renderPagination('items-pagination', count, 'items');
+  } catch(e) { console.error('loadItems:', e); }
+}
+
+async function loadCategoryFilter() {
+  try {
+    const data  = await apiGet(API_BASE + '/materials/categories/');
+    const cats  = data.results || data;
+    const opts  = '<option value="">전체 분류</option>' +
+                  cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    ['item-cat-filter','wh-cat-filter','ib-cat-filter','ob-cat-filter','center-cat-filter','acib-cat-filter','acrt-cat-filter','acob-cat-filter'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const cur = sel.value;
+      sel.innerHTML = opts;
+      if (cur) sel.value = cur;
+    });
+  } catch(e) {}
+}
+
+async function loadCategorySelect() {
+  try {
+    const data  = await apiGet(API_BASE + '/materials/categories/');
+    const items = data.results || data;
+    const sel   = document.getElementById('item-category');
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">분류 선택...</option>' +
+      items.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    if (cur) sel.value = cur;
+  } catch(e) {}
+}
+
+function openItemModal(item) {
+  document.getElementById('itemModalTitle').textContent = item ? '자재 품목 수정' : '자재 품목 등록';
+  document.getElementById('item-id').value       = item ? item.id : '';
+  document.getElementById('item-code').value     = item ? item.code : '';
+  document.getElementById('item-name').value     = item ? item.name : '';
+  document.getElementById('item-spec').value     = item ? (item.spec || '') : '';
+  document.getElementById('item-unit').value     = item ? (item.unit || 'ea') : 'ea';
+  document.getElementById('item-minstock').value = item ? (item.min_stock ?? 0) : 0;
+  document.getElementById('item-supplier').value = item ? (item.supplier || '') : '';
+  document.getElementById('item-note').value     = item ? (item.note || '') : '';
+  document.getElementById('item-delete-btn').style.display = item ? '' : 'none';
+  loadCategorySelect().then(() => {
+    if (item && item.category) document.getElementById('item-category').value = item.category;
+  });
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('itemModal')).show();
+}
+
+function editItem(item) { openItemModal(item); }
+
+async function submitItem() {
+  const id  = document.getElementById('item-id').value;
+  const cat = document.getElementById('item-category').value;
+  const code= document.getElementById('item-code').value.trim();
+  const name= document.getElementById('item-name').value.trim();
+  if (!cat || !code || !name) { showToast('분류·코드·자재명은 필수입니다', 'warning'); return; }
+  const payload = {
+    category:   parseInt(cat), code, name,
+    spec:       document.getElementById('item-spec').value.trim(),
+    unit:       document.getElementById('item-unit').value,
+    min_stock:  parseInt(document.getElementById('item-minstock').value) || 0,
+    supplier:   document.getElementById('item-supplier').value.trim(),
+    note:       document.getElementById('item-note').value.trim(),
+  };
+  try {
+    if (id) {
+      await apiPatch(API_BASE + '/materials/items/' + id + '/', payload);
+      showToast('품목 수정 완료', 'success');
+    } else {
+      await apiPost(API_BASE + '/materials/items/', payload);
+      showToast('품목 등록 완료', 'success');
+    }
+    bootstrap.Modal.getInstance(document.getElementById('itemModal')).hide();
+    loadItems();
+    loadCategoryFilter();
+  } catch(e) { showToast('저장 실패: ' + (e.message || e), 'error'); }
+}
+
+async function deleteItem() {
+  const id   = document.getElementById('item-id').value;
+  const name = document.getElementById('item-name').value;
+  if (!id) return;
+  if (!confirm(`자재 품목 "${name}"을(를) 삭제하겠습니까?\n관련 입고/출고 이력도 함께 삭제될 수 있습니다.`)) return;
+  try {
+    await apiDelete(API_BASE + '/materials/items/' + id + '/');
+    bootstrap.Modal.getInstance(document.getElementById('itemModal')).hide();
+    showToast('품목 삭제 완료', 'success');
+    loadItems(); loadWarehouse(); loadCategoryFilter();
+  } catch(e) { showToast('삭제 실패: ' + (e.message || JSON.stringify(e)), 'error'); }
+}
+
+// ── CSV 일괄 등록 ──────────────────────────────────────
+function downloadCsvTemplate() {
+  window.location.href = API_BASE + '/materials/items/csv_template/';
+}
+
+async function submitBulkImport() {
+  const fileEl = document.getElementById('csv-file');
+  if (!fileEl.files.length) { showToast('CSV 파일을 선택해 주세요', 'warning'); return; }
+  const formData = new FormData();
+  formData.append('file', fileEl.files[0]);
+  const resultEl = document.getElementById('bulk-result');
+  resultEl.innerHTML = '<div class="text-muted small">업로드 중...</div>';
+  try {
+    const res  = await fetch(API_BASE + '/materials/items/bulk_import/', {
+      method: 'POST', headers: { 'X-CSRFToken': getCsrfToken() }, body: formData,
+    });
+    const data = await res.json();
+    if (res.ok) {
+      let html = `<div class="alert alert-success py-2 mb-1">
+        <b>등록 완료</b> — 신규: ${data.created}건, 수정(덮어쓰기): ${data.updated}건</div>`;
+      if (data.errors?.length) {
+        html += `<div class="alert alert-warning py-2"><b>오류 행:</b><ul class="mb-0 mt-1">` +
+          data.errors.map(e => `<li class="small">${e}</li>`).join('') + '</ul></div>';
+      }
+      resultEl.innerHTML = html;
+      loadItems(); loadCategoryFilter();
+    } else {
+      resultEl.innerHTML = `<div class="alert alert-danger py-2">${data.error || JSON.stringify(data)}</div>`;
+    }
+  } catch(e) { showToast('업로드 실패', 'error'); resultEl.innerHTML = ''; }
+}
+
+// ── 창고 재고 탭 ──────────────────────────────────────
+async function loadWarehouse() {
+  const q   = (document.getElementById('wh-search')?.value || '').trim();
+  const cat = document.getElementById('wh-cat-filter')?.value || '';
+  const params = { page: _pg.warehouse, page_size: PAGE_SIZE };
+  if (q)   params.q        = q;
+  if (cat) params.category = cat;
+  try {
+    const data  = await apiGet(API_BASE + '/materials/warehouse/', params);
+    const items = data.results || data;
+    const count = data.count ?? items.length;
+    const tbody = document.getElementById('warehouse-tbody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">해당 조건의 재고가 없습니다</td></tr>';
+      renderPagination('warehouse-pagination', 0, 'warehouse');
+      return;
+    }
+    tbody.innerHTML = items.map(i => `<tr>
+      <td><small class="text-muted">${i.material_code || '-'}</small></td>
+      <td><small class="text-muted">${i.category_name || '-'}</small></td>
+      <td class="fw-semibold text-truncate" style="max-width:150px;" title="${i.material_name||''}">${i.material_name || '-'}</td>
+      <td><small class="text-muted">${i.material_spec || '-'}</small></td>
+      <td><small>${i.unit || '-'}</small></td>
+      <td class="text-end fw-bold ${i.is_low ? 'text-danger' : ''}">${numFmt(i.quantity)}</td>
+      <td class="text-end text-muted"><small>${numFmt(i.min_stock)}</small></td>
+      <td>${i.is_low ? '<span class="badge bg-danger">부족</span>' : '<span class="badge bg-success">정상</span>'}</td>
+    </tr>`).join('');
+    renderPagination('warehouse-pagination', count, 'warehouse');
+  } catch(e) { console.error('loadWarehouse:', e); }
+}
+
+// ── 품목 select 로드 ──────────────────────────────────
+async function loadMaterials() {
+  try {
+    const data  = await apiGet(API_BASE + '/materials/items/', { page_size: 500 });
+    const items = data.results || data;
+    ['ib-material','ob-material'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      sel.innerHTML = '<option value="">품목 선택...</option>' +
+        items.map(m => `<option value="${m.id}">[${m.code || ''}] ${m.name} (${m.unit || '개'})</option>`).join('');
+    });
+  } catch(e) {}
+}
+
+// ── 입고 이력 탭 ──────────────────────────────────────
+async function loadInboundHistory() {
+  const q   = (document.getElementById('ib-search')?.value || '').trim();
+  const cat = document.getElementById('ib-cat-filter')?.value || '';
+  const params = { page: _pg.inbound, page_size: PAGE_SIZE };
+  if (q)   params.q        = q;
+  if (cat) params.category = cat;
+  try {
+    const data  = await apiGet(API_BASE + '/materials/inbound/', params);
+    const items = data.results || data;
+    const count = data.count ?? items.length;
+    const tbody = document.getElementById('inbound-tbody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="14" class="text-center py-4 text-muted">입고 이력 없음</td></tr>';
+      renderPagination('inbound-pagination', 0, 'inbound'); return;
+    }
+    document.getElementById('inbound-check-all').checked = false;
+    updateBulkSignBtn();
+    tbody.innerHTML = items.map(i => {
+      const hasPdf   = i.pdf_path ? true : false;
+      const pdfBadge = hasPdf
+        ? '<span class="badge bg-success ms-1" title="입고증 생성됨"><i class="bi bi-file-earmark-check"></i></span>'
+        : '<span class="badge bg-light text-muted border ms-1" title="미생성"><i class="bi bi-file-earmark"></i></span>';
+      const hTitle = i.handover_phone ? ` title="${i.handover_person||''} ${i.handover_phone}"` : '';
+      const rTitle = i.receiver_phone ? ` title="${i.receiver_person||''} ${i.receiver_phone}"` : '';
+      const hPhone = i.handover_phone ? '<i class="bi bi-telephone-fill text-muted ms-1" style="font-size:9px;"></i>' : '';
+      const rPhone = i.receiver_phone ? '<i class="bi bi-telephone-fill text-muted ms-1" style="font-size:9px;"></i>' : '';
+      return `<tr>
+      <td><input type="checkbox" class="inbound-check" value="${i.id}" onchange="updateBulkSignBtn()"></td>
+      <td><small class="text-primary fw-bold">${i.inbound_number || '-'}</small>${pdfBadge}</td>
+      <td><small class="text-muted">${i.material_code || '-'}</small></td>
+      <td><small class="text-muted">${i.category_name || '-'}</small></td>
+      <td class="fw-semibold text-truncate" style="max-width:150px;" title="${i.material_name||''}">${i.material_name || '-'}</td>
+      <td class="text-truncate" style="max-width:90px;"><small class="text-muted">${i.material_spec || '-'}</small></td>
+      <td><small>${i.material_unit || '-'}</small></td>
+      <td class="text-end">${numFmt(i.quantity)}</td>
+      <td class="text-truncate" style="max-width:75px;"><small>${i.supplier || '-'}</small></td>
+      <td class="text-nowrap"><small${hTitle}>${i.handover_person||'-'}${hPhone}</small></td>
+      <td class="text-nowrap"><small${rTitle}>${i.receiver_person||'-'}${rPhone}</small></td>
+      <td><small class="text-muted">${formatDate(i.inbound_date)}</small></td>
+      <td><small>${i.received_by_name || '-'}</small></td>
+      <td class="text-nowrap">
+        <button class="btn btn-xs btn-outline-primary me-1" onclick='openInboundEdit(${JSON.stringify(i)})'>수정</button>
+        ${hasPdf ? `<a class="btn btn-xs btn-outline-success me-1" href="${API_BASE}/materials/inbound/${i.id}/download_pdf/" title="다운로드"><i class="bi bi-download"></i></a>` : ''}
+        <button class="btn btn-xs ${hasPdf ? 'btn-success' : 'btn-outline-secondary'}" onclick="downloadCert('inbound',${i.id})">${hasPdf ? '재생성' : '입고증'}</button>
+      </td>
+    </tr>`;
+    }).join('');
+    renderPagination('inbound-pagination', count, 'inbound');
+  } catch(e) { console.error('loadInboundHistory:', e); }
+}
+
+// ── 출고 이력 탭 ──────────────────────────────────────
+async function loadOutboundHistory() {
+  const q      = (document.getElementById('ob-search')?.value || '').trim();
+  const cat    = document.getElementById('ob-cat-filter')?.value || '';
+  const center = document.getElementById('ob-center-filter')?.value || '';
+  const params = { page: _pg.outbound, page_size: PAGE_SIZE };
+  if (q)      params.q         = q;
+  if (cat)    params.category  = cat;
+  if (center) params.to_center = center;
+  try {
+    const data  = await apiGet(API_BASE + '/materials/outbound/', params);
+    const items = data.results || data;
+    const count = data.count ?? items.length;
+    const tbody = document.getElementById('outbound-tbody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="12" class="text-center py-4 text-muted">출고 이력 없음</td></tr>';
+      renderPagination('outbound-pagination', 0, 'outbound'); return;
+    }
+    tbody.innerHTML = items.map(i => {
+      const hasPdf   = i.pdf_path ? true : false;
+      const pdfBadge = hasPdf
+        ? '<span class="badge bg-success ms-1" title="출고증 생성됨"><i class="bi bi-file-earmark-check"></i></span>'
+        : '<span class="badge bg-light text-muted border ms-1" title="미생성"><i class="bi bi-file-earmark"></i></span>';
+      const hTitle = i.handover_phone ? ` title="${i.handover_person||''} ${i.handover_phone}"` : '';
+      const rTitle = i.receiver_phone ? ` title="${i.receiver_person||''} ${i.receiver_phone}"` : '';
+      const hPhone = i.handover_phone ? '<i class="bi bi-telephone-fill text-muted ms-1" style="font-size:9px;"></i>' : '';
+      const rPhone = i.receiver_phone ? '<i class="bi bi-telephone-fill text-muted ms-1" style="font-size:9px;"></i>' : '';
+      return `<tr>
+      <td><input type="checkbox" class="outbound-check" value="${i.id}" onchange="updateBulkOutboundSignBtn()"></td>
+      <td><small class="text-warning fw-bold">${i.outbound_number || '-'}</small>${pdfBadge}</td>
+      <td><small class="text-muted">${i.material_code || '-'}</small></td>
+      <td><small class="text-muted">${i.category_name || '-'}</small></td>
+      <td class="fw-semibold text-truncate" style="max-width:150px;" title="${i.material_name||''}">${i.material_name || '-'}</td>
+      <td class="text-truncate" style="max-width:90px;"><small class="text-muted">${i.material_spec || '-'}</small></td>
+      <td><small>${i.material_unit || '-'}</small></td>
+      <td class="text-end">${numFmt(i.quantity)}</td>
+      <td class="text-truncate" style="max-width:80px;"><small>${i.to_center_name || i.to_worker_name || '-'}</small></td>
+      <td class="text-nowrap"><small${hTitle}>${i.handover_person||'-'}${hPhone}</small></td>
+      <td class="text-nowrap"><small${rTitle}>${i.receiver_person||'-'}${rPhone}</small></td>
+      <td><small class="text-muted">${formatDate(i.outbound_date)}</small></td>
+      <td><small>${i.issued_by_name || '-'}</small></td>
+      <td class="text-nowrap">
+        <button class="btn btn-xs btn-outline-primary me-1" onclick='openOutboundEdit(${JSON.stringify(i)})'>수정</button>
+        ${hasPdf ? `<a class="btn btn-xs btn-outline-success me-1" href="${API_BASE}/materials/outbound/${i.id}/download_pdf/" title="다운로드"><i class="bi bi-download"></i></a>` : ''}
+        <button class="btn btn-xs ${hasPdf ? 'btn-success' : 'btn-outline-secondary'}" onclick="downloadCert('outbound',${i.id})">${hasPdf ? '재생성' : '출고증'}</button>
+      </td>
+    </tr>`;
+    }).join('');
+    renderPagination('outbound-pagination', count, 'outbound');
+  } catch(e) { console.error('loadOutboundHistory:', e); }
+}
+
+// ── 센터별 재고 탭 ────────────────────────────────────
+async function loadCenterFilter() {
+  const sel = document.getElementById('center-filter');
+  if (!sel) return;
+  try {
+    const data  = await apiGet(API_BASE + '/schools/centers/', { page_size: 50 });
+    const items = data.results || data;
+    sel.innerHTML = '<option value="">전체 지원청</option>' +
+      items.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+  } catch(e) {}
+}
+
+async function loadCenterInventory() {
+  const centerCode = document.getElementById('center-filter')?.value || '';
+  const cat        = document.getElementById('center-cat-filter')?.value || '';
+  const q          = (document.getElementById('center-material-q')?.value || '').trim();
+  const params     = { page: _pg.center, page_size: PAGE_SIZE };
+  if (centerCode) params.center   = centerCode;
+  if (cat)        params.category = cat;
+  if (q)          params.q        = q;
+  try {
+    const data  = await apiGet(API_BASE + '/materials/center/', params);
+    const items = data.results || data;
+    const count = data.count ?? items.length;
+    const tbody = document.getElementById('center-tbody');
+    const cols  = IS_ADMIN ? 6 : 5;
+    if (!items.length) {
+      tbody.innerHTML = `<tr><td colspan="${cols}" class="text-center py-4 text-muted">재고 없음</td></tr>`;
+      renderPagination('center-pagination', 0, 'center');
+      return;
+    }
+    // admin 전체 보기: 지원청이 바뀔 때 구분선
+    if (IS_ADMIN && !centerCode) {
+      let prevCenter = null;
+      tbody.innerHTML = items.map(i => {
+        const isNew = i.center_name !== prevCenter;
+        prevCenter  = i.center_name;
+        return `<tr${isNew ? ' class="table-group-divider"' : ''}>
+          <td><small class="fw-semibold text-primary">${isNew ? (i.center_name || '-') : ''}</small></td>
+          <td><small class="text-muted">${i.material_code || '-'}</small></td>
+          <td><small class="text-muted">${i.category_name || '-'}</small></td>
+          <td class="fw-semibold text-truncate" style="max-width:150px;" title="${i.material_name||''}">${i.material_name || '-'}</td>
+          <td><small class="text-muted">${i.material_spec || '-'}</small></td>
+          <td><small>${i.unit || '-'}</small></td>
+          <td class="text-end fw-bold">${numFmt(i.quantity)}</td>
+          <td><small class="text-muted">${i.updated_at ? i.updated_at.substring(0,16).replace('T',' ') : '-'}</small></td>
+        </tr>`;
+      }).join('');
+    } else {
+      tbody.innerHTML = items.map(i => `<tr>
+        ${IS_ADMIN ? `<td><small class="fw-semibold">${i.center_name || '-'}</small></td>` : ''}
+        <td><small class="text-muted">${i.material_code || '-'}</small></td>
+        <td><small class="text-muted">${i.category_name || '-'}</small></td>
+        <td class="fw-semibold text-truncate" style="max-width:150px;" title="${i.material_name||''}">${i.material_name || '-'}</td>
+        <td><small class="text-muted">${i.material_spec || '-'}</small></td>
+        <td><small>${i.unit || '-'}</small></td>
+        <td class="text-end fw-bold">${numFmt(i.quantity)}</td>
+        <td><small class="text-muted">${i.updated_at ? i.updated_at.substring(0,16).replace('T',' ') : '-'}</small></td>
+      </tr>`).join('');
+    }
+    renderPagination('center-pagination', count, 'center');
+  } catch(e) { console.error('loadCenterInventory:', e); }
+}
+
+// ── 부족 알림 탭 ──────────────────────────────────────
+async function loadLowStock() {
+  try {
+    const data  = await apiGet(API_BASE + '/materials/warehouse/low_stock/', { page: _pg.low, page_size: PAGE_SIZE });
+    const items = data.results || data;
+    const count = data.count ?? items.length;
+    const kpi   = document.getElementById('kpi-low');
+    if (kpi) kpi.textContent = count;
+    const tbody = document.getElementById('low-stock-tbody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-success py-4"><i class="bi bi-check-circle-fill me-1"></i>부족 품목 없음</td></tr>';
+      renderPagination('low-pagination', 0, 'low');
+      return;
+    }
+    tbody.innerHTML = items.map(i => `<tr>
+      <td><small class="text-muted">${i.material_code || '-'}</small></td>
+      <td><small class="text-muted">${i.category_name || '-'}</small></td>
+      <td class="fw-semibold text-truncate" style="max-width:150px;" title="${i.material_name||''}">${i.material_name || '-'}</td>
+      <td><small class="text-muted">${i.material_spec || '-'}</small></td>
+      <td><small>${i.unit || '-'}</small></td>
+      <td class="text-end fw-bold text-danger">${numFmt(i.quantity)}</td>
+      <td class="text-end text-muted"><small>${numFmt(i.min_stock)}</small></td>
+      <td><span class="badge bg-danger">부족</span></td>
+    </tr>`).join('');
+    renderPagination('low-pagination', count, 'low');
+  } catch(e) {}
+}
+
+// ── resident: 창고→센터 입고 이력 ────────────────────
+async function loadMyInbound() {
+  try {
+    const data  = await apiGet(API_BASE + '/materials/outbound/', { page_size: 100, from_warehouse: 'true' });
+    const items = data.results || data;
+    const tbody = document.getElementById('my-inbound-tbody');
+    if (!items.length) { tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-muted">수령 이력 없음</td></tr>'; return; }
+    tbody.innerHTML = items.map(i => `<tr>
+      <td><small class="text-primary fw-bold">${i.outbound_number || '-'}</small></td>
+      <td><small class="text-muted">${i.material_code || '-'}</small></td>
+      <td><small class="text-muted">${i.category_name || '-'}</small></td>
+      <td class="fw-semibold text-truncate" style="max-width:150px;" title="${i.material_name||''}">${i.material_name || '-'}</td>
+      <td class="text-truncate" style="max-width:90px;"><small class="text-muted">${i.material_spec || '-'}</small></td>
+      <td><small>${i.material_unit || '-'}</small></td>
+      <td class="text-end">${numFmt(i.quantity)}</td>
+      <td><small>${i.handover_person || '-'}</small></td>
+      <td><small>${i.receiver_person || '-'}</small></td>
+      <td><small class="text-muted">${formatDate(i.outbound_date)}</small></td>
+      <td><small>${i.issued_by_name || '-'}</small></td>
+    </tr>`).join('');
+  } catch(e) {}
+}
+
+// ── resident: 센터 출고 이력 ──────────────────────────
+async function loadCenterOutboundHistory() {
+  try {
+    const data  = await apiGet(API_BASE + '/materials/outbound/', { page_size: 100, from_warehouse: 'false' });
+    const items = data.results || data;
+    const tbody = document.getElementById('center-out-tbody');
+    if (!items.length) { tbody.innerHTML = '<tr><td colspan="12" class="text-center py-4 text-muted">출고 이력 없음</td></tr>'; return; }
+    tbody.innerHTML = items.map(i => `<tr>
+      <td><small class="text-danger fw-bold">${i.outbound_number || '-'}</small></td>
+      <td><small class="text-muted">${i.material_code || '-'}</small></td>
+      <td><small class="text-muted">${i.category_name || '-'}</small></td>
+      <td class="fw-semibold text-truncate" style="max-width:150px;" title="${i.material_name||''}">${i.material_name || '-'}</td>
+      <td class="text-truncate" style="max-width:90px;"><small class="text-muted">${i.material_spec || '-'}</small></td>
+      <td><small>${i.material_unit || '-'}</small></td>
+      <td class="text-end">${numFmt(i.quantity)}</td>
+      <td><small class="text-primary">${i.to_school || '-'}</small></td>
+      <td><small>${i.handover_person || '-'}</small></td>
+      <td><small>${i.receiver_person || '-'}</small></td>
+      <td><small class="text-muted">${formatDate(i.outbound_date)}</small></td>
+      <td class="text-center">
+        <button class="btn btn-xs btn-outline-danger" onclick='openCenterOutModal(${JSON.stringify(i)})'>수정</button>
+      </td>
+    </tr>`).join('');
+  } catch(e) {}
+}
+
+// ── resident: 반납 입고 이력 ──────────────────────────
+async function loadCenterReturnHistory() {
+  try {
+    const data  = await apiGet(API_BASE + '/materials/returns/', { page_size: 100 });
+    const items = data.results || data;
+    const tbody = document.getElementById('center-return-tbody');
+    if (!items.length) { tbody.innerHTML = '<tr><td colspan="12" class="text-center py-4 text-muted">반납 입고 이력 없음</td></tr>'; return; }
+    tbody.innerHTML = items.map(i => `<tr>
+      <td><small class="text-warning fw-bold">${i.return_number || '-'}</small></td>
+      <td><small class="text-muted">${i.material_code || '-'}</small></td>
+      <td><small class="text-muted">${i.category_name || '-'}</small></td>
+      <td class="fw-semibold text-truncate" style="max-width:150px;" title="${i.material_name||''}">${i.material_name || '-'}</td>
+      <td class="text-truncate" style="max-width:90px;"><small class="text-muted">${i.material_spec || '-'}</small></td>
+      <td><small>${i.material_unit || '-'}</small></td>
+      <td class="text-end">${numFmt(i.quantity)}</td>
+      <td><small class="text-primary">${i.from_school || '-'}</small></td>
+      <td><small>${i.handover_person || '-'}</small></td>
+      <td><small>${i.receiver_person || '-'}</small></td>
+      <td><small class="text-muted">${formatDate(i.return_date)}</small></td>
+      <td class="text-center">
+        <button class="btn btn-xs btn-outline-warning" onclick='openCenterReturnModal(${JSON.stringify(i)})'>수정</button>
+      </td>
+    </tr>`).join('');
+  } catch(e) { console.error('loadCenterReturnHistory:', e); }
+}
+
+async function loadCenterReturnMaterials() {
+  try {
+    const data  = await apiGet(API_BASE + '/materials/center/', { page_size: 200 });
+    const items = (data.results || data).filter(i => i.quantity > 0);
+    // 모든 품목 허용 (반납이므로 재고 없어도 됨)
+    const allMat = await apiGet(API_BASE + '/materials/items/', { no_page: 1 });
+    const all = allMat.results || allMat;
+    document.getElementById('cr-material').innerHTML =
+      '<option value="">품목 선택...</option>' +
+      all.map(i => `<option value="${i.id}">${i.name} [${i.code}]</option>`).join('');
+  } catch(e) {}
+}
+
+async function openCenterReturnModal(data) {
+  document.getElementById('cr-id').value          = data?.id || '';
+  document.getElementById('cr-qty').value         = data?.quantity || 1;
+  document.getElementById('cr-date').value        = data?.return_date || todayKST();
+  document.getElementById('cr-note').value        = data?.note || '';
+  document.getElementById('centerReturnModalTitle').textContent = data ? '반납 입고 수정' : '반납 입고 등록';
+  const delBtn = document.getElementById('cr-delete-btn');
+  delBtn.style.display = data ? '' : 'none';
+
+  // 인력 로드 → 인계자/인수자 모두 센터 전체 인력
+  const staff = await loadCenterStaff();
+  fillPersonnelSelect('cr-handover', staff, data?.handover_person || '');
+  fillPersonnelSelect('cr-receiver', staff, data?.receiver_person || '');
+  document.getElementById('cr-handover-phone').value = data?.handover_phone || '';
+  document.getElementById('cr-receiver-phone').value = data?.receiver_phone || '';
+
+  loadCenterReturnMaterials().then(() => {
+    if (data?.material) document.getElementById('cr-material').value = data.material;
+  });
+  initSchoolSelects('cr', data?.from_school || '');
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('centerReturnModal')).show();
+}
+
+async function submitCenterReturn() {
+  const id  = document.getElementById('cr-id').value;
+  const mat = document.getElementById('cr-material').value;
+  const qty = document.getElementById('cr-qty').value;
+  const dt  = document.getElementById('cr-date').value;
+  if (!mat || !qty || !dt) { showToast('품목·수량·반납일 필수', 'warning'); return; }
+  const body = {
+    material:        parseInt(mat),
+    quantity:        parseInt(qty),
+    return_date:     dt,
+    from_school:     getSchoolSelectName('cr'),
+    handover_person: document.getElementById('cr-handover').value,
+    handover_phone:  document.getElementById('cr-handover-phone').value || '',
+    receiver_person: document.getElementById('cr-receiver').value,
+    receiver_phone:  document.getElementById('cr-receiver-phone').value || '',
+    note:            document.getElementById('cr-note').value,
+  };
+  try {
+    if (id) {
+      await apiPatch(API_BASE + `/materials/returns/${id}/`, body);
+      showToast('수정 완료', 'success');
+    } else {
+      await apiPost(API_BASE + '/materials/returns/', body);
+      showToast('반납 입고 등록 완료 — 센터 재고 증가', 'success');
+    }
+    bootstrap.Modal.getInstance(document.getElementById('centerReturnModal')).hide();
+    loadCenterReturnHistory();
+    loadCenterInventory();
+  } catch(e) { showToast('저장 실패: ' + (e.message || e), 'error'); }
+}
+
+async function deleteCenterReturn() {
+  const id = document.getElementById('cr-id').value;
+  if (!id || !confirm('이 반납 입고 기록을 삭제하시겠습니까?\n센터 재고가 자동 감소됩니다.')) return;
+  try {
+    await apiDelete(API_BASE + `/materials/returns/${id}/`);
+    bootstrap.Modal.getInstance(document.getElementById('centerReturnModal')).hide();
+    showToast('삭제 완료', 'success');
+    loadCenterReturnHistory();
+    loadCenterInventory();
+  } catch(e) { showToast('삭제 실패: ' + (e.message || e), 'error'); }
+}
+
+// ── 관리자: 센터별 필터 공통 로드 ────────────────────────
+let _adminCenterFiltersLoaded = false;
+async function loadAdminCenterFilters() {
+  if (_adminCenterFiltersLoaded) return;
+  try {
+    const data  = await apiGet(API_BASE + '/schools/centers/', { page_size: 50 });
+    const items = data.results || data;
+    const opts  = '<option value="">전체 지원청</option>' +
+      items.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    ['acib-center-filter','acrt-center-filter','acob-center-filter'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = opts;
+    });
+    _adminCenterFiltersLoaded = true;
+  } catch(e) {}
+}
+
+// ── 관리자: 센터별 입고이력 (창고→센터) ──────────────────
+async function loadAdminCenterInbound() {
+  const center = document.getElementById('acib-center-filter')?.value || '';
+  const cat    = document.getElementById('acib-cat-filter')?.value    || '';
+  const q      = (document.getElementById('acib-search')?.value || '').trim();
+  const params = { page: _pg['admin-cinbound'], page_size: PAGE_SIZE, from_warehouse: 'true' };
+  if (center) params.to_center = center;
+  if (cat)    params.category  = cat;
+  if (q)      params.q         = q;
+  try {
+    const data  = await apiGet(API_BASE + '/materials/outbound/', params);
+    const items = data.results || data;
+    const count = data.count ?? items.length;
+    const tbody = document.getElementById('admin-cinbound-tbody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-muted">이력 없음</td></tr>';
+      renderPagination('admin-cinbound-pagination', 0, 'admin-cinbound'); return;
+    }
+    tbody.innerHTML = items.map(i => `<tr>
+      <td class="text-nowrap"><small class="text-success fw-bold">${i.outbound_number || '-'}</small></td>
+      <td class="text-nowrap"><small class="fw-semibold">${i.to_center_name || '-'}</small></td>
+      <td class="text-nowrap"><small class="text-muted">${i.material_code || '-'}</small></td>
+      <td class="text-nowrap"><small class="text-muted">${i.category_name || '-'}</small></td>
+      <td class="fw-semibold text-truncate" style="max-width:150px;" title="${i.material_name||''}">${i.material_name || '-'}</td>
+      <td class="text-truncate" style="max-width:85px;"><small class="text-muted">${i.material_spec || '-'}</small></td>
+      <td class="text-nowrap"><small>${i.material_unit || '-'}</small></td>
+      <td class="text-end text-nowrap">${numFmt(i.quantity)}</td>
+      <td class="text-nowrap"><small>${i.handover_person || '-'}</small></td>
+      <td class="text-nowrap"><small>${i.receiver_person || '-'}</small></td>
+      <td class="text-nowrap"><small class="text-muted">${formatDate(i.outbound_date)}</small></td>
+    </tr>`).join('');
+    renderPagination('admin-cinbound-pagination', count, 'admin-cinbound');
+  } catch(e) { console.error('loadAdminCenterInbound:', e); }
+}
+
+// ── 관리자: 센터별 출고이력 (센터→현장) ──────────────────
+// ── 관리자: 센터별 반납 입고이력 (현장→센터) ──────────────
+async function loadAdminCenterReturn() {
+  const center = document.getElementById('acrt-center-filter')?.value || '';
+  const cat    = document.getElementById('acrt-cat-filter')?.value    || '';
+  const q      = (document.getElementById('acrt-search')?.value || '').trim();
+  const params = { page: _pg['admin-creturn'], page_size: PAGE_SIZE };
+  if (center) params.center   = center;
+  if (cat)    params.category = cat;
+  if (q)      params.q        = q;
+  try {
+    const data  = await apiGet(API_BASE + '/materials/returns/', params);
+    const items = data.results || data;
+    const count = data.count ?? items.length;
+    const tbody = document.getElementById('admin-creturn-tbody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="12" class="text-center py-4 text-muted">이력 없음</td></tr>';
+      renderPagination('admin-creturn-pagination', 0, 'admin-creturn'); return;
+    }
+    tbody.innerHTML = items.map(i => `<tr>
+      <td class="text-nowrap"><small class="text-warning fw-bold">${i.return_number || '-'}</small></td>
+      <td class="text-nowrap"><small class="fw-semibold text-success">${i.center_name || '-'}</small></td>
+      <td class="text-nowrap"><small class="text-muted">${i.material_code || '-'}</small></td>
+      <td class="text-nowrap"><small class="text-muted">${i.category_name || '-'}</small></td>
+      <td class="fw-semibold text-truncate" style="max-width:150px;" title="${i.material_name||''}">${i.material_name || '-'}</td>
+      <td class="text-truncate" style="max-width:85px;"><small class="text-muted">${i.material_spec || '-'}</small></td>
+      <td class="text-nowrap"><small>${i.material_unit || '-'}</small></td>
+      <td class="text-end text-nowrap">${numFmt(i.quantity)}</td>
+      <td class="text-nowrap"><small class="text-primary">${i.from_school || '-'}</small></td>
+      <td class="text-nowrap"><small>${i.handover_person || '-'}</small></td>
+      <td class="text-nowrap"><small>${i.receiver_person || '-'}</small></td>
+      <td class="text-nowrap"><small class="text-muted">${formatDate(i.return_date)}</small></td>
+    </tr>`).join('');
+    renderPagination('admin-creturn-pagination', count, 'admin-creturn');
+  } catch(e) { console.error('loadAdminCenterReturn:', e); }
+}
+
+// ── 관리자: 센터별 출고이력 (센터→현장) ──────────────────
+async function loadAdminCenterOutbound() {
+  const center = document.getElementById('acob-center-filter')?.value || '';
+  const cat    = document.getElementById('acob-cat-filter')?.value    || '';
+  const q      = (document.getElementById('acob-search')?.value || '').trim();
+  const params = { page: _pg['admin-coutbound'], page_size: PAGE_SIZE, from_warehouse: 'false' };
+  if (center) params.from_center = center;
+  if (cat)    params.category    = cat;
+  if (q)      params.q           = q;
+  try {
+    const data  = await apiGet(API_BASE + '/materials/outbound/', params);
+    const items = data.results || data;
+    const count = data.count ?? items.length;
+    const tbody = document.getElementById('admin-coutbound-tbody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="12" class="text-center py-4 text-muted">이력 없음</td></tr>';
+      renderPagination('admin-coutbound-pagination', 0, 'admin-coutbound'); return;
+    }
+    tbody.innerHTML = items.map(i => `<tr>
+      <td class="text-nowrap"><small class="text-danger fw-bold">${i.outbound_number || '-'}</small></td>
+      <td class="text-nowrap"><small class="fw-semibold">${i.issued_by_center_name || '-'}</small></td>
+      <td class="text-nowrap"><small class="text-muted">${i.material_code || '-'}</small></td>
+      <td class="text-nowrap"><small class="text-muted">${i.category_name || '-'}</small></td>
+      <td class="fw-semibold text-truncate" style="max-width:150px;" title="${i.material_name||''}">${i.material_name || '-'}</td>
+      <td class="text-truncate" style="max-width:85px;"><small class="text-muted">${i.material_spec || '-'}</small></td>
+      <td class="text-nowrap"><small>${i.material_unit || '-'}</small></td>
+      <td class="text-end text-nowrap">${numFmt(i.quantity)}</td>
+      <td class="text-nowrap"><small class="text-primary">${i.to_school || '-'}</small></td>
+      <td class="text-nowrap"><small>${i.handover_person || '-'}</small></td>
+      <td class="text-nowrap"><small>${i.receiver_person || '-'}</small></td>
+      <td class="text-nowrap"><small class="text-muted">${formatDate(i.outbound_date)}</small></td>
+    </tr>`).join('');
+    renderPagination('admin-coutbound-pagination', count, 'admin-coutbound');
+  } catch(e) { console.error('loadAdminCenterOutbound:', e); }
+}
+
+// ── 모달 학교 선택 공통 헬퍼 ──────────────────────────
+let _schoolSelectMeta  = null; // { centers:[{id,code,name}], types:[{id,code,name,order}] }
+const _schoolCache     = {};   // cenCode → [{id,name,school_type(id),school_type_name}]
+
+async function ensureSchoolMeta() {
+  if (_schoolSelectMeta) return _schoolSelectMeta;
+  const [cenData, typeData] = await Promise.all([
+    apiGet(API_BASE + '/schools/centers/', { page_size: 50 }),
+    apiGet(API_BASE + '/schools/types/',   { page_size: 50 }),
+  ]);
+  _schoolSelectMeta = {
+    centers: (cenData.results || cenData),
+    types:   (typeData.results || typeData),
+  };
+  return _schoolSelectMeta;
+}
+
+async function fetchSchoolsByCenter(cenCode) {
+  if (!cenCode) return [];
+  if (_schoolCache[cenCode]) return _schoolCache[cenCode];
+  try {
+    // page_size 200 (max) 로 두 번까지 시도
+    const params = { center: cenCode, page_size: 200, is_active: 'true' };
+    const data   = await apiGet(API_BASE + '/schools/schools/', params);
+    let items    = data.results || data;
+    if (data.next) {
+      const data2 = await apiGet(API_BASE + '/schools/schools/', { ...params, page: 2 });
+      items = items.concat(data2.results || data2);
+    }
+    _schoolCache[cenCode] = items;
+    return items;
+  } catch(e) { return []; }
+}
+
+async function initSchoolSelects(prefix, defaultSchoolName) {
+  const meta   = await ensureSchoolMeta();
+  const cenSel = document.getElementById(`${prefix}-center`);
+  if (!cenSel) return;
+  cenSel.innerHTML = '<option value="">지원청 선택...</option>' +
+    meta.centers.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+  cenSel.value = USER_CENTER_CODE || '';
+  await populateSchoolTypes(prefix);
+  if (defaultSchoolName) {
+    setSchoolSelectByName(prefix, defaultSchoolName);
+  }
+}
+
+async function populateSchoolTypes(prefix) {
+  const meta    = await ensureSchoolMeta();
+  const cenCode = document.getElementById(`${prefix}-center`)?.value;
+  const typeSel = document.getElementById(`${prefix}-school-type`);
+  if (!typeSel) return;
+  typeSel.innerHTML = '<option value="">학제 선택...</option>';
+  if (cenCode) {
+    const schools = await fetchSchoolsByCenter(cenCode);
+    const usedIds = new Set(schools.map(s => s.school_type));
+    const types   = meta.types.filter(t => usedIds.has(t.id))
+                              .slice().sort((a, b) => a.order - b.order);
+    typeSel.innerHTML += types.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+  } else {
+    meta.types.slice().sort((a, b) => a.order - b.order)
+      .forEach(t => typeSel.innerHTML += `<option value="${t.id}">${t.name}</option>`);
+  }
+  await populateSchools(prefix);
+}
+
+async function populateSchools(prefix) {
+  const cenCode = document.getElementById(`${prefix}-center`)?.value;
+  const typeId  = document.getElementById(`${prefix}-school-type`)?.value;
+  const schSel  = document.getElementById(`${prefix}-school`);
+  if (!schSel) return;
+  if (!cenCode) {
+    schSel.innerHTML = '<option value="">지원청을 먼저 선택하세요</option>';
+    return;
+  }
+  let schools = await fetchSchoolsByCenter(cenCode);
+  if (typeId) schools = schools.filter(s => s.school_type == typeId);
+  schools = schools.slice().sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  schSel.innerHTML = '<option value="">학교 선택...</option>' +
+    schools.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+}
+
+async function onCenterChange(prefix) {
+  await populateSchoolTypes(prefix);
+}
+
+async function onSchoolTypeChange(prefix) {
+  await populateSchools(prefix);
+}
+
+function clearSchoolSelect(prefix) {
+  const cenSel  = document.getElementById(`${prefix}-center`);
+  const typeSel = document.getElementById(`${prefix}-school-type`);
+  const schSel  = document.getElementById(`${prefix}-school`);
+  if (cenSel)  cenSel.value  = USER_CENTER_CODE || '';
+  if (typeSel) typeSel.value = '';
+  if (schSel)  schSel.value  = '';
+  populateSchools(prefix);
+}
+
+function getSchoolSelectName(prefix) {
+  const sel = document.getElementById(`${prefix}-school`);
+  return sel?.value || '';
+}
+
+function setSchoolSelectByName(prefix, name) {
+  const sel = document.getElementById(`${prefix}-school`);
+  if (!sel || !name) return;
+  const opt = Array.from(sel.options).find(o => o.value === name);
+  if (opt) { sel.value = name; }
+  // 없으면 임시 option 추가 (수정 모드에서 기존 텍스트 유지)
+  else if (name) {
+    const o = document.createElement('option');
+    o.value = name; o.textContent = name; o.dataset.legacy = '1';
+    sel.appendChild(o);
+    sel.value = name;
+  }
+}
+
+// ── resident: 센터 출고 등록 ──────────────────────────
+// ── 센터 인력 캐시 ─────────────────────────────────────
+let _workerTreeMat    = [];  // workforce/worker-tree 캐시 [{id,name,workers:[{id,name,phone}]}]
+let _warehouseStaffMat = []; // 관리자·상주자 캐시
+let _centersMat        = []; // 지원청 목록 캐시
+
+async function initPersonnelCache() {
+  if (_workerTreeMat.length) return;
+  try {
+    const [treeRes, whRes, cenRes] = await Promise.allSettled([
+      fetch(`${API_BASE}/workforce/worker-tree/`, { headers: { 'X-CSRFToken': CSRF_TOKEN } }).then(r => r.json()),
+      fetch(`${API_BASE}/accounts/api/users/warehouse_staff/`, { headers: { 'X-CSRFToken': CSRF_TOKEN } }).then(r => r.json()),
+      fetch(`${API_BASE}/schools/centers/?page_size=50`, { headers: { 'X-CSRFToken': CSRF_TOKEN } }).then(r => r.json()),
+    ]);
+    _workerTreeMat     = treeRes.status === 'fulfilled' ? (treeRes.value.centers || []) : [];
+    _warehouseStaffMat = whRes.status   === 'fulfilled' ? (Array.isArray(whRes.value) ? whRes.value : []) : [];
+    const cenData      = cenRes.status  === 'fulfilled' ? cenRes.value : {};
+    _centersMat        = cenData.results || cenData || [];
+    if (!Array.isArray(_centersMat)) _centersMat = [];
+  } catch(e) {}
+}
+
+function getWorkersByCenterMat(centerId) {
+  if (!centerId) return [];
+  const found = _workerTreeMat.find(c => String(c.id) === String(centerId));
+  return found ? found.workers : [];
+}
+
+// 기존 호환성 유지용 (fillPersonnelSelect에서 사용)
+async function loadCenterStaff(centerId) {
+  await initPersonnelCache();
+  return getWorkersByCenterMat(centerId || USER_CENTER_ID);
+}
+
+async function loadWarehouseStaff() {
+  await initPersonnelCache();
+  return _warehouseStaffMat;
+}
+
+function buildMatPersonOptions(users) {
+  return '<option value="">선택...</option>' +
+    users.map(u => `<option value="${u.name}" data-phone="${u.phone||''}">${u.name}</option>`).join('');
+}
+
+function applyMatPersonSelect(selId, nameId, phoneId) {
+  const sel = document.getElementById(selId);
+  const opt = sel?.options[sel.selectedIndex];
+  if (!opt || !opt.value) return;
+  const nameEl = document.getElementById(nameId);
+  const phoneEl = document.getElementById(phoneId);
+  if (nameEl) nameEl.value  = opt.value || '';
+  if (phoneEl) phoneEl.value = opt.dataset.phone || '';
+}
+
+function fillPersonnelSelect(selId, staff, defaultName) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  if (!staff.length) {
+    sel.innerHTML = '<option value="">인력 정보 없음</option>';
+    return;
+  }
+  sel.innerHTML = buildMatPersonOptions(staff);
+  if (defaultName) sel.value = defaultName;
+}
+
+async function onMatObCenterChange() {
+  await initPersonnelCache();
+  const centerId = document.getElementById('ob-center')?.value;
+  const blank = '<option value="">-- 선택 --</option>';
+  document.getElementById('ob-handover-sel').innerHTML = blank + buildMatPersonOptions(_warehouseStaffMat).replace('<option value="">선택...</option>','');
+  const cStaff = getWorkersByCenterMat(centerId);
+  document.getElementById('ob-receiver-sel').innerHTML = blank + buildMatPersonOptions(cStaff).replace('<option value="">선택...</option>','');
+}
+
+async function loadCenterMaterials() {
+  try {
+    const data  = await apiGet(API_BASE + '/materials/center/', { page_size: 500 });
+    const items = data.results || data;
+    const sel   = document.getElementById('co-material');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">품목 선택...</option>' +
+      items.filter(i => i.quantity > 0).map(i =>
+        `<option value="${i.material}">${i.material_name} (재고: ${numFmt(i.quantity)} ${i.unit || ''})</option>`
+      ).join('');
+  } catch(e) {}
+}
+
+async function openCenterOutModal(data) {
+  const isEdit = !!data;
+  document.getElementById('co-id').value    = data?.id || '';
+  document.getElementById('co-qty').value   = data?.quantity || 1;
+  document.getElementById('co-date').value  = data?.outbound_date || todayKST();
+  document.getElementById('co-note').value  = data?.note || '';
+  document.getElementById('centerOutModalTitle').textContent = isEdit ? '센터 출고 수정' : '센터 출고 등록';
+  document.getElementById('co-delete-btn').style.display = isEdit ? '' : 'none';
+  document.getElementById('co-save-btn').textContent     = isEdit ? '저장' : '출고 등록';
+  const hint = document.getElementById('co-material-hint');
+  if (hint) hint.style.display = isEdit ? 'none' : '';
+
+  // 인력 로드 → 인계자/인수자 모두 센터 전체 인력
+  const staff = await loadCenterStaff();
+  fillPersonnelSelect('co-handover', staff, data?.handover_person || '');
+  fillPersonnelSelect('co-receiver', staff, data?.receiver_person || '');
+  document.getElementById('co-handover-phone').value = data?.handover_phone || '';
+  document.getElementById('co-receiver-phone').value = data?.receiver_phone || '';
+
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('centerOutModal')).show();
+  if (!isEdit) {
+    loadCenterMaterials();
+  } else {
+    // 수정 모드: 현재 품목 표시
+    const sel = document.getElementById('co-material');
+    sel.innerHTML = `<option value="${data.material}">${data.material_name}</option>`;
+    sel.value = data.material;
+    sel.disabled = true;
+  }
+  initSchoolSelects('co', data?.to_school || '');
+}
+
+async function submitCenterOutbound() {
+  const id  = document.getElementById('co-id').value;
+  const mat = document.getElementById('co-material').value;
+  const qty = document.getElementById('co-qty').value;
+  if (!mat || !qty) { showToast('품목과 수량을 입력하세요', 'warning'); return; }
+  const body = {
+    quantity:        parseInt(qty),
+    outbound_date:   document.getElementById('co-date').value,
+    to_school:       getSchoolSelectName('co'),
+    handover_person: document.getElementById('co-handover').value,
+    handover_phone:  document.getElementById('co-handover-phone').value || '',
+    receiver_person: document.getElementById('co-receiver').value,
+    receiver_phone:  document.getElementById('co-receiver-phone').value || '',
+    note:            document.getElementById('co-note').value,
+  };
+  try {
+    if (id) {
+      await apiPatch(API_BASE + `/materials/outbound/${id}/center_outbound_update/`, body);
+      showToast('수정 완료', 'success');
+    } else {
+      await apiPost(API_BASE + '/materials/outbound/center_outbound/', {
+        ...body, material: parseInt(mat)
+      });
+      showToast('출고 등록 완료 — 센터 재고 자동 감소', 'success');
+    }
+    // 수정 모드에서 disabled 해제
+    document.getElementById('co-material').disabled = false;
+    bootstrap.Modal.getInstance(document.getElementById('centerOutModal')).hide();
+    loadCenterOutboundHistory();
+    loadCenterInventory();
+  } catch(e) { showToast('저장 실패: ' + (e.message || e), 'error'); }
+}
+
+async function deleteCenterOutbound() {
+  const id = document.getElementById('co-id').value;
+  if (!id || !confirm('이 출고 기록을 삭제하시겠습니까?\n센터 재고가 자동 복구됩니다.')) return;
+  try {
+    await apiDelete(API_BASE + `/materials/outbound/${id}/center_outbound_delete/`);
+    document.getElementById('co-material').disabled = false;
+    bootstrap.Modal.getInstance(document.getElementById('centerOutModal')).hide();
+    showToast('삭제 완료 — 센터 재고 복구', 'success');
+    loadCenterOutboundHistory();
+    loadCenterInventory();
+  } catch(e) { showToast('삭제 실패: ' + (e.message || e), 'error'); }
+}
+
+// ── 전자서명 + 입고증/출고증 PDF ─────────────────────
+const _signPads = {};
+
+function initSignCanvas(key) {
+  const canvas = document.getElementById(`sign-canvas-${key}`);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth   = 2;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+  let drawing = false, lastX = 0, lastY = 0;
+
+  function pos(e) {
+    const r = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return [(t.clientX - r.left) * (canvas.width / r.width),
+            (t.clientY - r.top)  * (canvas.height / r.height)];
+  }
+  function start(e) { e.preventDefault(); drawing = true; [lastX, lastY] = pos(e); }
+  function move(e)  {
+    e.preventDefault();
+    if (!drawing) return;
+    const [x, y] = pos(e);
+    ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y); ctx.stroke();
+    [lastX, lastY] = [x, y];
+  }
+  function stop()   { drawing = false; }
+
+  canvas.addEventListener('mousedown',  start);
+  canvas.addEventListener('mousemove',  move);
+  canvas.addEventListener('mouseup',    stop);
+  canvas.addEventListener('mouseleave', stop);
+  canvas.addEventListener('touchstart', start, {passive:false});
+  canvas.addEventListener('touchmove',  move,  {passive:false});
+  canvas.addEventListener('touchend',   stop);
+  _signPads[key] = { canvas, ctx };
+}
+
+function clearSign(key) {
+  const pad = _signPads[key];
+  if (pad) pad.ctx.clearRect(0, 0, pad.canvas.width, pad.canvas.height);
+}
+
+function isCanvasBlank(key) {
+  const pad = _signPads[key];
+  if (!pad) return true;
+  const data = pad.ctx.getImageData(0, 0, pad.canvas.width, pad.canvas.height).data;
+  return !data.some(v => v !== 0);
+}
+
+function _collectSignBody() {
+  const body = {};
+  const hName  = document.getElementById('sign-handover-name').value.trim();
+  const hPhone = document.getElementById('sign-handover-phone').value.trim();
+  const rName  = document.getElementById('sign-receiver-name').value.trim();
+  const rPhone = document.getElementById('sign-receiver-phone').value.trim();
+  if (hName)  body.handover_person = hName;
+  if (hPhone) body.handover_phone  = hPhone;
+  if (rName)  body.receiver_person = rName;
+  if (rPhone) body.receiver_phone  = rPhone;
+  if (!isCanvasBlank('handover'))
+    body.handover_signature = _signPads['handover'].canvas.toDataURL('image/png');
+  if (!isCanvasBlank('receiver'))
+    body.receiver_signature = _signPads['receiver'].canvas.toDataURL('image/png');
+  return body;
+}
+
+async function _openSignModal(type, id, bulkIds) {
+  document.getElementById('sign-type').value     = type;
+  document.getElementById('sign-id').value       = id || '';
+  document.getElementById('sign-bulk-ids').value = bulkIds ? bulkIds.join(',') : '';
+  document.getElementById('signModalTitle').textContent =
+    (type === 'inbound' ? '입고증' : '출고증') + ' 전자 서명';
+  // 기존 등록 정보 불러오기 (첫 번째 레코드 기준)
+  let rec = {};
+  try { rec = await apiGet(API_BASE + `/materials/${type}/${id}/`); } catch(e) {}
+  document.getElementById('sign-handover-name').value  = rec.handover_person || '';
+  document.getElementById('sign-handover-phone').value = rec.handover_phone  || '';
+  document.getElementById('sign-receiver-name').value  = rec.receiver_person || '';
+  document.getElementById('sign-receiver-phone').value = rec.receiver_phone  || '';
+  clearSign('handover'); clearSign('receiver');
+  const bulkInfo = document.getElementById('sign-bulk-info');
+  if (bulkIds && bulkIds.length > 1) {
+    bulkInfo.style.display = '';
+    document.getElementById('sign-bulk-count').textContent = bulkIds.length;
+  } else { bulkInfo.style.display = 'none'; }
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('signModal')).show();
+  setTimeout(() => { initSignCanvas('handover'); initSignCanvas('receiver'); }, 300);
+}
+
+function downloadCert(type, id) { _openSignModal(type, id, null); }
+
+function toggleAllInboundCheck(master) {
+  document.querySelectorAll('.inbound-check').forEach(cb => cb.checked = master.checked);
+  updateBulkSignBtn();
+}
+
+function updateBulkSignBtn() {
+  const checked = document.querySelectorAll('.inbound-check:checked').length;
+  const btn = document.getElementById('btn-bulk-sign');
+  if (!btn) return;
+  btn.style.display = checked > 0 ? '' : 'none';
+  document.getElementById('bulk-sign-count').textContent = checked;
+}
+
+function openBulkSign() {
+  const ids = [...document.querySelectorAll('.inbound-check:checked')].map(cb => parseInt(cb.value));
+  if (!ids.length) return;
+  _openSignModal('inbound', ids[0], ids);
+}
+
+function toggleAllOutboundCheck(master) {
+  document.querySelectorAll('.outbound-check').forEach(cb => cb.checked = master.checked);
+  updateBulkOutboundSignBtn();
+}
+
+function updateBulkOutboundSignBtn() {
+  const checked = document.querySelectorAll('.outbound-check:checked').length;
+  const btn = document.getElementById('btn-bulk-outbound-sign');
+  if (!btn) return;
+  btn.style.display = checked > 0 ? '' : 'none';
+  document.getElementById('bulk-outbound-sign-count').textContent = checked;
+}
+
+function openBulkOutboundSign() {
+  const ids = [...document.querySelectorAll('.outbound-check:checked')].map(cb => parseInt(cb.value));
+  if (!ids.length) return;
+  _openSignModal('outbound', ids[0], ids);
+}
+
+async function saveSignAndGenPdf() {
+  if (isCanvasBlank('handover')) {
+    showToast('인계자 서명을 입력하세요.', 'warning'); return;
+  }
+  if (isCanvasBlank('receiver')) {
+    showToast('인수자 서명을 입력하세요.', 'warning'); return;
+  }
+  const type    = document.getElementById('sign-type').value;
+  const id      = document.getElementById('sign-id').value;
+  const bulkRaw = document.getElementById('sign-bulk-ids').value;
+  const ids     = bulkRaw ? bulkRaw.split(',').map(Number) : [parseInt(id)];
+  const body    = _collectSignBody();
+  bootstrap.Modal.getInstance(document.getElementById('signModal')).hide();
+  showToast(`PDF 생성 중... (${ids.length}건)`, 'info');
+  let ok = 0, fail = 0;
+  for (const rid of ids) {
+    try {
+      if (Object.keys(body).length > 0)
+        await apiPost(API_BASE + `/materials/${type}/${rid}/sign/`, body);
+      await apiPost(API_BASE + `/materials/${type}/${rid}/generate_pdf/`, {});
+      ok++;
+    } catch(e) {
+      fail++;
+      console.error(`PDF 생성 실패 (id=${rid}):`, e);
+    }
+  }
+  if (fail === 0) {
+    showToast(`${ok}건 PDF 생성 완료 — NAS에 저장됨. 목록의 다운로드(↓) 버튼으로 저장하세요.`, 'success');
+  } else {
+    showToast(`완료 ${ok}건 / 실패 ${fail}건 (콘솔 확인)`, fail === ids.length ? 'error' : 'warning');
+  }
+  if (type === 'inbound') loadInboundHistory();
+  else loadOutboundHistory();
+}
+
+// ── 입고 수정 ─────────────────────────────────────────
+function openInboundEdit(i) {
+  document.getElementById('ie-id').value            = i.id;
+  document.getElementById('ie-number').value        = i.inbound_number || '';
+  document.getElementById('ie-material-name').value = i.material_name  || '';
+  document.getElementById('ie-qty').value           = i.quantity;
+  document.getElementById('ie-date').value          = i.inbound_date   || '';
+  document.getElementById('ie-supplier').value      = i.supplier       || '';
+  document.getElementById('ie-handover').value      = i.handover_person || '';
+  document.getElementById('ie-receiver').value      = i.receiver_person || '';
+  document.getElementById('ie-note').value          = i.note           || '';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('inboundEditModal')).show();
+}
+
+async function submitInboundEdit() {
+  const id  = document.getElementById('ie-id').value;
+  const qty = parseInt(document.getElementById('ie-qty').value);
+  if (!qty || qty < 1) { showToast('수량을 1 이상 입력하세요', 'warning'); return; }
+  try {
+    await apiPatch(API_BASE + '/materials/inbound/' + id + '/', {
+      quantity:        qty,
+      inbound_date:    document.getElementById('ie-date').value,
+      supplier:        document.getElementById('ie-supplier').value,
+      handover_person: document.getElementById('ie-handover').value,
+      receiver_person: document.getElementById('ie-receiver').value,
+      note:            document.getElementById('ie-note').value,
+    });
+    bootstrap.Modal.getInstance(document.getElementById('inboundEditModal')).hide();
+    showToast('입고 수정 완료 (창고 재고 자동 조정)', 'success');
+    loadInboundHistory();
+    loadWarehouse();
+  } catch(e) { showToast('수정 실패', 'error'); }
+}
+
+async function deleteInbound() {
+  const id  = document.getElementById('ie-id').value;
+  const num = document.getElementById('ie-number').value;
+  if (!id) return;
+  if (!confirm(`입고 이력 "${num}"을(를) 삭제하겠습니까?\n창고 재고가 자동으로 차감됩니다.`)) return;
+  try {
+    await apiDelete(API_BASE + '/materials/inbound/' + id + '/');
+    bootstrap.Modal.getInstance(document.getElementById('inboundEditModal')).hide();
+    showToast('입고 삭제 완료 (창고 재고 자동 차감)', 'success');
+    loadInboundHistory(); loadWarehouse();
+  } catch(e) { showToast('삭제 실패: ' + (e.message || JSON.stringify(e)), 'error'); }
+}
+
+// ── 출고 수정 ─────────────────────────────────────────
+function openOutboundEdit(i) {
+  document.getElementById('oe-id').value            = i.id;
+  document.getElementById('oe-number').value        = i.outbound_number || '';
+  document.getElementById('oe-material-name').value = i.material_name   || '';
+  document.getElementById('oe-qty').value           = i.quantity;
+  document.getElementById('oe-date').value          = i.outbound_date   || '';
+  document.getElementById('oe-handover').value      = i.handover_person || '';
+  document.getElementById('oe-receiver').value      = i.receiver_person || '';
+  document.getElementById('oe-note').value          = i.note            || '';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('outboundEditModal')).show();
+}
+
+async function submitOutboundEdit() {
+  const id  = document.getElementById('oe-id').value;
+  const qty = parseInt(document.getElementById('oe-qty').value);
+  if (!qty || qty < 1) { showToast('수량을 1 이상 입력하세요', 'warning'); return; }
+  try {
+    await apiPatch(API_BASE + '/materials/outbound/' + id + '/', {
+      quantity:        qty,
+      outbound_date:   document.getElementById('oe-date').value,
+      handover_person: document.getElementById('oe-handover').value,
+      receiver_person: document.getElementById('oe-receiver').value,
+      note:            document.getElementById('oe-note').value,
+    });
+    bootstrap.Modal.getInstance(document.getElementById('outboundEditModal')).hide();
+    showToast('출고 수정 완료 (창고·센터 재고 자동 조정)', 'success');
+    loadOutboundHistory();
+    loadWarehouse();
+    loadCenterInventory();
+  } catch(e) { showToast('수정 실패: ' + (e.message || e), 'error'); }
+}
+
+async function deleteOutbound() {
+  const id  = document.getElementById('oe-id').value;
+  const num = document.getElementById('oe-number').value;
+  if (!id) return;
+  if (!confirm(`출고 이력 "${num}"을(를) 삭제하겠습니까?\n창고 재고가 복구되고 센터 재고가 차감됩니다.`)) return;
+  try {
+    await apiDelete(API_BASE + '/materials/outbound/' + id + '/');
+    bootstrap.Modal.getInstance(document.getElementById('outboundEditModal')).hide();
+    showToast('출고 삭제 완료 (재고 자동 조정)', 'success');
+    loadOutboundHistory(); loadWarehouse(); loadCenterInventory();
+  } catch(e) { showToast('삭제 실패: ' + (e.message || JSON.stringify(e)), 'error'); }
+}
+
+// ── 입고 등록 ─────────────────────────────────────────
+async function openInboundModal() {
+  await initPersonnelCache();
+  loadMaterials();
+  // 필드 초기화
+  ['ib-handover','ib-handover-phone','ib-receiver','ib-receiver-phone','ib-supplier','ib-note'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('ib-qty').value = 1;
+  document.getElementById('ib-unit-price').value = 0;
+  document.getElementById('ib-type-normal').checked = true;
+  // 센터 드롭다운 채우기
+  const centerSel = document.getElementById('ib-from-center');
+  if (centerSel && _centersMat.length) {
+    centerSel.innerHTML = '<option value="">-- 센터 선택 --</option>' +
+      _centersMat.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  }
+  document.getElementById('ib-receiver-sel').innerHTML =
+    '<option value="">-- 선택 --</option>' +
+    buildMatPersonOptions(_warehouseStaffMat).replace('<option value="">선택...</option>','');
+  onIbTypeChange();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('inboundModal')).show();
+}
+
+function onIbTypeChange() {
+  const isReturn = document.getElementById('ib-type-return')?.checked;
+  document.getElementById('ib-center-wrap').style.display   = isReturn ? '' : 'none';
+  document.getElementById('ib-supplier-wrap').style.display = isReturn ? 'none' : '';
+  document.getElementById('ib-handover-label').textContent  = isReturn ? '인계자 (센터)' : '인계자 (납품)';
+  const alertEl = document.getElementById('ib-alert');
+  if (alertEl) alertEl.innerHTML = isReturn
+    ? '<i class="bi bi-info-circle me-1"></i>반납 입고 등록 시 해당 센터 재고 감소 + 창고 재고 자동 증가됩니다.'
+    : '<i class="bi bi-info-circle me-1"></i>입고 등록 시 창고 재고가 자동 증가됩니다.';
+}
+
+async function submitInbound() {
+  const mat      = document.getElementById('ib-material').value;
+  const qty      = document.getElementById('ib-qty').value;
+  const isReturn = document.getElementById('ib-type-return')?.checked;
+  const center   = document.getElementById('ib-from-center').value;
+  if (!mat || !qty) { showToast('품목과 수량을 입력하세요', 'warning'); return; }
+  if (isReturn && !center) { showToast('반납 센터를 선택하세요', 'warning'); return; }
+  try {
+    await apiPost(API_BASE + '/materials/inbound/', {
+      material:        parseInt(mat),
+      quantity:        parseInt(qty),
+      unit_price:      parseInt(document.getElementById('ib-unit-price').value) || 0,
+      inbound_type:    isReturn ? 'return' : 'normal',
+      from_center:     isReturn ? (parseInt(center) || null) : null,
+      supplier:        document.getElementById('ib-supplier').value        || '',
+      inbound_date:    document.getElementById('ib-date').value,
+      handover_person: document.getElementById('ib-handover').value        || '',
+      handover_phone:  document.getElementById('ib-handover-phone').value  || '',
+      receiver_person: document.getElementById('ib-receiver').value        || '',
+      receiver_phone:  document.getElementById('ib-receiver-phone').value  || '',
+      note:            document.getElementById('ib-note').value            || '',
+    });
+    bootstrap.Modal.getInstance(document.getElementById('inboundModal')).hide();
+    showToast(isReturn ? '반납 입고 완료 — 해당 센터 재고 감소 + 창고 재고 증가' : '입고 등록 완료 — 창고 재고 자동 증가', 'success');
+    loadWarehouse(); loadInboundHistory();
+  } catch(e) { showToast('등록 실패', 'error'); }
+}
+
+// ── 출고 등록 ─────────────────────────────────────────
+async function openOutboundModal() {
+  await initPersonnelCache();
+  document.getElementById('ob-handover').value = '';
+  document.getElementById('ob-handover-phone').value = '';
+  document.getElementById('ob-receiver').value = '';
+  document.getElementById('ob-receiver-phone').value = '';
+  const blank = '<option value="">-- 선택 또는 직접 입력 --</option>';
+  document.getElementById('ob-handover-sel').innerHTML = blank + buildMatPersonOptions(_warehouseStaffMat).replace('<option value="">선택...</option>','');
+  document.getElementById('ob-receiver-sel').innerHTML = blank;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('outboundModal')).show();
+}
+
+async function submitOutbound() {
+  const mat    = document.getElementById('ob-material').value;
+  const qty    = document.getElementById('ob-qty').value;
+  const center = document.getElementById('ob-center').value;
+  if (!mat || !qty || !center) { showToast('품목·수량·지원청을 모두 선택하세요', 'warning'); return; }
+  try {
+    await apiPost(API_BASE + '/materials/outbound/', {
+      material:        parseInt(mat),
+      quantity:        parseInt(qty),
+      to_center:       parseInt(center),
+      outbound_date:   document.getElementById('ob-date').value,
+      handover_person: document.getElementById('ob-handover').value || '',
+      handover_phone:  document.getElementById('ob-handover-phone').value || '',
+      receiver_person: document.getElementById('ob-receiver').value || '',
+      receiver_phone:  document.getElementById('ob-receiver-phone').value || '',
+      note:            document.getElementById('ob-note').value,
+    });
+    bootstrap.Modal.getInstance(document.getElementById('outboundModal')).hide();
+    showToast('출고 등록 완료 — 해당 지원청 재고가 자동 증가됩니다', 'success');
+    loadWarehouse(); loadOutboundHistory(); loadCenterInventory();
+  } catch(e) { showToast('등록 실패', 'error'); }
+}
+
+// ── 입고 일괄 등록 ────────────────────────────────────
+function downloadInboundTemplate() {
+  window.location.href = API_BASE + '/materials/inbound/csv_template/';
+}
+
+async function submitBulkInbound() {
+  const fileEl = document.getElementById('inbound-csv-file');
+  if (!fileEl.files.length) { showToast('CSV 파일을 선택해 주세요', 'warning'); return; }
+  const formData = new FormData();
+  formData.append('file', fileEl.files[0]);
+  const resultEl = document.getElementById('bulk-inbound-result');
+  resultEl.innerHTML = '<div class="text-muted small">업로드 중...</div>';
+  try {
+    const res  = await fetch(API_BASE + '/materials/inbound/bulk_import/', {
+      method: 'POST', headers: { 'X-CSRFToken': getCsrfToken() }, body: formData,
+    });
+    const data = await res.json();
+    if (res.ok) {
+      let html = `<div class="alert alert-success py-2 mb-1"><b>입고 완료</b> — ${data.created}건 등록</div>`;
+      if (data.errors?.length) {
+        html += `<div class="alert alert-warning py-2"><b>오류 행:</b><ul class="mb-0 mt-1">` +
+          data.errors.map(e => `<li class="small">${e}</li>`).join('') + '</ul></div>';
+      }
+      resultEl.innerHTML = html;
+      loadInboundHistory(); loadWarehouse();
+    } else {
+      resultEl.innerHTML = `<div class="alert alert-danger py-2">${data.error || JSON.stringify(data)}</div>`;
+    }
+  } catch(e) { showToast('업로드 실패', 'error'); resultEl.innerHTML = ''; }
+}
+
+// ── 출고 일괄 등록 ────────────────────────────────────
+function downloadOutboundTemplate() {
+  window.location.href = API_BASE + '/materials/outbound/csv_template/';
+}
+
+async function submitBulkOutbound() {
+  const fileEl = document.getElementById('outbound-csv-file');
+  if (!fileEl.files.length) { showToast('CSV 파일을 선택해 주세요', 'warning'); return; }
+  const formData = new FormData();
+  formData.append('file', fileEl.files[0]);
+  const resultEl = document.getElementById('bulk-outbound-result');
+  resultEl.innerHTML = '<div class="text-muted small">업로드 중...</div>';
+  try {
+    const res  = await fetch(API_BASE + '/materials/outbound/bulk_import/', {
+      method: 'POST', headers: { 'X-CSRFToken': getCsrfToken() }, body: formData,
+    });
+    const data = await res.json();
+    if (res.ok) {
+      let html = `<div class="alert alert-success py-2 mb-1"><b>출고 완료</b> — ${data.created}건 등록 (창고 재고 자동 감소 · 지원청 재고 자동 증가)</div>`;
+      if (data.errors?.length) {
+        html += `<div class="alert alert-warning py-2"><b>오류 행:</b><ul class="mb-0 mt-1">` +
+          data.errors.map(e => `<li class="small">${e}</li>`).join('') + '</ul></div>';
+      }
+      resultEl.innerHTML = html;
+      loadOutboundHistory(); loadWarehouse(); loadCenterInventory();
+    } else {
+      resultEl.innerHTML = `<div class="alert alert-danger py-2">${data.error || JSON.stringify(data)}</div>`;
+    }
+  } catch(e) { showToast('업로드 실패', 'error'); resultEl.innerHTML = ''; }
+}
+
+async function loadCenterSelect() {
+  try {
+    const data  = await apiGet(API_BASE + '/schools/centers/', { page_size: 50 });
+    const items = data.results || data;
+    const sel   = document.getElementById('ob-center');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">지원청 선택...</option>' +
+      items.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  } catch(e) {}
+}
+
+async function loadOutboundCenterFilter() {
+  try {
+    const sel = document.getElementById('ob-center-filter');
+    if (!sel || sel.options.length > 1) return; // 이미 로드됨
+    const data  = await apiGet(API_BASE + '/schools/centers/', { page_size: 50 });
+    const items = data.results || data;
+    sel.innerHTML = '<option value="">전체 출고대상</option>' +
+      items.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  } catch(e) {}
+}
+
+// ── Excel 다운로드 ────────────────────────────────────
+const EXCEL_TAB_NAMES = {
+  'stats':'자재통계',
+  'items':'자재품목', 'warehouse':'창고재고', 'inbound':'입고이력',
+  'outbound':'출고이력', 'center':'센터별재고', 'low':'부족알림',
+  'admin-cinbound':'센터별입고이력', 'admin-creturn':'센터별반납이력', 'admin-coutbound':'센터별출고이력',
+  'my-inbound':'창고입고이력', 'center-out':'센터출고', 'center-return':'반납입고이력'
+};
+
+// 탭별 행 데이터 반환 헬퍼
+async function getTabRows(tab) {
+  if (tab === 'stats') {
+    if (!_statsData) return [];
+    const { rows: sr, centerIds, centerNames } = _statsData;
+    return sr.map(r => {
+      const obj = { '자재코드': r.code, '분류': r.category, '품목명': r.name };
+      centerNames.forEach((name, idx) => { obj[name] = r.centerQtys[centerIds[idx]] ?? 0; });
+      obj['중앙(창고)'] = r.warehouseQty;
+      return obj;
+    });
+
+  } else if (tab === 'items') {
+    const d = await apiGet(API_BASE + '/materials/items/', { no_page: 1 });
+    return (d.results || d).map(i => ({
+      '자재코드': i.code || '', '분류': i.category_name || '', '품목명': i.name || '',
+      '규격': i.spec || '', '단위': i.unit || '',
+      '최소재고': i.min_stock ?? 0, '창고재고': i.warehouse_qty ?? 0,
+    }));
+
+  } else if (tab === 'warehouse') {
+    const d = await apiGet(API_BASE + '/materials/warehouse/', { no_page: 1 });
+    return (d.results || d).map(i => ({
+      '자재코드': i.material_code || '', '분류': i.category_name || '', '품목명': i.material_name || '',
+      '규격': i.material_spec || '', '단위': i.unit || '',
+      '재고': i.quantity ?? 0, '최소수량': i.min_stock ?? 0,
+      '상태': i.is_low ? '부족' : '정상',
+    }));
+
+  } else if (tab === 'inbound') {
+    const d = await apiGet(API_BASE + '/materials/inbound/', { no_page: 1 });
+    return (d.results || d).map(i => ({
+      '입고번호': i.inbound_number || '', '자재코드': i.material_code || '',
+      '분류': i.category_name || '', '품목명': i.material_name || '',
+      '규격': i.material_spec || '', '단위': i.material_unit || '', '수량': i.quantity ?? 0,
+      '공급업체': i.supplier || '',
+      '인계자': i.handover_person || '', '인계자연락처': i.handover_phone || '',
+      '인수자': i.receiver_person || '', '인수자연락처': i.receiver_phone || '',
+      '입고일': i.inbound_date || '', '등록자': i.received_by_name || '',
+    }));
+
+  } else if (tab === 'outbound') {
+    const d = await apiGet(API_BASE + '/materials/outbound/', { no_page: 1 });
+    return (d.results || d).map(i => ({
+      '출고번호': i.outbound_number || '', '자재코드': i.material_code || '',
+      '분류': i.category_name || '', '품목명': i.material_name || '',
+      '규격': i.material_spec || '', '단위': i.material_unit || '', '수량': i.quantity ?? 0,
+      '출고대상': i.to_center_name || i.to_worker_name || '',
+      '인계자': i.handover_person || '', '인계자연락처': i.handover_phone || '',
+      '인수자': i.receiver_person || '', '인수자연락처': i.receiver_phone || '',
+      '출고일': i.outbound_date || '', '담당자': i.issued_by_name || '',
+    }));
+
+  } else if (tab === 'center') {
+    const d = await apiGet(API_BASE + '/materials/center/', { no_page: 1 });
+    return (d.results || d).map(i => ({
+      '지원청': i.center_name || '', '자재코드': i.material_code || '',
+      '분류': i.category_name || '', '품목명': i.material_name || '',
+      '규격': i.material_spec || '', '단위': i.unit || '',
+      '재고': i.quantity ?? 0,
+      '갱신일시': i.updated_at ? i.updated_at.substring(0,16).replace('T',' ') : '',
+    }));
+
+  } else if (tab === 'low') {
+    const d = await apiGet(API_BASE + '/materials/warehouse/low_stock/', { no_page: 1 });
+    return (d.results || d).map(i => ({
+      '자재코드': i.material_code || '', '분류': i.category_name || '',
+      '품목명': i.material_name || '', '규격': i.material_spec || '',
+      '단위': i.unit || '', '재고': i.quantity ?? 0,
+      '최소수량': i.min_stock ?? 0, '상태': '부족',
+    }));
+
+  } else if (tab === 'my-inbound') {
+    const d = await apiGet(API_BASE + '/materials/outbound/', { no_page: 1, from_warehouse: 'true' });
+    return (d.results || d).map(i => ({
+      '출고번호': i.outbound_number || '', '자재코드': i.material_code || '',
+      '분류': i.category_name || '', '품목명': i.material_name || '',
+      '규격': i.material_spec || '', '수량': i.quantity ?? 0,
+      '인계자': i.handover_person || '', '인수자': i.receiver_person || '',
+      '입고일': i.outbound_date || '', '출고담당자': i.issued_by_name || '',
+    }));
+
+  } else if (tab === 'center-out') {
+    const d = await apiGet(API_BASE + '/materials/outbound/', { no_page: 1, from_warehouse: 'false' });
+    return (d.results || d).map(i => ({
+      '출고번호': i.outbound_number || '', '자재코드': i.material_code || '',
+      '분류': i.category_name || '', '품목명': i.material_name || '',
+      '규격': i.material_spec || '', '수량': i.quantity ?? 0,
+      '출고학교': i.to_school || '',
+      '인계자': i.handover_person || '', '인수자': i.receiver_person || '',
+      '출고일': i.outbound_date || '',
+    }));
+
+  } else if (tab === 'center-return') {
+    const d = await apiGet(API_BASE + '/materials/returns/', { no_page: 1 });
+    return (d.results || d).map(i => ({
+      '반납번호': i.return_number || '', '자재코드': i.material_code || '',
+      '분류': i.category_name || '', '품목명': i.material_name || '',
+      '수량': i.quantity ?? 0, '반납출처(학교)': i.from_school || '',
+      '인계자': i.handover_person || '', '인수자': i.receiver_person || '',
+      '반납일': i.return_date || '',
+    }));
+
+  } else if (tab === 'admin-cinbound') {
+    const d = await apiGet(API_BASE + '/materials/outbound/', { no_page: 1, from_warehouse: 'true' });
+    return (d.results || d).map(i => ({
+      '출고번호': i.outbound_number || '', '수령지원청': i.to_center_name || '',
+      '자재코드': i.material_code || '', '분류': i.category_name || '',
+      '품목명': i.material_name || '', '규격': i.material_spec || '',
+      '단위': i.material_unit || '', '수량': i.quantity ?? 0,
+      '인계자': i.handover_person || '', '인수자': i.receiver_person || '',
+      '출고일': i.outbound_date || '',
+    }));
+
+  } else if (tab === 'admin-creturn') {
+    const d = await apiGet(API_BASE + '/materials/returns/', { no_page: 1 });
+    return (d.results || d).map(i => ({
+      '반납번호': i.return_number || '', '반납센터': i.center_name || '',
+      '자재코드': i.material_code || '', '분류': i.category_name || '',
+      '품목명': i.material_name || '', '규격': i.material_spec || '',
+      '단위': i.material_unit || '', '수량': i.quantity ?? 0,
+      '반납출처(학교)': i.from_school || '', '인계자': i.handover_person || '',
+      '인수자': i.receiver_person || '', '반납일': i.return_date || '',
+    }));
+
+  } else if (tab === 'admin-coutbound') {
+    const d = await apiGet(API_BASE + '/materials/outbound/', { no_page: 1, from_warehouse: 'false' });
+    return (d.results || d).map(i => ({
+      '출고번호': i.outbound_number || '', '출고지원청': i.issued_by_center_name || '',
+      '자재코드': i.material_code || '', '분류': i.category_name || '',
+      '품목명': i.material_name || '', '규격': i.material_spec || '',
+      '단위': i.material_unit || '', '수량': i.quantity ?? 0,
+      '출고대상(학교)': i.to_school || '', '인계자': i.handover_person || '',
+      '인수자': i.receiver_person || '', '출고일': i.outbound_date || '',
+    }));
+  }
+  return [];
+}
+
+function makeSheet(rows) {
+  if (!rows.length) return null;
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = Object.keys(rows[0]).map(k => ({
+    wch: Math.max(k.length * 2, ...rows.map(r => String(r[k] ?? '').length)) + 2
+  }));
+  return ws;
+}
+
+// 단일 탭 다운로드
+async function downloadExcel(tab) {
+  const today    = todayKST();
+  const tabName  = EXCEL_TAB_NAMES[tab] || tab;
+  showToast('Excel 파일 생성 중...', 'info');
+  try {
+    const rows = await getTabRows(tab);
+    if (!rows.length) { showToast('다운로드할 데이터가 없습니다', 'warning'); return; }
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, makeSheet(rows), tabName);
+    XLSX.writeFile(wb, `${tabName}_${today}.xlsx`);
+    showToast(`${tabName}_${today}.xlsx 다운로드 완료`, 'success');
+  } catch(e) { showToast('다운로드 실패: ' + (e.message || e), 'error'); }
+}
+
+// 전체 탭 다운로드 (통계탭 버튼)
+async function downloadAllExcel() {
+  const today = todayKST();
+  const fileName = `자재관리_전체_${today}.xlsx`;
+
+  // 관리자/슈퍼관리자용 탭 목록
+  const adminTabs = [
+    'stats','items','warehouse','inbound','outbound','center','low',
+    'admin-cinbound','admin-creturn','admin-coutbound'
+  ];
+  const residentTabs = ['my-inbound','center-out','center-return'];
+  const tabs = IS_ADMIN ? adminTabs : residentTabs;
+
+  showToast('전체 데이터 수집 중... 잠시 기다려 주세요', 'info');
+  try {
+    // 통계 데이터가 없으면 먼저 로드
+    if (IS_ADMIN && !_statsData) await loadStats();
+
+    // 병렬 fetch (stats는 이미 캐시됨)
+    const allRows = await Promise.all(tabs.map(t => getTabRows(t).catch(() => [])));
+
+    const wb = XLSX.utils.book_new();
+    let sheetCount = 0;
+    tabs.forEach((t, idx) => {
+      const rows = allRows[idx];
+      if (!rows.length) return;
+      const ws = makeSheet(rows);
+      if (ws) {
+        XLSX.utils.book_append_sheet(wb, ws, EXCEL_TAB_NAMES[t] || t);
+        sheetCount++;
+      }
+    });
+
+    if (!sheetCount) { showToast('다운로드할 데이터가 없습니다', 'warning'); return; }
+    XLSX.writeFile(wb, fileName);
+    showToast(`${fileName} (${sheetCount}개 시트) 다운로드 완료`, 'success');
+  } catch(e) { showToast('다운로드 실패: ' + (e.message || e), 'error'); }
+}
+
+// ── 페이지 초기화 ─────────────────────────────────────
+const today = todayKST();
+document.getElementById('ib-date').value = today;
+document.getElementById('ob-date').value = today;
+const coDate = document.getElementById('co-date');
+if (coDate) coDate.value = today;
+
+if (IS_ADMIN) {
+  // 통계 탭이 기본 표시 상태로 렌더됨 — 데이터만 로드
+  loadStats();
+  loadCategoryFilter();
+  loadCenterFilter();
+  // KPI
+  (async () => {
+    try {
+      const [inData, outData, lowData] = await Promise.all([
+        apiGet(API_BASE + '/materials/inbound/',  { page_size: 200 }),
+        apiGet(API_BASE + '/materials/outbound/', { page_size: 200 }),
+        apiGet(API_BASE + '/materials/warehouse/low_stock/', { page_size: 1 }),
+      ]);
+      const ins  = (inData.results  || inData).filter(i => i.inbound_date  === today);
+      const outs = (outData.results || outData).filter(i => i.outbound_date === today);
+      document.getElementById('kpi-in').textContent  = ins.length;
+      document.getElementById('kpi-out').textContent = outs.length;
+      document.getElementById('kpi-low').textContent = lowData.count ?? (lowData.results || lowData).length;
+    } catch(e) {}
+  })();
+} else {
+  // resident: 센터 재고 탭이 기본 표시 상태로 렌더됨
+  loadCenterInventory();
+}
+</script>
+{% endblock %}

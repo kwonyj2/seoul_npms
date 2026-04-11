@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page {
+    size: A4;
+    margin: 15mm 12mm 15mm 12mm;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: NanumGothic, '나눔고딕', sans-serif;
+    font-size: 9.5pt;
+    color: #000;
+  }
+
+  /* 메인 테이블 */
+  .main-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1.5px solid #000;
+  }
+  .main-table th,
+  .main-table td {
+    border: 1px solid #555;
+    padding: 5px 8px;
+    vertical-align: middle;
+  }
+
+  /* 제목 행 */
+  .title-row td {
+    text-align: center;
+    font-size: 16pt;
+    font-weight: bold;
+    letter-spacing: 6px;
+    padding: 10px 0;
+    border-bottom: 1.5px solid #000;
+  }
+
+  /* 항목명 셀 */
+  .label {
+    background: #f5f5f5;
+    font-weight: bold;
+    white-space: nowrap;
+    width: 13%;
+    text-align: center;
+  }
+
+  /* 값 셀 */
+  .value {
+    width: 22%;
+  }
+
+  /* 전체 너비 값 셀 */
+  .value-full {
+    min-height: 30px;
+  }
+
+  /* 조치방법 체크박스 행 */
+  .method-cell {
+    letter-spacing: 0;
+  }
+  .chk { margin-right: 6px; font-size: 11pt; }
+  .chk-item { display: inline-block; margin-right: 20px; }
+
+  /* 장애분류 헤더 행 */
+  .category-header td {
+    background: #f5f5f5;
+    font-weight: bold;
+    text-align: center;
+  }
+
+  /* 장애분류 소분류 셀 */
+  .sub-cell {
+    font-size: 9pt;
+    line-height: 1.9;
+    padding: 4px 10px;
+  }
+  .sub-item { display: inline-block; width: 32%; }
+
+  /* 결과 행 */
+  .result-row td { font-weight: bold; }
+</style>
+</head>
+<body>
+
+<table class="main-table">
+
+  <!-- 제목 -->
+  <tr class="title-row">
+    <td colspan="4">장 애 처 리 보 고 서</td>
+  </tr>
+
+  <!-- 학교명 / 교육지원청 -->
+  <tr>
+    <td class="label">학교명</td>
+    <td class="value">{{ incident.school.name }}</td>
+    <td class="label">교육지원청</td>
+    <td class="value">{{ incident.school.support_center.name }}</td>
+  </tr>
+
+  <!-- 접수번호 / 접수자 -->
+  <tr>
+    <td class="label">접수번호</td>
+    <td class="value">{{ incident.incident_number }}</td>
+    <td class="label">접수자</td>
+    <td class="value">
+      {% if incident.received_by %}
+        ({{ incident.received_by.get_role_display }}){{ incident.received_by.name }}
+      {% else %}-{% endif %}
+    </td>
+  </tr>
+
+  <!-- 접수시간 / 현장 도착시간 -->
+  <tr>
+    <td class="label">접수시간</td>
+    <td class="value">{{ incident.received_at|date:"Y-m-d H:i:s" }}</td>
+    <td class="label">현장 도착시간</td>
+    <td class="value">{{ incident.arrived_at|date:"Y-m-d H:i:s"|default:'' }}</td>
+  </tr>
+
+  <!-- 처리완료시간 / 처리소요시간 -->
+  <tr>
+    <td class="label">처리완료시간</td>
+    <td class="value">{{ incident.completed_at|date:"Y-m-d H:i:s"|default:'' }}</td>
+    <td class="label">처리소요시간</td>
+    <td class="value">{{ elapsed_display }}</td>
+  </tr>
+
+  <!-- 요청자 / 처리자 -->
+  <tr>
+    <td class="label">요청자</td>
+    <td class="value">{{ incident.requester_name }}</td>
+    <td class="label">처리자</td>
+    <td class="value">
+      {% if first_assignment %}
+        ({{ first_assignment.worker.get_role_display }}){{ first_assignment.worker.name }}
+      {% else %}-{% endif %}
+    </td>
+  </tr>
+
+  <!-- 요청내용 -->
+  <tr>
+    <td class="label">요청내용</td>
+    <td colspan="3" class="value-full" style="min-height:36px;">{{ incident.description }}</td>
+  </tr>
+
+  <!-- 원인 -->
+  <tr>
+    <td class="label">원인</td>
+    <td colspan="3" class="value-full" style="min-height:36px;">{{ incident.description }}</td>
+  </tr>
+
+  <!-- 조치내용 -->
+  <tr>
+    <td class="label">조치내용</td>
+    <td colspan="3" class="value-full" style="min-height:50px;">{{ incident.resolution|default:'' }}</td>
+  </tr>
+
+  <!-- 조치방법 -->
+  <tr>
+    <td class="label">조치방법</td>
+    <td colspan="3" class="method-cell">
+      <span class="chk-item">
+        <span class="chk">{% if incident.contact_method == 'phone' %}☑{% else %}☐{% endif %}</span>전화상담
+      </span>
+      <span class="chk-item">
+        <span class="chk">{% if incident.contact_method == 'visit' %}☑{% else %}☐{% endif %}</span>현장방문
+      </span>
+      <span class="chk-item">
+        <span class="chk">{% if incident.contact_method == 'system' or incident.contact_method == 'auto' %}☑{% else %}☐{% endif %}</span>원격기술지원
+      </span>
+      <span class="chk-item">
+        <span class="chk">☐</span>이관
+      </span>
+    </td>
+  </tr>
+
+  <!-- 장애분류 헤더 -->
+  <tr class="category-header">
+    <td colspan="2" style="width:50%;">장 애 분 류</td>
+    <td colspan="2">장 애 유 형</td>
+  </tr>
+
+  <!-- 장애분류 각 대분류별 행 -->
+  {% for cat in all_categories %}
+  <tr>
+    <td class="label" colspan="1">{{ cat.name }}</td>
+    <td colspan="3" class="sub-cell">
+      {% for sub in cat.subcategories.all %}
+      <span class="sub-item">
+        {% if incident.subcategory and incident.subcategory.id == sub.id %}☑{% else %}☐{% endif %}&nbsp;{{ sub.name }}
+      </span>
+      {% endfor %}
+    </td>
+  </tr>
+  {% endfor %}
+
+  <!-- 결과 -->
+  <tr class="result-row">
+    <td class="label">결과</td>
+    <td colspan="3">{{ incident.get_status_display }}</td>
+  </tr>
+
+</table>
+
+</body>
+</html>

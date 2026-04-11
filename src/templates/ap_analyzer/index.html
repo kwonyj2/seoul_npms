@@ -1,0 +1,891 @@
+{% extends 'base.html' %}
+{% block title %}AP 신호 측정{% endblock %}
+
+{% block extra_css %}
+<style>
+body.npms-body { background:#0a0e1a; }
+.ap-wrap { color:#e6edf3; }
+.info-bar { background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:7px 12px; margin-bottom:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.info-bar label { font-size:.63rem; color:#6e7681; display:block; margin-bottom:1px; }
+.iinp { background:#161b22; border:1px solid #30363d; color:#e6edf3; border-radius:4px; padding:3px 7px; font-size:.74rem; outline:none; }
+.iinp:focus { border-color:#58a6ff; }
+.main-tabs { display:flex; border-bottom:2px solid #21262d; margin-bottom:12px; gap:2px; flex-wrap:wrap; }
+.mtab { padding:7px 14px; font-size:.78rem; font-weight:700; color:#6e7681; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; border-radius:4px 4px 0 0; transition:all .15s; white-space:nowrap; }
+.mtab:hover { color:#c9d1d9; background:#161b22; }
+.mtab.active { color:#58a6ff; border-bottom-color:#58a6ff; background:#0d1117; }
+.dk-card { background:#0d1117; border:1px solid #21262d; border-radius:10px; overflow:hidden; margin-bottom:10px; }
+.dk-card-hdr { background:#161b22; border-bottom:1px solid #21262d; padding:7px 12px; display:flex; align-items:center; justify-content:space-between; }
+.dk-card-title { color:#58a6ff; font-weight:700; font-size:.82rem; }
+.ap-sel-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.ap-sel-row label { font-size:.72rem; color:#6e7681; white-space:nowrap; }
+.ap-sel-row select { background:#161b22; border:1px solid #30363d; color:#e6edf3; border-radius:6px; padding:4px 10px; font-size:.78rem; outline:none; flex:1; max-width:320px; }
+.mini-gauge-row { display:flex; align-items:center; gap:12px; padding:8px 14px; border-bottom:1px solid #21262d; }
+.mini-dbm { font-size:1.5rem; font-weight:700; font-family:monospace; }
+.mini-qual { font-size:.78rem; font-weight:600; margin-top:1px; }
+.mini-bars { display:flex; gap:2px; align-items:flex-end; height:14px; margin-top:4px; }
+.mini-bar { width:5px; border-radius:1px; }
+.wl-ssid-hero { font-size:1.1rem; font-weight:700; color:#e6edf3; padding:8px 14px 3px; }
+.wl-bssid-sub { font-size:.7rem; color:#6e7681; font-family:monospace; padding:0 14px 8px; border-bottom:1px solid #21262d; }
+.wl-grid { display:grid; grid-template-columns:1fr 1fr; }
+.wl-row { display:flex; justify-content:space-between; padding:5px 14px; border-bottom:1px solid #0a0e1a; font-size:.76rem; }
+.wl-row:nth-child(even) { background:#060b12; }
+.wl-key { color:#8b949e; white-space:nowrap; min-width:72px; }
+.wl-val { color:#e6edf3; font-weight:600; text-align:right; }
+.wl-section { background:#161b22; border-top:1px solid #21262d; border-bottom:1px solid #21262d; padding:5px 14px 3px; font-size:.68rem; font-weight:700; color:#6e7681; letter-spacing:1px; text-transform:uppercase; }
+.net-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; padding:10px 14px; }
+.net-field label { font-size:.63rem; color:#6e7681; display:block; margin-bottom:2px; }
+.net-field input { width:100%; background:#161b22; border:1px solid #30363d; color:#e6edf3; border-radius:4px; padding:3px 7px; font-size:.73rem; outline:none; font-family:monospace; box-sizing:border-box; }
+.net-field input:focus { border-color:#58a6ff; }
+.filter-bar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+.fbtn { padding:3px 11px; border-radius:20px; font-size:.74rem; font-weight:600; border:1px solid #30363d; background:#161b22; color:#8b949e; cursor:pointer; }
+.fbtn.band-on { background:#1f6feb; border-color:#1f6feb; color:#fff; }
+.fbtn.slot-on { background:#1a4731; border-color:#2ea043; color:#3fb950; }
+.slot-tabs { display:flex; border-bottom:1px solid #21262d; }
+.stab { flex:1; padding:5px 0; text-align:center; font-size:.74rem; font-weight:600; color:#6e7681; cursor:pointer; border-bottom:2px solid transparent; }
+.stab.active { color:#58a6ff; border-bottom-color:#58a6ff; background:#0d1117; }
+.ap-tbl { width:100%; border-collapse:collapse; font-size:.72rem; }
+.ap-tbl th { background:#161b22; padding:3px 2px; font-size:.65rem; font-weight:600; color:#6e7681; border:1px solid #21262d; text-align:center; }
+.ap-tbl td { border:1px solid #21262d; padding:1px 2px; background:#0d1117; }
+.ap-tbl input,.ap-tbl select { width:100%; border:none; background:transparent; color:#e6edf3; font-size:.72rem; padding:2px 3px; outline:none; }
+.ap-tbl input::placeholder { color:#484f58; }
+.ap-tbl input:focus,.ap-tbl select:focus { background:#1f2937; border-radius:2px; }
+.ap-tbl select option { background:#1c2333; color:#e6edf3; }
+.cdot { display:inline-block; width:11px; height:11px; border-radius:50%; cursor:pointer; border:1px solid #484f58; }
+.bdel { background:none; border:none; color:#f85149; cursor:pointer; font-size:.85rem; padding:0 3px; }
+.wlan-list { display:flex; flex-direction:column; gap:4px; }
+.wlan-card { background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:7px 10px; display:flex; align-items:center; gap:9px; border-left:3px solid #333; cursor:pointer; }
+.wlan-card:hover { background:#161b22; }
+.arc-col { flex-shrink:0; width:44px; text-align:center; }
+.sig-bars { display:flex; gap:2px; align-items:flex-end; height:13px; margin-top:2px; justify-content:center; }
+.sig-bar { width:4px; border-radius:1px; }
+.wlan-info { flex:1; min-width:0; }
+.wlan-ssid { font-size:.85rem; font-weight:700; color:#e6edf3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wlan-loc { font-size:.63rem; color:#6e7681; }
+.wlan-tags { display:flex; gap:3px; flex-wrap:wrap; margin-top:3px; }
+.tag { font-size:.6rem; padding:1px 5px; border-radius:10px; font-weight:600; background:#161b22; border:1px solid #30363d; color:#8b949e; }
+.tag.ch { border-color:#1f6feb; color:#58a6ff; }
+.tag.band { border-color:#1a4731; color:#3fb950; }
+.tag.sec { border-color:#4d2e00; color:#d29922; }
+.tag.open { border-color:#4d1a1a; color:#f85149; }
+.dbm-col { flex-shrink:0; text-align:right; }
+.dbm-val { font-size:1rem; font-weight:700; font-family:monospace; }
+.dbm-unit { font-size:.58rem; color:#8b949e; }
+.dbm-qual { font-size:.62rem; font-weight:600; }
+.radar-wrap { background:#060d1a; border:1px solid #21262d; border-radius:10px; overflow:hidden; margin-bottom:10px; }
+.radar-bar { display:flex; align-items:center; justify-content:space-between; padding:7px 14px; background:#0d1117; border-bottom:1px solid #21262d; }
+.radar-title { color:#58a6ff; font-weight:700; font-size:.85rem; }
+.radar-sub { color:#6e7681; font-size:.7rem; }
+#radarCanvas { display:block; width:100%; height:240px; }
+#chBar { background:#060d1a; padding:3px 52px 5px 52px; display:flex; gap:1px; }
+.gauge-top { background:#161b22; border-bottom:1px solid #21262d; padding:7px 12px; display:flex; align-items:center; justify-content:space-between; }
+.gtitle { color:#58a6ff; font-weight:700; font-size:.82rem; }
+#speedoCanvas { display:block; width:100%; }
+.qual-display { text-align:center; padding:6px 0 10px; }
+.qual-dbm { font-size:1.8rem; font-weight:700; font-family:monospace; }
+.qual-text { font-size:.8rem; font-weight:600; margin-top:2px; }
+.qual-sub { font-size:.68rem; color:#6e7681; }
+.winfo-table { width:100%; border-collapse:collapse; font-size:.75rem; }
+.winfo-table tr { border-bottom:1px solid #0d1117; }
+.winfo-table td { padding:5px 12px; }
+.winfo-table td:first-child { color:#8b949e; width:80px; white-space:nowrap; }
+.winfo-table td:last-child { color:#e6edf3; font-weight:600; }
+.winfo-table tr:nth-child(even) { background:#0a0e1a; }
+.modal-content.dk { background:#0d1117; border:1px solid #30363d; }
+.modal-header.dk { background:#161b22; border-bottom:1px solid #30363d; }
+.modal-footer.dk { background:#161b22; border-top:1px solid #30363d; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2 ap-wrap">
+
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <i class="bi bi-wifi fs-5" style="color:#58a6ff;"></i>
+    <h5 class="mb-0 fw-bold" style="color:#58a6ff;font-size:1rem;">WLAN 신호 측정 · AP 채널 레이더</h5>
+    <div class="ms-auto d-flex gap-2">
+      <button class="fbtn" onclick="clearAll()"><i class="bi bi-arrow-counterclockwise"></i> 초기화</button>
+      <button class="fbtn" style="background:#1a4731;border-color:#2ea043;color:#3fb950;font-weight:700;" onclick="openCapture()">
+        <i class="bi bi-camera-fill me-1"></i>캡처
+      </button>
+    </div>
+  </div>
+
+  <div class="info-bar">
+    <div><label>점검일시</label><input type="datetime-local" id="iDate" class="iinp" style="width:170px;"></div>
+    <div><label>점검학교</label><input type="text" id="iSchool" class="iinp" placeholder="학교명" style="width:130px;"></div>
+    <div><label>점검자</label><input type="text" id="iInspector" class="iinp" placeholder="이름" style="width:90px;"></div>
+    <div><label>비고</label><input type="text" id="iNote" class="iinp" placeholder="메모" style="width:150px;"></div>
+  </div>
+
+  <div class="main-tabs">
+    <div class="mtab active" id="mtab0" onclick="switchMainTab(0)"><i class="bi bi-info-circle me-1"></i>WLAN 정보</div>
+    <div class="mtab"        id="mtab1" onclick="switchMainTab(1)"><i class="bi bi-search me-1"></i>채널 검색</div>
+    <div class="mtab"        id="mtab2" onclick="switchMainTab(2)"><i class="bi bi-broadcast me-1"></i>채널 레이더</div>
+    <div class="mtab"        id="mtab3" onclick="switchMainTab(3)"><i class="bi bi-activity me-1"></i>그래프</div>
+  </div>
+
+  <!-- 탭0: WLAN 정보 -->
+  <div id="tabPane0">
+    <div class="ap-sel-row">
+      <label><i class="bi bi-crosshair me-1"></i>AP 선택</label>
+      <select id="wlApSelector" onchange="onWlApSelect()">
+        <option value="">-- AP를 입력하면 자동 표시 --</option>
+      </select>
+    </div>
+    <div class="dk-card">
+      <div class="dk-card-hdr">
+        <span class="dk-card-title"><i class="bi bi-wifi me-1"></i>WLAN 상세 정보</span>
+        <small style="font-size:.65rem;color:#6e7681;" id="wlApName">—</small>
+      </div>
+      <div class="mini-gauge-row">
+        <div id="miniArcSvg"></div>
+        <div style="flex:1;">
+          <div class="mini-dbm" id="wlDbm" style="color:#6e7681;">— dBm</div>
+          <div class="mini-qual" id="wlQual" style="color:#6e7681;">측정값 없음</div>
+          <div class="mini-bars" id="wlBars"></div>
+        </div>
+        <div style="font-size:.7rem;color:#6e7681;" id="wlDist">거리 추정: —</div>
+      </div>
+      <div class="wl-ssid-hero" id="wlSsid">—</div>
+      <div class="wl-bssid-sub" id="wlBssid">BSSID: —</div>
+      <div class="wl-section">무선 RF 정보</div>
+      <div class="wl-grid">
+        <div class="wl-row"><span class="wl-key">WiFi 강도</span><span class="wl-val" id="wl-signal">—</span></div>
+        <div class="wl-row"><span class="wl-key">SNR</span><span class="wl-val" id="wl-snr">—</span></div>
+        <div class="wl-row"><span class="wl-key">잡음(추정)</span><span class="wl-val" id="wl-noise">—</span></div>
+        <div class="wl-row"><span class="wl-key">링크 속도</span><span class="wl-val" id="wl-speed">—</span></div>
+        <div class="wl-row"><span class="wl-key">WiFi 표준</span><span class="wl-val" id="wl-standard">—</span></div>
+        <div class="wl-row"><span class="wl-key">암호화</span><span class="wl-val" id="wl-security">—</span></div>
+        <div class="wl-row"><span class="wl-key">채널</span><span class="wl-val" id="wl-channel">—</span></div>
+        <div class="wl-row"><span class="wl-key">주파수</span><span class="wl-val" id="wl-freq">—</span></div>
+        <div class="wl-row"><span class="wl-key">채널 폭</span><span class="wl-val" id="wl-width">—</span></div>
+        <div class="wl-row"><span class="wl-key">밴드</span><span class="wl-val" id="wl-band">—</span></div>
+        <div class="wl-row"><span class="wl-key">거리(추정)</span><span class="wl-val" id="wl-dist2">—</span></div>
+        <div class="wl-row"><span class="wl-key">WiFi 표준</span><span class="wl-val" id="wl-std2">—</span></div>
+      </div>
+      <div class="wl-section">네트워크 정보 <span style="font-size:.6rem;font-weight:400;color:#484f58;">(직접 입력)</span></div>
+      <div class="net-grid">
+        <div class="net-field"><label>IP 주소</label><input type="text" id="ni-ip" placeholder="192.168.1.xxx" oninput="saveNetInfo()"></div>
+        <div class="net-field"><label>서브넷 마스크</label><input type="text" id="ni-mask" placeholder="255.255.255.0" oninput="saveNetInfo()"></div>
+        <div class="net-field"><label>게이트웨이</label><input type="text" id="ni-gw" placeholder="192.168.1.1" oninput="saveNetInfo()"></div>
+        <div class="net-field"><label>DHCP 서버</label><input type="text" id="ni-dhcp" placeholder="192.168.1.1" oninput="saveNetInfo()"></div>
+        <div class="net-field"><label>DNS 1</label><input type="text" id="ni-dns1" placeholder="8.8.8.8" oninput="saveNetInfo()"></div>
+        <div class="net-field"><label>DNS 2</label><input type="text" id="ni-dns2" placeholder="8.8.4.4" oninput="saveNetInfo()"></div>
+        <div class="net-field"><label>DHCP 임대 만료</label><input type="datetime-local" id="ni-lease" oninput="saveNetInfo()"></div>
+        <div class="net-field"><label>외부 IP</label><input type="text" id="ni-extip" placeholder="공인 IP" oninput="saveNetInfo()"></div>
+      </div>
+      <div class="wl-section">측정 정보</div>
+      <div class="wl-grid">
+        <div class="wl-row"><span class="wl-key">측정 위치</span><span class="wl-val" id="wl-loc">—</span></div>
+        <div class="wl-row"><span class="wl-key">측정 일시</span><span class="wl-val" id="wl-time">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 탭1: 채널 검색 -->
+  <div id="tabPane1" style="display:none;">
+    <div class="filter-bar">
+      <span style="font-size:.7rem;color:#6e7681;">밴드</span>
+      <button class="fbtn band-on" data-band="2.4" onclick="setBand(this)">2.4 GHz</button>
+      <button class="fbtn" data-band="5" onclick="setBand(this)">5 GHz</button>
+      <span style="font-size:.7rem;color:#6e7681;margin-left:4px;">슬롯</span>
+      <button class="fbtn slot-on" data-slot="all" onclick="setSlot(this)">전체</button>
+      <button class="fbtn" data-slot="0" onclick="setSlot(this)">슬롯 1</button>
+      <button class="fbtn" data-slot="1" onclick="setSlot(this)">슬롯 2</button>
+      <button class="fbtn" data-slot="2" onclick="setSlot(this)">슬롯 3</button>
+    </div>
+    <div class="row g-2">
+      <div class="col-12 col-lg-5">
+        <div class="dk-card">
+          <div class="dk-card-hdr">
+            <span class="dk-card-title"><i class="bi bi-pencil-square me-1"></i>AP 데이터 입력</span>
+            <small style="font-size:.63rem;color:#6e7681;">★ 체크 = 레이더 표시</small>
+          </div>
+          <div class="slot-tabs">
+            <div class="stab active" id="stab0" onclick="switchTab(0)">슬롯 1</div>
+            <div class="stab"        id="stab1" onclick="switchTab(1)">슬롯 2</div>
+            <div class="stab"        id="stab2" onclick="switchTab(2)">슬롯 3</div>
+          </div>
+          <div id="slotBody" style="padding:8px;"></div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-7">
+        <div style="font-size:.7rem;color:#8b949e;font-weight:700;letter-spacing:1px;padding:6px 0 4px;border-bottom:1px solid #21262d;margin-bottom:7px;text-transform:uppercase;">
+          <i class="bi bi-reception-4 me-1"></i>WLAN Information
+        </div>
+        <div class="wlan-list" id="wlanList">
+          <div style="font-size:.74rem;color:#6e7681;padding:14px;text-align:center;">AP 데이터를 입력하면 표시됩니다.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 탭2: 채널 레이더 -->
+  <div id="tabPane2" style="display:none;">
+    <div class="filter-bar mb-2">
+      <span style="font-size:.7rem;color:#6e7681;">밴드</span>
+      <button class="fbtn band-on" data-band2="2.4" onclick="setBand2(this)">2.4 GHz</button>
+      <button class="fbtn" data-band2="5" onclick="setBand2(this)">5 GHz</button>
+    </div>
+    <div class="radar-wrap">
+      <div class="radar-bar">
+        <span class="radar-title"><i class="bi bi-broadcast me-1"></i>CHANNEL RADAR</span>
+        <span class="radar-sub" id="radarSub">2.4 GHz</span>
+      </div>
+      <canvas id="radarCanvas"></canvas>
+      <div id="chBar"></div>
+    </div>
+  </div>
+
+  <!-- 탭3: 그래프 -->
+  <div id="tabPane3" style="display:none;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <label style="font-size:.72rem;color:#6e7681;white-space:nowrap;"><i class="bi bi-crosshair me-1"></i>계기판 표시 AP</label>
+      <select id="apSelector" onchange="onApSelect()" style="background:#161b22;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:4px 10px;font-size:.78rem;outline:none;flex:1;max-width:280px;">
+        <option value="">-- AP 선택 --</option>
+      </select>
+    </div>
+    <div class="row g-2">
+      <div class="col-12 col-md-5">
+        <div class="dk-card">
+          <div class="gauge-top">
+            <span class="gtitle"><i class="bi bi-speedometer2 me-1"></i>Signal Strength Meter</span>
+            <span style="font-size:.68rem;color:#6e7681;" id="gaugeApName">—</span>
+          </div>
+          <canvas id="speedoCanvas" style="display:block;width:100%;height:200px;"></canvas>
+          <div class="qual-display" id="qualDisplay">
+            <div class="qual-dbm" style="color:#6e7681;">— dBm</div>
+            <div class="qual-text" style="color:#6e7681;">측정값 없음</div>
+            <div class="qual-sub">AP를 선택하세요</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-md-7">
+        <div class="dk-card" style="height:100%;">
+          <div class="dk-card-hdr"><span class="dk-card-title"><i class="bi bi-table me-1"></i>WLAN 상세 정보</span></div>
+          <div id="grDetailSsid" style="font-size:1.05rem;font-weight:700;color:#e6edf3;padding:8px 12px 4px;">—</div>
+          <div id="grDetailBssid" style="font-size:.7rem;color:#6e7681;font-family:monospace;padding:0 12px 8px;border-bottom:1px solid #21262d;">BSSID: —</div>
+          <table class="winfo-table">
+            <tr><td>신호 강도</td><td id="di-signal">—</td></tr>
+            <tr><td>품질</td><td id="di-qual">—</td></tr>
+            <tr><td>채널</td><td id="di-channel">—</td></tr>
+            <tr><td>주파수</td><td id="di-freq">—</td></tr>
+            <tr><td>채널 폭</td><td id="di-width">—</td></tr>
+            <tr><td>밴드</td><td id="di-band">—</td></tr>
+            <tr><td>보안</td><td id="di-security">—</td></tr>
+            <tr><td>잡음(추정)</td><td id="di-noise">—</td></tr>
+            <tr><td>SNR</td><td id="di-snr">—</td></tr>
+            <tr><td>링크 속도</td><td id="di-speed">—</td></tr>
+            <tr><td>측정 위치</td><td id="di-loc">—</td></tr>
+            <tr><td>측정 일시</td><td id="di-time">—</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 캡처 모달 -->
+<div class="modal fade" id="capModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content dk">
+      <div class="modal-header dk py-2">
+        <h6 class="modal-title text-light mb-0"><i class="bi bi-image me-2" style="color:#58a6ff;"></i>고해상도 캡처</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-2" style="background:#000;overflow-x:auto;text-align:center;">
+        <canvas id="capCanvas" style="border:1px solid #21262d;max-width:100%;"></canvas>
+      </div>
+      <div class="modal-footer dk py-2">
+        <small class="text-muted me-auto">PNG · 390px · @3x</small>
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">닫기</button>
+        <button class="btn btn-sm fw-bold" onclick="downloadPng()" style="background:#1a4731;border:1px solid #2ea043;color:#3fb950;"><i class="bi bi-download me-1"></i>PNG 저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var CH24=[1,2,3,4,5,6,7,8,9,10,11,12,13];
+var CH5=[36,40,44,48,52,56,60,64,100,104,108,112,116,120,124,128,132,136,140,149,153,157,161,165];
+var NON_OVL=[1,6,11];
+var COLORS=['#00b4d8','#ff6b6b','#51cf66','#ffd43b','#cc5de8','#ff922b','#20c997','#f783ac',
+            '#74c0fc','#a9e34b','#ff8787','#63e6be','#748ffc','#ffa94d','#38d9a9','#da77f2',
+            '#ff6b81','#69db7c','#4dabf7','#ff8c00','#c084fc','#34d399'];
+var RADAR_CSS_H=240, SPEEDO_CSS_H=200;
+var DBM_MIN=-100, DBM_MAX=-10;
+var S_START=0.75*Math.PI, S_SWEEP=1.5*Math.PI;
+var colorIdx=0;
+function nextColor(){ return COLORS[colorIdx++%COLORS.length]; }
+var curBand='2.4', curBand2='2.4', curSlot='all', curTab=0, curMainTab=0;
+var netInfo={};
+var slots=[{name:'위치 1',time:'',aps:[]},{name:'위치 2',time:'',aps:[]},{name:'위치 3',time:'',aps:[]}];
+
+function qColor(d){
+  if(d===null||d===undefined||d===''||isNaN(+d)) return '#6e7681';
+  var v=+d; if(v>=-50) return '#3fb950'; if(v>=-67) return '#d29922'; if(v>=-80) return '#f0883e'; return '#f85149';
+}
+function qText(d){
+  if(!d&&d!==0) return '-'; var v=+d;
+  if(v>=-50) return '우수'; if(v>=-67) return '양호'; if(v>=-80) return '보통'; return '약함';
+}
+function chFreq(band,ch){
+  if(!ch) return '-';
+  if(band==='2.4') return ((2407+ch*5)/1000).toFixed(3)+' GHz';
+  return ((5000+ch*5)/1000).toFixed(3)+' GHz';
+}
+function estimateDist(dbm,band){
+  if(!dbm) return '—';
+  var freq=(band==='2.4')?2437:5200, ptx=20, n=2.7;
+  var d=Math.pow(10,(ptx-(+dbm)-20*Math.log10(freq)+27.55)/(10*n));
+  if(d<0.5) return '0.5 m 미만'; if(d>200) return '200 m 초과'; return d.toFixed(1)+' m';
+}
+function wifiStd(band,spd){
+  var s=+spd;
+  if(band==='5'){ if(s>=600) return '802.11ac (Wi-Fi 5)'; if(s>=150) return '802.11n (Wi-Fi 4)'; return '802.11a'; }
+  if(s>=150) return '802.11n (Wi-Fi 4)'; if(s>=54) return '802.11g'; return '802.11b';
+}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escT(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function dbmToAngle(dbm){ var t=Math.max(0,Math.min(1,(dbm-DBM_MIN)/(DBM_MAX-DBM_MIN))); return S_START+t*S_SWEEP; }
+
+function collectAps(band,slotFilter,onlyChecked){
+  var out=[];
+  for(var si=0;si<slots.length;si++){
+    if(slotFilter!=='all'&&String(si)!==slotFilter) continue;
+    var s=slots[si];
+    for(var ai=0;ai<s.aps.length;ai++){
+      var ap=s.aps[ai];
+      if(onlyChecked&&ap.on===false) continue;
+      if(ap.band!==band) continue;
+      if(!ap.channel||!ap.signal) continue;
+      out.push({ssid:ap.ssid,bssid:ap.bssid||'',band:ap.band,channel:ap.channel,
+                signal:ap.signal,security:ap.security,color:ap.color,on:ap.on,
+                noise:ap.noise||-95,linkspeed:ap.linkspeed||0,width:ap.width||'20',
+                si:si,ai:ai,slotName:s.name||('슬롯 '+(si+1)),time:s.time});
+    }
+  }
+  return out;
+}
+
+function switchMainTab(idx){
+  curMainTab=idx;
+  [0,1,2,3].forEach(function(i){
+    document.getElementById('mtab'+i).classList.toggle('active',i===idx);
+    document.getElementById('tabPane'+i).style.display=(i===idx)?'':'none';
+  });
+  if(idx===2) setTimeout(function(){drawRadar(rCtx,radarCvs,curBand2,'all',false,null);},50);
+  if(idx===3) setTimeout(function(){drawSpeedo(getSelectedApObj());},50);
+  if(idx===0) rebuildWlSelector();
+}
+
+/* ---- 탭0: WLAN정보 ---- */
+function rebuildWlSelector(){
+  var allAps=[];
+  for(var si=0;si<slots.length;si++){
+    for(var ai=0;ai<slots[si].aps.length;ai++){
+      var ap=slots[si].aps[ai];
+      if(!ap.channel||!ap.signal) continue;
+      allAps.push({ap:ap,si:si,ai:ai,slotName:slots[si].name||('슬롯 '+(si+1)),time:slots[si].time});
+    }
+  }
+  var sel=document.getElementById('wlApSelector'),prev=sel.value;
+  sel.innerHTML='<option value="">-- AP 선택 --</option>';
+  allAps.forEach(function(o){
+    var key=o.si+'_'+o.ai,opt=document.createElement('option');
+    opt.value=key; opt.textContent=(o.ap.ssid||'?')+'  ('+o.ap.signal+'dBm)  ['+o.slotName+']';
+    if(key===prev) opt.selected=true; sel.appendChild(opt);
+  });
+  if(!sel.value&&allAps.length>0) sel.value=allAps[0].si+'_'+allAps[0].ai;
+  onWlApSelect();
+}
+function onWlApSelect(){
+  var key=document.getElementById('wlApSelector').value;
+  if(!key){clearWlInfo();return;}
+  var parts=key.split('_'),si=+parts[0],ai=+parts[1],ap=slots[si]&&slots[si].aps[ai];
+  if(!ap){clearWlInfo();return;}
+  var obj={ssid:ap.ssid,bssid:ap.bssid||'',band:ap.band,channel:ap.channel,
+           signal:ap.signal,security:ap.security,color:ap.color,
+           noise:ap.noise||-95,linkspeed:ap.linkspeed||0,width:ap.width||'20',
+           si:si,ai:ai,slotName:slots[si].name||('슬롯 '+(si+1)),time:slots[si].time};
+  renderWlInfo(obj,key);
+}
+function clearWlInfo(){
+  document.getElementById('wlSsid').textContent='—';
+  document.getElementById('wlBssid').textContent='BSSID: —';
+  document.getElementById('wlApName').textContent='—';
+  document.getElementById('wlDbm').textContent='— dBm';
+  document.getElementById('wlQual').textContent='측정값 없음';
+  document.getElementById('wlBars').innerHTML='';
+  document.getElementById('miniArcSvg').innerHTML='';
+  document.getElementById('wlDist').textContent='거리 추정: —';
+  ['signal','snr','noise','speed','standard','security','channel','freq','width','band','dist2','std2','loc','time'].forEach(function(k){
+    var el=document.getElementById('wl-'+k); if(el){el.textContent='—';el.style.color='';}
+  });
+}
+function renderWlInfo(ap,key){
+  var qc=qColor(ap.signal),snr=ap.signal?(ap.signal-(ap.noise||-95)):null;
+  document.getElementById('wlApName').textContent=ap.ssid||'—';
+  document.getElementById('wlSsid').textContent=ap.ssid||'—';
+  document.getElementById('wlBssid').textContent='BSSID: '+(ap.bssid||'미입력');
+  document.getElementById('wlDbm').textContent=ap.signal+' dBm';
+  document.getElementById('wlDbm').style.color=qc;
+  document.getElementById('wlQual').textContent=qText(ap.signal);
+  document.getElementById('wlQual').style.color=qc;
+  document.getElementById('wlBars').innerHTML=makeBarsHTML(ap.signal,qc);
+  document.getElementById('miniArcSvg').innerHTML=makeArcSVG(ap.signal,qc);
+  document.getElementById('wlDist').textContent='거리 추정: '+estimateDist(ap.signal,ap.band);
+  function sw(id,val,col){ var el=document.getElementById('wl-'+id); if(!el) return; el.textContent=val||'—'; el.style.color=col||'#e6edf3'; }
+  sw('signal',ap.signal+' dBm',qc);
+  sw('snr',snr!==null?snr+' dB':'—');
+  sw('noise',(ap.noise||-95)+' dBm');
+  sw('speed',ap.linkspeed?ap.linkspeed+' Mbps':'미입력');
+  sw('standard',wifiStd(ap.band,ap.linkspeed));
+  sw('security',ap.security||'Open');
+  sw('channel','CH '+ap.channel);
+  sw('freq',chFreq(ap.band,ap.channel));
+  sw('width',ap.width+' MHz');
+  sw('band',ap.band+' GHz');
+  sw('dist2',estimateDist(ap.signal,ap.band),'#8b949e');
+  sw('std2',wifiStd(ap.band,ap.linkspeed));
+  sw('loc',ap.slotName,'#8b949e');
+  sw('time',ap.time?ap.time.replace('T',' '):'—','#8b949e');
+  var ni=netInfo[key]||{};
+  document.getElementById('ni-ip').value=ni.ip||'';
+  document.getElementById('ni-mask').value=ni.mask||'';
+  document.getElementById('ni-gw').value=ni.gw||'';
+  document.getElementById('ni-dhcp').value=ni.dhcp||'';
+  document.getElementById('ni-dns1').value=ni.dns1||'';
+  document.getElementById('ni-dns2').value=ni.dns2||'';
+  document.getElementById('ni-lease').value=ni.lease||'';
+  document.getElementById('ni-extip').value=ni.extip||'';
+}
+function saveNetInfo(){
+  var key=document.getElementById('wlApSelector').value; if(!key) return;
+  netInfo[key]={ip:document.getElementById('ni-ip').value,mask:document.getElementById('ni-mask').value,
+    gw:document.getElementById('ni-gw').value,dhcp:document.getElementById('ni-dhcp').value,
+    dns1:document.getElementById('ni-dns1').value,dns2:document.getElementById('ni-dns2').value,
+    lease:document.getElementById('ni-lease').value,extip:document.getElementById('ni-extip').value};
+}
+
+/* ---- 탭3: 계기판 ---- */
+var speedoCvs=document.getElementById('speedoCanvas');
+var speedoCtx=speedoCvs.getContext('2d');
+function drawSpeedo(ap){
+  var cvs=speedoCvs,c=speedoCtx;
+  var W=cvs.parentElement?cvs.parentElement.clientWidth:280,H=SPEEDO_CSS_H;
+  cvs.width=W; cvs.height=H;
+  var cx=W/2,cy=H*0.78,R=Math.min(W*0.44,H*0.84);
+  c.fillStyle='#0d1117'; c.fillRect(0,0,W,H);
+  var zones=[{from:-100,to:-80,color:'#f85149'},{from:-80,to:-67,color:'#f0883e'},
+             {from:-67,to:-50,color:'#d29922'},{from:-50,to:-30,color:'#3fb950'},{from:-30,to:-10,color:'#58a6ff'}];
+  var AW=R*0.15;
+  zones.forEach(function(z){
+    var a0=dbmToAngle(z.from),a1=dbmToAngle(z.to);
+    c.beginPath();c.arc(cx,cy,R-AW*0.1,a0,a1,false);c.arc(cx,cy,R-AW*0.9,a1,a0,true);c.closePath();c.fillStyle=z.color+'22';c.fill();
+    c.beginPath();c.arc(cx,cy,R-AW*0.1,a0,a1,false);c.lineWidth=AW*0.5;c.strokeStyle=z.color;c.stroke();
+  });
+  [-100,-90,-80,-70,-60,-50,-40,-30,-20,-10].forEach(function(dbm){
+    var a=dbmToAngle(dbm),co=Math.cos(a),si2=Math.sin(a);
+    c.beginPath();c.moveTo(cx+(R-AW*1.1)*co,cy+(R-AW*1.1)*si2);c.lineTo(cx+(R-AW*1.5)*co,cy+(R-AW*1.5)*si2);
+    c.strokeStyle='#484f58';c.lineWidth=1.2;c.stroke();
+    c.fillStyle='#6e7681';c.font='bold '+Math.round(R*0.082)+'px monospace';c.textAlign='center';c.textBaseline='middle';
+    c.fillText(String(dbm),cx+(R-AW*2.1)*co,cy+(R-AW*2.1)*si2);
+  });
+  for(var dv=DBM_MIN;dv<=DBM_MAX;dv+=2){
+    if(dv%10===0) continue;
+    var a2=dbmToAngle(dv),co2=Math.cos(a2),si3=Math.sin(a2);
+    c.beginPath();c.moveTo(cx+(R-AW*1.1)*co2,cy+(R-AW*1.1)*si3);c.lineTo(cx+(R-AW*1.35)*co2,cy+(R-AW*1.35)*si3);
+    c.strokeStyle='#21262d';c.lineWidth=0.7;c.stroke();
+  }
+  c.beginPath();c.arc(cx,cy,R*0.1,0,Math.PI*2);c.fillStyle='#21262d';c.fill();c.strokeStyle='#30363d';c.lineWidth=1;c.stroke();
+  if(!ap||!ap.signal){
+    c.textAlign='center';c.textBaseline='middle';c.font='bold '+Math.round(R*0.13)+'px monospace';c.fillStyle='#484f58';
+    c.fillText('--',cx,cy-R*0.25);updateQualDisplay(null,null);return;
+  }
+  var na=dbmToAngle(ap.signal),nc=Math.cos(na),ns=Math.sin(na),nL=R-AW*1.2,nB=R*0.12,nC=qColor(ap.signal);
+  c.shadowColor=nC+'66';c.shadowBlur=8;
+  c.beginPath();c.moveTo(cx-nB*nc,cy-nB*ns);c.lineTo(cx+nL*nc,cy+nL*ns);
+  c.strokeStyle=nC;c.lineWidth=2.5;c.lineCap='round';c.stroke();c.shadowBlur=0;
+  c.beginPath();c.arc(cx+nL*nc,cy+nL*ns,3,0,Math.PI*2);c.fillStyle=nC;c.fill();
+  c.beginPath();c.arc(cx,cy,R*0.08,0,Math.PI*2);
+  var cg=c.createRadialGradient(cx,cy,0,cx,cy,R*0.08);cg.addColorStop(0,'#484f58');cg.addColorStop(1,'#161b22');
+  c.fillStyle=cg;c.fill();c.strokeStyle=nC;c.lineWidth=1;c.stroke();
+  updateQualDisplay(ap.signal,nC);
+}
+function updateQualDisplay(signal,color){
+  var el=document.getElementById('qualDisplay');
+  if(!signal){el.innerHTML='<div class="qual-dbm" style="color:#6e7681;">-- dBm</div><div class="qual-text" style="color:#6e7681;">측정값 없음</div><div class="qual-sub">AP를 선택하세요</div>';return;}
+  var ap=getSelectedApObj(),snr=ap?(ap.signal-(ap.noise||-95)):null;
+  el.innerHTML='<div class="qual-dbm" style="color:'+color+';">'+signal+' dBm</div>'+
+    '<div class="qual-text" style="color:'+color+';">'+qText(signal)+'</div>'+
+    (snr!==null?'<div class="qual-sub">SNR: '+snr+' dB</div>':'<div class="qual-sub">dBm</div>');
+}
+function getSelectedApObj(){
+  var key=document.getElementById('apSelector').value; if(!key) return null;
+  var p=key.split('_'),si=+p[0],ai=+p[1];
+  if(!slots[si]||!slots[si].aps[ai]) return null;
+  var ap=slots[si].aps[ai]; if(!ap.channel||!ap.signal) return null;
+  return {ssid:ap.ssid,bssid:ap.bssid||'',band:ap.band,channel:ap.channel,
+          signal:ap.signal,security:ap.security,color:ap.color,
+          noise:ap.noise||-95,linkspeed:ap.linkspeed||0,width:ap.width||'20',
+          si:si,ai:ai,slotName:slots[si].name||('슬롯 '+(si+1)),time:slots[si].time};
+}
+function rebuildApSelector(){
+  var allAps=[];
+  ['2.4','5'].forEach(function(b){allAps=allAps.concat(collectAps(b,'all',false));});
+  var sel=document.getElementById('apSelector'),prev=sel.value;
+  sel.innerHTML='<option value="">-- AP 선택 --</option>';
+  allAps.forEach(function(ap){
+    var key=ap.si+'_'+ap.ai,opt=document.createElement('option');
+    opt.value=key;opt.textContent=(ap.ssid||'?')+'  ('+ap.signal+'dBm)  ['+ap.slotName+']';
+    if(key===prev) opt.selected=true; sel.appendChild(opt);
+  });
+  if(!sel.value&&allAps.length>0) sel.value=allAps[0].si+'_'+allAps[0].ai;
+  onApSelect();
+}
+function onApSelect(){
+  var ap=getSelectedApObj(); drawSpeedo(ap); updateGrDetail(ap);
+  document.getElementById('gaugeApName').textContent=ap?(ap.ssid||'?'):'—';
+}
+function updateGrDetail(ap){
+  var set=function(id,val){var el=document.getElementById(id);if(el)el.textContent=val||'—';};
+  document.getElementById('grDetailSsid').textContent=ap?(ap.ssid||'—'):'—';
+  document.getElementById('grDetailBssid').textContent='BSSID: '+(ap?(ap.bssid||'미입력'):'—');
+  if(!ap){['signal','qual','channel','freq','width','band','security','noise','snr','speed','loc','time'].forEach(function(k){set('di-'+k,'—');});return;}
+  var snr=ap.signal?(ap.signal-(ap.noise||-95)):null,qc=qColor(ap.signal);
+  set('di-signal',ap.signal+' dBm');set('di-qual',qText(ap.signal));
+  set('di-channel','CH '+ap.channel);set('di-freq',chFreq(ap.band,ap.channel));
+  set('di-width',ap.width+' MHz');set('di-band',ap.band+' GHz');
+  set('di-security',ap.security||'Open');set('di-noise',(ap.noise||-95)+' dBm');
+  set('di-snr',snr!==null?snr+' dB':'—');set('di-speed',ap.linkspeed?ap.linkspeed+' Mbps':'미입력');
+  set('di-loc',ap.slotName);set('di-time',ap.time?ap.time.replace('T',' '):'—');
+  var sigEl=document.getElementById('di-signal');if(sigEl)sigEl.style.color=qc;
+  var qualEl=document.getElementById('di-qual');if(qualEl)qualEl.style.color=qc;
+}
+
+/* ---- 채널 레이더 ---- */
+var radarCvs=document.getElementById('radarCanvas');
+var rCtx=radarCvs.getContext('2d');
+function gauss(x,mu,sigma){return Math.exp(-0.5*Math.pow((x-mu)/sigma,2));}
+function yOf(dbm,PT,PH,DB,DT){return PT+PH*(1-(dbm-DB)/(DT-DB));}
+function xOf(ch,band,PL,PW){
+  if(band==='2.4') return PL+((CH24.indexOf(ch)+1)/(CH24.length+1))*PW;
+  var i=CH5.indexOf(ch); return i<0?PL+PW/2:PL+((i+0.5)/CH5.length)*PW;
+}
+function unitPx(band,PW){return band==='2.4'?PW/(CH24.length+1):PW/CH5.length;}
+function drawRadar(c,cvs,band,sf,forCapture,capW){
+  var channels=(band==='2.4')?CH24:CH5,aps=collectAps(band,sf,true);
+  var dpr=forCapture?3:1;
+  var cssW=forCapture?(capW||390):(cvs.parentElement?cvs.parentElement.clientWidth:860);
+  var cssH=RADAR_CSS_H;
+  cvs.width=Math.round(cssW*dpr);cvs.height=Math.round(cssH*dpr);
+  if(dpr>1)c.setTransform(dpr,0,0,dpr,0,0);
+  var W=cssW,H=cssH,PL=52,PR=42,PT=28,PB=34,PW=W-PL-PR,PH=H-PT-PB,DB=-100,DT=-15;
+  c.fillStyle='#060d1a';c.fillRect(0,0,W,H);c.fillStyle='#090f1d';c.fillRect(PL,PT,PW,PH);
+  if(band==='2.4'){
+    NON_OVL.forEach(function(ch){var x=xOf(ch,band,PL,PW),bwp=unitPx(band,PW)*2.5;c.fillStyle='#0d1e35';c.fillRect(Math.max(PL,x-bwp),PT,bwp*2,PH);});
+  }
+  [-20,-30,-40,-50,-60,-67,-70,-80,-90,-100].forEach(function(d){
+    var y=yOf(d,PT,PH,DB,DT),isKey=(d===-50||d===-67||d===-80);
+    c.strokeStyle=d===-50?'#1a3a1a88':d===-67?'#3a2d0088':d===-80?'#3a1a0088':'#0d1f3366';
+    c.lineWidth=isKey?0.8:0.4;c.beginPath();c.moveTo(PL,y);c.lineTo(PL+PW,y);c.stroke();
+    c.fillStyle=isKey?qColor(d)+'99':'#21262d';c.font='8px monospace';c.textAlign='right';c.fillText(String(d),PL-4,y+3);
+  });
+  c.save();c.translate(11,PT+PH/2);c.rotate(-Math.PI/2);c.fillStyle='#484f58';c.font='9px sans-serif';c.textAlign='center';c.fillText('SIGNAL',0,0);c.restore();
+  channels.forEach(function(ch){
+    var x=xOf(ch,band,PL,PW),hi=(band==='2.4'&&NON_OVL.indexOf(ch)>=0);
+    c.strokeStyle=hi?'#1a2d45':'#0d1a2a';c.lineWidth=hi?0.8:0.4;c.beginPath();c.moveTo(x,PT);c.lineTo(x,PT+PH);c.stroke();
+    c.fillStyle=hi?'#388bfd':'#30363d';c.font=hi?'bold 9px monospace':'8px monospace';c.textAlign='center';c.fillText(String(ch),x,PT+PH+14);
+  });
+  c.fillStyle='#484f58';c.font='9px sans-serif';c.textAlign='center';c.fillText('CHANNEL',PL+PW/2,H-2);
+  c.strokeStyle='#1a2234';c.lineWidth=1;c.strokeRect(PL,PT,PW,PH);
+  if(aps.length===0){c.fillStyle='#21262d';c.font='12px sans-serif';c.textAlign='center';c.fillText('AP를 입력하고 ★ 체크하면 채널 분포가 표시됩니다.',W/2,PT+PH/2);return;}
+  var sigma=1.2,cutoff=3.2;if(band==='5')sigma=1.4;
+  aps.forEach(function(ap){
+    if(!ap.channel||!ap.signal)return;
+    var cx2=xOf(ap.channel,band,PL,PW),up=unitPx(band,PW),sP=sigma*up,cP=cutoff*sP;
+    var bY=yOf(DB,PT,PH,DB,DT),pD=Math.max(DB+2,Math.min(DT-2,ap.signal)),pY=yOf(pD,PT,PH,DB,DT);
+    var steps=120,x0=cx2-cP,x1=cx2+cP;
+    var grad=c.createLinearGradient(cx2,pY,cx2,bY);
+    grad.addColorStop(0,ap.color+'cc');grad.addColorStop(0.55,ap.color+'55');grad.addColorStop(1,ap.color+'00');
+    c.fillStyle=grad;c.beginPath();c.moveTo(Math.max(PL,x0),bY);
+    for(var i=0;i<=steps;i++){var px=x0+(x1-x0)*(i/steps),xC=(px-cx2)/up,gv=gauss(xC,0,sigma),py=bY-(bY-pY)*gv;c.lineTo(Math.max(PL,Math.min(PL+PW,px)),py);}
+    c.lineTo(Math.min(PL+PW,x1),bY);c.closePath();c.fill();
+    c.strokeStyle=ap.color;c.lineWidth=1.8;c.beginPath();var first=true;
+    for(var j=0;j<=steps;j++){var px2=x0+(x1-x0)*(j/steps),xC2=(px2-cx2)/up,gv2=gauss(xC2,0,sigma),py2=bY-(bY-pY)*gv2,lx2=Math.max(PL,Math.min(PL+PW,px2));if(first){c.moveTo(lx2,py2);first=false;}else c.lineTo(lx2,py2);}
+    c.stroke();
+    var lY=Math.max(pY,PT+3);
+    c.fillStyle='#e6edf3';c.font='bold 9px monospace';c.textAlign='center';c.fillText(String(ap.signal),cx2,lY);
+    c.fillStyle=ap.color;c.font='bold 8px sans-serif';c.fillText((ap.ssid||'?').substring(0,11),cx2,Math.max(lY-11,PT+4));
+    c.beginPath();c.arc(cx2,pY,2.5,0,Math.PI*2);c.fillStyle=ap.color;c.fill();
+  });
+  [{dbm:-50,text:'우수',color:'#3fb950'},{dbm:-67,text:'양호',color:'#d29922'},{dbm:-80,text:'보통',color:'#f0883e'}].forEach(function(ql){
+    var y=yOf(ql.dbm,PT,PH,DB,DT);c.fillStyle=ql.color;c.font='bold 7px sans-serif';c.textAlign='left';c.fillText('- '+ql.text,PL+PW+3,y+3);
+  });
+  if(!forCapture){
+    var barEl=document.getElementById('chBar');
+    barEl.innerHTML=channels.map(function(ch){
+      var ap2=null;for(var k=0;k<aps.length;k++){if(aps[k].channel===ch){ap2=aps[k];break;}}
+      var col=ap2?ap2.color:'#1a2234',hi=(band==='2.4'&&NON_OVL.indexOf(ch)>=0);
+      return '<div style="flex:1;height:6px;background:'+col+';border-radius:1px;'+(hi?'outline:1px solid #388bfd44;':'')+'" title="CH'+ch+(ap2?': '+ap2.ssid+' ('+ap2.signal+'dBm)':'')+'" ></div>';
+    }).join('');
+    document.getElementById('radarSub').textContent=(curBand2==='2.4'?'2.4 GHz':'5 GHz');
+  }
+}
+function setBand2(el){
+  curBand2=el.dataset.band2;
+  document.querySelectorAll('.fbtn[data-band2]').forEach(function(b){b.classList.toggle('band-on',b===el);});
+  drawRadar(rCtx,radarCvs,curBand2,'all',false,null);
+}
+
+/* ---- 탭1: WLAN 카드 ---- */
+function makeArcSVG(dbm,color){
+  var sz=44,r=sz/2-5,cxs=sz/2,cys=sz/2,svgH=sz/2+6;
+  var pct=Math.max(0,Math.min(100,(+dbm+100)/78*100));
+  var bgPath='M '+(cxs-r)+' '+cys+' A '+r+' '+r+' 0 0 1 '+(cxs+r)+' '+cys;
+  var fgPath='';
+  if(pct>0){var sw=pct/100*Math.PI,ex=cxs+r*Math.cos(Math.PI-sw),ey=cys-r*Math.sin(Math.PI-sw),laf=(sw>Math.PI)?1:0;
+    fgPath='<path d="M '+(cxs-r)+' '+cys+' A '+r+' '+r+' 0 '+laf+' 1 '+ex.toFixed(2)+' '+ey.toFixed(2)+'" stroke="'+color+'" stroke-width="4.5" fill="none" stroke-linecap="round"/>';}
+  return '<svg width="'+sz+'" height="'+svgH+'" viewBox="0 0 '+sz+' '+svgH+'" style="overflow:visible;">'+
+    '<path d="'+bgPath+'" stroke="#1f2937" stroke-width="4.5" fill="none" stroke-linecap="round"/>'+fgPath+
+    '<text x="'+cxs+'" y="'+(cys+2)+'" text-anchor="middle" font-size="9" font-weight="bold" fill="'+color+'" font-family="monospace">'+dbm+'</text></svg>';
+}
+function makeBarsHTML(dbm,color){
+  var levels=[[-100,-80],[-80,-67],[-67,-50],[-50,-10]],v=+dbm;
+  return levels.map(function(r,i){var h=4+i*3,on=(i===3)?(v>=-50):(v>=r[0]&&v<r[1]);
+    return '<div class="sig-bar" style="height:'+h+'px;background:'+(on?color:'#21262d')+';"></div>';}).join('');
+}
+function renderWlanList(){
+  var aps=[]; ['2.4','5'].forEach(function(b){aps=aps.concat(collectAps(b,curSlot,false));});
+  var el=document.getElementById('wlanList');
+  if(aps.length===0){el.innerHTML='<div style="font-size:.74rem;color:#6e7681;padding:14px;text-align:center;">AP 데이터를 입력하면 표시됩니다.</div>';return;}
+  var sorted=aps.slice().sort(function(a,b){return((b.signal!=null)?b.signal:-999)-((a.signal!=null)?a.signal:-999);});
+  el.innerHTML=sorted.map(function(ap){
+    var qc=qColor(ap.signal),qt=qText(ap.signal),secs=(ap.security==='Open'||!ap.security)?'open':'sec';
+    return '<div class="wlan-card" style="border-left-color:'+ap.color+'" onclick="selectApForTab0(\''+ap.si+'_'+ap.ai+'\')">'+
+      '<div class="arc-col">'+makeArcSVG(ap.signal,qc)+'<div class="sig-bars">'+makeBarsHTML(ap.signal,qc)+'</div></div>'+
+      '<div class="wlan-info"><div class="wlan-ssid">'+escT(ap.ssid||'-')+'</div><div class="wlan-loc">'+escT(ap.slotName)+'</div>'+
+      '<div class="wlan-tags"><span class="tag ch">CH '+ap.channel+'</span><span class="tag band">'+ap.band+'G</span><span class="tag '+secs+'">'+escT(ap.security||'Open')+'</span></div></div>'+
+      '<div class="dbm-col"><div class="dbm-val" style="color:'+qc+';">'+ap.signal+'</div><div class="dbm-unit">dBm</div><div class="dbm-qual" style="color:'+qc+';">'+qt+'</div></div></div>';
+  }).join('');
+}
+function selectApForTab0(key){switchMainTab(0);document.getElementById('wlApSelector').value=key;onWlApSelect();}
+
+function setBand(el){
+  curBand=el.dataset.band;
+  document.querySelectorAll('.fbtn[data-band]').forEach(function(b){b.classList.toggle('band-on',b===el);});
+  scheduleRedraw();
+}
+function setSlot(el){
+  curSlot=el.dataset.slot;
+  document.querySelectorAll('.fbtn[data-slot]').forEach(function(b){b.classList.toggle('slot-on',b===el);});
+  scheduleRedraw();
+}
+function switchTab(si){
+  curTab=si; [0,1,2].forEach(function(i){document.getElementById('stab'+i).classList.toggle('active',i===si);});
+  renderSlotBody();
+}
+function renderSlotBody(){
+  var si=curTab,s=slots[si],rows=s.aps.map(function(ap,ai){return apRowHTML(si,ai,ap);}).join('');
+  document.getElementById('slotBody').innerHTML=
+    '<div style="display:flex;gap:8px;margin-bottom:7px;">'+
+      '<div style="flex:1;"><label style="font-size:.63rem;color:#6e7681;display:block;">측정 위치</label>'+
+        '<input class="iinp" style="width:100%;" type="text" value="'+esc(s.name)+'" placeholder="위치명" oninput="slots['+si+'].name=this.value;updateTabLabel('+si+')"></div>'+
+      '<div><label style="font-size:.63rem;color:#6e7681;display:block;">측정 일시</label>'+
+        '<input class="iinp" type="datetime-local" value="'+s.time+'" onchange="slots['+si+'].time=this.value"></div></div>'+
+    '<table class="ap-tbl"><thead><tr>'+
+      '<th style="width:16px;" title="레이더 표시">★</th><th style="width:12px;"></th>'+
+      '<th>SSID</th><th style="width:38px;">밴드</th><th style="width:30px;">CH</th>'+
+      '<th style="width:44px;">dBm</th><th style="width:50px;">잡음</th>'+
+      '<th style="width:50px;">보안</th><th style="width:52px;">폭MHz</th><th style="width:18px;"></th>'+
+    '</tr></thead><tbody id="apBody">'+rows+'</tbody></table>'+
+    '<button onclick="addAp('+si+')" style="width:100%;margin-top:5px;padding:3px 0;background:#161b22;border:1px dashed #30363d;color:#6e7681;border-radius:4px;font-size:.7rem;cursor:pointer;">+ AP 추가</button>';
+}
+function apRowHTML(si,ai,ap){
+  var qc=qColor(ap.signal),chk=(ap.on!==false)?'checked':'';
+  var b24=(ap.band==='2.4')?'selected':'',b5=(ap.band==='5')?'selected':'';
+  var sWP3=(ap.security==='WPA3')?'selected':'',sWP2=(ap.security==='WPA2')?'selected':'';
+  var sWEP=(ap.security==='WEP')?'selected':'',sOpn=(ap.security==='Open')?'selected':'',sNon=(!ap.security)?'selected':'';
+  var w20=(ap.width==='20'||!ap.width)?'selected':'',w40=(ap.width==='40')?'selected':'',w80=(ap.width==='80')?'selected':'';
+  return '<tr>'+
+    '<td style="text-align:center;"><input type="checkbox" '+chk+' onchange="slots['+si+'].aps['+ai+'].on=this.checked;scheduleRedraw()"></td>'+
+    '<td style="text-align:center;"><span class="cdot" style="background:'+ap.color+'" onclick="recolor('+si+','+ai+')" title="색상"></span></td>'+
+    '<td><input type="text" placeholder="SSID" value="'+esc(ap.ssid)+'" oninput="slots['+si+'].aps['+ai+'].ssid=this.value;scheduleRedraw()"></td>'+
+    '<td><select onchange="slots['+si+'].aps['+ai+'].band=this.value;scheduleRedraw()"><option value="2.4" '+b24+'>2.4G</option><option value="5" '+b5+'>5G</option></select></td>'+
+    '<td><input type="number" placeholder="ch" min="1" max="165" value="'+(ap.channel||'')+'" oninput="slots['+si+'].aps['+ai+'].channel=+this.value;scheduleRedraw()"></td>'+
+    '<td><input type="number" placeholder="dBm" min="-100" max="-10" value="'+(ap.signal||'')+'" style="color:'+qc+';font-weight:700;" oninput="var v=+this.value;slots['+si+'].aps['+ai+'].signal=v;this.style.color=qColor(v);scheduleRedraw()"></td>'+
+    '<td><input type="number" placeholder="-95" min="-100" max="-20" value="'+(ap.noise||'')+'" style="color:#6e7681;" oninput="slots['+si+'].aps['+ai+'].noise=+this.value;scheduleRedraw()"></td>'+
+    '<td><select onchange="slots['+si+'].aps['+ai+'].security=this.value">'+
+      '<option value="" '+sNon+'>-</option><option value="WPA3" '+sWP3+'>WPA3</option><option value="WPA2" '+sWP2+'>WPA2</option><option value="WEP" '+sWEP+'>WEP</option><option value="Open" '+sOpn+'>Open</option>'+
+    '</select></td>'+
+    '<td><select onchange="slots['+si+'].aps['+ai+'].width=this.value">'+
+      '<option value="20" '+w20+'>20</option><option value="40" '+w40+'>40</option><option value="80" '+w80+'>80</option>'+
+    '</select></td>'+
+    '<td><button class="bdel" onclick="removeAp('+si+','+ai+')">x</button></td></tr>';
+}
+function updateTabLabel(si){var el=document.getElementById('stab'+si);if(el)el.textContent=(slots[si].name||('슬롯 '+(si+1))).substring(0,5);}
+function addAp(si){slots[si].aps.push({ssid:'',bssid:'',band:'2.4',channel:null,signal:null,noise:-95,security:'WPA2',width:'20',linkspeed:0,color:nextColor(),on:true});renderSlotBody();scheduleRedraw();}
+function removeAp(si,ai){slots[si].aps.splice(ai,1);renderSlotBody();scheduleRedraw();}
+function recolor(si,ai){slots[si].aps[ai].color=nextColor();renderSlotBody();scheduleRedraw();}
+
+var _dt=null;
+function scheduleRedraw(){
+  clearTimeout(_dt);
+  _dt=setTimeout(function(){
+    drawRadar(rCtx,radarCvs,curBand2,'all',false,null);
+    renderWlanList();
+    rebuildApSelector();
+    if(curMainTab===0) rebuildWlSelector();
+  },80);
+}
+function clearAll(){
+  if(!confirm('모든 측정 데이터를 초기화합니까?')) return;
+  colorIdx=0;netInfo={};
+  slots=[{name:'위치 1',time:'',aps:[]},{name:'위치 2',time:'',aps:[]},{name:'위치 3',time:'',aps:[]}];
+  renderSlotBody();scheduleRedraw();
+}
+
+/* ---- 캡처 ---- */
+var capCvsEl=null;
+function drawSpeedoOnCanvas(c,cx,cy,R,ap){
+  var zones=[{from:-100,to:-80,color:'#f85149'},{from:-80,to:-67,color:'#f0883e'},{from:-67,to:-50,color:'#d29922'},{from:-50,to:-30,color:'#3fb950'},{from:-30,to:-10,color:'#58a6ff'}];
+  var AW=R*0.15;
+  zones.forEach(function(z){
+    var a0=dbmToAngle(z.from),a1=dbmToAngle(z.to);
+    c.beginPath();c.arc(cx,cy,R-AW*0.1,a0,a1,false);c.arc(cx,cy,R-AW*0.9,a1,a0,true);c.closePath();c.fillStyle=z.color+'22';c.fill();
+    c.beginPath();c.arc(cx,cy,R-AW*0.1,a0,a1,false);c.lineWidth=AW*0.5;c.strokeStyle=z.color;c.stroke();
+  });
+  [-100,-90,-80,-70,-60,-50,-40,-30,-20,-10].forEach(function(dbm){
+    var a=dbmToAngle(dbm),co=Math.cos(a),si2=Math.sin(a);
+    c.beginPath();c.moveTo(cx+(R-AW*1.1)*co,cy+(R-AW*1.1)*si2);c.lineTo(cx+(R-AW*1.5)*co,cy+(R-AW*1.5)*si2);
+    c.strokeStyle='#484f58';c.lineWidth=1.2;c.stroke();
+    c.fillStyle='#6e7681';c.font='bold '+(Math.round(R*0.075))+'px monospace';c.textAlign='center';c.textBaseline='middle';
+    c.fillText(String(dbm),cx+(R-AW*2.1)*co,cy+(R-AW*2.1)*si2);
+  });
+  c.textBaseline='alphabetic';
+  if(!ap||!ap.signal)return;
+  var na=dbmToAngle(ap.signal),nc=Math.cos(na),ns=Math.sin(na),nL=R-AW*1.2,nB=R*0.12,nC=qColor(ap.signal);
+  c.shadowColor=nC+'66';c.shadowBlur=8;
+  c.beginPath();c.moveTo(cx-nB*nc,cy-nB*ns);c.lineTo(cx+nL*nc,cy+nL*ns);c.strokeStyle=nC;c.lineWidth=2.5;c.lineCap='round';c.stroke();c.shadowBlur=0;
+  c.beginPath();c.arc(cx+nL*nc,cy+nL*ns,3,0,Math.PI*2);c.fillStyle=nC;c.fill();
+  c.beginPath();c.arc(cx,cy,R*0.08,0,Math.PI*2);c.fillStyle='#21262d';c.fill();c.strokeStyle=nC;c.lineWidth=1;c.stroke();
+}
+function openCapture(){
+  var band=curBand2,aps=collectAps(band,'all',true),selAp=getSelectedApObj()||aps[0]||null;
+  var ni=selAp?netInfo[selAp.si+'_'+selAp.ai]||{}:{};
+  var MW=390,SC=3,HDR_H=125,SPEEDO_H=220,INFO_H=220,RADAR_H=RADAR_CSS_H,CHBAR_H=12;
+  var NET_H=(ni.ip||ni.gw||ni.dns1)?110:0;
+  var LEG_H=14+Math.max(1,Math.ceil(aps.length/2))*22+8,FOOT_H=32;
+  var TOTAL_H=HDR_H+SPEEDO_H+INFO_H+NET_H+RADAR_H+CHBAR_H+LEG_H+FOOT_H+4;
+  var cvs=document.getElementById('capCanvas');
+  cvs.width=MW*SC;cvs.height=TOTAL_H*SC;cvs.style.width=MW+'px';cvs.style.height=TOTAL_H+'px';
+  capCvsEl=cvs;
+  var c=cvs.getContext('2d');
+  c.setTransform(SC,0,0,SC,0,0);
+  c.fillStyle='#060d1a';c.fillRect(0,0,MW,TOTAL_H);
+  var y=0;
+  /* 헤더 */
+  c.fillStyle='#0d1117';c.fillRect(0,0,MW,HDR_H);c.fillStyle='#1f6feb';c.fillRect(0,0,MW,4);
+  c.fillStyle='#58a6ff';c.font='bold 14px sans-serif';c.textAlign='left';c.fillText('무선 AP 신호 측정 보고서',12,24);
+  c.strokeStyle='#21262d';c.lineWidth=0.5;c.beginPath();c.moveTo(12,30);c.lineTo(MW-12,30);c.stroke();
+  var iRows=[['점검일시',document.getElementById('iDate').value||'-'],['점검학교',document.getElementById('iSchool').value||'-'],['점검자',document.getElementById('iInspector').value||'-'],['측정밴드',band==='2.4'?'2.4 GHz':'5 GHz']];
+  var iNote=document.getElementById('iNote').value;if(iNote)iRows.push(['비고',iNote]);
+  iRows.forEach(function(r,i){var ry=44+i*16;c.fillStyle='#6e7681';c.font='9px sans-serif';c.textAlign='left';c.fillText(r[0],14,ry);c.fillStyle='#e6edf3';c.fillText(r[1],68,ry);});
+  c.fillStyle='#484f58';c.font='8px sans-serif';c.textAlign='right';c.fillText('생성: '+nowKSTLocale(),MW-10,HDR_H-8);
+  c.strokeStyle='#21262d';c.lineWidth=0.5;c.beginPath();c.moveTo(0,HDR_H);c.lineTo(MW,HDR_H);c.stroke();
+  y=HDR_H;
+  /* 계기판+WLAN상세 */
+  var cW1=MW*0.44,cW2=MW-cW1;
+  c.fillStyle='#0d1117';c.fillRect(0,y,MW,SPEEDO_H);
+  drawSpeedoOnCanvas(c,cW1/2,y+SPEEDO_H*0.73,Math.min(cW1*0.42,SPEEDO_H*0.7),selAp);
+  if(selAp&&selAp.signal){var qc2=qColor(selAp.signal);c.fillStyle=qc2;c.font='bold 15px monospace';c.textAlign='center';c.fillText(selAp.signal+' dBm',cW1/2,y+SPEEDO_H-30);c.font='bold 10px sans-serif';c.fillText(qText(selAp.signal),cW1/2,y+SPEEDO_H-16);}
+  if(selAp){
+    var tx=cW1+8;
+    c.fillStyle='#58a6ff';c.font='bold 10px sans-serif';c.textAlign='left';c.fillText((selAp.ssid||'?').substring(0,16),tx,y+16);
+    c.fillStyle='#484f58';c.font='7px monospace';c.fillText(selAp.bssid||'BSSID 미입력',tx,y+27);
+    c.strokeStyle='#21262d';c.lineWidth=0.5;c.beginPath();c.moveTo(tx,y+32);c.lineTo(MW-4,y+32);c.stroke();
+    var iR=[['신호 강도',selAp.signal+' dBm',qColor(selAp.signal)],['품질',qText(selAp.signal),qColor(selAp.signal)],
+            ['WiFi 표준',wifiStd(selAp.band,selAp.linkspeed),'#e6edf3'],['채널','CH '+selAp.channel,'#58a6ff'],
+            ['주파수',chFreq(selAp.band,selAp.channel),'#e6edf3'],['채널 폭',selAp.width+' MHz','#e6edf3'],
+            ['밴드',selAp.band+' GHz','#3fb950'],['보안',selAp.security||'Open','#d29922'],
+            ['잡음(추정)',(selAp.noise||'-95')+' dBm','#6e7681'],['SNR',(selAp.signal-(selAp.noise||-95))+' dB','#e6edf3'],
+            ['링크속도',selAp.linkspeed?(selAp.linkspeed+' Mbps'):'미입력','#e6edf3'],
+            ['거리(추정)',estimateDist(selAp.signal,selAp.band),'#8b949e'],['측정위치',selAp.slotName,'#8b949e']];
+    iR.forEach(function(r,i){var ry=y+40+i*14;if(i%2===0){c.fillStyle='#0a0e1a';c.fillRect(tx,ry-10,cW2-4,14);}
+      c.fillStyle='#6e7681';c.font='7.5px sans-serif';c.textAlign='left';c.fillText(r[0],tx+4,ry);
+      c.fillStyle=r[2]||'#e6edf3';c.font='bold 7.5px sans-serif';c.fillText(String(r[1]).substring(0,18),tx+60,ry);});
+  }
+  y+=SPEEDO_H;
+  /* 네트워크 정보 */
+  if(NET_H>0){
+    c.strokeStyle='#21262d';c.lineWidth=0.5;c.beginPath();c.moveTo(0,y);c.lineTo(MW,y);c.stroke();
+    c.fillStyle='#161b22';c.fillRect(0,y,MW,NET_H);
+    c.fillStyle='#6e7681';c.font='bold 8px sans-serif';c.textAlign='left';c.fillText('| 네트워크 정보',10,y+12);
+    var nR=[['IP 주소',ni.ip||'—'],['서브넷',ni.mask||'—'],['게이트웨이',ni.gw||'—'],['DHCP',ni.dhcp||'—'],
+            ['DNS 1',ni.dns1||'—'],['DNS 2',ni.dns2||'—'],['DHCP 임대',ni.lease||'—'],['외부 IP',ni.extip||'—']];
+    nR.forEach(function(r,i){var col=i%2,row=Math.floor(i/2),nx=10+col*(MW/2),ny=y+22+row*16;
+      c.fillStyle='#6e7681';c.font='7.5px sans-serif';c.textAlign='left';c.fillText(r[0],nx,ny);
+      c.fillStyle='#e6edf3';c.font='bold 7.5px monospace';c.fillText(r[1],nx+58,ny);});
+    y+=NET_H;
+  }
+  /* 채널 레이더 */
+  c.strokeStyle='#21262d';c.lineWidth=0.5;c.beginPath();c.moveTo(0,y);c.lineTo(MW,y);c.stroke();y+=1;
+  var rC2=document.createElement('canvas'),rX2=rC2.getContext('2d');
+  drawRadar(rX2,rC2,band,'all',true,MW);c.drawImage(rC2,0,y,MW,RADAR_H);y+=RADAR_H;
+  /* 채널바 */
+  var chs2=(band==='2.4')?CH24:CH5,bPL=52,bW=(MW-bPL-42)/chs2.length;
+  chs2.forEach(function(ch,i){var ap2=null;for(var k=0;k<aps.length;k++){if(aps[k].channel===ch){ap2=aps[k];break;}}c.fillStyle=ap2?ap2.color:'#1a2234';c.fillRect(bPL+i*bW+0.5,y+2,Math.max(1,bW-1),CHBAR_H-4);});y+=CHBAR_H;
+  /* 범례 */
+  c.strokeStyle='#21262d';c.lineWidth=0.5;c.beginPath();c.moveTo(0,y);c.lineTo(MW,y);c.stroke();y+=1;
+  c.fillStyle='#0d1117';c.fillRect(0,y,MW,LEG_H);
+  c.fillStyle='#6e7681';c.font='bold 8px sans-serif';c.textAlign='left';c.fillText('| 검출 AP 목록',10,y+12);
+  aps.forEach(function(ap2,i){var col=i%2,row=Math.floor(i/2),lx=10+col*(MW/2),ly=y+22+row*22;
+    c.fillStyle=ap2.color;c.beginPath();c.arc(lx+5,ly-3,5,0,Math.PI*2);c.fill();
+    c.fillStyle='#e6edf3';c.font='8.5px sans-serif';c.textAlign='left';c.fillText((ap2.ssid||'?').substring(0,13),lx+13,ly);
+    c.fillStyle=qColor(ap2.signal);c.font='8px monospace';c.fillText('CH'+ap2.channel+' / '+ap2.signal+'dBm',lx+13,ly+11);});y+=LEG_H;
+  /* 푸터 */
+  c.strokeStyle='#21262d';c.lineWidth=0.5;c.beginPath();c.moveTo(0,y);c.lineTo(MW,y);c.stroke();y+=1;
+  c.fillStyle='#0d1117';c.fillRect(0,y,MW,FOOT_H);c.fillStyle='#1f6feb';c.fillRect(0,y+FOOT_H-3,MW,3);
+  c.fillStyle='#484f58';c.font='7.5px sans-serif';c.textAlign='center';
+  c.fillText('NPMS — 학교 네트워크 장애관리 시스템',MW/2,y+12);
+  c.fillText('본 측정 결과는 측정 당시 환경에 따라 달라질 수 있습니다.',MW/2,y+23);
+  new bootstrap.Modal(document.getElementById('capModal')).show();
+}
+function downloadPng(){if(!capCvsEl)return;var a=document.createElement('a');a.download='wlan_'+nowKSTFilename()+'.png';a.href=capCvsEl.toDataURL('image/png');a.click();}
+
+var _rt=null;
+window.addEventListener('resize',function(){clearTimeout(_rt);_rt=setTimeout(function(){
+  if(curMainTab===2)drawRadar(rCtx,radarCvs,curBand2,'all',false,null);
+  if(curMainTab===3)drawSpeedo(getSelectedApObj());
+},250);});
+
+/* 초기화 */
+document.getElementById('iDate').value=nowKST();
+slots[0].name='1층 중앙홀';slots[0].time=nowKST();
+slots[0].aps=[
+  {ssid:'EduNet-5G',bssid:'AA:BB:CC:DD:EE:01',band:'5',channel:36,signal:-52,noise:-95,security:'WPA2',width:'80',linkspeed:867,color:COLORS[0],on:true},
+  {ssid:'GYEONGNAM',bssid:'AA:BB:CC:DD:EE:02',band:'5',channel:44,signal:-71,noise:-95,security:'WPA2',width:'80',linkspeed:433,color:COLORS[1],on:true},
+  {ssid:'School-24',bssid:'AA:BB:CC:DD:EE:03',band:'2.4',channel:1,signal:-58,noise:-95,security:'WPA2',width:'20',linkspeed:144,color:COLORS[2],on:true},
+  {ssid:'School-24',bssid:'AA:BB:CC:DD:EE:04',band:'2.4',channel:6,signal:-48,noise:-95,security:'WPA2',width:'20',linkspeed:144,color:COLORS[3],on:true},
+  {ssid:'Guest',bssid:'AA:BB:CC:DD:EE:05',band:'2.4',channel:11,signal:-74,noise:-95,security:'Open',width:'20',linkspeed:54,color:COLORS[4],on:true}
+];
+slots[1].name='2층 북도';slots[1].time=nowKST();
+slots[1].aps=[
+  {ssid:'EduNet-5G',bssid:'AA:BB:CC:DD:EE:11',band:'5',channel:36,signal:-68,noise:-95,security:'WPA2',width:'80',linkspeed:433,color:COLORS[5],on:true},
+  {ssid:'School-24',bssid:'AA:BB:CC:DD:EE:13',band:'2.4',channel:6,signal:-55,noise:-95,security:'WPA2',width:'20',linkspeed:144,color:COLORS[6],on:true}
+];
+slots[2].name='3층 남도';slots[2].time=nowKST();
+slots[2].aps=[
+  {ssid:'EduNet-5G',bssid:'AA:BB:CC:DD:EE:21',band:'5',channel:40,signal:-82,noise:-95,security:'WPA2',width:'40',linkspeed:200,color:COLORS[7],on:true},
+  {ssid:'School-24',bssid:'AA:BB:CC:DD:EE:23',band:'2.4',channel:11,signal:-79,noise:-95,security:'WPA2',width:'20',linkspeed:54,color:COLORS[8],on:true}
+];
+colorIdx=9;
+renderSlotBody();
+scheduleRedraw();
+setTimeout(function(){rebuildWlSelector();},150);
+</script>
+{% endblock %}

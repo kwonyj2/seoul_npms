@@ -1,0 +1,1103 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}NAS 파일{% endblock %}
+{% block page_title %}<i class="bi bi-folder2-open me-2"></i>NAS 파일 관리{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2" style="height:calc(100vh - 110px);display:flex;flex-direction:column;">
+
+  <!-- 툴바 -->
+  <div class="card border-0 shadow-sm mb-2 flex-shrink-0">
+    <div class="card-body py-2 px-3 d-flex align-items-center gap-2 flex-wrap">
+      <!-- 탐색 버튼 -->
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-outline-secondary" id="btn-back" onclick="navBack()" disabled title="뒤로">
+          <i class="bi bi-arrow-left"></i>
+        </button>
+        <button class="btn btn-outline-secondary" id="btn-up" onclick="navUp()" disabled title="상위 폴더">
+          <i class="bi bi-arrow-up"></i>
+        </button>
+      </div>
+      <!-- 경로 breadcrumb -->
+      <div class="flex-grow-1 border rounded px-2 py-1 bg-white small" id="breadcrumb"
+           style="min-width:180px;cursor:default;overflow-x:auto;white-space:nowrap;">
+        <span class="text-muted"><i class="bi bi-hdd me-1"></i>NAS</span>
+      </div>
+      <!-- 검색 -->
+      <div class="input-group input-group-sm" style="width:200px;">
+        <input type="text" id="file-search" class="form-control" placeholder="파일명·내용 검색">
+        <button class="btn btn-outline-secondary" onclick="doSearch()"><i class="bi bi-search"></i></button>
+      </div>
+      <!-- 뷰 전환 -->
+      <div class="btn-group btn-group-sm">
+        <button id="btn-list-view" class="btn btn-outline-secondary active" onclick="setView('list')" title="목록">
+          <i class="bi bi-list-ul"></i>
+        </button>
+        <button id="btn-grid-view" class="btn btn-outline-secondary" onclick="setView('grid')" title="아이콘">
+          <i class="bi bi-grid-3x3-gap"></i>
+        </button>
+      </div>
+      <!-- 새 폴더 / 업로드 -->
+      <button class="btn btn-sm btn-outline-secondary" id="btn-new-folder" onclick="createFolder()" title="새 폴더">
+        <i class="bi bi-folder-plus me-1"></i>새 폴더
+      </button>
+      <button class="btn btn-sm btn-primary" onclick="openUploadModal()">
+        <i class="bi bi-upload me-1"></i>업로드
+      </button>
+    </div>
+  </div>
+
+  <!-- 메인 2열 -->
+  <div class="row g-2 flex-grow-1" style="min-height:0;">
+
+    <!-- 좌측: 폴더 트리 -->
+    <div class="col-12 col-xl-2 d-none d-xl-flex flex-column">
+      <div class="card border-0 shadow-sm flex-grow-1" style="min-height:0;">
+        <div class="card-header py-2 bg-white border-bottom">
+          <span class="fw-semibold small"><i class="bi bi-folder-fill text-warning me-1"></i>폴더</span>
+        </div>
+        <div class="card-body p-0" id="side-tree" style="overflow-y:auto;height:100%;">
+          <div class="text-center py-3 text-muted small">로딩 중...</div>
+        </div>
+        <div class="card-footer py-1 px-2 bg-light border-top small text-muted" id="nas-stats">-</div>
+      </div>
+    </div>
+
+    <!-- 우측: 파일/폴더 탐색 영역 -->
+    <div class="col-12 col-xl-10 d-flex flex-column">
+      <div class="card border-0 shadow-sm flex-grow-1" style="min-height:0;">
+
+        <!-- 상태 바 -->
+        <div class="card-header py-2 bg-white border-bottom d-flex align-items-center">
+          <small class="text-muted ms-auto" id="item-count"></small>
+        </div>
+
+        <!-- 목록 뷰 -->
+        <div id="view-list" class="table-responsive flex-grow-1" style="overflow-y:auto;">
+          <table class="table table-sm table-hover mb-0" style="table-layout:fixed;min-width:640px;">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th style="width:32px;"></th>
+                <th style="width:220px;">이름</th>
+                <th style="width:70px;">유형</th>
+                <th style="width:75px;">분류</th>
+                <th style="width:65px;" class="text-end">크기</th>
+                <th style="width:88px;">업로드일</th>
+                <th style="width:65px;">업로더</th>
+                <th style="width:68px;" class="text-center">작업</th>
+              </tr>
+            </thead>
+            <tbody id="item-tbody">
+              <tr><td colspan="8" class="text-center py-4 text-muted small">폴더를 선택하세요</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 그리드 뷰 -->
+        <div id="view-grid" class="d-none p-3" style="overflow-y:auto;">
+          <div class="row g-2" id="item-grid"></div>
+        </div>
+
+        <!-- 페이지네이션 -->
+        <div class="card-footer py-2 d-flex justify-content-between align-items-center">
+          <small class="text-muted" id="page-info">-</small>
+          <div id="pagination" class="d-flex gap-1"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 우클릭 컨텍스트 메뉴 -->
+<div id="ctx-menu" class="shadow border rounded bg-white py-1"
+     style="display:none;position:fixed;z-index:9999;min-width:160px;">
+</div>
+
+<!-- 이름 바꾸기 모달 -->
+<div class="modal fade" id="renameModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title"><i class="bi bi-pencil me-1"></i>이름 바꾸기</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body py-2">
+        <input type="text" id="rename-input" class="form-control form-control-sm">
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-primary" onclick="doRename()">변경</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 속성 모달 -->
+<div class="modal fade" id="propsModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title"><i class="bi bi-info-circle me-1"></i>속성</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <table class="table table-sm mb-0" id="props-table"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 새 폴더 모달 -->
+<div class="modal fade" id="folderModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title"><i class="bi bi-folder-plus me-1"></i>새 폴더</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body py-2">
+        <div class="mb-2">
+          <input type="text" id="folder-name" class="form-control form-control-sm" placeholder="폴더 이름">
+        </div>
+        {% if request.user.role == 'superadmin' %}
+        <div>
+          <label class="form-label small fw-semibold mb-1">접근 권한</label>
+          <select id="folder-access-level" class="form-select form-select-sm">
+            <option value="public">전체 공개</option>
+            <option value="admin">관리자 이상</option>
+            <option value="superadmin">슈퍼어드민 전용</option>
+          </select>
+          <div class="form-text" style="font-size:.7rem;">
+            <i class="bi bi-info-circle me-1"></i>하위 폴더는 이 권한을 자동 상속합니다.
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-primary" onclick="doCreateFolder()">만들기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 업로드 모달 -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title"><i class="bi bi-upload me-1"></i>파일 업로드</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" style="max-height:70vh;overflow-y:auto;">
+        <div class="mb-2 p-2 bg-light rounded small">
+          <i class="bi bi-folder-fill text-warning me-1"></i>
+          <span id="upload-folder-path" class="text-muted">루트</span>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">설명 <span class="text-muted fw-normal">(선택)</span></label>
+          <input type="text" id="up-desc" class="form-control form-control-sm">
+        </div>
+        <div class="d-flex gap-2 mb-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary flex-fill"
+                  onclick="document.getElementById('up-files').click()">
+            <i class="bi bi-file-earmark-plus me-1"></i>파일 선택
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-primary flex-fill"
+                  onclick="document.getElementById('up-folder-input').click()">
+            <i class="bi bi-folder-plus me-1"></i>폴더 선택
+          </button>
+          <input type="file" id="up-files"        class="d-none" multiple onchange="previewSelected(this)">
+          <input type="file" id="up-folder-input" class="d-none" multiple webkitdirectory onchange="previewFolderSelected(this)">
+        </div>
+        <div class="d-flex gap-2 mb-2">
+          <button class="btn btn-sm btn-secondary flex-fill" data-bs-dismiss="modal">
+            <i class="bi bi-x me-1"></i>취소
+          </button>
+          <button class="btn btn-sm btn-primary flex-fill" onclick="doUpload()">
+            <i class="bi bi-upload me-1"></i>업로드
+          </button>
+        </div>
+        <div id="drop-zone" class="border rounded p-3 text-center text-muted"
+             style="border-style:dashed!important;border-width:2px!important;min-height:70px;cursor:pointer;"
+             ondragover="handleDragOver(event)"
+             ondrop="handleDrop(event)">
+          <i class="bi bi-cloud-upload me-1"></i>
+          <small>파일 또는 폴더를 여기에 드래그</small>
+        </div>
+        <div id="up-file-list" class="mt-2"></div>
+        <div id="up-progress" class="d-none mt-2">
+          <div class="progress" style="height:6px;">
+            <div id="up-bar" class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%"></div>
+          </div>
+          <small id="up-status" class="text-muted mt-1 d-block"></small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 미리보기 오프캔버스 -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="previewCanvas" style="width:560px;">
+  <div class="offcanvas-header py-2 border-bottom">
+    <h6 class="offcanvas-title mb-0 text-truncate" id="preview-title" style="max-width:440px;"></h6>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body p-0 d-flex flex-column">
+    <div id="preview-meta" class="px-3 py-2 bg-light border-bottom small"></div>
+    <div id="preview-body" class="flex-grow-1 d-flex align-items-center justify-content-center" style="min-height:400px;overflow:auto;"></div>
+    <div class="p-2 border-top">
+      <a id="preview-dl-btn" href="#" class="btn btn-sm btn-primary w-100">
+        <i class="bi bi-download me-1"></i>다운로드
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const API = '{{ API_BASE|default:"/npms/api" }}';
+
+// ── 상태 ────────────────────────────────────────────────────
+let currentFolderId = null;   // null = 루트
+let currentPath     = [];     // [{id, name}, ...]
+let navHistory      = [];     // 뒤로 가기 스택
+let currentView     = 'list';
+let currentPage     = 1;
+let selectedFiles   = [];
+const _ctxRowData   = {};     // 우클릭 row 데이터 캐시 { 'f<id>': {type,id,name}, 'fi<id>': {type,id,name,fileObj} }
+
+// ── 초기화 ──────────────────────────────────────────────────
+async function init() {
+  updateNavButtons();
+  await loadSideTree(null);
+  loadContents();
+  loadStats();
+}
+
+// ── 사이드 트리 (지연 로드) ─────────────────────────────────
+async function loadSideTree(parentId, containerEl) {
+  const target = containerEl || document.getElementById('side-tree');
+  if (!containerEl) target.innerHTML = '<div class="text-center py-2 text-muted small">로딩 중...</div>';
+  try {
+    const pid = parentId === null ? 'root' : parentId;
+    const data = await apiGet(`${API}/nas/folders/children/`, { parent_id: pid });
+    if (!containerEl) target.innerHTML = '';
+    renderSideNodes(data, target, 0);
+  } catch(e) {
+    if (!containerEl) target.innerHTML = '<div class="text-center py-2 text-muted small">로드 실패</div>';
+  }
+}
+
+function renderSideNodes(nodes, container, depth) {
+  if (!nodes.length && depth === 0) {
+    container.innerHTML = '<div class="px-3 py-2 text-muted small">폴더 없음</div>';
+    return;
+  }
+  nodes.forEach(f => {
+    const wrap = document.createElement('div');
+    wrap.className = 'side-folder-item';
+    wrap.dataset.id = f.id;
+    const pad = depth * 14 + 8;
+    wrap.innerHTML = `
+      <div class="d-flex align-items-center py-1 side-folder-row ${currentFolderId === f.id ? 'active' : ''}"
+           style="padding-left:${pad}px;padding-right:8px;cursor:pointer;"
+           onclick="navigateTo(${f.id}, '${f.name.replace(/'/g,"\\'")}')">
+        ${f.has_children
+          ? `<button class="btn btn-xs btn-link p-0 me-1 text-muted tree-toggle" style="font-size:.6rem;line-height:1;min-width:10px;"
+                     onclick="toggleSideNode(event, ${f.id}, this, ${depth + 1})">
+               <i class="bi bi-chevron-right"></i>
+             </button>`
+          : `<span style="display:inline-block;width:14px;"></span>`}
+        <i class="bi bi-folder-fill text-warning me-1" style="font-size:.8rem;"></i>
+        <span class="small text-truncate">${f.name}</span>
+      </div>
+      <div class="side-children" style="display:none;"></div>`;
+    container.appendChild(wrap);
+  });
+}
+
+async function toggleSideNode(e, folderId, btn, childDepth) {
+  // stopPropagation 제거 → 클릭이 부모 navigateTo 까지 전파되어 우측 패널도 갱신됨
+  const wrap = btn.closest('.side-folder-item');
+  const childContainer = wrap.querySelector('.side-children');
+  const icon = btn.querySelector('i');
+  if (childContainer.style.display === 'none') {
+    childContainer.style.display = '';
+    icon.className = 'bi bi-chevron-down';
+    if (!childContainer.children.length) {
+      childContainer.innerHTML = '<div class="py-1 text-muted small" style="padding-left:' + (childDepth * 14 + 8) + 'px">로딩...</div>';
+      const data = await apiGet(`${API}/nas/folders/children/`, { parent_id: folderId });
+      childContainer.innerHTML = '';
+      renderSideNodes(data, childContainer, childDepth);
+    }
+  } else {
+    childContainer.style.display = 'none';
+    icon.className = 'bi bi-chevron-right';
+  }
+}
+
+function highlightSideTree(folderId) {
+  document.querySelectorAll('.side-folder-row').forEach(r => r.classList.remove('active'));
+  const target = document.querySelector(`.side-folder-item[data-id="${folderId}"] .side-folder-row`);
+  if (target) target.classList.add('active');
+}
+
+// ── 탐색 ─────────────────────────────────────────────────────
+function navigateTo(folderId, folderName) {
+  if (currentFolderId !== null) navHistory.push({ id: currentFolderId, path: [...currentPath] });
+  if (folderId === null) {
+    currentFolderId = null;
+    currentPath = [];
+  } else {
+    // 이미 경로에 있으면 해당 위치로 잘라냄
+    const idx = currentPath.findIndex(p => p.id === folderId);
+    if (idx >= 0) {
+      currentPath = currentPath.slice(0, idx + 1);
+    } else {
+      currentPath.push({ id: folderId, name: folderName });
+    }
+    currentFolderId = folderId;
+  }
+  updateBreadcrumb();
+  updateNavButtons();
+  highlightSideTree(currentFolderId);
+  currentPage = 1;
+  loadContents();
+}
+
+function navBack() {
+  if (!navHistory.length) return;
+  const prev = navHistory.pop();
+  currentFolderId = prev.id;
+  currentPath = prev.path;
+  updateBreadcrumb();
+  updateNavButtons();
+  highlightSideTree(currentFolderId);
+  currentPage = 1;
+  loadContents();
+}
+
+function navUp() {
+  if (!currentPath.length) return;
+  const parentPath = currentPath.slice(0, -1);
+  const parentId   = parentPath.length ? parentPath[parentPath.length - 1].id : null;
+  const parentName = parentPath.length ? parentPath[parentPath.length - 1].name : 'NAS';
+  navigateTo(parentId, parentName);
+}
+
+function updateBreadcrumb() {
+  const bc = document.getElementById('breadcrumb');
+  let html = `<a href="#" class="text-decoration-none text-muted" onclick="navigateTo(null,'NAS');return false;">
+                <i class="bi bi-hdd me-1"></i>NAS
+              </a>`;
+  currentPath.forEach((p, i) => {
+    html += ` <span class="text-muted">/</span> `;
+    if (i < currentPath.length - 1) {
+      html += `<a href="#" class="text-decoration-none" onclick="navigateTo(${p.id},'${p.name.replace(/'/g,"\\'")}');return false;">${p.name}</a>`;
+    } else {
+      html += `<span class="fw-semibold">${p.name}</span>`;
+    }
+  });
+  bc.innerHTML = html;
+}
+
+function updateNavButtons() {
+  document.getElementById('btn-back').disabled = navHistory.length === 0;
+  document.getElementById('btn-up').disabled   = currentPath.length === 0;
+  // 최상위 폴더 생성은 슈퍼어드민만
+  const newFolderBtn = document.getElementById('btn-new-folder');
+  if (newFolderBtn) {
+    newFolderBtn.disabled = (currentFolderId === null && USER_ROLE !== 'superadmin');
+    newFolderBtn.title    = (currentFolderId === null && USER_ROLE !== 'superadmin')
+      ? '최상위 폴더는 슈퍼어드민만 생성 가능'
+      : '새 폴더';
+  }
+}
+
+// ── 컨텐츠 로드 (폴더 + 파일) ───────────────────────────────
+async function loadContents(page = 1) {
+  currentPage = page;
+  const q = document.getElementById('file-search').value.trim();
+
+  setLoading(true);
+  try {
+    // 하위 폴더 (검색 중이 아닐 때만)
+    let subFolders = [];
+    if (!q && currentFolderId !== null) {
+      const fd = await apiGet(`${API}/nas/folders/children/`, { parent_id: currentFolderId });
+      subFolders = fd;
+    } else if (!q && currentFolderId === null) {
+      const fd = await apiGet(`${API}/nas/folders/children/`, { parent_id: 'root' });
+      subFolders = fd;
+    }
+
+    // 파일
+    const params = { page, page_size: 30 };
+    if (currentFolderId) params.folder_id = currentFolderId;
+    if (q) params.q = q;
+    const endpoint = q ? `${API}/nas/files/search/` : `${API}/nas/files/`;
+    const fileData = await apiGet(endpoint, params);
+    const files    = fileData.results || fileData;
+    const total    = fileData.count ?? files.length;
+
+    const folderCount = subFolders.length;
+    const fileCount   = total;
+    document.getElementById('item-count').textContent =
+      `폴더 ${folderCount}개  파일 ${fileCount}개`;
+    document.getElementById('page-info').textContent =
+      fileCount > 30 ? `${page} / ${Math.ceil(fileCount/30)}` : '';
+
+    renderPagination(fileCount, 30, page);
+
+    if (currentView === 'list') renderList(subFolders, files);
+    else                        renderGrid(subFolders, files);
+  } catch(e) {
+    document.getElementById('item-tbody').innerHTML =
+      '<tr><td colspan="8" class="text-center py-3 text-danger small">로드 실패</td></tr>';
+  }
+  setLoading(false);
+}
+
+function setLoading(on) {
+  if (on) {
+    document.getElementById('item-tbody').innerHTML =
+      '<tr><td colspan="8" class="text-center py-3 text-muted small">로딩 중...</td></tr>';
+    document.getElementById('item-grid').innerHTML =
+      '<div class="col-12 text-center py-4 text-muted small">로딩 중...</div>';
+  }
+}
+
+function mimeExt(mime) {
+  if (!mime) return '-';
+  if (mime.startsWith('image/'))               return mime.split('/')[1].toUpperCase();
+  if (mime === 'application/pdf')              return 'PDF';
+  if (mime.includes('spreadsheetml') || mime.includes('excel')) return 'Excel';
+  if (mime.includes('wordprocessingml') || mime.includes('word')) return 'Word';
+  if (mime.includes('presentationml') || mime.includes('powerpoint')) return 'PPT';
+  if (mime.includes('zip'))                    return 'ZIP';
+  if (mime.startsWith('video/'))               return 'Video';
+  if (mime.startsWith('text/'))                return 'Text';
+  const sub = mime.split('/')[1] || '-';
+  return sub.length > 6 ? sub.substring(0, 6).toUpperCase() : sub.toUpperCase();
+}
+
+// ── 목록 뷰 렌더 ─────────────────────────────────────────────
+function renderList(folders, files) {
+  const tbody = document.getElementById('item-tbody');
+  let rows = '';
+
+  folders.forEach((f, fi) => {
+    _ctxRowData['f' + f.id] = { type: 'folder', id: f.id, name: f.name, access_level: f.access_level };
+    const accessBadge = f.access_level === 'superadmin'
+      ? '<span class="badge bg-danger ms-1" style="font-size:.6rem;">슈퍼어드민</span>'
+      : f.access_level === 'admin'
+        ? '<span class="badge bg-warning text-dark ms-1" style="font-size:.6rem;">관리자</span>'
+        : '';
+    rows += `<tr style="cursor:pointer;"
+                ondblclick="navigateTo(${f.id},'${f.name.replace(/'/g,"\\'")}');"
+                oncontextmenu="showCtxMenuById(event,'f${f.id}')">
+      <td class="text-center"><i class="bi bi-folder-fill text-warning"></i></td>
+      <td class="text-truncate"><span class="small fw-semibold">${f.name}</span>${accessBadge}</td>
+      <td><small class="text-muted">폴더</small></td>
+      <td></td><td></td><td></td><td></td>
+      <td class="text-center" style="white-space:nowrap;" onclick="event.stopPropagation()">
+        <a href="${API}/nas/folders/${f.id}/download/" class="btn btn-xs btn-outline-primary">
+          <i class="bi bi-download"></i>
+        </a>
+        <button class="btn btn-xs btn-outline-danger ms-1" onclick="deleteFolder(event,${f.id},'${f.name.replace(/'/g,"\\'")}')">
+          <i class="bi bi-trash"></i>
+        </button>
+      </td>
+    </tr>`;
+  });
+
+  files.forEach(f => {
+    const icon = mimeIcon(f.mime_type);
+    _ctxRowData['fi' + f.id] = { type: 'file', id: f.id, name: f.original_name || f.name, fileObj: f };
+    rows += `<tr style="cursor:pointer;" onclick="openPreview(${f.id})"
+                oncontextmenu="showCtxMenuById(event,'fi${f.id}')">
+      <td class="text-center"><i class="bi ${icon.cls}" style="color:${icon.color};"></i></td>
+      <td class="text-truncate" title="${f.original_name||f.name}"><span class="small">${f.original_name || f.name}</span></td>
+      <td><small class="text-muted">${mimeExt(f.mime_type)}</small></td>
+      <td><span class="badge bg-light text-dark border" style="font-size:.65rem;">${f.category_display||f.category}</span></td>
+      <td class="text-end"><small class="text-muted">${f.file_size_kb||0} KB</small></td>
+      <td><small class="text-muted">${formatDate(f.uploaded_at)}</small></td>
+      <td class="text-truncate"><small>${f.uploaded_by_name||'-'}</small></td>
+      <td class="text-center" style="white-space:nowrap;" onclick="event.stopPropagation()">
+        <a href="${API}/nas/files/${f.id}/download/" class="btn btn-xs btn-outline-primary">
+          <i class="bi bi-download"></i>
+        </a>
+        <button class="btn btn-xs btn-outline-danger" onclick="deleteFile(event,${f.id})">
+          <i class="bi bi-trash"></i>
+        </button>
+      </td>
+    </tr>`;
+  });
+
+  if (!rows) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted small">비어 있습니다</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows;
+}
+
+// ── 그리드 뷰 렌더 ───────────────────────────────────────────
+function renderGrid(folders, files) {
+  const grid = document.getElementById('item-grid');
+  let cards = '';
+
+  folders.forEach(f => {
+    cards += `<div class="col-6 col-sm-4 col-md-3 col-lg-2">
+      <div class="card border shadow-sm h-100 text-center p-2" style="cursor:pointer;"
+           ondblclick="navigateTo(${f.id},'${f.name.replace(/'/g,"\\'")}')">
+        <i class="bi bi-folder-fill text-warning" style="font-size:2.2rem;"></i>
+        <div class="small fw-semibold text-truncate mt-1" title="${f.name}">${f.name}</div>
+      </div>
+    </div>`;
+  });
+
+  files.forEach(f => {
+    const isImg = f.mime_type?.startsWith('image/');
+    const icon  = mimeIcon(f.mime_type);
+    const thumb = isImg
+      ? `<img src="${API}/nas/files/${f.id}/preview/" class="w-100 h-100 object-fit-cover" style="max-height:80px;" onerror="this.parentNode.innerHTML='<i class=\\'bi ${icon.cls}\\' style=\\'color:${icon.color};font-size:2rem;\\'></i>'">`
+      : `<i class="bi ${icon.cls}" style="color:${icon.color};font-size:2rem;"></i>`;
+    cards += `<div class="col-6 col-sm-4 col-md-3 col-lg-2">
+      <div class="card border shadow-sm h-100" style="cursor:pointer;" onclick="openPreview(${f.id})">
+        <div class="d-flex align-items-center justify-content-center bg-light" style="height:80px;overflow:hidden;">${thumb}</div>
+        <div class="p-1 text-center">
+          <div class="small text-truncate" title="${f.original_name||f.name}" style="font-size:.72rem;">${f.original_name||f.name}</div>
+          <div class="text-muted" style="font-size:.65rem;">${f.file_size_kb||0} KB</div>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  if (!cards) {
+    grid.innerHTML = '<div class="col-12 text-center py-4 text-muted small">비어 있습니다</div>';
+    return;
+  }
+  grid.innerHTML = cards;
+}
+
+// ── 페이지네이션 ─────────────────────────────────────────────
+function renderPagination(total, pageSize, current) {
+  const pages = Math.ceil(total / pageSize);
+  const el    = document.getElementById('pagination');
+  if (pages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  const start = Math.max(1, current - 2);
+  const end   = Math.min(pages, current + 2);
+  if (start > 1) html += `<button class="btn btn-xs btn-outline-secondary" onclick="loadContents(1)">1</button><span class="text-muted small">…</span>`;
+  for (let i = start; i <= end; i++) {
+    html += `<button class="btn btn-xs ${i===current?'btn-primary':'btn-outline-secondary'}" onclick="loadContents(${i})">${i}</button>`;
+  }
+  if (end < pages) html += `<span class="text-muted small">…</span><button class="btn btn-xs btn-outline-secondary" onclick="loadContents(${pages})">${pages}</button>`;
+  el.innerHTML = html;
+}
+
+// ── 뷰 전환 ──────────────────────────────────────────────────
+function setView(v) {
+  currentView = v;
+  document.getElementById('view-list').classList.toggle('d-none', v !== 'list');
+  document.getElementById('view-grid').classList.toggle('d-none', v !== 'grid');
+  document.getElementById('btn-list-view').classList.toggle('active', v === 'list');
+  document.getElementById('btn-grid-view').classList.toggle('active', v === 'grid');
+  loadContents(currentPage);
+}
+
+// ── 검색 ─────────────────────────────────────────────────────
+let searchTimer;
+document.getElementById('file-search').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { currentPage = 1; loadContents(); }, 500);
+});
+document.getElementById('file-search').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
+});
+function doSearch() { currentPage = 1; loadContents(); }
+
+// ── 새 폴더 ──────────────────────────────────────────────────
+function createFolder() {
+  if (currentFolderId === null && USER_ROLE !== 'superadmin') {
+    showToast('최상위 폴더는 슈퍼어드민만 생성할 수 있습니다.', 'warning');
+    return;
+  }
+  document.getElementById('folder-name').value = '';
+  new bootstrap.Modal(document.getElementById('folderModal')).show();
+  setTimeout(() => document.getElementById('folder-name').focus(), 300);
+}
+
+async function doCreateFolder() {
+  const name = document.getElementById('folder-name').value.trim();
+  if (!name) { showToast('폴더 이름을 입력하세요', 'warning'); return; }
+
+  // full_path 계산
+  const parentPath = currentPath.length ? currentPath.map(p => p.name).join('/') : '';
+  const fullPath   = parentPath ? `/${parentPath}/${name}` : `/${name}`;
+
+  const body = { name, parent: currentFolderId || null, full_path: fullPath };
+  const accessEl = document.getElementById('folder-access-level');
+  if (accessEl) body.access_level = accessEl.value;
+
+  try {
+    await apiPost(`${API}/nas/folders/`, body);
+    bootstrap.Modal.getInstance(document.getElementById('folderModal')).hide();
+    showToast(`'${name}' 폴더 생성됨`, 'success');
+    // 사이드 트리 갱신
+    if (currentFolderId === null) {
+      await loadSideTree(null);
+    }
+    loadContents(currentPage);
+  } catch(e) { showToast('폴더 생성 실패', 'error'); }
+}
+
+// ── 폴더 삭제 ────────────────────────────────────────────────
+async function deleteFolder(e, folderId, folderName) {
+  e.stopPropagation();
+  if (!confirm(`'${folderName}' 폴더를 삭제하시겠습니까?\n(하위 폴더와 파일이 모두 삭제됩니다)`)) return;
+  try {
+    await fetch(`${API}/nas/folders/${folderId}/`, {
+      method: 'DELETE', headers: { 'X-CSRFToken': getCsrfToken() }
+    });
+    showToast('폴더 삭제됨', 'success');
+    if (currentFolderId === null) await loadSideTree(null);
+    loadContents(currentPage);
+  } catch(e) { showToast('삭제 실패', 'error'); }
+}
+
+// ── 파일 삭제 ────────────────────────────────────────────────
+async function deleteFile(e, fileId) {
+  e.stopPropagation();
+  if (!confirm('파일을 삭제하시겠습니까?')) return;
+  try {
+    await fetch(`${API}/nas/files/${fileId}/`, {
+      method: 'DELETE', headers: { 'X-CSRFToken': getCsrfToken() }
+    });
+    showToast('파일 삭제됨', 'success');
+    loadContents(currentPage);
+  } catch(e) { showToast('삭제 실패', 'error'); }
+}
+
+// ── 업로드 ───────────────────────────────────────────────────
+function openUploadModal() {
+  selectedFiles = [];
+  document.getElementById('up-file-list').innerHTML = '';
+  document.getElementById('up-progress').classList.add('d-none');
+  document.getElementById('up-bar').style.width = '0%';
+  const pathStr = currentPath.length ? currentPath.map(p => p.name).join(' / ') : '루트';
+  document.getElementById('upload-folder-path').textContent = pathStr;
+  if (!currentFolderId) {
+    showToast('업로드할 폴더를 먼저 선택하세요', 'warning');
+    return;
+  }
+  new bootstrap.Modal(document.getElementById('uploadModal')).show();
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  // 드래그 항목에 폴더가 포함될 수 있으므로 items 기준으로 처리
+}
+
+async function handleDrop(e) {
+  e.preventDefault();
+  const items = Array.from(e.dataTransfer.items || []);
+  const entries = items.map(i => i.webkitGetAsEntry?.()).filter(Boolean);
+  if (entries.length) {
+    const collected = await collectEntries(entries);
+    addFiles(collected);
+  } else {
+    addFiles(Array.from(e.dataTransfer.files));
+  }
+}
+
+// DataTransferEntry 재귀 수집
+async function collectEntries(entries) {
+  const files = [];
+  for (const entry of entries) {
+    if (entry.isFile) {
+      const file = await new Promise(res => entry.file(res));
+      // webkitRelativePath는 드래그 시 없으므로 entry.fullPath로 보완
+      Object.defineProperty(file, 'relativePath', { value: entry.fullPath.replace(/^\//, ''), writable: false });
+      files.push(file);
+    } else if (entry.isDirectory) {
+      const children = await readDirEntries(entry);
+      const sub = await collectEntries(children);
+      files.push(...sub);
+    }
+  }
+  return files;
+}
+
+function readDirEntries(dirEntry) {
+  return new Promise(resolve => {
+    const reader = dirEntry.createReader();
+    const all = [];
+    function read() {
+      reader.readEntries(entries => {
+        if (!entries.length) { resolve(all); return; }
+        all.push(...entries);
+        read();
+      });
+    }
+    read();
+  });
+}
+
+function previewSelected(input) {
+  addFiles(Array.from(input.files));
+  input.value = '';
+}
+
+function previewFolderSelected(input) {
+  addFiles(Array.from(input.files));
+  input.value = '';
+}
+
+function addFiles(files) {
+  selectedFiles = [...selectedFiles, ...files];
+  renderFilePreviewList();
+}
+
+function renderFilePreviewList() {
+  const list = document.getElementById('up-file-list');
+  if (!selectedFiles.length) { list.innerHTML = ''; return; }
+  // 폴더 구조 포함 시 경로 표시
+  const hasPaths = selectedFiles.some(f => (f.webkitRelativePath || f.relativePath || '').includes('/'));
+  list.innerHTML = `<div class="small text-muted mb-1">${selectedFiles.length}개 파일 선택됨</div>` +
+    selectedFiles.map((f, i) => {
+      const path = f.webkitRelativePath || f.relativePath || f.name;
+      return `<div class="d-flex align-items-center justify-content-between small border rounded px-2 py-1 mb-1">
+        <span class="text-truncate me-2" title="${path}">
+          <i class="bi ${mimeIcon(f.type).cls} me-1"></i>
+          ${hasPaths && path !== f.name ? `<span class="text-muted">${path.substring(0, path.lastIndexOf('/') + 1)}</span>` : ''}${f.name}
+        </span>
+        <span class="text-muted me-2 flex-shrink-0">${Math.round(f.size / 1024)}KB</span>
+        <button class="btn btn-xs btn-outline-danger p-0 px-1 flex-shrink-0" onclick="removeFile(${i})">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>`;
+    }).join('');
+}
+
+function removeFile(i) {
+  selectedFiles.splice(i, 1);
+  renderFilePreviewList();
+}
+
+// 폴더 경로 → 폴더 ID 캐시 (업로드 중 재사용)
+const _folderCache = {};
+
+async function ensureFolderPath(pathParts, baseParentId, basePath) {
+  // pathParts: ['서브폴더A', '서브폴더B'] — 현재 폴더 기준 상대 경로
+  let parentId = baseParentId;
+  let builtPath = basePath;
+  for (const part of pathParts) {
+    const key = `${parentId}/${part}`;
+    if (_folderCache[key]) {
+      parentId = _folderCache[key];
+      builtPath = `${builtPath}/${part}`;
+      continue;
+    }
+    builtPath = `${builtPath}/${part}`;
+    try {
+      const resp = await fetch(`${API}/nas/folders/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+        body: JSON.stringify({ name: part, parent: parentId, full_path: builtPath }),
+      });
+      const data = await resp.json();
+      _folderCache[key] = data.id;
+      parentId = data.id;
+    } catch(e) { break; }
+  }
+  return parentId;
+}
+
+async function doUpload() {
+  if (!currentFolderId)     { showToast('폴더를 선택하세요', 'warning'); return; }
+  if (!selectedFiles.length){ showToast('파일을 선택하세요', 'warning'); return; }
+
+  const desc  = document.getElementById('up-desc').value;
+  const prog  = document.getElementById('up-progress');
+  const bar   = document.getElementById('up-bar');
+  const stat  = document.getElementById('up-status');
+  prog.classList.remove('d-none');
+
+  // _folderCache 초기화
+  Object.keys(_folderCache).forEach(k => delete _folderCache[k]);
+
+  const basePath = '/' + currentPath.map(p => p.name).join('/');
+  let done = 0;
+
+  for (const file of selectedFiles) {
+    const relPath = file.webkitRelativePath || file.relativePath || '';
+    // 상대경로에서 디렉터리 부분 추출 (첫 번째 세그먼트는 선택한 폴더명이므로 제거)
+    const parts = relPath ? relPath.split('/') : [];
+    // parts[0] = 선택한 폴더명, parts[마지막] = 파일명, 중간 = 하위폴더들
+    const subDirParts = parts.length > 1 ? parts.slice(1, -1) : [];
+
+    let targetFolderId = currentFolderId;
+    if (subDirParts.length) {
+      stat.textContent = `폴더 생성 중: ${subDirParts.join('/')}`;
+      targetFolderId = await ensureFolderPath(subDirParts, currentFolderId, basePath);
+    }
+
+    stat.textContent = `업로드 중 (${done + 1}/${selectedFiles.length}): ${file.name}`;
+    const fd = new FormData();
+    fd.append('folder', targetFolderId);
+    fd.append('file', file);
+    fd.append('description', desc);
+    try {
+      const resp = await fetch(`${API}/nas/files/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCsrfToken() },
+        body: fd,
+      });
+      if (resp.ok) done++;
+    } catch(e) {}
+    bar.style.width = `${Math.round((done) / selectedFiles.length * 100)}%`;
+  }
+
+  stat.textContent = `${done}/${selectedFiles.length}개 완료`;
+  showToast(`${done}개 파일 업로드 완료`, 'success');
+  bootstrap.Modal.getInstance(document.getElementById('uploadModal'))?.hide();
+  await loadSideTree(null);
+  loadContents(currentPage);
+  loadStats();
+}
+
+// ── 미리보기 ─────────────────────────────────────────────────
+async function openPreview(id) {
+  try {
+    const f = await apiGet(`${API}/nas/files/${id}/`);
+    document.getElementById('preview-title').textContent = f.original_name || f.name;
+    document.getElementById('preview-dl-btn').href = `${API}/nas/files/${id}/download/`;
+    document.getElementById('preview-meta').innerHTML = `
+      <span class="me-3"><i class="bi bi-folder me-1 text-warning"></i>${f.folder_path||'-'}</span>
+      <span class="me-3"><i class="bi bi-tag me-1"></i>${f.category_display||f.category}</span>
+      <span class="me-3"><i class="bi bi-hdd me-1"></i>${f.file_size_kb||0} KB</span>
+      <span><i class="bi bi-calendar me-1"></i>${formatDate(f.uploaded_at)}</span>`;
+
+    const body = document.getElementById('preview-body');
+    const mime = f.mime_type || '';
+    const previewUrl = `${API}/nas/files/${id}/preview/`;
+    if (mime.startsWith('image/')) {
+      body.innerHTML = `<img src="${previewUrl}" class="img-fluid p-2" style="max-height:500px;">`;
+    } else if (mime === 'application/pdf') {
+      body.innerHTML = `<embed src="${previewUrl}" type="application/pdf" class="w-100" style="height:500px;">`;
+    } else {
+      const icon = mimeIcon(mime);
+      body.innerHTML = `<div class="text-center p-4">
+        <i class="bi ${icon.cls} display-1" style="color:${icon.color}"></i>
+        <div class="mt-2 fw-semibold">${f.original_name||f.name}</div>
+        <div class="text-muted small mt-1">${mime||'알 수 없는 형식'}</div>
+        <div class="text-muted small">${f.file_size_kb||0} KB</div>
+      </div>`;
+    }
+    new bootstrap.Offcanvas(document.getElementById('previewCanvas')).show();
+  } catch(e) { showToast('미리보기 실패', 'error'); }
+}
+
+// ── 통계 ────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const d = await apiGet(`${API}/nas/files/stats/`);
+    document.getElementById('nas-stats').innerHTML =
+      `<i class="bi bi-files me-1"></i>${d.total_files}개 &nbsp; <i class="bi bi-hdd me-1"></i>${d.total_size_mb}MB`;
+  } catch(e) {}
+}
+
+// ── MIME 아이콘 ──────────────────────────────────────────────
+function mimeIcon(mime) {
+  if (!mime) return { cls: 'bi-file-earmark', color: '#6c757d' };
+  if (mime.startsWith('image/'))                            return { cls: 'bi-file-image',   color: '#0d6efd' };
+  if (mime === 'application/pdf')                           return { cls: 'bi-file-pdf',     color: '#dc3545' };
+  if (mime.includes('word'))                                return { cls: 'bi-file-word',    color: '#0d6efd' };
+  if (mime.includes('excel') || mime.includes('spreadsheet')) return { cls: 'bi-file-excel', color: '#198754' };
+  if (mime.includes('zip') || mime.includes('rar'))         return { cls: 'bi-file-zip',    color: '#ffc107' };
+  if (mime.startsWith('video/'))                            return { cls: 'bi-file-play',   color: '#6f42c1' };
+  if (mime.startsWith('text/'))                             return { cls: 'bi-file-text',   color: '#20c997' };
+  return { cls: 'bi-file-earmark', color: '#6c757d' };
+}
+
+// getCsrfToken — npms.js 전역 함수 사용
+
+// ── 컨텍스트 메뉴 ────────────────────────────────────────────
+let _ctxClipboard = null; // {action:'cut'|'copy', type:'folder'|'file', id, name}
+let _ctxTarget    = null; // 현재 우클릭 대상
+
+function showCtxMenuById(e, rowKey) {
+  const data = _ctxRowData[rowKey];
+  if (!data) return;
+  showCtxMenu(e, data.type, data.id, data.name, data.fileObj || null);
+}
+
+function showCtxMenu(e, type, id, name, fileObj) {
+  e.preventDefault();
+  e.stopPropagation();
+  _ctxTarget = { type, id, name, fileObj: fileObj || null };
+
+  const canPaste = _ctxClipboard !== null;
+  const isFolder = type === 'folder';
+
+  const items = [
+    { icon: 'bi-pencil',         label: '이름 바꾸기',  action: 'rename'     },
+    { icon: 'bi-scissors',       label: '잘라내기',     action: 'cut'        },
+    { icon: 'bi-files',          label: '복사',         action: 'copy'       },
+    { sep: true },
+    { icon: 'bi-clipboard-check',label: '붙여넣기',     action: 'paste',     disabled: !canPaste },
+    { sep: true },
+    { icon: 'bi-download',       label: '다운로드',     action: 'download'   },
+    { sep: true },
+    { icon: 'bi-info-circle',    label: '속성',         action: 'props'      },
+    { sep: true },
+    { icon: 'bi-trash',          label: '삭제',         action: 'delete',    cls: 'text-danger' },
+  ];
+
+  const menu = document.getElementById('ctx-menu');
+  menu.innerHTML = items.map(it => {
+    if (it.sep) return '<div class="dropdown-divider my-1"></div>';
+    const dis = it.disabled ? 'opacity-50 pe-none' : '';
+    return `<div class="px-3 py-1 small ctx-item ${dis} ${it.cls||''}"
+                 style="cursor:pointer;white-space:nowrap;"
+                 onmouseenter="this.classList.add('bg-primary-subtle')"
+                 onmouseleave="this.classList.remove('bg-primary-subtle')"
+                 onclick="handleCtxAction('${it.action}')">
+              <i class="bi ${it.icon} me-2"></i>${it.label}
+            </div>`;
+  }).join('');
+
+  // 화면 경계 처리
+  const mw = 170, mh = 280;
+  let x = e.clientX, y = e.clientY;
+  if (x + mw > window.innerWidth)  x = window.innerWidth  - mw - 4;
+  if (y + mh > window.innerHeight) y = window.innerHeight - mh - 4;
+
+  menu.style.left    = x + 'px';
+  menu.style.top     = y + 'px';
+  menu.style.display = 'block';
+}
+
+function hideCtxMenu() {
+  document.getElementById('ctx-menu').style.display = 'none';
+}
+document.addEventListener('click',       hideCtxMenu);
+document.addEventListener('contextmenu', e => { if (!e.target.closest('#ctx-menu')) hideCtxMenu(); });
+
+async function handleCtxAction(action) {
+  hideCtxMenu();
+  const t = _ctxTarget;
+  if (!t) return;
+
+  if (action === 'rename') {
+    document.getElementById('rename-input').value = t.name;
+    new bootstrap.Modal(document.getElementById('renameModal')).show();
+    setTimeout(() => { const el = document.getElementById('rename-input'); el.focus(); el.select(); }, 300);
+  }
+
+  else if (action === 'cut' || action === 'copy') {
+    _ctxClipboard = { action, type: t.type, id: t.id, name: t.name };
+    showToast(`'${t.name}' ${action === 'cut' ? '잘라내기' : '복사'} 완료 — 대상 폴더에서 붙여넣기 하세요`, 'info');
+  }
+
+  else if (action === 'paste') {
+    if (!_ctxClipboard) return;
+    const cb = _ctxClipboard;
+    // 붙여넣기 대상: 우클릭한 항목이 폴더면 그 안으로, 아니면 현재 폴더로
+    const destFolderId = (t.type === 'folder') ? t.id : currentFolderId;
+    if (!destFolderId) { showToast('붙여넣을 폴더를 선택하세요', 'warning'); return; }
+    try {
+      const endpoint = cb.type === 'folder'
+        ? `${API}/nas/folders/${cb.id}/move/`
+        : `${API}/nas/files/${cb.id}/move/`;
+      const body = cb.type === 'folder'
+        ? { parent: destFolderId }
+        : { folder: destFolderId };
+      await fetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+        body: JSON.stringify(body),
+      });
+      if (cb.action === 'cut') _ctxClipboard = null;
+      showToast(`'${cb.name}' 이동 완료`, 'success');
+      await loadSideTree(null);
+      loadContents(currentPage);
+    } catch(err) { showToast('이동 실패', 'error'); }
+  }
+
+  else if (action === 'download') {
+    const url = t.type === 'folder'
+      ? `${API}/nas/folders/${t.id}/download/`
+      : `${API}/nas/files/${t.id}/download/`;
+    const a = document.createElement('a'); a.href = url; a.click();
+  }
+
+  else if (action === 'props') {
+    if (t.type === 'folder') {
+      const d = await apiGet(`${API}/nas/folders/${t.id}/`);
+      document.getElementById('props-table').innerHTML = `
+        <tbody>
+          <tr><th class="ps-3 text-muted fw-normal" style="width:40%">이름</th><td>${d.name}</td></tr>
+          <tr><th class="ps-3 text-muted fw-normal">경로</th><td><small>${d.full_path}</small></td></tr>
+          <tr><th class="ps-3 text-muted fw-normal">접근 권한</th><td>${d.access_level_display||'-'}</td></tr>
+          <tr><th class="ps-3 text-muted fw-normal">하위 폴더</th><td>${d.children_count}개</td></tr>
+          <tr><th class="ps-3 text-muted fw-normal">파일 수</th><td>${d.files_count}개</td></tr>
+          <tr><th class="ps-3 text-muted fw-normal">생성일</th><td><small>${formatDate(d.created_at)}</small></td></tr>
+          <tr><th class="ps-3 text-muted fw-normal">생성자</th><td>${d.created_by_name||'-'}</td></tr>
+        </tbody>`;
+    } else {
+      const d = t.fileObj || await apiGet(`${API}/nas/files/${t.id}/`);
+      document.getElementById('props-table').innerHTML = `
+        <tbody>
+          <tr><th class="ps-3 text-muted fw-normal" style="width:40%">파일명</th><td><small>${d.original_name||d.name}</small></td></tr>
+          <tr><th class="ps-3 text-muted fw-normal">유형</th><td>${mimeExt(d.mime_type)}</td></tr>
+          <tr><th class="ps-3 text-muted fw-normal">크기</th><td>${d.file_size_kb||0} KB</td></tr>
+          <tr><th class="ps-3 text-muted fw-normal">폴더</th><td><small>${d.folder_path||'-'}</small></td></tr>
+          <tr><th class="ps-3 text-muted fw-normal">업로드일</th><td><small>${formatDate(d.uploaded_at)}</small></td></tr>
+          <tr><th class="ps-3 text-muted fw-normal">업로더</th><td>${d.uploaded_by_name||'-'}</td></tr>
+        </tbody>`;
+    }
+    new bootstrap.Modal(document.getElementById('propsModal')).show();
+  }
+
+  else if (action === 'delete') {
+    if (t.type === 'folder') await deleteFolder({ stopPropagation:()=>{} }, t.id, t.name);
+    else                     await deleteFile(  { stopPropagation:()=>{} }, t.id);
+  }
+}
+
+// 이름 바꾸기 실행
+async function doRename() {
+  const newName = document.getElementById('rename-input').value.trim();
+  if (!newName) { showToast('이름을 입력하세요', 'warning'); return; }
+  const t = _ctxTarget;
+  try {
+    const endpoint = t.type === 'folder'
+      ? `${API}/nas/folders/${t.id}/rename/`
+      : `${API}/nas/files/${t.id}/rename/`;
+    await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+      body: JSON.stringify({ name: newName }),
+    });
+    bootstrap.Modal.getInstance(document.getElementById('renameModal')).hide();
+    showToast('이름 변경 완료', 'success');
+    if (t.type === 'folder') await loadSideTree(null);
+    loadContents(currentPage);
+  } catch(err) { showToast('이름 변경 실패', 'error'); }
+}
+
+init();
+</script>
+
+<style>
+.side-folder-row { border-radius: 4px; color: inherit; }
+.side-folder-row:hover { background: #f0f4ff; }
+.side-folder-row.active { background: #e8f0fe; color: #0d6efd; font-weight: 600; }
+</style>
+{% endblock %}

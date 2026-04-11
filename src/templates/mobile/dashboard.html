@@ -1,0 +1,42 @@
+{% extends 'mobile/base.html' %}
+{% block title %}현장 홈{% endblock %}
+{% block header_title %}NPMS 현장{% endblock %}
+{% block header_left %}{% endblock %}
+{% block nav_home %}active{% endblock %}
+
+{% block content %}
+<div class="text-center py-3 mb-3">
+  <div style="font-size:15px;color:#6c757d;">{{ request.user.name }} 님, 안녕하세요</div>
+</div>
+
+<!-- 빠른 실행 -->
+<div class="row g-3 mb-4">
+  <div class="col-6">
+    <a href="/npms/mobile/incidents/create/" class="btn btn-primary btn-field" style="background:#1a5fa8;">
+      <i class="bi bi-plus-circle d-block fs-2 mb-1"></i>장애 접수
+    </a>
+  </div>
+  <div class="col-6">
+    <a href="/npms/mobile/incidents/" class="btn btn-outline-primary btn-field">
+      <i class="bi bi-list-ul d-block fs-2 mb-1"></i>장애 목록
+    </a>
+  </div>
+  <div class="col-6">
+    <a href="/npms/mobile/reports/cable/" class="btn btn-outline-success btn-field">
+      <i class="bi bi-ethernet d-block fs-2 mb-1"></i>포설 확인서
+    </a>
+  </div>
+  <div class="col-6">
+    <a href="/npms/mobile/reports/switch/" class="btn btn-outline-secondary btn-field">
+      <i class="bi bi-hdd-rack d-block fs-2 mb-1"></i>설치 확인서
+    </a>
+  </div>
+</div>
+
+<!-- PC 버전 링크 -->
+<div class="text-center mt-4">
+  <a href="/npms/" class="text-muted small">
+    <i class="bi bi-display me-1"></i>PC 버전으로 이동
+  </a>
+</div>
+{% endblock %}

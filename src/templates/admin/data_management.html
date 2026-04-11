@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}데이터 관리{% endblock %}
+{% block page_title %}<i class="bi bi-database me-2"></i>CSV 데이터 관리{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+  <div class="alert alert-info d-flex align-items-center py-2 mb-3">
+    <i class="bi bi-info-circle-fill me-2"></i>
+    <span class="small">CSV 파일은 UTF-8 (BOM 포함) 또는 UTF-8로 저장 후 업로드하세요. 헤더 행이 반드시 포함되어야 합니다.</span>
+  </div>
+
+  <div class="row g-3">
+
+    <!-- 장비목록 -->
+    <div class="col-12 col-md-6 col-xl-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header py-2 bg-white border-bottom">
+          <span class="fw-semibold"><i class="bi bi-hdd text-primary me-2"></i>장비목록 (스위치 S/N)</span>
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">컬럼: <code>모델명, 제조번호, 관리번호</code></p>
+          <div class="d-flex gap-2">
+            <a href="${API_BASE}/assets/assets/csv_download/" class="btn btn-sm btn-outline-primary"
+               onclick="this.href=API_BASE+'/assets/assets/csv_download/'">
+              <i class="bi bi-download me-1"></i>다운로드
+            </a>
+            <label class="btn btn-sm btn-outline-success mb-0">
+              <i class="bi bi-upload me-1"></i>업로드
+              <input type="file" class="d-none" accept=".csv" onchange="uploadCSV(this, 'assets/assets/csv_upload/')">
+            </label>
+          </div>
+          <div id="result-assets" class="mt-2"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 학교목록 -->
+    <div class="col-12 col-md-6 col-xl-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header py-2 bg-white border-bottom">
+          <span class="fw-semibold"><i class="bi bi-building text-success me-2"></i>학교목록</span>
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">컬럼: <code>학교명, 교육지원청, 학제, 주소, 위도, 경도, 전화번호</code></p>
+          <div class="d-flex gap-2">
+            <a id="dl-schools" href="#" class="btn btn-sm btn-outline-primary"
+               onclick="this.href=API_BASE+'/schools/schools/csv_download/';return true;">
+              <i class="bi bi-download me-1"></i>다운로드
+            </a>
+            <label class="btn btn-sm btn-outline-success mb-0">
+              <i class="bi bi-upload me-1"></i>업로드
+              <input type="file" class="d-none" accept=".csv" onchange="uploadCSV(this, 'schools/schools/csv_upload/')">
+            </label>
+          </div>
+          <div id="result-schools" class="mt-2"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 건물명 -->
+    <div class="col-12 col-md-6 col-xl-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header py-2 bg-white border-bottom">
+          <span class="fw-semibold"><i class="bi bi-house text-warning me-2"></i>건물명</span>
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">컬럼: <code>학교명, 건물명</code></p>
+          <div class="d-flex gap-2">
+            <a id="dl-buildings" href="#" class="btn btn-sm btn-outline-primary"
+               onclick="this.href=API_BASE+'/schools/buildings/csv_download/';return true;">
+              <i class="bi bi-download me-1"></i>다운로드
+            </a>
+            <label class="btn btn-sm btn-outline-success mb-0">
+              <i class="bi bi-upload me-1"></i>업로드
+              <input type="file" class="d-none" accept=".csv" onchange="uploadCSV(this, 'schools/buildings/csv_upload/')">
+            </label>
+          </div>
+          <div id="result-buildings" class="mt-2"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 인력정보 (집주소 포함) -->
+    <div class="col-12 col-md-6 col-xl-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header py-2 bg-white border-bottom">
+          <span class="fw-semibold"><i class="bi bi-people text-info me-2"></i>인력정보 (집주소 포함)</span>
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">컬럼: <code>username, 이름, 역할, 전화번호, 이메일, 교육지원청, 자택주소, 활성여부</code></p>
+          <div class="d-flex gap-2">
+            <a id="dl-workers" href="#" class="btn btn-sm btn-outline-primary"
+               onclick="this.href=API_BASE+'/accounts/api/users/csv_download/';return true;">
+              <i class="bi bi-download me-1"></i>다운로드
+            </a>
+            <label class="btn btn-sm btn-outline-success mb-0">
+              <i class="bi bi-upload me-1"></i>업로드
+              <input type="file" class="d-none" accept=".csv" onchange="uploadCSV(this, 'accounts/api/users/bulk_import/')">
+            </label>
+          </div>
+          <div id="result-workers" class="mt-2"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 출퇴근 기록 -->
+    <div class="col-12 col-md-6 col-xl-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header py-2 bg-white border-bottom">
+          <span class="fw-semibold"><i class="bi bi-clock text-secondary me-2"></i>출퇴근 기록</span>
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">근무일 / 인력명 / 출근시각 / 퇴근시각 / 근무시간 / 상태</p>
+          <div class="d-flex gap-2">
+            <a id="dl-attendance" href="#" class="btn btn-sm btn-outline-primary"
+               onclick="this.href=API_BASE+'/workforce/attendance/csv_download/';return true;">
+              <i class="bi bi-download me-1"></i>다운로드
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 스위치 설치 내역 (장애이력 포함) -->
+    <div class="col-12 col-md-6 col-xl-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header py-2 bg-white border-bottom">
+          <span class="fw-semibold"><i class="bi bi-router text-danger me-2"></i>장비 전체목록 내보내기</span>
+        </div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">관리번호 / 제조번호 / 모델 / 설치학교 / 설치위치 / 상태</p>
+          <div class="d-flex gap-2">
+            <a id="dl-full-assets" href="#" class="btn btn-sm btn-outline-primary"
+               onclick="this.href=API_BASE+'/assets/assets/csv_download/';return true;">
+              <i class="bi bi-download me-1"></i>전체 다운로드
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function uploadCSV(input, endpoint) {
+  const file = input.files[0];
+  if (!file) return;
+  // 업로드 결과 표시 요소 찾기 (가장 가까운 card-body 안의 result div)
+  const label = input.closest('label');
+  const cardBody = label ? label.closest('.card-body') : null;
+  const el = cardBody ? cardBody.querySelector('[id^="result-"]') : null;
+  if (el) el.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>업로드 중...';
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch(`${API_BASE}/${endpoint}`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': CSRF_TOKEN},
+      body: fd,
+    });
+    const data = await res.json();
+    if (el) {
+      const ok  = data.created || data.updated || 0;
+      const err = (data.errors || []).length;
+      el.innerHTML = `<div class="alert alert-${err?'warning':'success'} py-1 px-2 mb-0 small mt-1">
+        등록: ${ok}건${data.updated ? ' / 업데이트: '+data.updated+'건' : ''}${err ? ' / 오류: '+err+'건' : ''}
+      </div>`;
+    }
+    showToast((data.created||0) + '건 처리 완료', 'success');
+  } catch(e) {
+    if (el) el.innerHTML = '<div class="alert alert-danger py-1 px-2 mb-0 small mt-1">업로드 실패</div>';
+  }
+  input.value = '';
+}
+</script>
+{% endblock %}

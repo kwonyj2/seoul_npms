@@ -1,0 +1,1089 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}NMS 모니터링{% endblock %}
+{% block page_title %}<i class="bi bi-activity me-2 text-success"></i>NMS 네트워크 모니터링{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+  <!-- KPI 요약 -->
+  <div class="row g-2 mb-3" id="nms-kpi">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-2">
+        <div class="small text-muted">전체 장비</div>
+        <div class="fw-bold fs-5" id="kpi-total">-</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-2">
+        <div class="small text-success">정상</div>
+        <div class="fw-bold fs-5 text-success" id="kpi-up">-</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-2 border-danger">
+        <div class="small text-danger">장애</div>
+        <div class="fw-bold fs-5 text-danger" id="kpi-down">-</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm text-center py-2">
+        <div class="small text-warning">경고</div>
+        <div class="fw-bold fs-5 text-warning" id="kpi-warning">-</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 탭 -->
+  <ul class="nav nav-tabs mb-2" id="nms-tabs">
+    <li class="nav-item">
+      <a class="nav-link active" href="#" onclick="switchTab('monitor',this);return false;">
+        <i class="bi bi-activity me-1"></i>모니터링
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" onclick="switchTab('topology',this);return false;">
+        <i class="bi bi-diagram-3 me-1"></i>토폴로지
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" onclick="switchTab('assets',this);return false;">
+        <i class="bi bi-link-45deg me-1"></i>자산 연동
+      </a>
+    </li>
+  </ul>
+
+  <!-- ── 모니터링 탭 ── -->
+  <div id="tab-monitor">
+    <div class="row g-2">
+      <!-- 장애 이벤트 -->
+      <div class="col-12 col-xl-5">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between">
+            <span class="fw-semibold"><i class="bi bi-bell text-danger me-1"></i>미해결 이벤트</span>
+            <span class="live-dot"></span>
+          </div>
+          <div class="card-body p-0" id="events-list" style="max-height:400px;overflow-y:auto;">
+            <div class="text-center py-3 text-muted small">로딩 중...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 장비 목록 -->
+      <div class="col-12 col-xl-7">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header py-2 bg-white border-bottom d-flex align-items-center gap-2">
+            <span class="fw-semibold"><i class="bi bi-hdd-network text-primary me-1"></i>장비 현황</span>
+            <input type="text" id="dev-search" class="form-control form-control-sm ms-auto"
+                   style="width:180px;" placeholder="학교명·IP 검색">
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th>장비명</th>
+                  <th>학교</th>
+                  <th style="width:105px;">IP</th>
+                  <th style="width:60px;">유형</th>
+                  <th style="width:60px;">상태</th>
+                  <th style="width:55px;">자산</th>
+                  <th style="width:75px;">마지막 응답</th>
+                </tr>
+              </thead>
+              <tbody id="device-tbody">
+                <tr><td colspan="7" class="text-center py-3 text-muted">로딩 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 토폴로지 탭 ── -->
+  <div id="tab-topology" class="d-none">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="fw-semibold"><i class="bi bi-diagram-3 text-primary me-1"></i>네트워크 토폴로지</span>
+          <div class="d-flex gap-2 align-items-center flex-wrap">
+            <button class="btn btn-sm btn-warning text-white" onclick="startBulkAnalyze()" id="btn-bulk-analyze">
+              <i class="bi bi-collection me-1"></i>전체 구성도 분석
+            </button>
+            <button class="btn btn-sm btn-success" onclick="showJsonImportModal()">
+              <i class="bi bi-cloud-download me-1"></i>JSON 가져오기
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="exportCsv()">
+              <i class="bi bi-filetype-csv me-1"></i>CSV 다운로드
+            </button>
+            <button class="btn btn-sm btn-outline-info" onclick="downloadSnmpGuide()">
+              <i class="bi bi-file-word me-1"></i>SNMP 가이드
+            </button>
+            <button class="btn btn-sm btn-outline-primary" onclick="generateTopology()">
+              <i class="bi bi-arrow-clockwise me-1"></i>재생성
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="topoFit()">
+              <i class="bi bi-fullscreen"></i>
+            </button>
+          </div>
+        </div>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          <select id="topo-center" class="form-select form-select-sm" style="width:160px;" onchange="onTopoCenter()">
+            <option value="">교육지원청 선택</option>
+          </select>
+          <select id="topo-type" class="form-select form-select-sm" style="width:120px;" onchange="onTopoType()" disabled>
+            <option value="">학제 선택</option>
+          </select>
+          <select id="topo-school" class="form-select form-select-sm" style="width:200px;" onchange="loadTopology()" disabled>
+            <option value="">학교 선택</option>
+          </select>
+        </div>
+      </div>
+      <!-- 망구분 + 케이블 필터 (버튼형) -->
+      <div class="px-3 py-2 border-bottom bg-light">
+        <div class="d-flex align-items-center gap-1 flex-wrap mb-1">
+          <span class="topo-filter-label">망구분</span>
+          <button class="topo-btn topo-net-btn active" data-net="__all__" onclick="topoFilterNet(this)">전체</button>
+          <button class="topo-btn topo-net-btn" data-net="교사망"  onclick="topoFilterNet(this)" style="--tc:#0d6efd;">교사망</button>
+          <button class="topo-btn topo-net-btn" data-net="학생망"  onclick="topoFilterNet(this)" style="--tc:#198754;">학생망</button>
+          <button class="topo-btn topo-net-btn" data-net="기타망"  onclick="topoFilterNet(this)" style="--tc:#fd7e14;">기타망</button>
+          <button class="topo-btn topo-net-btn" data-net="무선망"  onclick="topoFilterNet(this)" style="--tc:#dc3545;">무선망</button>
+          <button class="topo-btn topo-net-btn" data-net="전화망"  onclick="topoFilterNet(this)" style="--tc:#6f42c1;">전화망</button>
+        </div>
+        <div class="d-flex align-items-center gap-1 flex-wrap">
+          <span class="topo-filter-label">케이블</span>
+          <button class="topo-btn topo-cable-btn active" data-cable="__all__" onclick="topoFilterCable(this)">전체</button>
+          <button class="topo-btn topo-cable-btn" data-cable="fiber"   onclick="topoFilterCable(this)" style="--tc:#dc3545;">광케이블</button>
+          <button class="topo-btn topo-cable-btn" data-cable="cat6"    onclick="topoFilterCable(this)" style="--tc:#0d6efd;">Cat6</button>
+          <button class="topo-btn topo-cable-btn" data-cable="cat5e"   onclick="topoFilterCable(this)" style="--tc:#198754;">Cat5e</button>
+          <button class="topo-btn topo-cable-btn" data-cable="cat5"    onclick="topoFilterCable(this)" style="--tc:#6c757d;">Cat5</button>
+        </div>
+      </div>
+
+      <!-- 토폴로지 캔버스 + 범례 오버레이 -->
+      <div style="position:relative;">
+        <div id="topo-container" style="height:580px; background:#f8f9fa;">
+          <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+            <div class="text-center">
+              <i class="bi bi-diagram-3 display-4 d-block mb-2"></i>
+              학교를 선택하면 토폴로지가 표시됩니다
+            </div>
+          </div>
+        </div>
+
+        <!-- 범례 (우측 하단 오버레이) -->
+        <div id="topo-legend" style="display:none;position:absolute;right:12px;bottom:12px;
+             background:rgba(255,255,255,0.96);border:1px solid #dee2e6;border-radius:8px;
+             padding:10px 14px;font-size:11px;min-width:195px;
+             box-shadow:0 2px 10px rgba(0,0,0,.13);z-index:5;">
+          <div class="fw-bold mb-2" style="font-size:12px;">망 색상 × 케이블 선 스타일</div>
+          <div class="text-muted fw-semibold mb-1" style="font-size:10px;">망 구분 (노드 테두리 색)</div>
+          <div class="d-flex gap-2 flex-wrap mb-2" style="font-size:11px;">
+            <span><span class="leg-dot" style="background:#0d6efd;"></span> 교사망</span>
+            <span><span class="leg-dot" style="background:#198754;"></span> 학생망</span>
+            <span><span class="leg-dot" style="background:#fd7e14;"></span> 기타망</span>
+            <span><span class="leg-dot" style="background:#dc3545;"></span> 무선망</span>
+          </div>
+          <div class="text-muted fw-semibold mb-1" style="font-size:10px;">케이블 유형 (선 스타일)</div>
+          <div class="d-flex flex-column gap-1" style="font-size:11px;">
+            <div><span class="leg-line" style="border-top:3px solid #888;"></span> 광케이블 굵은 실선</div>
+            <div><span class="leg-line" style="border-top:2px solid #888;"></span> Cat6 보통 실선</div>
+            <div><span class="leg-line" style="border-top:2px dashed #888;border-spacing:8px;"></span> Cat5e 긴 점선</div>
+            <div><span class="leg-line" style="border-top:2px dotted #888;"></span> Cat5 짧은 점선</div>
+          </div>
+          <hr class="my-1">
+          <div class="text-muted" style="font-size:10px;">노드 클릭 시 상세정보 표시<br>총 <span id="legend-node-cnt">-</span>대 · 링크 <span id="legend-edge-cnt">-</span>개</div>
+        </div>
+      </div>
+
+      <!-- 장비/링크 클릭 상세 팝업 -->
+      <div class="card-footer py-2 small" id="topo-detail" style="display:none;">
+        <div class="d-flex justify-content-between align-items-start">
+          <div class="flex-grow-1" id="topo-detail-body"></div>
+          <button class="btn btn-sm btn-close ms-2"
+                  onclick="document.getElementById('topo-detail').style.display='none'"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JSON 가져오기 모달 -->
+  <div class="modal fade" id="jsonImportModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header py-2">
+          <h6 class="modal-title"><i class="bi bi-cloud-download me-1"></i>토폴로지 JSON 가져오기</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info small py-2 mb-3">
+            <strong>사용법:</strong> Claude에게 구성도 이미지를 첨부하여 분석 요청한 후, 받은 JSON을 아래에 붙여넣기하세요.<br>
+            기존 수동 등록 장비/링크는 교체됩니다.
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">학교</label>
+            <select id="json-import-school" class="form-select form-select-sm" style="max-width:300px;">
+              <option value="">-- 학교 선택 --</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label small fw-semibold">JSON 데이터</label>
+            <textarea id="json-import-text" class="form-control font-monospace" rows="12"
+              placeholder='{"nodes":[{"id":1,"label":"방화벽","device_type":"firewall",...}], "edges":[...]}'
+              style="font-size:11px;"></textarea>
+          </div>
+          <div id="json-import-error" class="text-danger small mt-1 d-none"></div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+          <button type="button" class="btn btn-sm btn-success" onclick="submitJsonImport()" id="btn-json-import">
+            <i class="bi bi-upload me-1"></i>가져오기
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 전체 구성도 분석 진행 패널 -->
+  <div id="bulk-analyze-panel" class="card border-0 shadow-sm mt-2 d-none">
+    <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center">
+      <span class="fw-semibold"><i class="bi bi-collection text-warning me-1"></i>전체 구성도 일괄 분석</span>
+      <span id="bulk-analyze-badge" class="badge bg-secondary">대기</span>
+    </div>
+    <div class="card-body py-2">
+      <div class="d-flex justify-content-between small mb-1">
+        <span id="bulk-analyze-text">처리 중...</span>
+        <span id="bulk-analyze-counts"></span>
+      </div>
+      <div class="progress mb-2" style="height:10px;">
+        <div id="bulk-analyze-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
+             style="width:0%"></div>
+      </div>
+      <div id="bulk-analyze-table" style="max-height:220px;overflow-y:auto;display:none;">
+        <table class="table table-sm table-bordered mb-0" style="font-size:11px;">
+          <thead class="table-light sticky-top">
+            <tr><th>학교</th><th style="width:60px;">결과</th><th style="width:50px;">장비</th><th style="width:50px;">링크</th><th>비고</th></tr>
+          </thead>
+          <tbody id="bulk-analyze-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 자산 연동 탭 ── -->
+  <div id="tab-assets" class="d-none">
+    <div class="row g-3">
+
+      <!-- 자산↔NMS 연동 현황 -->
+      <div class="col-12 col-xl-7">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header py-2 bg-white border-bottom d-flex align-items-center gap-2">
+            <span class="fw-semibold"><i class="bi bi-link-45deg text-primary me-1"></i>NMS 장비 ↔ 자산 연동 현황</span>
+            <button class="btn btn-xs btn-outline-secondary ms-auto" onclick="loadAssetSync()">
+              <i class="bi bi-arrow-clockwise"></i> 새로고침
+            </button>
+          </div>
+          <div class="table-responsive" style="max-height:420px;overflow-y:auto;">
+            <table class="table table-sm table-hover mb-0">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th>장비명</th>
+                  <th>학교</th>
+                  <th style="width:100px;">IP</th>
+                  <th style="width:60px;">상태</th>
+                  <th style="width:80px;">자산 연결</th>
+                  <th style="width:80px;">S/N</th>
+                </tr>
+              </thead>
+              <tbody id="asset-sync-tbody">
+                <tr><td colspan="6" class="text-center py-3 text-muted small">로딩 중...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card-footer py-1 small text-muted" id="asset-sync-stats">-</div>
+        </div>
+      </div>
+
+      <!-- 학교 장비목록 → Asset 변환 -->
+      <div class="col-12 col-xl-5">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header py-2 bg-white border-bottom">
+            <span class="fw-semibold"><i class="bi bi-arrow-right-circle text-success me-1"></i>학교 장비목록 → 자산 변환</span>
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">학교 선택</label>
+              <select id="convert-school" class="form-select form-select-sm">
+                <option value="">-- 학교 선택 --</option>
+              </select>
+            </div>
+            <div class="alert alert-info small py-2 mb-3">
+              <i class="bi bi-info-circle me-1"></i>
+              학교 상세의 <strong>장비목록(SchoolEquipment)</strong>을 자산관리(Asset)로 일괄 변환합니다.<br>
+              변환된 자산에 <strong>관리 IP / SNMP 설정</strong>을 등록하면 NMS 모니터링이 자동 시작됩니다.
+            </div>
+            <div id="convert-preview" class="mb-3 d-none">
+              <div class="small fw-semibold mb-1">장비목록 미리보기</div>
+              <div id="convert-preview-body" class="border rounded p-2 small bg-light" style="max-height:150px;overflow-y:auto;"></div>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="previewEquipment()">
+                <i class="bi bi-eye me-1"></i>미리보기
+              </button>
+              <button class="btn btn-sm btn-success flex-fill" onclick="convertEquipment()">
+                <i class="bi bi-arrow-right-circle me-1"></i>자산으로 변환
+              </button>
+            </div>
+            <div id="convert-result" class="mt-2 d-none"></div>
+          </div>
+        </div>
+
+        <!-- 자산 네트워크 설정 안내 -->
+        <div class="card border-0 shadow-sm mt-3">
+          <div class="card-header py-2 bg-white border-bottom">
+            <span class="fw-semibold"><i class="bi bi-info-circle text-info me-1"></i>NMS 자동 등록 흐름</span>
+          </div>
+          <div class="card-body small">
+            <ol class="mb-0 ps-3">
+              <li class="mb-1"><strong>자산 관리</strong>(<code>/assets/</code>)에서 장비 등록 또는 변환</li>
+              <li class="mb-1">장비 상세 → <strong>네트워크 설정 탭</strong>에서<br>
+                관리 IP · SNMP Community 입력 후 저장</li>
+              <li class="mb-1">저장 즉시 <strong>NMS 모니터링 장비</strong>에 자동 추가</li>
+              <li class="mb-1">Celery가 SNMP 폴링하여 <strong>상태(정상/장애)</strong> 자동 갱신</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<link rel="stylesheet" href="{% static 'css/vis-network.min.css' %}">
+<script src="{% static 'js/vis-network.min.js' %}"></script>
+<style>
+/* ── 토폴로지 필터 버튼 ── */
+.topo-filter-label {
+  font-size: 12px; font-weight: 600; color: #6c757d;
+  min-width: 46px;
+}
+.topo-btn {
+  padding: 2px 11px; font-size: 11px; border-radius: 4px; cursor: pointer;
+  border: 1px solid #ced4da; background: #f8f9fa; color: #495057;
+  transition: background .15s, color .15s;
+}
+.topo-btn:hover { background: #e9ecef; }
+.topo-btn.active {
+  background: var(--tc, #495057); color: #fff;
+  border-color: var(--tc, #495057);
+}
+/* 전체 버튼 활성 */
+.topo-net-btn[data-net="__all__"].active,
+.topo-cable-btn[data-cable="__all__"].active { background:#495057; border-color:#495057; }
+/* ── 범례 요소 ── */
+.leg-dot {
+  display: inline-block; width: 12px; height: 12px;
+  border-radius: 50%; vertical-align: middle; margin-right: 3px;
+}
+.leg-line {
+  display: inline-block; width: 36px; vertical-align: middle; margin-right: 4px;
+}
+</style>
+<script>
+const STATUS_BADGE = {
+  up:      '<span class="badge bg-success">정상</span>',
+  down:    '<span class="badge bg-danger">장애</span>',
+  warning: '<span class="badge bg-warning text-dark">경고</span>',
+  unknown: '<span class="badge bg-secondary">미확인</span>',
+};
+const SEVERITY_COLOR = { critical:'danger', major:'warning', minor:'info', info:'secondary' };
+
+// ── KPI ──────────────────────────────────────────────────────
+async function loadSummary() {
+  try {
+    const data = await apiGet(`${API_BASE}/network/devices/summary/`);
+    document.getElementById('kpi-total').textContent   = numFmt(data.total);
+    document.getElementById('kpi-up').textContent      = numFmt(data.up);
+    document.getElementById('kpi-down').textContent    = numFmt(data.down);
+    document.getElementById('kpi-warning').textContent = numFmt(data.warning);
+  } catch(e) {}
+}
+
+// ── 이벤트 ───────────────────────────────────────────────────
+async function loadEvents() {
+  try {
+    const data = await apiGet(`${API_BASE}/network/events/active_summary/`);
+    const container = document.getElementById('events-list');
+    const latest = data.latest || [];
+    if (!latest.length) {
+      container.innerHTML = '<div class="text-center text-success py-3 small"><i class="bi bi-check-circle-fill"></i> 이벤트 없음</div>';
+      return;
+    }
+    container.innerHTML = latest.map(e => `
+      <div class="px-3 py-2 border-bottom d-flex gap-2 align-items-start">
+        <i class="bi bi-exclamation-triangle text-${SEVERITY_COLOR[e.severity]||'secondary'} mt-1"></i>
+        <div class="flex-grow-1">
+          <div class="small fw-semibold">${e.device_name} (${e.school_name||'-'})</div>
+          <div class="text-muted" style="font-size:.75rem;">${e.message}</div>
+          <small class="text-muted">${timeAgo(e.occurred_at)}</small>
+        </div>
+        <button class="btn btn-xs btn-outline-success flex-shrink-0" onclick="resolveEvent(${e.id})">해결</button>
+      </div>`).join('');
+  } catch(e) {}
+}
+
+// ── 장비 목록 ─────────────────────────────────────────────────
+async function loadDevices(q = '') {
+  try {
+    const params = { page_size: 50 };
+    if (q) params.q = q;
+    const data = await apiGet(`${API_BASE}/network/devices/`, params);
+    const tbody = document.getElementById('device-tbody');
+    const items = data.results || [];
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-3 text-muted">장비 없음</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(d => `
+      <tr>
+        <td class="small fw-semibold">${d.name}</td>
+        <td><small class="text-muted">${d.school_name||'-'}</small></td>
+        <td><small class="font-monospace">${d.ip_address||'-'}</small></td>
+        <td><small>${d.type_display||d.device_type||'-'}</small></td>
+        <td>${STATUS_BADGE[d.status]||d.status}</td>
+        <td class="text-center">
+          ${d.asset_id
+            ? `<a href="/npms/assets/?id=${d.asset_id}" class="badge bg-success text-decoration-none" title="자산 연결됨">연결</a>`
+            : `<span class="badge bg-light text-muted border">미연결</span>`}
+        </td>
+        <td><small class="text-muted">${d.last_seen ? timeAgo(d.last_seen) : '-'}</small></td>
+      </tr>`).join('');
+  } catch(e) {}
+}
+
+async function resolveEvent(id) {
+  try {
+    await apiPost(`${API_BASE}/network/events/${id}/resolve/`, {});
+    showToast('이벤트 해결 처리됨', 'success');
+    loadEvents(); loadSummary();
+  } catch(e) { showToast('처리 실패', 'error'); }
+}
+
+let devSearchTimer;
+document.getElementById('dev-search').addEventListener('input', function() {
+  clearTimeout(devSearchTimer);
+  devSearchTimer = setTimeout(() => loadDevices(this.value), 400);
+});
+
+loadSummary(); loadEvents(); loadDevices();
+setInterval(() => { loadSummary(); loadEvents(); }, 30000);
+
+// ── 탭 전환 ─────────────────────────────────────────────────
+function switchTab(name, el) {
+  document.querySelectorAll('#nms-tabs .nav-link').forEach(a => a.classList.remove('active'));
+  el.classList.add('active');
+  ['monitor','topology','assets'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('d-none', t !== name);
+  });
+  if (name === 'topology') { if (!topoNetwork) loadTopoSchools(); _checkBulkAnalyzeOnLoad(); }
+  if (name === 'assets') { loadAssetSync(); loadConvertSchools(); }
+}
+
+// ── 토폴로지 ─────────────────────────────────────────────────
+let topoNetwork = null;
+let _topoTree = [];   // tree API 결과 캐시
+
+async function loadTopoSchools() {
+  try {
+    _topoTree = await apiGet(`${API_BASE}/schools/schools/tree/`, {});
+    const sel = document.getElementById('topo-center');
+    _topoTree.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.name;
+      sel.appendChild(o);
+    });
+  } catch(e) { console.error('tree load error:', e); }
+}
+
+function onTopoCenter() {
+  const centerId = parseInt(document.getElementById('topo-center').value);
+  const typeSel  = document.getElementById('topo-type');
+  const schoolSel = document.getElementById('topo-school');
+
+  typeSel.innerHTML = '<option value="">학제 선택</option>';
+  schoolSel.innerHTML = '<option value="">학교 선택</option>';
+  typeSel.disabled = true;
+  schoolSel.disabled = true;
+
+  if (!centerId) return;
+  const center = _topoTree.find(c => c.id === centerId);
+  if (!center) return;
+
+  (center.types || []).forEach(t => {
+    const o = document.createElement('option');
+    o.value = t.id; o.textContent = `${t.name} (${t.count})`;
+    typeSel.appendChild(o);
+  });
+  typeSel.disabled = false;
+}
+
+function onTopoType() {
+  const centerId = parseInt(document.getElementById('topo-center').value);
+  const typeId   = parseInt(document.getElementById('topo-type').value);
+  const schoolSel = document.getElementById('topo-school');
+
+  schoolSel.innerHTML = '<option value="">학교 선택</option>';
+  schoolSel.disabled = true;
+
+  if (!centerId || !typeId) return;
+  const center = _topoTree.find(c => c.id === centerId);
+  if (!center) return;
+  const type = (center.types || []).find(t => t.id === typeId);
+  if (!type) return;
+
+  (type.schools || []).forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id; o.textContent = s.name;
+    schoolSel.appendChild(o);
+  });
+  schoolSel.disabled = false;
+}
+
+async function loadTopology() {
+  const schoolId = document.getElementById('topo-school').value;
+  if (!schoolId) return;
+  const container = document.getElementById('topo-container');
+  container.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>로딩 중...</div>';
+  try {
+    const data = await apiGet(`${API_BASE}/network/topology/live/`, { school_id: schoolId });
+    renderTopology(data);
+  } catch(e) {
+    console.error('loadTopology error:', e);
+    container.innerHTML =
+      `<div class="d-flex align-items-center justify-content-center h-100 text-danger">오류: ${e.message || e}</div>`;
+  }
+}
+
+async function generateTopology() {
+  const schoolId = document.getElementById('topo-school').value;
+  if (!schoolId) { showToast('학교를 선택하세요', 'warning'); return; }
+  try {
+    await apiPost(`${API_BASE}/network/topology/generate/`, { school_id: schoolId });
+    showToast('토폴로지 스냅샷 저장됨', 'success');
+    loadTopology();
+  } catch(e) { showToast('생성 실패', 'error'); }
+}
+
+let _topoAllNodes = [];
+let _topoAllEdges = [];
+let _topoNodes    = null;
+let _topoEdges    = null;
+let _activeNet    = '__all__';
+let _activeCable  = '__all__';
+
+// 계층 라벨
+const LEVEL_LABELS = { 0:'보안', 1:'1계위', 2:'2계위', 3:'3계위', 4:'4계위' };
+
+function renderTopology(data) {
+  const container = document.getElementById('topo-container');
+  _topoAllNodes = data.nodes || [];
+  _topoAllEdges = data.edges || [];
+
+  if (!_topoAllNodes.length) {
+    container.innerHTML =
+      '<div class="d-flex align-items-center justify-content-center h-100 text-muted">' +
+      '<div class="text-center"><i class="bi bi-diagram-3 display-4 d-block mb-2"></i>' +
+      '등록된 장비가 없습니다<br><small class="text-secondary">JSON 가져오기를 먼저 실행하세요</small></div></div>';
+    document.getElementById('topo-legend').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('legend-node-cnt').textContent = _topoAllNodes.length;
+  document.getElementById('legend-edge-cnt').textContent = _topoAllEdges.length;
+
+  _topoNodes = new vis.DataSet(_topoAllNodes);
+  _topoEdges = new vis.DataSet(_topoAllEdges);
+
+  const options = {
+    layout: {
+      hierarchical: {
+        enabled: true,
+        direction: 'UD',
+        sortMethod: 'directed',
+        levelSeparation: 140,
+        nodeSpacing: 130,
+        treeSpacing: 180,
+        blockShifting: true,
+        edgeMinimization: true,
+        parentCentralization: true,
+      },
+    },
+    physics: { enabled: false },
+    interaction: { hover: true, zoomView: true, dragView: true, tooltipDelay: 150 },
+    nodes: { shape: 'box', font: { size: 11, color: '#fff' }, margin: 6 },
+    edges: {
+      font: { size: 9, align: 'middle', color: '#444' },
+      arrows: { to: { enabled: false } },
+    },
+  };
+
+  if (topoNetwork) topoNetwork.destroy();
+  topoNetwork = new vis.Network(container, { nodes: _topoNodes, edges: _topoEdges }, options);
+
+  // ── 계층 라벨: canvas afterDrawing으로 좌측에 그리기 ──────────
+  topoNetwork.on('afterDrawing', ctx => {
+    if (!_topoAllNodes.length) return;
+    const ids = _topoAllNodes.map(n => n.id);
+    const positions = topoNetwork.getPositions(ids);
+
+    // 레벨별 최소 Y 좌표 수집
+    const levelY = {};
+    _topoAllNodes.forEach(n => {
+      const pos = positions[n.id];
+      if (!pos) return;
+      const lv = (n.level !== undefined ? n.level : 2);
+      if (levelY[lv] === undefined || pos.y < levelY[lv]) levelY[lv] = pos.y;
+    });
+
+    // 최좌측 X 기준으로 라벨 위치 결정
+    const allX = Object.values(positions).map(p => p.x).filter(x => isFinite(x));
+    if (!allX.length) return;
+    const labelX = Math.min(...allX) - 80;
+
+    ctx.save();
+    ctx.font = 'bold 12px "Apple SD Gothic Neo", Arial, sans-serif';
+    ctx.textAlign  = 'center';
+    ctx.textBaseline = 'middle';
+
+    Object.entries(levelY).forEach(([lv, y]) => {
+      const label = LEVEL_LABELS[parseInt(lv)] || `${lv}계위`;
+      const bw = 54, bh = 22;
+
+      // 배경 박스
+      ctx.fillStyle = 'rgba(52,58,64,0.82)';
+      ctx.beginPath();
+      ctx.rect(labelX - bw / 2, y - bh / 2, bw, bh);
+      ctx.fill();
+
+      // 텍스트
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(label, labelX, y);
+    });
+
+    ctx.restore();
+  });
+
+  // ── 노드 클릭 → 상세 팝업 ────────────────────────────────────
+  topoNetwork.on('selectNode', params => {
+    if (!params.nodes.length) return;
+    const node = _topoNodes.get(params.nodes[0]);
+    const statusBadge = STATUS_BADGE[node.status] || node.status || '-';
+    document.getElementById('topo-detail-body').innerHTML =
+      `<div class="d-flex flex-wrap gap-3">
+        <div><strong>${(node.label||'').replace(/\n/g,' ')}</strong> ${statusBadge}</div>
+        <div class="text-muted">유형: ${node.device_type||'-'}</div>
+        <div class="text-muted">망: ${node.network_type||'-'}</div>
+        <div class="text-muted">IP: <span class="font-monospace">${node.ip_address||'-'}</span></div>
+        <div class="text-muted">모델: ${node.model||'-'}</div>
+        <div class="text-muted">위치: ${node.location||'-'}</div>
+      </div>`;
+    document.getElementById('topo-detail').style.display = '';
+  });
+
+  topoNetwork.on('selectEdge', params => {
+    if (!params.edges.length) return;
+    const edge = _topoEdges.get(params.edges[0]);
+    const from = _topoNodes.get(edge.from);
+    const to   = _topoNodes.get(edge.to);
+    document.getElementById('topo-detail-body').innerHTML =
+      `<div class="d-flex flex-wrap gap-3">
+        <div><strong>${(from?.label||'').replace(/\n/g,' ')}</strong>
+             → <strong>${(to?.label||'').replace(/\n/g,' ')}</strong></div>
+        <div class="text-muted">케이블: ${edge.label||edge.cable_type||'-'}</div>
+        <div class="text-muted">망: ${edge.network_type||'-'}</div>
+      </div>`;
+    document.getElementById('topo-detail').style.display = '';
+  });
+
+  topoNetwork.on('deselectNode', () => {
+    if (!topoNetwork.getSelectedEdges().length)
+      document.getElementById('topo-detail').style.display = 'none';
+  });
+  topoNetwork.on('deselectEdge', () => {
+    if (!topoNetwork.getSelectedNodes().length)
+      document.getElementById('topo-detail').style.display = 'none';
+  });
+
+  document.getElementById('topo-legend').style.display = '';
+}
+
+// ── 망구분 필터 (버튼형 단일 선택) ────────────────────────────
+function topoFilterNet(btn) {
+  document.querySelectorAll('.topo-net-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _activeNet = btn.dataset.net;
+  applyTopoFilter();
+}
+
+// ── 케이블 필터 (버튼형 단일 선택) ────────────────────────────
+function topoFilterCable(btn) {
+  document.querySelectorAll('.topo-cable-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _activeCable = btn.dataset.cable;
+  applyTopoFilter();
+}
+
+function applyTopoFilter() {
+  if (!_topoNodes || !_topoEdges) return;
+
+  // 방화벽/라우터(루트 노드)는 망 필터와 무관하게 항상 표시
+  const visibleNodeIds = new Set(
+    _topoAllNodes.filter(n => {
+      if (_activeNet === '__all__') return true;
+      return n.network_type === _activeNet
+          || n.device_type === 'firewall'
+          || n.device_type === 'router';
+    }).map(n => n.id)
+  );
+
+  _topoNodes.update(_topoAllNodes.map(n => ({
+    id: n.id,
+    hidden: !visibleNodeIds.has(n.id),
+  })));
+  _topoEdges.update(_topoAllEdges.map(e => ({
+    id: e.id,
+    hidden: (_activeCable !== '__all__' && e.cable_type !== _activeCable)
+         || !visibleNodeIds.has(e.from)
+         || !visibleNodeIds.has(e.to),
+  })));
+}
+
+function topoFit() {
+  if (topoNetwork) topoNetwork.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+}
+
+// ── JSON 가져오기 ────────────────────────────────────────────
+let _jsonImportModal = null;
+
+function showJsonImportModal() {
+  if (!_jsonImportModal) {
+    _jsonImportModal = new bootstrap.Modal(document.getElementById('jsonImportModal'));
+    // 학교 목록 로드
+    apiGet(`${API_BASE}/schools/schools/`, { page_size: 500 }).then(data => {
+      const sel = document.getElementById('json-import-school');
+      (data.results || data).forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.id; o.textContent = s.school_name || s.name;
+        sel.appendChild(o);
+      });
+    }).catch(() => {});
+  }
+  document.getElementById('json-import-text').value = '';
+  document.getElementById('json-import-error').classList.add('d-none');
+  _jsonImportModal.show();
+}
+
+async function submitJsonImport() {
+  const schoolId = document.getElementById('json-import-school').value;
+  const text     = document.getElementById('json-import-text').value.trim();
+  const errEl    = document.getElementById('json-import-error');
+  errEl.classList.add('d-none');
+
+  if (!schoolId) { errEl.textContent = '학교를 선택하세요.'; errEl.classList.remove('d-none'); return; }
+  if (!text)     { errEl.textContent = 'JSON 데이터를 입력하세요.'; errEl.classList.remove('d-none'); return; }
+
+  let parsed;
+  try { parsed = JSON.parse(text); } catch(e) {
+    errEl.textContent = 'JSON 형식 오류: ' + e.message;
+    errEl.classList.remove('d-none');
+    return;
+  }
+
+  const btn = document.getElementById('btn-json-import');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>처리 중...';
+  try {
+    const res = await apiPost(`${API_BASE}/network/topology/import_json/`, { school_id: schoolId, data: parsed });
+    showToast(`완료: 장비 ${res.created_devices||0}개, 링크 ${res.created_links||0}개 등록`, 'success');
+    _jsonImportModal.hide();
+    // 토폴로지 학교 선택이 같으면 자동 리로드
+    const topoSchool = document.getElementById('topo-school').value;
+    if (topoSchool == schoolId) loadTopology();
+  } catch(e) {
+    errEl.textContent = e.message || '가져오기 실패';
+    errEl.classList.remove('d-none');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-upload me-1"></i>가져오기';
+  }
+}
+
+// ── CSV 다운로드 ──────────────────────────────────────────────
+function exportCsv() {
+  const schoolId = document.getElementById('topo-school').value;
+  if (!schoolId) { showToast('학교를 선택하세요', 'warning'); return; }
+  const url = `${API_BASE}/network/topology/export_csv/?school_id=${schoolId}`;
+  const a = document.createElement('a');
+  a.href = url; a.download = ''; a.click();
+}
+
+// ── SNMP 가이드 다운로드 ──────────────────────────────────────
+function downloadSnmpGuide() {
+  const schoolId = document.getElementById('topo-school').value;
+  if (!schoolId) { showToast('학교를 선택하세요', 'warning'); return; }
+  const url = `${API_BASE}/network/topology/snmp_guide/?school_id=${schoolId}`;
+  const a = document.createElement('a');
+  a.href = url; a.download = ''; a.click();
+}
+
+// ── 전체 구성도 일괄 분석 ────────────────────────────────────
+let _bulkAnalyzeTimer = null;
+
+async function startBulkAnalyze() {
+  if (!confirm('구성도 이미지 폴더의 전체 학교를 Claude AI로 분석합니다. 계속하시겠습니까?')) return;
+  const btn = document.getElementById('btn-bulk-analyze');
+  btn.disabled = true;
+  try {
+    const res = await apiPost(`${API_BASE}/network/topology/bulk_analyze/`, {});
+
+    // CLI 모드: API 키 없이 호스트 스크립트 방식
+    if (res && res.mode === 'cli') {
+      btn.disabled = false;
+      _showCliModal(res);
+      return;
+    }
+
+    showToast('전체 분석 시작됨', 'info');
+    document.getElementById('bulk-analyze-panel').classList.remove('d-none');
+    _startBulkAnalyzePolling();
+  } catch(e) {
+    btn.disabled = false;
+    if (e.status === 409) {
+      showToast('이미 실행 중입니다', 'warning');
+      document.getElementById('bulk-analyze-panel').classList.remove('d-none');
+      _startBulkAnalyzePolling();
+    } else {
+      showToast(e.message || '시작 실패', 'error');
+    }
+  }
+}
+
+function _showCliModal(res) {
+  // 기존 모달 제거
+  const old = document.getElementById('cliModal');
+  if (old) old.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'cliModal';
+  modal.className = 'modal fade';
+  modal.innerHTML = `
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-warning text-dark">
+          <h5 class="modal-title"><i class="bi bi-terminal me-2"></i>Claude Code CLI 자동 분석</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted mb-3">ANTHROPIC_API_KEY가 없습니다. 서버 터미널에서 아래 명령어를 실행하면 NMS 화면에 실시간 진행 현황이 표시됩니다.</p>
+          <div class="mb-3">
+            <label class="form-label fw-bold">전체 처리 (첫 실행)</label>
+            <div class="input-group">
+              <input type="text" class="form-control font-monospace bg-light" value="${res.command}" readonly id="cli-cmd-full">
+              <button class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText(document.getElementById('cli-cmd-full').value);showToast('복사됨','success')">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">이어서 처리 (중단 후 재시작)</label>
+            <div class="input-group">
+              <input type="text" class="form-control font-monospace bg-light" value="${res.options.resume}" readonly id="cli-cmd-resume">
+              <button class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText(document.getElementById('cli-cmd-resume').value);showToast('복사됨','success')">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">단일 학교 처리</label>
+            <div class="input-group">
+              <input type="text" class="form-control font-monospace bg-light" value="${res.options.single}" readonly id="cli-cmd-single">
+              <button class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText(document.getElementById('cli-cmd-single').value);showToast('복사됨','success')">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </div>
+          </div>
+          <div class="alert alert-info mb-0">
+            <i class="bi bi-info-circle me-2"></i>
+            스크립트 실행 중에는 이 화면의 <strong>진행 현황 패널</strong>에서 실시간으로 처리 상황을 확인할 수 있습니다.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" onclick="_startBulkAnalyzePolling(); document.getElementById('bulk-analyze-panel').classList.remove('d-none'); bootstrap.Modal.getInstance(document.getElementById('cliModal')).hide()">
+            <i class="bi bi-activity me-1"></i>진행 현황 패널 열기
+          </button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  new bootstrap.Modal(modal).show();
+}
+
+function _startBulkAnalyzePolling() {
+  if (_bulkAnalyzeTimer) clearInterval(_bulkAnalyzeTimer);
+  _bulkAnalyzeTimer = setInterval(_updateBulkAnalyzeProgress, 3000);
+  _updateBulkAnalyzeProgress();
+}
+
+async function _updateBulkAnalyzeProgress() {
+  try {
+    const p = await apiGet(`${API_BASE}/network/topology/bulk_progress/`, {});
+    if (!p.started) return;
+
+    const pct = p.total > 0 ? Math.round(p.done / p.total * 100) : 0;
+    document.getElementById('bulk-analyze-bar').style.width = pct + '%';
+    document.getElementById('bulk-analyze-text').textContent = `${p.done} / ${p.total} 처리 중...`;
+    document.getElementById('bulk-analyze-counts').innerHTML =
+      `<span class="text-success">완료 ${p.ok}</span> &nbsp;
+       <span class="text-muted">스킵 ${p.skip}</span> &nbsp;
+       <span class="text-danger">실패 ${p.fail}</span>`;
+
+    const tbody = document.getElementById('bulk-analyze-tbody');
+    tbody.innerHTML = (p.results || []).slice().reverse().map(r => {
+      const badge = r.status === 'ok'
+        ? '<span class="badge bg-success">완료</span>'
+        : r.status === 'skip'
+          ? '<span class="badge bg-secondary">스킵</span>'
+          : '<span class="badge bg-danger">실패</span>';
+      return `<tr>
+        <td>${r.school}</td><td>${badge}</td>
+        <td>${r.devices != null ? r.devices : '-'}</td>
+        <td>${r.links != null ? r.links : '-'}</td>
+        <td class="text-muted">${r.note || ''}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('bulk-analyze-table').style.display = '';
+
+    if (p.finished) {
+      clearInterval(_bulkAnalyzeTimer);
+      document.getElementById('btn-bulk-analyze').disabled = false;
+      document.getElementById('bulk-analyze-badge').className = 'badge bg-success';
+      document.getElementById('bulk-analyze-badge').textContent = '완료';
+      document.getElementById('bulk-analyze-bar').classList.remove('progress-bar-animated');
+      document.getElementById('bulk-analyze-text').textContent = `완료: 총 ${p.total}개`;
+      showToast(`분석 완료: 성공 ${p.ok}개, 스킵 ${p.skip}개, 실패 ${p.fail}개`, 'success');
+    } else {
+      document.getElementById('bulk-analyze-badge').className = 'badge bg-warning text-dark';
+      document.getElementById('bulk-analyze-badge').textContent = '처리 중';
+    }
+  } catch(e) {}
+}
+
+// 탭 전환 시 진행 중인 작업 자동 감지
+async function _checkBulkAnalyzeOnLoad() {
+  try {
+    const p = await apiGet(`${API_BASE}/network/topology/bulk_progress/`, {});
+    if (p.started && !p.finished) {
+      document.getElementById('bulk-analyze-panel').classList.remove('d-none');
+      _startBulkAnalyzePolling();
+    }
+  } catch(e) {}
+}
+
+// ── 자산 연동 탭 ─────────────────────────────────────────────
+async function loadAssetSync() {
+  try {
+    const data = await apiGet(`${API_BASE}/network/devices/`, { page_size: 200 });
+    const items = data.results || [];
+    const tbody = document.getElementById('asset-sync-tbody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted small">NMS 장비 없음</td></tr>';
+      return;
+    }
+    const linked   = items.filter(d => d.asset_id).length;
+    const unlinked = items.length - linked;
+    document.getElementById('asset-sync-stats').textContent =
+      `총 ${items.length}대 | 자산 연결 ${linked}대 | 미연결 ${unlinked}대`;
+
+    tbody.innerHTML = items.map(d => `
+      <tr class="${d.asset_id ? '' : 'table-warning'}">
+        <td class="small fw-semibold">${d.name}</td>
+        <td><small>${d.school_name||'-'}</small></td>
+        <td><small class="font-monospace">${d.ip_address||'-'}</small></td>
+        <td>${STATUS_BADGE[d.status]||d.status}</td>
+        <td class="text-center">
+          ${d.asset_id
+            ? `<span class="badge bg-success">연결</span>`
+            : `<span class="badge bg-warning text-dark">미연결</span>`}
+        </td>
+        <td><small class="text-muted">${d.serial_number||'-'}</small></td>
+      </tr>`).join('');
+  } catch(e) {}
+}
+
+async function loadConvertSchools() {
+  const sel = document.getElementById('convert-school');
+  if (sel.options.length > 1) return;
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/`, { page_size: 500 });
+    const items = data.results || data;
+    items.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.id; o.textContent = s.school_name || s.name;
+      sel.appendChild(o);
+    });
+  } catch(e) {}
+}
+
+async function previewEquipment() {
+  const schoolId = document.getElementById('convert-school').value;
+  if (!schoolId) { showToast('학교를 선택하세요', 'warning'); return; }
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${schoolId}/equipment/`);
+    const preview = document.getElementById('convert-preview');
+    const body    = document.getElementById('convert-preview-body');
+    if (!data.length) {
+      body.innerHTML = '<span class="text-muted">장비목록이 없습니다.</span>';
+    } else {
+      body.innerHTML = `<strong>${data.length}대</strong> 발견<br>` +
+        data.slice(0, 15).map(e =>
+          `<div class="border-bottom py-1">${e.category} · ${e.model_name||'-'} · ${e.device_id||'-'} · ${e.install_location||'-'}</div>`
+        ).join('') +
+        (data.length > 15 ? `<div class="text-muted">... 외 ${data.length-15}대</div>` : '');
+    }
+    preview.classList.remove('d-none');
+  } catch(e) { showToast('조회 실패', 'error'); }
+}
+
+async function convertEquipment() {
+  const schoolId = document.getElementById('convert-school').value;
+  if (!schoolId) { showToast('학교를 선택하세요', 'warning'); return; }
+  if (!confirm('해당 학교의 장비목록을 자산관리로 변환합니다.\n이미 등록된 S/N은 건너뜁니다. 계속하시겠습니까?')) return;
+  try {
+    const res = await fetch(`${API_BASE}/schools/schools/${schoolId}/equipment_to_assets/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '변환 실패');
+    const result = document.getElementById('convert-result');
+    result.className = 'mt-2 alert alert-success small py-2';
+    result.innerHTML = `<i class="bi bi-check-circle me-1"></i>
+      신규 변환: <strong>${data.created}대</strong> &nbsp;|&nbsp;
+      건너뜀: ${data.skipped_count}대`;
+    result.classList.remove('d-none');
+    showToast(`${data.created}대 자산 변환 완료`, 'success');
+    loadAssetSync();
+  } catch(e) {
+    showToast(e.message || '변환 실패', 'error');
+  }
+}
+
+
+</script>
+{% endblock %}

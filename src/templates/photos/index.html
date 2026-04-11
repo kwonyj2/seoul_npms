@@ -1,0 +1,1086 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}사진 관리{% endblock %}
+{% block page_title %}<i class="bi bi-camera me-2"></i>현장 사진 관리{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+  <!-- 필터 -->
+  <div class="card border-0 shadow-sm mb-2">
+    <div class="card-body py-2 px-3">
+      <div class="row g-1 align-items-end">
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-0" style="font-size:.68rem; color:#64748b;">교육지원청</label>
+          <select id="f-center" class="form-select form-select-sm" onchange="onFilterCenterChange()">
+            <option value="">전체</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-0" style="font-size:.68rem; color:#64748b;">학제</label>
+          <select id="f-stype" class="form-select form-select-sm" onchange="onFilterStypeChange()">
+            <option value="">전체</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label mb-0" style="font-size:.68rem; color:#64748b;">학교</label>
+          <select id="f-school" class="form-select form-select-sm" onchange="autoSearch()">
+            <option value="">전체 학교</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-4">
+          <label class="form-label mb-0" style="font-size:.68rem; color:#64748b;">검색어 (학교명·작업명·파일명)</label>
+          <div class="input-group input-group-sm">
+            <input type="text" id="f-q" class="form-control form-control-sm" placeholder="검색어 입력 후 Enter 또는 검색 클릭"
+                   onkeydown="if(event.key==='Enter') doSearch()">
+            <button class="btn btn-primary" onclick="doSearch()"><i class="bi bi-search"></i></button>
+            <button class="btn btn-outline-secondary" onclick="resetFilter()" title="초기화"><i class="bi bi-x-lg"></i></button>
+          </div>
+        </div>
+        <div class="col-6 col-md-2 d-flex justify-content-end align-items-end">
+          <button class="btn btn-sm btn-success w-100" data-bs-toggle="modal" data-bs-target="#uploadModal">
+            <i class="bi bi-camera me-1"></i>사진 업로드
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 목록 + 미리보기 2분할 (화면 하단까지 고정) -->
+  <div class="d-flex gap-2" style="height:calc(100vh - 210px); min-height:300px;">
+
+    <!-- ── 좌: 사진 목록 ── -->
+    <div class="flex-grow-1 d-flex flex-column" style="min-width:0;">
+      <div class="card border-0 shadow-sm d-flex flex-column" style="flex:1; min-height:0;">
+
+        <!-- 카드 헤더: 뷰 전환 + 선택 모드 -->
+        <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center flex-shrink-0">
+          <div class="d-flex align-items-center gap-2">
+            <span class="fw-semibold small">사진 목록</span>
+            <!-- 선택 모드 툴바 (선택 시 표시) -->
+            <div id="sel-toolbar" class="d-none align-items-center gap-1">
+              <span id="sel-count" class="badge bg-primary" style="font-size:.7rem;">0</span>
+              <button class="btn btn-xs btn-outline-secondary" onclick="selectAllPhotos()">전체선택</button>
+              <button class="btn btn-xs btn-outline-secondary" onclick="clearSelection()">선택해제</button>
+              <button class="btn btn-xs btn-danger" onclick="bulkDelete()">
+                <i class="bi bi-trash me-1"></i>선택 삭제
+              </button>
+            </div>
+          </div>
+          <div class="d-flex gap-1 align-items-center">
+            <button class="btn btn-xs btn-outline-warning" id="btn-select-mode" onclick="toggleSelectMode()" title="사진 선택/삭제 모드">
+              <i class="bi bi-check2-square"></i>
+            </button>
+            <div class="btn-group btn-group-sm ms-1">
+              <button class="btn btn-outline-secondary active" id="view-grid" onclick="setView('grid')">
+                <i class="bi bi-grid-3x3-gap" style="font-size:.75rem;"></i>
+              </button>
+              <button class="btn btn-outline-secondary" id="view-list" onclick="setView('list')">
+                <i class="bi bi-list-ul" style="font-size:.75rem;"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 스크롤 영역 (flex:1 → 남은 공간 모두 사용) -->
+        <div class="card-body p-1 flex-grow-1" style="overflow-y:auto; min-height:0;">
+          <!-- 그리드 뷰 -->
+          <div id="photo-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:5px;">
+            <div style="grid-column:1/-1; text-align:center; padding:3rem 0; color:#94a3b8; font-size:.85rem;">로딩 중...</div>
+          </div>
+          <!-- 리스트 뷰 -->
+          <div id="photo-list" class="d-none">
+            <table class="table table-sm table-hover mb-0" style="font-size:.75rem;">
+              <thead class="table-light" style="position:sticky; top:0; z-index:1;">
+                <tr>
+                  <th style="width:28px;"><input type="checkbox" id="chk-all" onchange="toggleAllCheckbox(this)" class="form-check-input"></th>
+                  <th style="width:38px;">사진</th>
+                  <th style="width:22%;">학교</th>
+                  <th>파일명</th>
+                  <th style="width:50px;">단계</th>
+                  <th style="width:72px;">촬영일</th>
+                  <th style="width:46px;">촬영자</th>
+                </tr>
+              </thead>
+              <tbody id="photo-list-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 페이지네이션 (카드 하단 고정) -->
+        <div class="card-footer py-1 d-flex justify-content-between align-items-center flex-shrink-0 bg-white border-top">
+          <small class="text-muted" style="font-size:.7rem;">
+            전체 <span id="kpi-total" class="fw-bold text-primary">-</span>장
+            &nbsp;·&nbsp; 페이지 <span id="page-info">-</span>
+          </small>
+          <div class="d-flex align-items-center gap-1">
+            <small class="text-muted me-1" style="font-size:.7rem;">
+              <span id="kpi-before" class="text-warning fw-bold">-</span>작업전
+              <span class="mx-1">·</span>
+              <span id="kpi-after" class="text-success fw-bold">-</span>작업후
+            </small>
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-outline-secondary" id="btn-prev" onclick="changePage(-1)" disabled>
+                <i class="bi bi-chevron-left"></i>
+              </button>
+              <button class="btn btn-outline-secondary" id="btn-next" onclick="changePage(1)">
+                <i class="bi bi-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 우: 미리보기 패널 ── -->
+    <div id="preview-panel" class="d-flex flex-column" style="width:300px; min-width:260px; flex-shrink:0;">
+      <div class="card border-0 shadow-sm d-flex flex-column" style="flex:1; min-height:0;">
+        <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center flex-shrink-0">
+          <span class="fw-semibold small"><i class="bi bi-image me-1"></i>미리보기</span>
+          <button class="btn btn-xs btn-outline-secondary d-none" id="btn-preview-close" onclick="clearPreview()">
+            <i class="bi bi-x"></i>
+          </button>
+        </div>
+        <div class="d-flex flex-column" style="flex:1; min-height:0; overflow:hidden;">
+          <!-- 이미지 -->
+          <div id="preview-img-wrap" style="background:#1e293b; flex-shrink:0; height:200px; display:flex; align-items:center; justify-content:center; position:relative;">
+            <div id="preview-placeholder" class="text-center text-white opacity-50">
+              <i class="bi bi-cursor-fill d-block mb-1" style="font-size:2rem;"></i>
+              <div style="font-size:.75rem;">사진을 선택하세요</div>
+            </div>
+            <img id="preview-img" src="" alt="" style="display:none; max-width:100%; max-height:100%; object-fit:contain; cursor:zoom-in;" onclick="window.open(this.src,'_blank')">
+          </div>
+          <!-- 상세 정보 -->
+          <div id="preview-info" class="p-2 d-none" style="overflow-y:auto; flex:1;">
+            <table class="table table-sm table-borderless mb-0" style="font-size:.75rem;">
+              <tbody>
+                <tr><td class="text-muted py-1" style="width:60px;">학교</td><td id="pi-school" class="py-1 fw-semibold"></td></tr>
+                <tr><td class="text-muted py-1">건물/층</td><td id="pi-location" class="py-1"></td></tr>
+                <tr><td class="text-muted py-1">교실</td><td id="pi-room" class="py-1"></td></tr>
+                <tr><td class="text-muted py-1">작업명</td><td id="pi-work" class="py-1"></td></tr>
+                <tr><td class="text-muted py-1">단계</td><td id="pi-stage" class="py-1"></td></tr>
+                <tr><td class="text-muted py-1">촬영일시</td><td id="pi-date" class="py-1"></td></tr>
+                <tr><td class="text-muted py-1">촬영자</td><td id="pi-taker" class="py-1"></td></tr>
+                <tr id="pi-gps-row"><td class="text-muted py-1">GPS</td><td id="pi-gps" class="py-1"></td></tr>
+                <tr><td class="text-muted py-1">파일명</td><td id="pi-fname" class="py-1" style="word-break:break-all; font-size:.67rem;"></td></tr>
+              </tbody>
+            </table>
+            <div class="mt-2 d-flex gap-1">
+              <a id="pi-download" href="#" download class="btn btn-sm btn-outline-primary flex-fill" style="font-size:.72rem;">
+                <i class="bi bi-download me-1"></i>다운로드
+              </a>
+              <button id="pi-delete" class="btn btn-sm btn-outline-danger" style="font-size:.72rem;" onclick="deleteSelectedPhoto()">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /d-flex -->
+</div>
+
+{% if user.role == 'superadmin' %}
+<!-- 작업명 관리 모달 (슈퍼관리자 전용) -->
+<div class="modal fade" id="worktypeModal" tabindex="-1">
+  <div class="modal-dialog modal-md">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title"><i class="bi bi-list-check me-2 text-primary"></i>작업명 관리 <small class="text-muted fw-normal">(슈퍼관리자 전용)</small></h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <!-- 추가 폼 -->
+        <div class="input-group input-group-sm mb-3">
+          <input type="text" id="wt-new-name" class="form-control" placeholder="새 작업명 입력 (예: 전산실랙 사진, AP 교체)"
+                 onkeydown="if(event.key==='Enter') addWorkType()">
+          <input type="number" id="wt-new-order" class="form-control" style="max-width:80px;" placeholder="순서" value="0" min="0">
+          <button class="btn btn-primary" onclick="addWorkType()">
+            <i class="bi bi-plus-lg me-1"></i>추가
+          </button>
+        </div>
+        <!-- 목록 -->
+        <div style="max-height:400px; overflow-y:auto;">
+          <table class="table table-sm table-hover mb-0" style="font-size:.82rem;">
+            <thead class="table-light" style="position:sticky;top:0;">
+              <tr>
+                <th style="width:36px;">순서</th>
+                <th>작업명</th>
+                <th style="width:56px;">상태</th>
+                <th style="width:80px;">관리</th>
+              </tr>
+            </thead>
+            <tbody id="wt-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <small class="text-muted me-auto" style="font-size:.72rem;">비활성 작업명은 업로드 목록에 표시되지 않습니다.</small>
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- 사진 업로드 모달 -->
+<div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" id="uploadModalLabel"><i class="bi bi-camera me-2"></i>현장 사진 업로드</h6>
+        {% if user.role == 'superadmin' %}
+        <button type="button" class="btn btn-xs btn-outline-secondary me-2"
+                data-bs-toggle="modal" data-bs-target="#worktypeModal"
+                title="작업명 관리">
+          <i class="bi bi-list-check me-1"></i>작업명 관리
+        </button>
+        {% endif %}
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+
+          <!-- 좌측: 학교/위치 선택 -->
+          <div class="col-12 col-md-6">
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">교육지원청</label>
+              <select id="up-center" class="form-select form-select-sm" onchange="onCenterChange()">
+                <option value="">선택하세요</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">학제</label>
+              <select id="up-stype" class="form-select form-select-sm" onchange="loadSchoolsByCenter()">
+                <option value="">전체</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">학교 <span class="text-danger">*</span></label>
+              <select id="up-school" class="form-select form-select-sm" onchange="loadBuildings()">
+                <option value="">교육지원청 먼저 선택</option>
+              </select>
+            </div>
+            <div class="row g-1 mb-2">
+              <div class="col-4">
+                <label class="form-label small mb-1">건물</label>
+                <select id="up-building" class="form-select form-select-sm" onchange="loadFloors()">
+                  <option value="">선택</option>
+                </select>
+                <input type="text" id="up-building-new" class="form-control form-control-sm mt-1 d-none" placeholder="새 건물명 입력">
+              </div>
+              <div class="col-4">
+                <label class="form-label small mb-1">층</label>
+                <select id="up-floor" class="form-select form-select-sm" onchange="loadRooms()">
+                  <option value="">선택</option>
+                </select>
+                <input type="text" id="up-floor-new" class="form-control form-control-sm mt-1 d-none" placeholder="새 층 이름 (예: 3층)">
+              </div>
+              <div class="col-4">
+                <label class="form-label small mb-1">교실</label>
+                <select id="up-room" class="form-select form-select-sm" onchange="onRoomSelectChange()">
+                  <option value="">선택</option>
+                </select>
+                <input type="text" id="up-room-new" class="form-control form-control-sm mt-1 d-none" placeholder="새 교실명 입력">
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">작업명 <span class="text-danger">*</span></label>
+              <select id="up-worktype" class="form-select form-select-sm" onchange="toggleWorkTypeEtc()">
+                <option value="">선택하세요</option>
+              </select>
+            </div>
+            <div class="mb-2" id="worktype-etc-row" style="display:none;">
+              <input type="text" id="up-worktype-etc" class="form-control form-control-sm" placeholder="작업명 직접 입력">
+            </div>
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">단계</label>
+              <div class="btn-group w-100" role="group">
+                <input type="radio" class="btn-check" name="up-stage" id="stage-before" value="before">
+                <label class="btn btn-outline-warning btn-sm" for="stage-before">작업전</label>
+                <input type="radio" class="btn-check" name="up-stage" id="stage-after" value="after" checked>
+                <label class="btn btn-outline-success btn-sm" for="stage-after">작업후</label>
+                <input type="radio" class="btn-check" name="up-stage" id="stage-other" value="other">
+                <label class="btn btn-outline-secondary btn-sm" for="stage-other">기타</label>
+              </div>
+            </div>
+            <!-- GPS -->
+            <div class="mb-2">
+              <label class="form-label small fw-semibold mb-1">GPS 위치</label>
+              <div class="d-flex gap-2 align-items-center">
+                <input type="text" id="up-gps" class="form-control form-control-sm" placeholder="위도, 경도" readonly>
+                <button class="btn btn-sm btn-outline-primary text-nowrap" onclick="captureGps()">
+                  <i class="bi bi-geo-alt-fill me-1"></i>현재 위치
+                </button>
+              </div>
+              <div id="gps-status" class="text-muted" style="font-size:.75rem;"></div>
+            </div>
+          </div>
+
+          <!-- 우측: 파일 선택 + 미리보기 -->
+          <div class="col-12 col-md-6">
+            <label class="form-label small fw-semibold mb-1">사진 선택 <span class="text-danger">*</span></label>
+            <div id="drop-zone" class="border rounded p-3 text-center mb-2"
+                 style="min-height:120px; border-style:dashed!important; cursor:pointer; background:#f8f9fa;"
+                 ondragover="event.preventDefault()" ondrop="handleDrop(event)"
+                 onclick="document.getElementById('up-files').click()">
+              <i class="bi bi-cloud-upload fs-3 text-muted"></i>
+              <div class="small text-muted mt-1">클릭하거나 사진을 드래그하세요</div>
+              <div class="small text-muted">(다중 선택 가능)</div>
+              <input type="file" id="up-files" class="d-none" accept="image/*" multiple onchange="previewFiles(this.files)">
+            </div>
+            <!-- 미리보기 -->
+            <div id="preview-grid" class="row g-1" style="max-height:220px; overflow-y:auto;"></div>
+            <div class="mt-2">
+              <label class="form-label small mb-1">관련 장애 (선택)</label>
+              <select id="up-incident" class="form-select form-select-sm">
+                <option value="">학교 선택 후 장애 목록 로드</option>
+              </select>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button type="button" class="btn btn-sm btn-success" onclick="submitUpload()" id="btn-upload">
+          <i class="bi bi-upload me-1"></i>업로드
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+<style>
+.photo-thumb { transition: box-shadow .12s, outline .12s; }
+.photo-thumb:hover { box-shadow: 0 0 0 2px #3b82f6; }
+.photo-thumb.selected { outline: 3px solid #2563eb; }
+.photo-thumb.checked  { outline: 3px solid #f59e0b; background:#fef9c3 !important; }
+.photo-thumb.checked img { opacity: .8; }
+#preview-img-wrap img { transition: opacity .2s; }
+</style>
+{% block extra_js %}
+<script>
+const STAGE_BADGE = {
+  before: '<span class="badge bg-warning text-dark" style="font-size:.65rem;">작업전</span>',
+  after:  '<span class="badge bg-success" style="font-size:.65rem;">작업후</span>',
+  other:  '<span class="badge bg-secondary" style="font-size:.65rem;">기타</span>',
+};
+const STAGE_LABEL = { before:'작업전', after:'작업후', other:'기타' };
+let currentPage = 1, totalPages = 1, viewMode = 'grid';
+let uploadFiles = [];
+let gpsLat = null, gpsLng = null, gpsAccuracy = null;
+let upSchoolId = null;
+let selectedPhotoId = null;
+let photoCache = {};
+let selectMode = false;
+let checkedIds = new Set();
+
+// ── 선택 모드 ──────────────────────────────────────────────────────────
+function toggleSelectMode() {
+  selectMode = !selectMode;
+  checkedIds.clear();
+  document.getElementById('btn-select-mode').classList.toggle('btn-outline-warning', !selectMode);
+  document.getElementById('btn-select-mode').classList.toggle('btn-warning', selectMode);
+  updateSelToolbar();
+  loadPhotos();  // 체크박스 재렌더링
+}
+
+function toggleCheck(id, e) {
+  e.stopPropagation();
+  if (checkedIds.has(id)) checkedIds.delete(id);
+  else checkedIds.add(id);
+  // 썸네일 강조 갱신
+  document.querySelectorAll(`[data-pid="${id}"]`).forEach(el => {
+    el.classList.toggle('checked', checkedIds.has(id));
+  });
+  updateSelToolbar();
+}
+
+function updateSelToolbar() {
+  const toolbar = document.getElementById('sel-toolbar');
+  const cnt     = document.getElementById('sel-count');
+  if (selectMode && checkedIds.size > 0) {
+    toolbar.classList.remove('d-none');
+    toolbar.classList.add('d-flex');
+    cnt.textContent = checkedIds.size + '장 선택';
+  } else {
+    toolbar.classList.add('d-none');
+    toolbar.classList.remove('d-flex');
+  }
+}
+
+function selectAllPhotos() {
+  Object.keys(photoCache).forEach(id => {
+    checkedIds.add(parseInt(id));
+    document.querySelectorAll(`[data-pid="${id}"]`).forEach(el => el.classList.add('checked'));
+  });
+  updateSelToolbar();
+  const chkAll = document.getElementById('chk-all');
+  if (chkAll) chkAll.checked = true;
+}
+
+function clearSelection() {
+  checkedIds.clear();
+  document.querySelectorAll('.photo-thumb.checked').forEach(el => el.classList.remove('checked'));
+  updateSelToolbar();
+  const chkAll = document.getElementById('chk-all');
+  if (chkAll) chkAll.checked = false;
+}
+
+function toggleAllCheckbox(chk) {
+  if (chk.checked) selectAllPhotos();
+  else clearSelection();
+}
+
+async function bulkDelete() {
+  if (checkedIds.size === 0) return;
+  if (!confirm(`선택한 ${checkedIds.size}장을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+  try {
+    const res = await apiPost(`${API_BASE}/photos/photos/bulk_delete/`, {ids: [...checkedIds]});
+    showToast(`${res.deleted}장 삭제 완료`, 'success');
+    checkedIds.clear();
+    clearPreview();
+    loadPhotos();
+  } catch(e) { showToast('삭제 실패', 'danger'); }
+}
+
+function setView(mode) {
+  viewMode = mode;
+  document.getElementById('photo-grid').style.display = (mode === 'grid') ? 'grid' : 'none';
+  document.getElementById('photo-list').classList.toggle('d-none', mode !== 'list');
+  document.getElementById('view-grid').classList.toggle('active', mode === 'grid');
+  document.getElementById('view-list').classList.toggle('active', mode === 'list');
+  currentPage = 1;
+  loadPhotos();
+}
+
+// ── 미리보기 패널 ──────────────────────────────────────────────────────
+function selectPhoto(id) {
+  selectedPhotoId = id;
+  const p = photoCache[id];
+  if (!p) return;
+
+  // 선택 강조
+  document.querySelectorAll('.photo-thumb.selected').forEach(el => el.classList.remove('selected'));
+  document.querySelectorAll(`[data-pid="${id}"]`).forEach(el => el.classList.add('selected'));
+
+  const imgEl  = document.getElementById('preview-img');
+  const ph     = document.getElementById('preview-placeholder');
+  const info   = document.getElementById('preview-info');
+  const closeBtn = document.getElementById('btn-preview-close');
+
+  const imgSrc = p.image_url || p.image || '';
+  imgEl.src = imgSrc;
+  imgEl.style.display = 'block';
+  ph.style.display    = 'none';
+  info.classList.remove('d-none');
+  closeBtn.classList.remove('d-none');
+
+  // 상세 정보
+  document.getElementById('pi-school').textContent   = p.school_name || '-';
+  const loc = [p.building_name, p.floor_name].filter(Boolean).join(' / ');
+  document.getElementById('pi-location').textContent = loc || '-';
+  document.getElementById('pi-room').textContent     = p.room_name || '-';
+  document.getElementById('pi-work').textContent     = p.work_type_name || p.work_type_etc || '-';
+  document.getElementById('pi-stage').innerHTML      = STAGE_BADGE[p.photo_stage] || '-';
+  document.getElementById('pi-date').textContent     = formatDateTime(p.taken_at);
+  document.getElementById('pi-taker').textContent    = p.taken_by_name || '-';
+  document.getElementById('pi-fname').textContent    = p.file_name || '-';
+
+  const gpsRow = document.getElementById('pi-gps-row');
+  if (p.gps_lat) {
+    document.getElementById('pi-gps').innerHTML =
+      `<a href="https://map.kakao.com/link/map/${p.gps_lat},${p.gps_lng}" target="_blank" class="text-decoration-none">
+        <i class="bi bi-geo-alt-fill text-success me-1"></i>${parseFloat(p.gps_lat).toFixed(5)}, ${parseFloat(p.gps_lng).toFixed(5)}
+       </a>`;
+    gpsRow.style.display = '';
+  } else {
+    gpsRow.style.display = 'none';
+  }
+  document.getElementById('pi-download').href     = imgSrc;
+  document.getElementById('pi-download').download = p.file_name || 'photo.jpg';
+}
+
+function clearPreview() {
+  selectedPhotoId = null;
+  document.querySelectorAll('.photo-thumb.selected').forEach(el => el.classList.remove('selected'));
+  document.getElementById('preview-img').style.display = 'none';
+  document.getElementById('preview-placeholder').style.display = '';
+  document.getElementById('preview-info').classList.add('d-none');
+  document.getElementById('btn-preview-close').classList.add('d-none');
+}
+
+async function deleteSelectedPhoto() {
+  if (!selectedPhotoId) return;
+  if (!confirm('이 사진을 삭제하시겠습니까?')) return;
+  try {
+    await apiDelete(`${API_BASE}/photos/photos/${selectedPhotoId}/`);
+    showToast('삭제되었습니다.', 'success');
+    clearPreview();
+    loadPhotos();
+  } catch(e) { showToast('삭제 실패', 'danger'); }
+}
+
+// ── 필터 cascade ──────────────────────────────────────────────────────────
+async function initFilterSelects() {
+  // 지원청
+  const cSel = document.getElementById('f-center');
+  try {
+    const data = await apiGet(`${API_BASE}/schools/centers/`);
+    (data.results || data).forEach(c => {
+      cSel.insertAdjacentHTML('beforeend', `<option value="${c.code}">${c.name}</option>`);
+    });
+  } catch(e) {}
+  // 학제
+  const tSel = document.getElementById('f-stype');
+  try {
+    const data = await apiGet(`${API_BASE}/schools/types/`);
+    (data.results || data).forEach(t => {
+      tSel.insertAdjacentHTML('beforeend', `<option value="${t.code}">${t.name}</option>`);
+    });
+  } catch(e) {}
+}
+
+async function onFilterCenterChange() {
+  const center = document.getElementById('f-center').value;
+  const stype  = document.getElementById('f-stype').value;
+  await loadFilterSchools(center, stype);
+  autoSearch();
+}
+
+async function onFilterStypeChange() {
+  const center = document.getElementById('f-center').value;
+  const stype  = document.getElementById('f-stype').value;
+  await loadFilterSchools(center, stype);
+  autoSearch();
+}
+
+function autoSearch() {
+  currentPage = 1;
+  loadPhotos();
+}
+
+async function loadFilterSchools(center, stype) {
+  const sel = document.getElementById('f-school');
+  sel.innerHTML = '<option value="">전체 학교</option>';
+  if (!center && !stype) return;
+  try {
+    const params = {};
+    if (center) params.center = center;
+    if (stype)  params.type   = stype;
+    // center 없이 stype만인 경우 전체 학교에서 stype 필터
+    if (!center) {
+      const data = await apiGet(`${API_BASE}/schools/schools/`, {school_type__code: stype, page_size: 300});
+      (data.results || data).forEach(s => {
+        sel.insertAdjacentHTML('beforeend', `<option value="${s.id}">${s.name}</option>`);
+      });
+      return;
+    }
+    const data = await apiGet(`${API_BASE}/schools/schools/filter/`, params);
+    (data || []).forEach(s => {
+      sel.insertAdjacentHTML('beforeend', `<option value="${s.id}">${s.name}</option>`);
+    });
+  } catch(e) {}
+}
+
+function doSearch() {
+  currentPage = 1;
+  loadPhotos();
+}
+
+function resetFilter() {
+  ['f-center','f-stype','f-school'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('f-q').value = '';
+  document.getElementById('f-school').innerHTML = '<option value="">전체 학교</option>';
+  currentPage = 1;
+  loadPhotos();
+}
+
+// ── 사진 목록 로드 ────────────────────────────────────────────────────────
+async function loadPhotos() {
+  const pageSize = viewMode === 'list' ? 20 : 48;
+  const params = { page: currentPage, page_size: pageSize };
+  const center = document.getElementById('f-center').value;
+  const stype  = document.getElementById('f-stype').value;
+  const school = document.getElementById('f-school').value;
+  const q      = document.getElementById('f-q').value.trim();
+  if (center) params.center      = center;
+  if (stype)  params.school_type = stype;
+  if (school) params.school_id   = school;
+  if (q)      params.q           = q;
+
+  try {
+    const data = await apiGet(`${API_BASE}/photos/photos/`, params);
+    totalPages = Math.ceil((data.count||0) / pageSize);
+    document.getElementById('kpi-total').textContent = data.count || 0;
+    document.getElementById('page-info').textContent = `${currentPage} / ${totalPages}`;
+    document.getElementById('btn-prev').disabled = currentPage <= 1;
+    document.getElementById('btn-next').disabled = currentPage >= totalPages;
+
+    const items = data.results || [];
+    // 카운트 집계
+    let beforeCnt = 0, afterCnt = 0;
+    items.forEach(p => { if(p.photo_stage==='before') beforeCnt++; else if(p.photo_stage==='after') afterCnt++; });
+    document.getElementById('kpi-before').textContent = beforeCnt;
+    document.getElementById('kpi-after').textContent  = afterCnt;
+
+    // 캐시 갱신
+    items.forEach(p => { photoCache[p.id] = p; });
+
+    const grid = document.getElementById('photo-grid');
+    if (!items.length) {
+      grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:2rem 0; color:#94a3b8; font-size:.8rem;">사진 없음</div>';
+      document.getElementById('photo-list-tbody').innerHTML = '';
+      clearPreview();
+      return;
+    }
+
+    // ── 그리드 뷰 ──
+    grid.innerHTML = items.map(p => {
+      const isChecked = checkedIds.has(p.id);
+      const isSelected = selectedPhotoId === p.id;
+      return `
+      <div class="photo-thumb${isSelected?' selected':''}${isChecked?' checked':''}"
+           data-pid="${p.id}"
+           onclick="${selectMode ? `toggleCheck(${p.id}, event)` : `selectPhoto(${p.id})`}"
+           style="cursor:pointer; position:relative; aspect-ratio:1/1; background:#f1f5f9; border-radius:5px; overflow:hidden; border:1px solid #e2e8f0;">
+        <img src="${p.image_url||p.image}" loading="lazy"
+             style="width:100%; height:100%; object-fit:cover; display:block;">
+        ${selectMode ? `
+        <div style="position:absolute;top:4px;left:4px;">
+          <input type="checkbox" class="form-check-input" ${isChecked?'checked':''} onclick="toggleCheck(${p.id},event)" style="width:16px;height:16px;cursor:pointer;">
+        </div>` : ''}
+        <div style="position:absolute; top:2px; right:2px;">${STAGE_BADGE[p.photo_stage]||''}</div>
+        ${p.gps_lat?'<div style="position:absolute;bottom:18px;left:3px;"><i class="bi bi-geo-alt-fill text-success" style="font-size:.55rem;"></i></div>':''}
+        <div style="position:absolute;bottom:0;left:0;right:0; background:rgba(0,0,0,.5); color:#fff; font-size:.58rem; padding:2px 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.school_name||''}</div>
+      </div>`;
+    }).join('');
+
+    // ── 리스트 뷰 ──
+    document.getElementById('photo-list-tbody').innerHTML = items.map(p => {
+      const isChecked = checkedIds.has(p.id);
+      return `
+      <tr class="photo-thumb${selectedPhotoId===p.id?' table-active':''}" data-pid="${p.id}"
+          onclick="selectMode ? toggleCheck(${p.id}, event) : selectPhoto(${p.id})" style="cursor:pointer;">
+        <td onclick="event.stopPropagation()">
+          <input type="checkbox" class="form-check-input" ${isChecked?'checked':''}
+                 onchange="toggleCheck(${p.id}, event)" style="width:14px;height:14px;">
+        </td>
+        <td><img src="${p.image_url||p.image}" style="width:36px;height:28px;object-fit:cover;border-radius:3px;"></td>
+        <td class="text-truncate" style="max-width:0;">${p.school_name||'-'}</td>
+        <td class="text-truncate" style="max-width:0; color:#475569;">${p.file_name||p.work_type_name||'-'}</td>
+        <td>${STAGE_BADGE[p.photo_stage]||''}</td>
+        <td class="text-muted text-nowrap">${formatDate(p.taken_at)}</td>
+        <td class="text-truncate" style="max-width:0;">${p.taken_by_name||'-'}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) { console.error('photo load error:', e); }
+}
+
+function changePage(d) { currentPage = Math.max(1, Math.min(totalPages, currentPage+d)); loadPhotos(); }
+
+// ── 업로드 모달: 교육지원청 / 학제 로드 ───────────────────────────────────
+async function loadCenters() {
+  const sel = document.getElementById('up-center');
+  try {
+    const data = await apiGet(`${API_BASE}/schools/centers/`);
+    (data.results || data).forEach(c => {
+      sel.insertAdjacentHTML('beforeend', `<option value="${c.code}">${c.name}</option>`);
+    });
+  } catch(e) {}
+}
+
+async function loadSchoolTypes() {
+  const sel = document.getElementById('up-stype');
+  try {
+    const data = await apiGet(`${API_BASE}/schools/types/`);
+    (data.results || data).forEach(t => {
+      sel.insertAdjacentHTML('beforeend', `<option value="${t.code}">${t.name}</option>`);
+    });
+  } catch(e) {}
+}
+
+function onCenterChange() {
+  document.getElementById('up-stype').value = '';
+  loadSchoolsByCenter();
+}
+
+async function loadSchoolsByCenter() {
+  const centerCode = document.getElementById('up-center').value;
+  const stypeCode  = document.getElementById('up-stype').value;
+  const sel = document.getElementById('up-school');
+  sel.innerHTML = '<option value="">선택하세요</option>';
+  resetLocationSelects();
+  upSchoolId = null;
+  if (!centerCode) return;
+  try {
+    const params = {center: centerCode};
+    if (stypeCode) params.type = stypeCode;
+    const data = await apiGet(`${API_BASE}/schools/schools/filter/`, params);
+    (data || []).forEach(s => {
+      sel.insertAdjacentHTML('beforeend', `<option value="${s.id}">${s.name}</option>`);
+    });
+  } catch(e) {}
+}
+
+function resetLocationSelects() {
+  ['up-building','up-floor','up-room'].forEach(id => {
+    document.getElementById(id).innerHTML = '<option value="">선택</option>';
+  });
+  ['up-building-new','up-floor-new','up-room-new'].forEach(id => {
+    const el = document.getElementById(id);
+    el.value = '';
+    el.classList.add('d-none');
+  });
+  document.getElementById('up-incident').innerHTML = '<option value="">학교 선택 후 장애 목록 로드</option>';
+}
+
+
+async function loadBuildings() {
+  const schoolId = document.getElementById('up-school').value;
+  upSchoolId = schoolId || null;
+  resetLocationSelects();
+  if (!schoolId) return;
+  // 관련 장애 로드
+  loadIncidentsBySchool(schoolId);
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${schoolId}/rooms_for_select/`);
+    const sel = document.getElementById('up-building');
+    (data || []).forEach(b => {
+      sel.insertAdjacentHTML('beforeend', `<option value="${b.id}">${b.name}</option>`);
+    });
+    sel.insertAdjacentHTML('beforeend', '<option value="__new__">+ 직접 입력</option>');
+  } catch(e) {}
+}
+
+async function loadFloors() {
+  const buildingVal = document.getElementById('up-building').value;
+  const newEl = document.getElementById('up-building-new');
+  const sel   = document.getElementById('up-floor');
+  sel.innerHTML = '<option value="">선택</option>';
+  document.getElementById('up-room').innerHTML = '<option value="">선택</option>';
+  document.getElementById('up-floor-new').classList.add('d-none');
+  document.getElementById('up-room-new').classList.add('d-none');
+  if (buildingVal === '__new__') {
+    newEl.classList.remove('d-none');
+    sel.insertAdjacentHTML('beforeend', '<option value="__new__">+ 직접 입력</option>');
+    return;
+  }
+  newEl.classList.add('d-none');
+  newEl.value = '';
+  if (!buildingVal || !upSchoolId) return;
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${upSchoolId}/rooms_for_select/`, {building: buildingVal});
+    (data || []).forEach(f => {
+      sel.insertAdjacentHTML('beforeend', `<option value="${f.id}">${f.floor_name}</option>`);
+    });
+    sel.insertAdjacentHTML('beforeend', '<option value="__new__">+ 직접 입력</option>');
+  } catch(e) {}
+}
+
+async function loadRooms() {
+  const floorVal = document.getElementById('up-floor').value;
+  const newEl    = document.getElementById('up-floor-new');
+  const sel      = document.getElementById('up-room');
+  sel.innerHTML  = '<option value="">선택</option>';
+  document.getElementById('up-room-new').classList.add('d-none');
+  if (floorVal === '__new__') {
+    newEl.classList.remove('d-none');
+    sel.insertAdjacentHTML('beforeend', '<option value="__new__">+ 직접 입력</option>');
+    return;
+  }
+  newEl.classList.add('d-none');
+  newEl.value = '';
+  if (!floorVal || !upSchoolId) return;
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${upSchoolId}/rooms_for_select/`, {floor: floorVal});
+    (data || []).forEach(r => {
+      const label = r.room_number ? `${r.room_number} ${r.name}` : r.name;
+      sel.insertAdjacentHTML('beforeend', `<option value="${r.id}">${label}</option>`);
+    });
+    sel.insertAdjacentHTML('beforeend', '<option value="__new__">+ 직접 입력</option>');
+  } catch(e) {}
+}
+
+function onRoomSelectChange() {
+  const val   = document.getElementById('up-room').value;
+  const newEl = document.getElementById('up-room-new');
+  if (val === '__new__') {
+    newEl.classList.remove('d-none');
+  } else {
+    newEl.classList.add('d-none');
+    newEl.value = '';
+  }
+}
+
+async function loadIncidentsBySchool(schoolId) {
+  const sel = document.getElementById('up-incident');
+  sel.innerHTML = '<option value="">없음 (선택 안 함)</option>';
+  if (!schoolId) return;
+  try {
+    const data = await apiGet(`${API_BASE}/incidents/incidents/`, {school: schoolId, page_size: 100});
+    const items = data.results || data;
+    if (!items.length) {
+      sel.insertAdjacentHTML('beforeend', '<option disabled>장애 이력 없음</option>');
+      return;
+    }
+    items.forEach(inc => {
+      const desc = (inc.description || '').substring(0, 30);
+      sel.insertAdjacentHTML('beforeend',
+        `<option value="${inc.id}">[${inc.incident_number}] ${desc}</option>`);
+    });
+  } catch(e) {}
+}
+
+// 직접 입력된 건물/층/교실을 서버에 생성 후 ID 반환
+async function resolveLocationIds() {
+  let buildingId = document.getElementById('up-building').value;
+  let floorId    = document.getElementById('up-floor').value;
+  let roomId     = document.getElementById('up-room').value;
+
+  if (buildingId === '__new__') {
+    const name = document.getElementById('up-building-new').value.trim();
+    if (!name) { showToast('건물명을 입력하세요.', 'warning'); return null; }
+    const res = await apiPost(`${API_BASE}/schools/schools/${upSchoolId}/add_building/`, {name});
+    buildingId = String(res.id);
+  }
+  if (floorId === '__new__') {
+    const floor_name = document.getElementById('up-floor-new').value.trim();
+    if (!floor_name) { showToast('층 이름을 입력하세요.', 'warning'); return null; }
+    const res = await apiPost(`${API_BASE}/schools/schools/${upSchoolId}/add_floor/`, {building_id: buildingId, floor_name});
+    floorId = String(res.id);
+  }
+  if (roomId === '__new__') {
+    const room_name = document.getElementById('up-room-new').value.trim();
+    if (!room_name) { showToast('교실명을 입력하세요.', 'warning'); return null; }
+    const res = await apiPost(`${API_BASE}/schools/schools/${upSchoolId}/add_room/`, {floor_id: floorId, room_name});
+    roomId = String(res.id);
+  }
+  return {buildingId, floorId, roomId};
+}
+
+async function loadWorkTypes() {
+  const sel = document.getElementById('up-worktype');
+  sel.innerHTML = '<option value="">선택하세요</option>';   // 매번 초기화
+  try {
+    const data = await apiGet(`${API_BASE}/photos/work-types/`);
+    (data.results || data).forEach(w => {
+      sel.insertAdjacentHTML('beforeend', `<option value="${w.id}">${w.name}</option>`);
+    });
+    sel.insertAdjacentHTML('beforeend', '<option value="etc">기타(직접입력)</option>');
+  } catch(e) {}
+}
+
+function toggleWorkTypeEtc() {
+  const val = document.getElementById('up-worktype').value;
+  document.getElementById('worktype-etc-row').style.display = val === 'etc' ? '' : 'none';
+}
+
+// ── GPS 캡처 ────────────────────────────────────────────────────────────
+function captureGps() {
+  const statusEl = document.getElementById('gps-status');
+  statusEl.textContent = '위치 취득 중...';
+  if (!navigator.geolocation) {
+    statusEl.textContent = 'GPS 미지원 브라우저';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      gpsLat = pos.coords.latitude.toFixed(7);
+      gpsLng = pos.coords.longitude.toFixed(7);
+      gpsAccuracy = pos.coords.accuracy;
+      document.getElementById('up-gps').value = `${gpsLat}, ${gpsLng}`;
+      statusEl.innerHTML = `<i class="bi bi-check-circle-fill text-success me-1"></i>정확도: ${gpsAccuracy.toFixed(0)}m`;
+    },
+    (err) => { statusEl.textContent = 'GPS 취득 실패: ' + err.message; },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+// ── 파일 드래그&드롭 + 미리보기 ─────────────────────────────────────────
+function handleDrop(e) {
+  e.preventDefault();
+  previewFiles(e.dataTransfer.files);
+}
+
+function previewFiles(files) {
+  uploadFiles = Array.from(files);
+  const grid = document.getElementById('preview-grid');
+  grid.innerHTML = uploadFiles.map((f, i) => {
+    const url = URL.createObjectURL(f);
+    return `<div class="col-4">
+      <div class="position-relative">
+        <img src="${url}" class="w-100 rounded" style="height:80px;object-fit:cover;">
+        <button class="btn btn-danger btn-xs position-absolute top-0 end-0 p-0" style="width:18px;height:18px;font-size:.6rem;"
+                onclick="removeFile(${i})" type="button">×</button>
+        <div class="text-truncate" style="font-size:.6rem;">${f.name}</div>
+      </div>
+    </div>`;
+  }).join('');
+  if (uploadFiles.length) document.getElementById('drop-zone').style.background = '#e8f5e9';
+  else document.getElementById('drop-zone').style.background = '#f8f9fa';
+}
+
+function removeFile(idx) {
+  uploadFiles.splice(idx, 1);
+  // 재렌더링
+  const dt = new DataTransfer();
+  uploadFiles.forEach(f => dt.items.add(f));
+  document.getElementById('up-files').files = dt.files;
+  previewFiles(uploadFiles);
+}
+
+// ── 업로드 제출 ─────────────────────────────────────────────────────────
+async function submitUpload() {
+  const schoolId = document.getElementById('up-school').value;
+  if (!schoolId)       { showToast('학교를 선택하세요', 'warning'); return; }
+  if (!uploadFiles.length) { showToast('사진을 선택하세요', 'warning'); return; }
+
+  const workTypeId = document.getElementById('up-worktype').value;
+  if (!workTypeId || workTypeId === '')  { showToast('작업명을 선택하세요', 'warning'); return; }
+
+  const stage   = document.querySelector('input[name="up-stage"]:checked')?.value || 'other';
+  const etcText = document.getElementById('up-worktype-etc').value.trim();
+  const incidentId = document.getElementById('up-incident').value;
+
+  const loc = await resolveLocationIds();
+  if (loc === null) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-upload me-1"></i>업로드';
+    return;
+  }
+  const { buildingId, floorId, roomId } = loc;
+
+  const btn = document.getElementById('btn-upload');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>업로드 중...';
+
+  let successCnt = 0, failCnt = 0;
+  for (const file of uploadFiles) {
+    const fd = new FormData();
+    fd.append('image',       file);
+    fd.append('school',      schoolId);
+    fd.append('photo_stage', stage);
+    fd.append('taken_at',    nowKSTISO());
+    if (workTypeId !== 'etc') fd.append('work_type', workTypeId);
+    if (etcText)  fd.append('work_type_etc', etcText);
+    if (buildingId) fd.append('building', buildingId);
+    if (floorId)    fd.append('floor',    floorId);
+    if (roomId)     fd.append('room',     roomId);
+    if (gpsLat)      fd.append('gps_lat',  gpsLat);
+    if (gpsLng)      fd.append('gps_lng',  gpsLng);
+    if (gpsAccuracy) fd.append('gps_accuracy', gpsAccuracy);
+    if (incidentId)  fd.append('incident', incidentId);
+
+    try {
+      const res = await fetch(`${API_BASE}/photos/photos/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': CSRF_TOKEN},
+        body: fd,
+      });
+      if (res.ok) successCnt++;
+      else failCnt++;
+    } catch(e) { failCnt++; }
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-upload me-1"></i>업로드';
+  if (successCnt) showToast(`${successCnt}장 업로드 완료${failCnt ? ' ('+failCnt+'장 실패)' : ''}`, 'success');
+  else showToast('업로드 실패', 'danger');
+  if (successCnt) {
+    bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
+    uploadFiles = [];
+    document.getElementById('preview-grid').innerHTML = '';
+    document.getElementById('up-files').value = '';
+    loadPhotos();
+  }
+}
+
+// ── 작업명 관리 (슈퍼관리자) ────────────────────────────────────────────
+async function loadWorkTypeList() {
+  const tbody = document.getElementById('wt-tbody');
+  if (!tbody) return;
+  try {
+    const data = await apiGet(`${API_BASE}/photos/work-types/`);
+    const items = data.results || data;
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">등록된 작업명 없음</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(w => `
+      <tr id="wt-row-${w.id}">
+        <td><input type="number" value="${w.order}" min="0" style="width:48px; font-size:.78rem;" class="form-control form-control-sm p-0 px-1 text-center"
+                   onchange="updateWorkType(${w.id},{order:+this.value})"></td>
+        <td>
+          <input type="text" value="${w.name}" class="form-control form-control-sm py-0"
+                 style="font-size:.82rem;" id="wt-name-${w.id}"
+                 onblur="updateWorkType(${w.id},{name:this.value})"
+                 onkeydown="if(event.key==='Enter') this.blur()">
+        </td>
+        <td class="text-center">
+          <div class="form-check form-switch d-flex justify-content-center mb-0">
+            <input class="form-check-input" type="checkbox" ${w.is_active?'checked':''}
+                   onchange="updateWorkType(${w.id},{is_active:this.checked})" style="cursor:pointer;">
+          </div>
+        </td>
+        <td class="text-center">
+          <button class="btn btn-xs btn-outline-danger" onclick="deleteWorkType(${w.id}, '${w.name.replace(/'/g,"\\'")}')">
+            <i class="bi bi-trash"></i>
+          </button>
+        </td>
+      </tr>`).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function addWorkType() {
+  const name  = document.getElementById('wt-new-name').value.trim();
+  const order = parseInt(document.getElementById('wt-new-order').value) || 0;
+  if (!name) { showToast('작업명을 입력하세요.', 'warning'); return; }
+  try {
+    await apiPost(`${API_BASE}/photos/work-types/`, {name, order, is_active: true});
+    document.getElementById('wt-new-name').value  = '';
+    document.getElementById('wt-new-order').value = '0';
+    showToast('작업명이 추가되었습니다.', 'success');
+    loadWorkTypeList();
+    loadWorkTypes();   // 업로드 모달 select 갱신
+  } catch(e) { showToast('추가 실패: ' + (e.message||''), 'danger'); }
+}
+
+async function updateWorkType(id, data) {
+  try {
+    await fetch(`${API_BASE}/photos/work-types/${id}/`, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json','X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify(data),
+    });
+    loadWorkTypes();
+  } catch(e) { showToast('수정 실패', 'danger'); }
+}
+
+async function deleteWorkType(id, name) {
+  if (!confirm(`"${name}" 작업명을 완전히 삭제하시겠습니까?`)) return;
+  try {
+    await apiDelete(`${API_BASE}/photos/work-types/${id}/`);
+    showToast('삭제되었습니다.', 'success');
+    loadWorkTypeList();
+    loadWorkTypes();
+  } catch(e) { showToast('삭제 실패', 'danger'); }
+}
+
+// 작업명 관리 모달 열릴 때 목록 로드
+document.getElementById('worktypeModal')?.addEventListener('show.bs.modal', loadWorkTypeList);
+
+// ── 초기화 ──────────────────────────────────────────────────────────────
+initFilterSelects();   // 검색 필터용
+loadCenters();         // 업로드 모달용
+loadSchoolTypes();     // 업로드 모달용
+loadWorkTypes();       // 업로드 모달용
+loadPhotos();
+</script>
+{% endblock %}

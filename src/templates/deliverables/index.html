@@ -1,0 +1,714 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}산출물 관리{% endblock %}
+{% block page_title %}<i class="bi bi-archive me-2"></i>산출물 관리{% endblock %}
+
+{% block extra_css %}
+<style>
+.tree-item {
+  color: #495057;
+  border-radius: 4px;
+  transition: background .15s;
+}
+.tree-item:hover { background: #f0f4ff; color: #0d6efd; }
+.tree-item.active { background: #e7f0ff; color: #0d6efd; font-weight: 600; }
+.tree-list { margin: 0; }
+.tree-toggle { font-size: .6rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+<div class="row g-2" style="height:calc(100vh - 120px);">
+
+  <!-- ─── 좌: 학교 트리 ─── -->
+  <div class="col-12 col-lg-3 d-flex flex-column">
+    <div class="card border-0 shadow-sm flex-fill">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-center gap-2">
+        <i class="bi bi-diagram-3 text-primary"></i>
+        <span class="fw-semibold small">학교 트리</span>
+        <button class="btn btn-xs btn-link p-0 text-muted ms-1" id="tree-reset-btn"
+                style="display:none;" onclick="filterCenter(null)" title="전체보기">
+          <i class="bi bi-x-circle"></i>
+        </button>
+        <input type="text" id="school-search" class="form-control form-control-sm ms-auto"
+               style="width:110px;" placeholder="학교 검색">
+      </div>
+      <div class="card-body p-0" style="overflow-y:auto;">
+        <div id="school-tree" style="max-height:calc(100vh - 170px);overflow-y:auto;">
+          <div class="p-2 text-muted small">로딩 중...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── 우: 파일 브라우저 ─── -->
+  <div class="col-12 col-lg-9 d-flex flex-column">
+    <div class="card border-0 shadow-sm flex-fill d-flex flex-column">
+      <div class="card-header py-2 bg-white border-bottom">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="fw-semibold" id="current-school-name">전체</span>
+          <div class="vr"></div>
+          <!-- 분류 탭 -->
+          <div class="d-flex flex-wrap gap-1" id="cat-tabs">
+            <button class="btn btn-sm btn-outline-secondary active" onclick="setCat('',this)">전체</button>
+            <button class="btn btn-sm btn-outline-primary"   onclick="setCat('구성도',this)">구성도</button>
+            <button class="btn btn-sm btn-outline-primary"   onclick="setCat('선번장',this)">선번장</button>
+            <button class="btn btn-sm btn-outline-primary"   onclick="setCat('랙실장도',this)">랙실장도</button>
+            <button class="btn btn-sm btn-outline-primary"   onclick="setCat('장비목록',this)">장비목록</button>
+            <button class="btn btn-sm btn-outline-primary"   onclick="setCat('건물정보',this)">건물정보</button>
+            <button class="btn btn-sm btn-outline-danger"    onclick="setCat('장애처리',this)">장애처리</button>
+            <button class="btn btn-sm btn-outline-success"   onclick="setCat('정기점검',this)">정기점검</button>
+            <button class="btn btn-sm btn-outline-warning"   onclick="setCat('소규모',this)">소규모</button>
+            <button class="btn btn-sm btn-outline-info"      onclick="setCat('스위치',this)">스위치</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="setCat('이미지',this)">이미지</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="setCat('기타',this)">기타</button>
+          </div>
+          <div class="ms-auto d-flex gap-1">
+            <!-- 검색 -->
+            <input type="text" id="file-search" class="form-control form-control-sm"
+                   style="width:320px;" placeholder="파일명 검색">
+            <!-- 업로드 버튼 -->
+            <button class="btn btn-sm btn-success" onclick="openUploadModal()">
+              <i class="bi bi-cloud-upload me-1"></i>업로드
+            </button>
+            <!-- 보기 전환 -->
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-outline-secondary active" id="btn-grid" onclick="setView('grid')">
+                <i class="bi bi-grid-3x3-gap"></i>
+              </button>
+              <button class="btn btn-outline-secondary" id="btn-list" onclick="setView('list')">
+                <i class="bi bi-list"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 파일 목록 -->
+      <div class="card-body p-2 flex-fill overflow-auto" id="file-area">
+        <div class="text-center py-5 text-muted">학교를 선택하세요</div>
+      </div>
+
+      <!-- 페이지네이션 -->
+      <div class="card-footer py-2 d-flex justify-content-between align-items-center">
+        <small class="text-muted">총 <span id="file-count" class="fw-bold text-primary">-</span>개 파일</small>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-secondary" id="fp-prev" onclick="filePage(-1)" disabled>
+            <i class="bi bi-chevron-left"></i>
+          </button>
+          <span class="btn btn-outline-secondary disabled small px-2" id="fp-info">1/1</span>
+          <button class="btn btn-outline-secondary" id="fp-next" onclick="filePage(1)" disabled>
+            <i class="bi bi-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+
+<!-- ─── 미리보기 오프캔버스 ─── -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="previewCanvas" style="width:min(680px,95vw);">
+  <div class="offcanvas-header py-2 border-bottom">
+    <h6 class="offcanvas-title fw-semibold text-truncate" id="preview-title">파일명</h6>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body p-0 d-flex flex-column">
+    <div id="preview-content" class="flex-fill p-3 text-center">
+      <div class="text-muted py-5">미리보기 불가</div>
+    </div>
+    <div class="border-top p-2 d-flex gap-2 justify-content-between align-items-center flex-wrap">
+      <div id="preview-meta" class="small text-muted"></div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-success d-none" id="btn-open-app" title="PC에 설치된 앱으로 열기">
+          <i class="bi bi-box-arrow-up-right me-1"></i>앱으로 열기
+        </button>
+        <button class="btn btn-sm btn-outline-danger" id="btn-delete-file">
+          <i class="bi bi-trash"></i>
+        </button>
+        <button class="btn btn-sm btn-primary" id="btn-download-file">
+          <i class="bi bi-download me-1"></i>다운로드
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ─── Modal: 파일 업로드 ─── -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-bold"><i class="bi bi-cloud-upload me-1"></i>파일 업로드</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">폴더 선택 <span class="text-danger">*</span></label>
+          <select id="up-folder" class="form-select form-select-sm">
+            <option value="">-- 폴더 선택 --</option>
+          </select>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">분류</label>
+            <select id="up-category" class="form-select form-select-sm">
+              <option value="report">구성도/선번장/랙실장도/장비목록</option>
+              <option value="incident">장애처리</option>
+              <option value="regular">정기점검</option>
+              <option value="switch">스위치</option>
+              <option value="photo">이미지</option>
+              <option value="other">소규모/기타</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">학교</label>
+            <select id="up-school" class="form-select form-select-sm">
+              <option value="">-- 학교 선택 --</option>
+            </select>
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">설명</label>
+          <input type="text" id="up-desc" class="form-control form-control-sm" placeholder="설명 (선택)">
+        </div>
+        <div>
+          <label class="form-label small fw-semibold">파일 <span class="text-danger">*</span></label>
+          <input type="file" id="up-file" class="form-control form-control-sm" multiple>
+        </div>
+        <!-- 드래그앤드롭 영역 -->
+        <div id="drop-zone"
+             class="border-2 border-dashed rounded text-center p-4 mt-2 text-muted"
+             style="cursor:pointer; border-color:#dee2e6 !important;"
+             ondragover="event.preventDefault();this.style.borderColor='#0d6efd'"
+             ondragleave="this.style.borderColor='#dee2e6'"
+             ondrop="handleDrop(event)">
+          <i class="bi bi-upload fs-2 d-block mb-1"></i>
+          파일을 여기에 드래그하거나 위 버튼으로 선택하세요
+        </div>
+        <div id="upload-file-list" class="mt-2"></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-primary" onclick="submitUpload()">
+          <i class="bi bi-check-lg me-1"></i>업로드
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const NAS_API = API_BASE + '/nas';
+const FILE_ICON = mime => {
+  if (!mime) return 'bi-file-earmark text-secondary';
+  if (mime.startsWith('image/')) return 'bi-file-image text-info';
+  if (mime === 'application/pdf') return 'bi-file-pdf text-danger';
+  if (mime.includes('word')) return 'bi-file-word text-primary';
+  if (mime.includes('sheet') || mime.includes('excel')) return 'bi-file-excel text-success';
+  if (mime.includes('zip') || mime.includes('rar')) return 'bi-file-zip text-warning';
+  if (mime.startsWith('text/')) return 'bi-file-text text-dark';
+  return 'bi-file-earmark text-secondary';
+};
+function fmtSize(b) {
+  if (!b) return '-';
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+
+let selectedSchoolId   = '';
+let selectedSchoolName = '';
+let selectedTab        = '';
+let currentView        = 'grid';
+let filePage_          = 1, fileTotalPages = 1;
+let previewFileId      = null;
+
+let treeData     = [];
+let activeCenter = null;
+let activeType   = null;
+let activeSchool = null;
+
+// ─────────────────────────────────────────
+// 학교 트리
+// ─────────────────────────────────────────
+async function loadSchoolTree() {
+  try {
+    treeData = await apiGet(`${API_BASE}/schools/schools/tree/`);
+    renderTree();
+  } catch(e) {
+    document.getElementById('school-tree').innerHTML = '<div class="p-2 text-danger small">로드 실패</div>';
+  }
+}
+
+function renderTree() {
+  const el = document.getElementById('school-tree');
+  if (!treeData.length) { el.innerHTML = '<div class="p-2 text-muted small">학교 없음</div>'; return; }
+  el.innerHTML = `
+    <ul class="list-unstyled mb-0 tree-list">
+      <li>
+        <a href="#" class="tree-item d-flex align-items-center px-2 py-1 small text-decoration-none
+           ${!activeCenter && !activeType && !activeSchool ? 'active' : ''}"
+           onclick="filterCenter(null);return false;">
+          <i class="bi bi-grid-3x3-gap me-1 text-muted"></i>전체
+        </a>
+      </li>
+      ${treeData.map(c => `
+        <li>
+          <div class="tree-center d-flex align-items-center">
+            <a href="#" class="tree-item flex-grow-1 d-flex align-items-center px-2 py-1 small text-decoration-none
+               ${activeCenter === c.code && !activeType && !activeSchool ? 'active' : ''}"
+               onclick="filterCenter('${c.code}','${c.name}');return false;">
+              <i class="bi bi-building me-1 text-primary" style="font-size:.7rem;"></i>
+              <span class="text-truncate">${c.name}</span>
+              <span class="badge bg-light text-muted border ms-auto" style="font-size:.6rem;">${c.count}</span>
+            </a>
+            <button class="btn btn-xs btn-link text-muted p-0 px-1 tree-toggle"
+                    onclick="toggleCenter(${c.id});return false;"
+                    data-center="${c.id}">
+              <i class="bi bi-chevron-right" style="font-size:.6rem;"></i>
+            </button>
+          </div>
+          <ul class="list-unstyled ps-3 mb-0" id="tree-c-${c.id}" style="display:none;">
+            ${c.types.map(t => `
+              <li>
+                <div class="d-flex align-items-center">
+                  <a href="#" class="tree-item flex-grow-1 d-flex align-items-center px-1 py-1 small text-decoration-none
+                     ${activeCenter === c.code && activeType === t.id && !activeSchool ? 'active' : ''}"
+                     onclick="filterType('${c.code}', ${t.id}, '${c.name} ${t.name}');return false;">
+                    <i class="bi bi-book me-1 text-success" style="font-size:.65rem;"></i>
+                    <span class="text-truncate">${t.name}</span>
+                    <span class="badge bg-light text-muted border ms-auto" style="font-size:.6rem;">${t.count}</span>
+                  </a>
+                  <button class="btn btn-xs btn-link text-muted p-0 px-1"
+                          onclick="toggleType(${c.id}, ${t.id});return false;"
+                          data-type="${c.id}-${t.id}">
+                    <i class="bi bi-chevron-right" style="font-size:.6rem;"></i>
+                  </button>
+                </div>
+                <ul class="list-unstyled ps-3 mb-0" id="tree-t-${c.id}-${t.id}" style="display:none;">
+                  ${t.schools.map(s => `
+                    <li>
+                      <a href="#" class="tree-item d-flex align-items-center px-1 py-1 small text-decoration-none
+                         ${activeSchool === s.id ? 'active' : ''}"
+                         data-sid="${s.id}" data-sname="${s.name}"
+                         onclick="filterSchool(${s.id}, '${c.code}', ${t.id}, '${s.name.replace(/'/g,"\\'")}');return false;">
+                        <i class="bi bi-dot me-1 text-muted"></i>
+                        <span class="text-truncate" title="${s.name}">${s.name}</span>
+                      </a>
+                    </li>`).join('')}
+                </ul>
+              </li>`).join('')}
+          </ul>
+        </li>`).join('')}
+    </ul>`;
+}
+
+function renderTreeActive() {
+  renderTree();
+  if (activeCenter) {
+    const c = treeData.find(x => x.code === activeCenter);
+    if (c) {
+      const ul = document.getElementById(`tree-c-${c.id}`);
+      if (ul) { ul.style.display = ''; const btn = document.querySelector(`[data-center="${c.id}"] i`); if (btn) { btn.className = 'bi bi-chevron-down'; btn.style.fontSize = '.6rem'; } }
+      if (activeType) {
+        const tul = document.getElementById(`tree-t-${c.id}-${activeType}`);
+        if (tul) { tul.style.display = ''; const tbtn = document.querySelector(`[data-type="${c.id}-${activeType}"] i`); if (tbtn) { tbtn.className = 'bi bi-chevron-down'; tbtn.style.fontSize = '.6rem'; } }
+      }
+    }
+  }
+  document.getElementById('tree-reset-btn').style.display = (activeCenter || activeSchool) ? '' : 'none';
+}
+
+function toggleCenter(centerId) {
+  const ul  = document.getElementById(`tree-c-${centerId}`);
+  const btn = document.querySelector(`[data-center="${centerId}"] i`);
+  if (!ul) return;
+  const open = ul.style.display !== 'none';
+  ul.style.display = open ? 'none' : '';
+  if (btn) { btn.className = open ? 'bi bi-chevron-right' : 'bi bi-chevron-down'; btn.style.fontSize = '.6rem'; }
+}
+
+function toggleType(centerId, typeId) {
+  const ul  = document.getElementById(`tree-t-${centerId}-${typeId}`);
+  const btn = document.querySelector(`[data-type="${centerId}-${typeId}"] i`);
+  if (!ul) return;
+  const open = ul.style.display !== 'none';
+  ul.style.display = open ? 'none' : '';
+  if (btn) { btn.className = open ? 'bi bi-chevron-right' : 'bi bi-chevron-down'; btn.style.fontSize = '.6rem'; }
+}
+
+function filterCenter(centerCode, centerName) {
+  activeCenter       = centerCode;
+  activeType         = null;
+  activeSchool       = null;
+  selectedSchoolId   = '';
+  selectedSchoolName = '';
+  filePage_ = 1;
+  document.getElementById('current-school-name').textContent = centerName || '전체';
+  renderTreeActive();
+  loadFiles();
+}
+
+function filterType(centerCode, typeId, label) {
+  activeCenter       = centerCode;
+  activeType         = typeId;
+  activeSchool       = null;
+  selectedSchoolId   = '';
+  selectedSchoolName = '';
+  filePage_ = 1;
+  document.getElementById('current-school-name').textContent = label || '전체';
+  renderTreeActive();
+  loadFiles();
+}
+
+function filterSchool(schoolId, centerCode, typeId, schoolName) {
+  activeSchool       = schoolId;
+  activeCenter       = centerCode;
+  activeType         = typeId;
+  selectedSchoolId   = schoolId;
+  selectedSchoolName = schoolName;
+  filePage_ = 1;
+  document.getElementById('current-school-name').textContent = schoolName;
+  renderTreeActive();
+  loadFiles();
+}
+
+// 학교 검색 (트리 내 학교명 필터링)
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('school-search').addEventListener('input', e => {
+    const q = e.target.value.toLowerCase().trim();
+    if (!q) { renderTreeActive(); return; }
+    // 검색어 있으면 모든 지원청/학제 펼치고 매칭 학교만 표시
+    document.querySelectorAll('#school-tree .tree-item[data-sid]').forEach(a => {
+      const name = a.dataset.sname || '';
+      a.closest('li').style.display = name.toLowerCase().includes(q) ? '' : 'none';
+    });
+    // 학교가 있는 학제/지원청 펼치기
+    document.querySelectorAll('[id^="tree-t-"]').forEach(ul => { ul.style.display = ''; });
+    document.querySelectorAll('[id^="tree-c-"]').forEach(ul => { ul.style.display = ''; });
+  });
+});
+
+// ─────────────────────────────────────────
+// 분류 탭
+// ─────────────────────────────────────────
+function setCat(tab, el) {
+  selectedTab = tab;
+  filePage_   = 1;
+  document.querySelectorAll('#cat-tabs .btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  loadFiles();
+}
+
+// ─────────────────────────────────────────
+// 파일 목록
+// ─────────────────────────────────────────
+async function loadFiles() {
+  const q = document.getElementById('file-search').value;
+  const params = { page: filePage_, page_size: 24 };
+  if (selectedSchoolId)   params.school_id   = selectedSchoolId;
+  if (selectedSchoolName) params.school_name = selectedSchoolName;
+  if (selectedTab)        params.tab         = selectedTab;
+  if (q)                  params.q           = q;
+
+  const area = document.getElementById('file-area');
+  area.innerHTML = '<div class="text-center py-5 text-muted">로딩 중...</div>';
+  try {
+    const data = await apiGet(`${NAS_API}/files/`, params);
+    fileTotalPages = Math.ceil((data.count||0) / 24);
+    document.getElementById('file-count').textContent = data.count||0;
+    document.getElementById('fp-info').textContent    = `${filePage_}/${fileTotalPages||1}`;
+    document.getElementById('fp-prev').disabled = filePage_ <= 1;
+    document.getElementById('fp-next').disabled = filePage_ >= fileTotalPages;
+
+    const items = data.results || [];
+    if (!items.length) {
+      area.innerHTML = '<div class="text-center py-5 text-muted"><i class="bi bi-folder2-open fs-1 d-block mb-2"></i>파일 없음</div>';
+      return;
+    }
+    if (currentView === 'grid') renderGrid(area, items);
+    else renderList(area, items);
+  } catch(e) { area.innerHTML = '<div class="text-center py-5 text-danger">로드 실패</div>'; }
+}
+
+function renderGrid(area, items) {
+  area.innerHTML = `<div class="row g-2">` + items.map(f => `
+    <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+      <div class="card h-100 border cursor-pointer file-card" onclick="previewFile(${f.id},'${f.name}','${f.mime_type||''}')">
+        <div class="card-body text-center py-3 px-2">
+          ${f.mime_type?.startsWith('image/')
+            ? `<img src="${NAS_API}/files/${f.id}/preview/" style="max-width:80px;max-height:70px;object-fit:cover;" onerror="this.style.display='none'">`
+            : `<i class="bi ${FILE_ICON(f.mime_type)} fs-1"></i>`}
+          <div class="small mt-2 text-truncate fw-semibold" title="${f.name}">${f.name}</div>
+          <small class="text-muted">${fmtSize(f.file_size)}</small>
+        </div>
+      </div>
+    </div>`).join('') + `</div>`;
+}
+
+function renderList(area, items) {
+  area.innerHTML = `<table class="table table-sm table-hover mb-0">
+    <thead class="table-light sticky-top">
+      <tr><th>파일명</th><th style="width:80px;">분류</th><th style="width:100px;">학교</th>
+          <th style="width:80px;">크기</th><th style="width:90px;">업로드일</th><th style="width:50px;"></th></tr>
+    </thead>
+    <tbody>` + items.map(f => `
+      <tr class="cursor-pointer" onclick="previewFile(${f.id},'${f.name}','${f.mime_type||''}')">
+        <td>
+          <i class="bi ${FILE_ICON(f.mime_type)} me-1"></i>
+          <span class="fw-semibold">${f.name}</span>
+          ${f.description ? `<small class="text-muted ms-1">${f.description}</small>` : ''}
+        </td>
+        <td><small>${f.category||'-'}</small></td>
+        <td><small class="text-muted">${f.school_name||'-'}</small></td>
+        <td><small>${fmtSize(f.file_size)}</small></td>
+        <td><small class="text-muted">${formatDate(f.uploaded_at)}</small></td>
+        <td class="text-center">
+          <a href="${NAS_API}/files/${f.id}/download/" class="btn btn-xs btn-outline-secondary py-0 px-1"
+             onclick="event.stopPropagation();" download>
+            <i class="bi bi-download"></i>
+          </a>
+        </td>
+      </tr>`).join('') + `</tbody></table>`;
+}
+
+function filePage(d) { filePage_ = Math.max(1, Math.min(fileTotalPages, filePage_+d)); loadFiles(); }
+
+function setView(v) {
+  currentView = v;
+  document.getElementById('btn-grid').classList.toggle('active', v==='grid');
+  document.getElementById('btn-list').classList.toggle('active', v==='list');
+  loadFiles();
+}
+
+// ─────────────────────────────────────────
+// 미리보기 오프캔버스
+// ─────────────────────────────────────────
+// ─────────────────────────────────────────
+// Office URI 스킴 처리 (PC 앱으로 열기)
+// ms-word / ms-excel / ms-powerpoint: SharePoint·OneDrive 방식
+// HWP: 다운로드 후 OS 연결 앱으로 자동 실행
+// ─────────────────────────────────────────
+const OFFICE_URI = {
+  // Word
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'ms-word',
+  'application/msword': 'ms-word',
+  // Excel
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'ms-excel',
+  'application/vnd.ms-excel': 'ms-excel',
+  // PowerPoint
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'ms-powerpoint',
+  'application/vnd.ms-powerpoint': 'ms-powerpoint',
+};
+const EXT_URI = {
+  '.docx':'ms-word', '.doc':'ms-word',
+  '.xlsx':'ms-excel', '.xls':'ms-excel',
+  '.pptx':'ms-powerpoint', '.ppt':'ms-powerpoint',
+};
+const HWP_EXTS = new Set(['.hwp', '.hwpx']);
+
+function getOfficeScheme(mime, name) {
+  if (OFFICE_URI[mime]) return OFFICE_URI[mime];
+  const ext = name.slice(name.lastIndexOf('.')).toLowerCase();
+  return EXT_URI[ext] || null;
+}
+
+function isHwp(name) {
+  const ext = name.slice(name.lastIndexOf('.')).toLowerCase();
+  return HWP_EXTS.has(ext);
+}
+
+function openWithApp(id, name, mime) {
+  // 다운로드 즉시 실행 → Windows에서 연결된 앱(Excel/한글 등)으로 자동 열림
+  const a = document.createElement('a');
+  a.href = `${NAS_API}/files/${id}/download/`;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+async function previewFile(id, name, mime) {
+  previewFileId = id;
+  document.getElementById('preview-title').textContent = name;
+  const content   = document.getElementById('preview-content');
+  const btnApp    = document.getElementById('btn-open-app');
+
+  // 앱으로 열기 버튼: Office 또는 HWP 일 때만 표시
+  const scheme    = getOfficeScheme(mime, name);
+  const hwp       = isHwp(name);
+  _preloadedTempUrl = null;
+
+  if (scheme || hwp) {
+    btnApp.classList.remove('d-none');
+    btnApp.innerHTML = hwp
+      ? '<i class="bi bi-download me-1"></i>한글로 열기'
+      : `<i class="bi bi-download me-1"></i>${
+          scheme === 'ms-word' ? 'Word' : scheme === 'ms-excel' ? 'Excel' : 'PowerPoint'
+        }로 열기`;
+    btnApp.onclick = () => openWithApp(id, name, mime);
+  } else {
+    btnApp.classList.add('d-none');
+  }
+
+  if (mime.startsWith('image/')) {
+    content.innerHTML = `<img src="${NAS_API}/files/${id}/preview/"
+      style="max-width:100%;max-height:calc(100vh - 200px);object-fit:contain;"
+      onerror="this.outerHTML='<div class=text-muted>이미지 로드 실패</div>'">`;
+  } else if (mime === 'application/pdf') {
+    content.innerHTML = `<iframe src="${NAS_API}/files/${id}/preview/"
+      style="width:100%;height:calc(100vh - 160px);border:none;"></iframe>`;
+  } else {
+    // Office / HWP / 기타: 안내 + 앱 열기 바로가기
+    const appLabel = scheme
+      ? `${scheme === 'ms-word' ? 'Microsoft Word' : scheme === 'ms-excel' ? 'Microsoft Excel' : 'Microsoft PowerPoint'}가`
+      : hwp ? '한글(HWP)이' : null;
+    content.innerHTML = `<div class="text-center py-5 text-muted">
+      <i class="bi ${FILE_ICON(mime)} display-4 d-block mb-3"></i>
+      <div class="fw-semibold mb-1">${name}</div>
+      ${appLabel
+        ? `<small class="text-secondary">PC에 ${appLabel} 설치되어 있으면<br><strong>앱으로 열기</strong> 버튼을 클릭하세요.</small>`
+        : `<small>미리보기를 지원하지 않는 파일 형식입니다.</small>`}
+    </div>`;
+  }
+
+  try {
+    const f = await apiGet(`${NAS_API}/files/${id}/`);
+    document.getElementById('preview-meta').innerHTML =
+      `${fmtSize(f.file_size)} · ${f.category||'-'} · ${formatDate(f.uploaded_at)}`;
+  } catch(e) {}
+
+  document.getElementById('btn-download-file').onclick = () => {
+    window.location.href = `${NAS_API}/files/${id}/download/`;
+  };
+  document.getElementById('btn-delete-file').onclick = () => deleteFile(id);
+
+  bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('previewCanvas')).show();
+}
+
+async function deleteFile(id) {
+  if (!confirm('파일을 삭제하시겠습니까?')) return;
+  try {
+    await fetch(`${NAS_API}/files/${id}/`, {
+      method: 'DELETE',
+      headers: { 'X-CSRFToken': getCsrfToken() }
+    });
+    bootstrap.Offcanvas.getInstance(document.getElementById('previewCanvas'))?.hide();
+    showToast('삭제 완료', 'success');
+    loadFiles();
+  } catch(e) { showToast('삭제 실패', 'danger'); }
+}
+
+// ─────────────────────────────────────────
+// 업로드 모달
+// ─────────────────────────────────────────
+let uploadFiles = [];
+
+async function openUploadModal() {
+  uploadFiles = [];
+  document.getElementById('upload-file-list').innerHTML = '';
+  document.getElementById('up-file').value = '';
+  document.getElementById('up-desc').value = '';
+
+  // 폴더 목록 로드
+  const folderSel = document.getElementById('up-folder');
+  folderSel.innerHTML = '<option value="">로딩 중...</option>';
+  try {
+    const data = await apiGet(`${NAS_API}/folders/`, { school_id: selectedSchoolId || undefined, page_size: 200 });
+    const folders = data.results || data;
+    folderSel.innerHTML = '<option value="">-- 폴더 선택 --</option>' +
+      folders.map(f => `<option value="${f.id}">${f.full_path||f.name}</option>`).join('');
+  } catch(e) { folderSel.innerHTML = '<option value="">폴더 로드 실패</option>'; }
+
+  // 학교 목록
+  const schoolSel = document.getElementById('up-school');
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/`, { page_size: 500 });
+    const schools = data.results || data;
+    schoolSel.innerHTML = '<option value="">-- 학교 선택 --</option>' +
+      schools.map(s => `<option value="${s.id}" ${s.id==selectedSchoolId?'selected':''}>${s.name}</option>`).join('');
+  } catch(e) {}
+
+  document.getElementById('up-category').value = selectedCat || 'other';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal')).show();
+}
+
+document.getElementById('up-file')?.addEventListener('change', e => {
+  uploadFiles = Array.from(e.target.files);
+  renderFileList();
+});
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').style.borderColor = '#dee2e6';
+  uploadFiles = Array.from(e.dataTransfer.files);
+  renderFileList();
+}
+
+function renderFileList() {
+  const el = document.getElementById('upload-file-list');
+  el.innerHTML = uploadFiles.map((f,i) => `
+    <div class="d-flex align-items-center gap-2 py-1 border-bottom small">
+      <i class="bi ${FILE_ICON(f.type)} text-muted"></i>
+      <span class="flex-fill text-truncate">${f.name}</span>
+      <span class="text-muted">${fmtSize(f.size)}</span>
+      <button class="btn btn-xs btn-outline-danger py-0 px-1" onclick="removeUploadFile(${i})">
+        <i class="bi bi-x"></i>
+      </button>
+    </div>`).join('');
+}
+
+function removeUploadFile(i) { uploadFiles.splice(i, 1); renderFileList(); }
+
+async function submitUpload() {
+  const folderId = document.getElementById('up-folder').value;
+  if (!folderId) { showToast('폴더를 선택하세요.', 'warning'); return; }
+  if (!uploadFiles.length) { showToast('파일을 선택하세요.', 'warning'); return; }
+
+  const category   = document.getElementById('up-category').value;
+  const desc       = document.getElementById('up-desc').value;
+  const uploadSchool = document.getElementById('up-school').value;
+
+  let success = 0, fail = 0;
+  for (const file of uploadFiles) {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('folder', folderId);
+    fd.append('category', category);
+    if (desc) fd.append('description', desc);
+    if (uploadSchool) fd.append('school', uploadSchool);
+    try {
+      const res = await fetch(`${NAS_API}/files/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCsrfToken() },
+        body: fd,
+      });
+      if (res.ok) success++;
+      else fail++;
+    } catch(e) { fail++; }
+  }
+
+  bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
+  showToast(`업로드 완료: ${success}개 성공${fail?`, ${fail}개 실패`:''}`, fail?'warning':'success');
+  loadFiles();
+}
+
+// ─────────────────────────────────────────
+// 초기화
+// ─────────────────────────────────────────
+loadSchoolTree();
+document.getElementById('file-search').addEventListener('input', (() => {
+  let t;
+  return () => { clearTimeout(t); t = setTimeout(() => { filePage_=1; loadFiles(); }, 400); };
+})());
+</script>
+{% endblock %}

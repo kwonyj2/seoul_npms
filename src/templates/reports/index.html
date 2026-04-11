@@ -1,0 +1,2499 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}업무보고서{% endblock %}
+{% block page_title %}<i class="bi bi-file-earmark-text me-2"></i>업무보고서 자동화{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── 선택 패널 ── */
+.sel-panel { background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:14px 16px; margin-bottom:14px; }
+.sel-row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+.sel-group { display:flex; flex-direction:column; gap:3px; flex:1; min-width:140px; }
+.sel-group label { font-size:.72rem; font-weight:600; color:#495057; }
+.sel-group select { font-size:.82rem; }
+.sel-arrow { color:#adb5bd; font-size:1.1rem; padding-top:22px; }
+/* 학교명 자동완성 */
+.school-suggest { position:absolute; left:0; right:0; top:100%; background:#fff; border:1px solid #ced4da; border-top:none; border-radius:0 0 6px 6px; z-index:200; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,.1); }
+.suggest-item { padding:6px 12px; font-size:.82rem; cursor:pointer; border-bottom:1px solid #f0f0f0; }
+.suggest-item:last-child { border-bottom:none; }
+.suggest-item:hover,.suggest-item.active { background:#eff6ff; }
+.suggest-item .s-name { font-weight:600; }
+.suggest-item .s-sub { font-size:.7rem; color:#6c757d; }
+/* ── 산출물 카드 ── */
+.doc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px; }
+.doc-card { border:1.5px solid #dee2e6; border-radius:10px; padding:16px 14px; cursor:pointer; background:#fff; transition:all .15s; text-align:center; }
+.doc-card:hover { border-color:#0d6efd; background:#f0f4ff; transform:translateY(-2px); box-shadow:0 3px 10px rgba(13,110,253,.12); }
+.doc-card .dc-icon { font-size:2rem; margin-bottom:8px; }
+.doc-card .dc-name { font-size:.82rem; font-weight:700; color:#212529; }
+.doc-card .dc-type { font-size:.68rem; color:#6c757d; margin-top:2px; }
+/* ── 최근 보고서 목록 ── */
+.rpt-row { display:flex; align-items:center; gap:8px; padding:7px 10px; border-bottom:1px solid #f0f0f0; font-size:.8rem; cursor:pointer; }
+.rpt-row:hover { background:#f8f9fa; }
+.rpt-row:last-child { border-bottom:none; }
+.rpt-badge { font-size:.65rem; padding:2px 7px; border-radius:12px; font-weight:600; white-space:nowrap; }
+/* ── 보고서 생성 모달 ── */
+.doc-modal-hdr { background:linear-gradient(135deg,#0d6efd,#0a58ca); color:#fff; border-radius:8px 8px 0 0; padding:14px 18px; }
+.doc-modal-school { font-size:.78rem; opacity:.85; margin-top:3px; }
+.form-section { background:#f8f9fa; border-radius:6px; padding:10px 14px; margin-bottom:10px; }
+.form-section-title { font-size:.7rem; font-weight:700; color:#495057; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; border-bottom:1px solid #dee2e6; padding-bottom:4px; }
+.form-field { margin-bottom:8px; }
+.form-field label { font-size:.75rem; font-weight:600; color:#495057; display:block; margin-bottom:3px; }
+.form-field .form-control,.form-field .form-select { font-size:.82rem; }
+.form-field .field-note { font-size:.68rem; color:#6c757d; margin-top:2px; }
+/* PDF 상태 */
+.pdf-spin { animation:spin 1s linear infinite; }
+@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+  <!-- ① 학교 선택 -->
+  <div class="sel-panel">
+    <!-- 1행: cascade + 검색 + 초기화 -->
+    <div class="sel-row">
+      <div class="sel-group">
+        <label><i class="bi bi-building me-1"></i>교육지원청</label>
+        <select id="sel-center" class="form-select form-select-sm" onchange="onCenterChange()">
+          <option value="">-- 교육지원청 선택 --</option>
+        </select>
+      </div>
+      <div class="sel-arrow"><i class="bi bi-chevron-right"></i></div>
+      <div class="sel-group">
+        <label><i class="bi bi-diagram-3 me-1"></i>학제</label>
+        <select id="sel-type" class="form-select form-select-sm" onchange="onTypeChange()" disabled>
+          <option value="">-- 학제 선택 --</option>
+        </select>
+      </div>
+      <div class="sel-arrow"><i class="bi bi-chevron-right"></i></div>
+      <div class="sel-group">
+        <label><i class="bi bi-house me-1"></i>학교</label>
+        <select id="sel-school" class="form-select form-select-sm" onchange="onSchoolChange()" disabled>
+          <option value="">-- 학교 선택 --</option>
+        </select>
+      </div>
+      <!-- 세로 구분선 -->
+      <div style="border-left:1px solid #dee2e6;margin:0 4px;align-self:stretch;"></div>
+      <!-- 학교명 검색 -->
+      <div class="sel-group" style="min-width:200px;flex:2;">
+        <label><i class="bi bi-search me-1"></i>학교명 검색</label>
+        <div class="position-relative">
+          <div class="input-group input-group-sm">
+            <input type="text" id="school-search-input" class="form-control"
+                   placeholder="학교명 직접 검색..." autocomplete="off"
+                   oninput="onSchoolSearchInput(this.value)"
+                   onkeydown="onSchoolSearchKey(event)">
+            <button class="btn btn-outline-secondary" type="button"
+                    onclick="clearSchoolSearch()" title="검색 지우기">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+          <div id="school-suggest" class="school-suggest" style="display:none;"></div>
+        </div>
+      </div>
+      <!-- 초기화 버튼 -->
+      <div style="padding-top:22px;">
+        <button class="btn btn-sm btn-outline-danger px-3" onclick="resetSel()" title="전체 초기화">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>초기화
+        </button>
+      </div>
+    </div>
+
+    <!-- 선택된 학교 정보 -->
+    <div id="school-info-bar" class="mt-2 d-none">
+      <span class="badge bg-primary me-2" id="school-badge">—</span>
+      <small class="text-muted" id="school-addr"></small>
+    </div>
+  </div>
+
+  <!-- ④ 데이터 내보내기 -->
+  <div class="row g-3 mb-3">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header py-2 bg-white border-bottom fw-semibold small d-flex align-items-center gap-2">
+          <i class="bi bi-download text-success"></i>보고서 데이터 내보내기
+          <small class="text-muted ms-auto fw-normal">완료된 보고서 데이터를 Excel / CSV로 다운로드</small>
+        </div>
+        <div class="card-body p-3">
+          <div class="row g-2 align-items-end">
+            <div class="col-12 col-sm-4">
+              <label class="form-label small fw-semibold mb-1"><i class="bi bi-file-earmark-text me-1 text-primary"></i>서류 종류</label>
+              <select id="export-tmpl-sel" class="form-select form-select-sm">
+                <option value="">-- 서류 선택 --</option>
+              </select>
+            </div>
+            <div class="col-6 col-sm-2">
+              <label class="form-label small fw-semibold mb-1"><i class="bi bi-calendar me-1"></i>시작일</label>
+              <input type="date" id="export-date-from" class="form-control form-control-sm">
+            </div>
+            <div class="col-6 col-sm-2">
+              <label class="form-label small fw-semibold mb-1"><i class="bi bi-calendar me-1"></i>종료일</label>
+              <input type="date" id="export-date-to" class="form-control form-control-sm">
+            </div>
+            <div class="col-12 col-sm-4 d-flex gap-2">
+              <button class="btn btn-sm btn-success flex-fill" onclick="exportReport('xlsx')">
+                <i class="bi bi-file-earmark-excel me-1"></i>Excel 다운로드
+              </button>
+              <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="exportReport('csv')">
+                <i class="bi bi-filetype-csv me-1"></i>CSV 다운로드
+              </button>
+            </div>
+          </div>
+          <div class="mt-2 small text-muted" id="export-hint">
+            <i class="bi bi-info-circle me-1"></i>서류 종류를 선택하고 Excel 또는 CSV 버튼을 누르세요. 날짜를 지정하면 해당 기간만 추출됩니다.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <!-- ② 산출물 선택 -->
+    <div class="col-12 col-lg-7">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header py-2 bg-white border-bottom fw-semibold small d-flex align-items-center gap-2">
+          <i class="bi bi-grid-3x2-gap text-primary"></i>산출물 선택
+          <small class="text-muted ms-auto" id="tmpl-hint">학교를 먼저 선택하세요</small>
+        </div>
+        <div class="card-body p-3" id="doc-grid-wrap">
+          <div class="text-center py-5 text-muted">
+            <i class="bi bi-arrow-up-circle fs-2 d-block mb-2"></i>
+            교육지원청 → 학제 → 학교를 선택하면<br>사용 가능한 산출물 양식이 표시됩니다.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ③ 최근 보고서 -->
+    <div class="col-12 col-lg-5">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header py-2 bg-white border-bottom fw-semibold small d-flex align-items-center gap-2">
+          <i class="bi bi-clock-history text-secondary"></i>최근 작성 보고서
+          <span class="badge bg-secondary ms-auto" id="rpt-count">0</span>
+        </div>
+        <div id="rpt-list" style="max-height:420px;overflow-y:auto;">
+          <div class="text-center py-4 text-muted small">학교를 선택하면 보고서 이력이 표시됩니다.</div>
+        </div>
+        <!-- 목록 페이징 -->
+        <div class="card-footer py-2 d-flex gap-1 justify-content-end" id="rpt-pager" style="display:none!important;">
+          <button class="btn btn-sm btn-outline-secondary" id="rpt-prev" onclick="rptPage(-1)"><i class="bi bi-chevron-left"></i></button>
+          <span class="btn btn-sm btn-outline-secondary disabled" id="rpt-page-info">1/1</span>
+          <button class="btn btn-sm btn-outline-secondary" id="rpt-next" onclick="rptPage(1)"><i class="bi bi-chevron-right"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════
+     보고서 작성 모달
+══════════════════════════════════════════ -->
+<div class="modal fade" id="writeModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <!-- 헤더 -->
+      <div class="doc-modal-hdr">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-file-earmark-plus fs-5"></i>
+          <div>
+            <div class="fw-bold" id="wm-title">보고서 작성</div>
+            <div class="doc-modal-school" id="wm-school">—</div>
+          </div>
+          <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+        </div>
+      </div>
+      <!-- 본문 -->
+      <div class="modal-body p-0">
+        <!-- 진행 상태 표시 -->
+        <div class="d-flex border-bottom bg-light" id="wm-steps">
+          <div class="flex-fill text-center py-2 small fw-semibold step-ind active" data-step="1">
+            <span class="badge bg-primary me-1">1</span>정보 입력
+          </div>
+          <div class="flex-fill text-center py-2 small text-muted step-ind" data-step="2">
+            <span class="badge bg-secondary me-1">2</span>내용 확인
+          </div>
+          <div class="flex-fill text-center py-2 small text-muted step-ind" data-step="3">
+            <span class="badge bg-secondary me-1">3</span>PDF 생성
+          </div>
+        </div>
+        <!-- 폼 영역 -->
+        <div class="p-3" id="wm-form-area">
+          <!-- 동적 렌더링 -->
+        </div>
+        <!-- 확인 영역 (step2) -->
+        <div class="p-3 d-none" id="wm-confirm-area">
+          <div class="alert alert-info small mb-2" id="wm-confirm-hint">
+            <i class="bi bi-info-circle me-1"></i>아래 내용을 확인하고 <strong>완료</strong>를 누르면 보고서가 저장되고 PDF가 자동 생성됩니다.
+          </div>
+          <div id="wm-edit-note-wrap" class="d-none mb-2">
+            <label class="form-label small fw-semibold mb-1"><i class="bi bi-pencil me-1 text-warning"></i>수정 메모 <small class="text-muted fw-normal">(이력에 기록됩니다)</small></label>
+            <input type="text" id="wm-edit-note" class="form-control form-control-sm" placeholder="예: 서명 재입력, 사진 교체 등">
+          </div>
+          <div id="wm-confirm-table"></div>
+        </div>
+        <!-- PDF 생성 영역 (step3) -->
+        <div class="p-3 d-none text-center" id="wm-pdf-area">
+          <div id="pdf-spinner" class="mb-3">
+            <i class="bi bi-arrow-repeat pdf-spin fs-2 text-primary"></i>
+            <div class="mt-2 text-muted small">PDF 생성 중...</div>
+          </div>
+          <div id="pdf-done" class="d-none">
+            <i class="bi bi-check-circle-fill fs-2 text-success"></i>
+            <div class="mt-2 fw-semibold">PDF 생성 완료</div>
+            <div class="text-muted small mb-3" id="pdf-done-name"></div>
+            <button class="btn btn-success" onclick="downloadCurrentPdf()">
+              <i class="bi bi-download me-1"></i>PDF 다운로드
+            </button>
+          </div>
+          <div id="pdf-err" class="d-none">
+            <i class="bi bi-exclamation-triangle-fill fs-2 text-warning"></i>
+            <div class="mt-2 fw-semibold text-warning">PDF 생성 대기 중</div>
+            <div class="text-muted small mb-3">백그라운드에서 생성 중입니다. 잠시 후 목록에서 다운로드하세요.</div>
+          </div>
+        </div>
+      </div>
+      <!-- 푸터 -->
+      <div class="modal-footer py-2 gap-2">
+        <button class="btn btn-sm btn-outline-secondary" id="wm-btn-back" onclick="wmBack()" style="display:none;">
+          <i class="bi bi-chevron-left me-1"></i>이전
+        </button>
+        <span class="text-muted small me-auto" id="wm-footer-hint"></span>
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal" id="wm-btn-cancel">닫기</button>
+        <button class="btn btn-sm btn-primary" id="wm-btn-next" onclick="wmNext()">
+          다음 <i class="bi bi-chevron-right ms-1"></i>
+        </button>
+        <button class="btn btn-sm btn-success d-none" id="wm-btn-complete" onclick="wmComplete()">
+          <i class="bi bi-check2-circle me-1"></i>완료 · PDF 생성
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 보고서 미리보기 모달 -->
+<div class="modal fade" id="viewModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-bold" id="view-title">보고서 조회</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3" id="view-body"></div>
+      <div class="modal-footer py-2 gap-2">
+        <span class="text-muted small me-auto" id="view-meta"></span>
+        <button class="btn btn-sm btn-outline-success d-none" id="view-final-btn">
+          <i class="bi bi-patch-check me-1"></i>최종 확정
+        </button>
+        <button class="btn btn-sm btn-outline-warning d-none" id="view-edit-btn">
+          <i class="bi bi-pencil-square me-1"></i>수정
+        </button>
+        <button class="btn btn-sm btn-outline-danger d-none" id="view-dl-btn">
+          <i class="bi bi-file-pdf me-1"></i>PDF 다운로드
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ────────────────────────────────────────────────
+   상태
+──────────────────────────────────────────────── */
+var CENTERS=[], TYPES=[], SCHOOLS=[], TEMPLATES=[];
+var selCenter=null, selType=null, selSchool=null, selTemplate=null;
+var wmStep=1, wmReportId=null, wmEditMode=false, wmEditReportId=null;
+var wmRestoreSigs=null; /* {itl:{data,name,org,phone}, sch:{data,name,org,phone}} — Step2 렌더 후 캔버스 복원용 */
+var rptPage_cur=1, rptPage_total=1;
+var schoolSwitchAssets=[];    // 스위치 설치확인서용 출고 장비 목록
+var schoolCurrentAssets=[];  // 스위치 설치확인서용 학교 기설치 장비 목록 (교체전 장비 선택용)
+var schoolVsdxData={buildings:[]};  // VSDX 건물/층/교실 데이터
+var schoolContacts=[];              // 학교 담당자 목록
+var switchDevPhotos=[];             // 장비별 사진 IDs [{before:id, after:id}]
+var schoolLocData={buildings:[],floors:[],locations:[]};  // 건물·층·설치위치 목록
+var cablePhotos=[];                 // 케이블 항목별 사진 IDs [{sp_before,sp_after,ep_before,ep_after}]
+
+/* ────────────────────────────────────────────────
+   초기 로드
+──────────────────────────────────────────────── */
+(function init(){
+  fetch(API_BASE+'/schools/centers/',{headers:{'X-CSRFToken':CSRF_TOKEN}})
+    .then(r=>r.json()).then(d=>{
+      CENTERS=(d.results||d);
+      var sel=document.getElementById('sel-center');
+      CENTERS.forEach(c=>{ var o=document.createElement('option'); o.value=c.code; o.textContent=c.name; sel.appendChild(o); });
+    });
+  fetch(API_BASE+'/schools/types/',{headers:{'X-CSRFToken':CSRF_TOKEN}})
+    .then(r=>r.json()).then(d=>{ TYPES=(d.results||d); });
+  fetch(API_BASE+'/reports/templates/?active=1',{headers:{'X-CSRFToken':CSRF_TOKEN}})
+    .then(r=>r.json()).then(d=>{ TEMPLATES=(d.results||d); _populateExportSel(); });
+})();
+
+/* ────────────────────────────────────────────────
+   3단 선택
+──────────────────────────────────────────────── */
+function onCenterChange(){
+  selCenter=document.getElementById('sel-center').value;
+  selType=null; selSchool=null;
+  var ts=document.getElementById('sel-type');
+  ts.innerHTML='<option value="">-- 학제 선택 --</option>';
+  ts.disabled=!selCenter;
+  document.getElementById('sel-school').innerHTML='<option value="">-- 학교 선택 --</option>';
+  document.getElementById('sel-school').disabled=true;
+  document.getElementById('school-info-bar').classList.add('d-none');
+  clearDocGrid(); clearRptList();
+  if(!selCenter) return;
+  /* 학제 채우기 */
+  TYPES.forEach(t=>{ var o=document.createElement('option'); o.value=t.code; o.textContent=t.name; ts.appendChild(o); });
+}
+function onTypeChange(){
+  selType=document.getElementById('sel-type').value;
+  selSchool=null;
+  loadSchools();
+}
+function loadSchools(){
+  var ss=document.getElementById('sel-school');
+  ss.innerHTML='<option value="">-- 학교 선택 --</option>'; ss.disabled=true;
+  if(!selCenter) return;
+  var url=API_BASE+'/schools/schools/filter/?center='+selCenter+(selType?'&type='+selType:'');
+  fetch(url,{headers:{'X-CSRFToken':CSRF_TOKEN}}).then(r=>r.json()).then(list=>{
+    SCHOOLS=list;
+    list.forEach(s=>{ var o=document.createElement('option'); o.value=s.id; o.textContent=s.name; ss.appendChild(o); });
+    ss.disabled=false;
+  });
+}
+function onSchoolChange(){
+  var ss=document.getElementById('sel-school');
+  selSchool=ss.value ? SCHOOLS.find(s=>s.id==ss.value)||{id:ss.value,name:ss.options[ss.selectedIndex].text} : null;
+  document.getElementById('school-info-bar').classList.toggle('d-none',!selSchool);
+  if(selSchool){
+    document.getElementById('school-badge').textContent=selSchool.name;
+  }
+  clearDocGrid(); clearRptList();
+  if(!selSchool) return;
+  renderDocGrid();
+  loadRptList(1);
+}
+function resetSel(){
+  ['sel-center','sel-type','sel-school'].forEach(id=>{ document.getElementById(id).value=''; });
+  document.getElementById('sel-type').disabled=true;
+  document.getElementById('sel-school').disabled=true;
+  document.getElementById('school-info-bar').classList.add('d-none');
+  selCenter=selType=selSchool=null;
+  clearSchoolSearch();
+  clearDocGrid(); clearRptList();
+}
+
+/* ────────────────────────────────────────────────
+   학교명 직접 검색 (자동완성)
+──────────────────────────────────────────────── */
+var _suggestTimer=null, _suggestIdx=-1;
+
+function onSchoolSearchInput(q){
+  clearTimeout(_suggestTimer);
+  _suggestIdx=-1;
+  if(!q.trim()){ hideSuggest(); return; }
+  _suggestTimer=setTimeout(()=>fetchSuggest(q.trim()),250);
+}
+
+function fetchSuggest(q){
+  fetch(API_BASE+'/schools/schools/?q='+encodeURIComponent(q)+'&page_size=15',
+        {headers:{'X-CSRFToken':CSRF_TOKEN}})
+    .then(r=>r.json())
+    .then(d=>{
+      var list=(d.results||d).slice(0,15);
+      if(!list.length){ hideSuggest(); return; }
+      var box=document.getElementById('school-suggest');
+      box.innerHTML=list.map((s,i)=>`
+        <div class="suggest-item" data-id="${s.id}" data-name="${s.name}"
+             data-center="${s.support_center_name||''}" data-type="${s.school_type_name||''}"
+             onmousedown="selectSuggest(${s.id},'${s.name.replace(/'/g,"\\'")}','${(s.support_center_name||'').replace(/'/g,"\\'")}')">
+          <div class="s-name">${s.name}</div>
+          <div class="s-sub">${s.support_center_name||''} · ${s.school_type_name||''} · ${s.address||''}</div>
+        </div>`).join('');
+      box.style.display='block';
+    }).catch(()=>hideSuggest());
+}
+
+function selectSuggest(id, name, centerName){
+  document.getElementById('school-search-input').value=name;
+  hideSuggest();
+  // cascade 선택 초기화 (검색으로 선택 시 cascade와 충돌 방지)
+  ['sel-center','sel-type','sel-school'].forEach(i=>{ document.getElementById(i).value=''; });
+  document.getElementById('sel-type').disabled=true;
+  document.getElementById('sel-school').disabled=true;
+  selCenter=null; selType=null;
+  // 학교 선택 처리
+  selSchool={id:id, name:name};
+  document.getElementById('school-info-bar').classList.remove('d-none');
+  document.getElementById('school-badge').textContent=name;
+  clearDocGrid(); clearRptList();
+  renderDocGrid();
+  loadRptList(1);
+}
+
+function onSchoolSearchKey(e){
+  var items=document.querySelectorAll('#school-suggest .suggest-item');
+  if(!items.length) return;
+  if(e.key==='ArrowDown'){ e.preventDefault(); _suggestIdx=Math.min(_suggestIdx+1,items.length-1); highlightSuggest(items); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); _suggestIdx=Math.max(_suggestIdx-1,0); highlightSuggest(items); }
+  else if(e.key==='Enter'&&_suggestIdx>=0){ e.preventDefault(); items[_suggestIdx].dispatchEvent(new Event('mousedown')); }
+  else if(e.key==='Escape'){ hideSuggest(); }
+}
+function highlightSuggest(items){
+  items.forEach((el,i)=>el.classList.toggle('active',i===_suggestIdx));
+  if(_suggestIdx>=0) items[_suggestIdx].scrollIntoView({block:'nearest'});
+}
+function hideSuggest(){ document.getElementById('school-suggest').style.display='none'; _suggestIdx=-1; }
+function clearSchoolSearch(){
+  document.getElementById('school-search-input').value='';
+  hideSuggest();
+}
+
+// 검색창 외부 클릭 시 드롭다운 닫기
+document.addEventListener('click', e=>{
+  if(!e.target.closest('#school-search-input')&&!e.target.closest('#school-suggest')) hideSuggest();
+});
+
+/* ────────────────────────────────────────────────
+   산출물 카드
+──────────────────────────────────────────────── */
+var DOC_ICONS = {
+  'incident':'🚨','regular':'🔍','cable':'🔌','switch_install':'🖧','quarterly':'📊','other':'📄'
+};
+var DOC_COLORS = {
+  'incident':'danger','regular':'success','cable':'warning','switch_install':'info','quarterly':'primary','other':'secondary'
+};
+function renderDocGrid(){
+  document.getElementById('tmpl-hint').textContent=TEMPLATES.length+'종 양식';
+  var html='<div class="doc-grid">';
+  TEMPLATES.forEach(t=>{
+    var icon=DOC_ICONS[t.report_type]||'📄', col=DOC_COLORS[t.report_type]||'secondary';
+    var extra='';
+    if(t.report_type==='switch_install')
+      extra='<div style="font-size:.62rem;color:#0dcaf0;margin-top:4px;"><i class="bi bi-box-seam me-1"></i>출고등록 필요</div>';
+    if(t.report_type==='regular')
+      extra='<div style="font-size:.62rem;color:#198754;margin-top:4px;"><i class="bi bi-bar-chart-steps me-1"></i>WBS 자동연동</div>';
+    html+=`<div class="doc-card" onclick="openWriteModal(${t.id})">
+      <div class="dc-icon">${icon}</div>
+      <div class="dc-name">${escH(t.name)}</div>
+      <div class="dc-type"><span class="badge bg-${col} bg-opacity-10 text-${col}">${escH(t.get_report_type_display||t.report_type)}</span></div>
+      ${extra}
+    </div>`;
+  });
+  html+='</div>';
+  document.getElementById('doc-grid-wrap').innerHTML=html;
+}
+function clearDocGrid(){
+  document.getElementById('doc-grid-wrap').innerHTML='<div class="text-center py-5 text-muted"><i class="bi bi-arrow-up-circle fs-2 d-block mb-2"></i>교육지원청 → 학제 → 학교를 선택하면<br>사용 가능한 산출물 양식이 표시됩니다.</div>';
+  document.getElementById('tmpl-hint').textContent='학교를 먼저 선택하세요';
+}
+
+/* ────────────────────────────────────────────────
+   최근 보고서 목록
+──────────────────────────────────────────────── */
+function loadRptList(page){
+  if(!selSchool) return;
+  rptPage_cur=page;
+  fetch(API_BASE+'/reports/reports/?school_id='+selSchool.id+'&page='+page,{headers:{'X-CSRFToken':CSRF_TOKEN}})
+    .then(r=>r.json()).then(d=>{
+      var list=d.results||[], total=d.count||0;
+      document.getElementById('rpt-count').textContent=total;
+      rptPage_total=Math.ceil(total/20)||1;
+      var pager=document.getElementById('rpt-pager');
+      if(total>20){ pager.style.display=''; document.getElementById('rpt-page-info').textContent=page+'/'+rptPage_total; }
+      else pager.style.display='none';
+      document.getElementById('rpt-prev').disabled=(page<=1);
+      document.getElementById('rpt-next').disabled=(page>=rptPage_total);
+      if(list.length===0){ document.getElementById('rpt-list').innerHTML='<div class="text-center py-4 text-muted small">작성된 보고서가 없습니다.</div>'; return; }
+      var html='';
+      list.forEach(r=>{
+        var st=r.status, stBadge=st==='completed'?'success':st==='draft'?'warning':'secondary';
+        var stLabel=st==='completed'?'완료':st==='draft'?'작성중':'보관';
+        var hasPdf=r.pdf_path?true:false;
+        var isFinal=r.is_final?true:false;
+        var editBtn=st==='draft'
+          ?`<button class="btn btn-sm btn-link p-0 ms-1 text-warning" title="이어서 작성"
+              onclick="event.stopPropagation();loadReportToForm(${r.id})">
+              <i class="bi bi-pencil-square"></i></button>`:'';
+        /* 최종확정 버튼 (completed 보고서만) */
+        var finalBtn=st==='completed'
+          ?`<button class="btn btn-sm btn-link p-0 ms-1 ${isFinal?'text-success':'text-muted'}"
+              title="${isFinal?'최종확정됨 (클릭하면 해제)':'최종 확정으로 설정'}"
+              onclick="event.stopPropagation();toggleFinal(${r.id},${isFinal})">
+              <i class="bi bi-${isFinal?'patch-check-fill':'patch-check'}"></i></button>`:'';
+        /* 삭제 버튼 */
+        var delBtn=`<button class="btn btn-sm btn-link p-0 ms-1 text-danger" title="삭제"
+          onclick="event.stopPropagation();deleteReport(${r.id})">
+          <i class="bi bi-trash3"></i></button>`;
+        /* 수정일시가 작성일시와 다르면 수정일시 표시 */
+        var dispDate=(r.updated_at&&r.updated_at.slice(0,16)!==r.created_at.slice(0,16))
+          ?'수정 '+(r.updated_at||'').slice(0,10)
+          :(r.created_at||'').slice(0,10);
+        html+=`<div class="rpt-row${isFinal?' border-start border-success border-3':''}" onclick="viewReport(${r.id})">
+          <span class="rpt-badge bg-${stBadge} bg-opacity-15 text-${stBadge}">${stLabel}</span>
+          ${isFinal?'<i class="bi bi-patch-check-fill text-success" title="최종확정" style="font-size:.8rem;"></i>':''}
+          <span class="flex-fill text-truncate fw-semibold small">${escH(r.title)}</span>
+          <span class="text-muted" style="font-size:.68rem;white-space:nowrap;">${dispDate}</span>
+          ${hasPdf?`<i class="bi bi-file-pdf text-danger" title="PDF 있음"></i>`:''}
+          ${editBtn}${finalBtn}${delBtn}
+        </div>`;
+      });
+      document.getElementById('rpt-list').innerHTML=html;
+    });
+}
+function rptPage(delta){ loadRptList(rptPage_cur+delta); }
+
+/* 최종 확정 토글 */
+async function toggleFinal(id, isCurrent){
+  var action=isCurrent?'unset_final':'set_final';
+  var msg=isCurrent?'최종 확정을 해제하시겠습니까?':'이 보고서를 최종 확정으로 설정하시겠습니까?\n\n※ 최종 확정 시 교체 장비 정보가 학교 장비목록에 자동 반영됩니다.';
+  if(!confirm(msg)) return;
+  try{
+    var res=await fetch(API_BASE+'/reports/reports/'+id+'/'+action+'/',{
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN}
+    });
+    if(!res.ok) throw new Error('처리 실패');
+    loadRptList(rptPage_cur);
+  }catch(e){ alert('오류: '+e.message); }
+}
+
+/* 보고서 삭제 */
+async function deleteReport(id){
+  if(!confirm('이 보고서를 삭제하시겠습니까?\n삭제된 보고서는 복구할 수 없습니다.')) return;
+  try{
+    var res=await fetch(API_BASE+'/reports/reports/'+id+'/',{
+      method:'DELETE', headers:{'X-CSRFToken':CSRF_TOKEN}
+    });
+    if(!res.ok) throw new Error('삭제 실패');
+    loadRptList(rptPage_cur);
+  }catch(e){ alert('오류: '+e.message); }
+}
+
+function clearRptList(){
+  document.getElementById('rpt-list').innerHTML='<div class="text-center py-4 text-muted small">학교를 선택하면 보고서 이력이 표시됩니다.</div>';
+  document.getElementById('rpt-count').textContent='0';
+}
+
+/* ────────────────────────────────────────────────
+   보고서 작성 모달
+──────────────────────────────────────────────── */
+async function openWriteModal(tmplId){
+  if(!selSchool){ alert('학교를 먼저 선택하세요.'); return; }
+  selTemplate=TEMPLATES.find(t=>t.id===tmplId);
+  if(!selTemplate){ alert('템플릿을 찾을 수 없습니다.'); return; }
+
+  /* 스위치 설치확인서: 출고등록 장비 + 기설치 장비 + VSDX + 연락처 사전 조회 */
+  schoolSwitchAssets=[]; schoolCurrentAssets=[]; schoolVsdxData={buildings:[]}; schoolContacts=[]; switchDevPhotos=[]; cablePhotos=[];
+  schoolLocData={buildings:[],floors:[],locations:[]};
+  if(selTemplate.report_type==='switch_install'){
+    try{
+      var centerObj=CENTERS.find(c=>c.code===selCenter);
+      var cid=centerObj?centerObj.id:'';
+      var url=API_BASE+'/reports/reports/school_switch_assets/?school_id='+selSchool.id;
+      if(cid) url+='&center_id='+cid;
+      var res=await fetch(url,{headers:{'X-CSRFToken':CSRF_TOKEN}});
+      var d=await res.json();
+      schoolSwitchAssets=d.assets||[];
+    }catch(e){ console.error(e); }
+    try{
+      var r2=await fetch(
+        API_BASE+'/reports/reports/school_installed_assets/?school_id='+selSchool.id,
+        {headers:{'X-CSRFToken':CSRF_TOKEN}}
+      );
+      var d2=await r2.json();
+      schoolCurrentAssets=d2.assets||[];
+      schoolLocData={buildings:d2.buildings||[],floors:d2.floors||[],locations:d2.locations||[]};
+    }catch(e){ console.error(e); }
+    try{
+      var rv=await fetch(API_BASE+'/reports/reports/school_vsdx_data/?school_id='+selSchool.id,{headers:{'X-CSRFToken':CSRF_TOKEN}});
+      var dv=await rv.json();
+      schoolVsdxData={buildings:dv.buildings||[]};
+    }catch(e){ console.error(e); }
+    try{
+      var rc=await fetch(API_BASE+'/reports/reports/school_contacts/?school_id='+selSchool.id,{headers:{'X-CSRFToken':CSRF_TOKEN}});
+      var dc=await rc.json();
+      schoolContacts=dc.contacts||[];
+    }catch(e){ console.error(e); }
+    if(schoolSwitchAssets.length===0){
+      var proceed=confirm(
+        '⚠ '+selSchool.name+'에 출고등록된 스위치가 없습니다.\n\n'+
+        '장비 관리 > 출고 이력에서 해당 교육지원청 → 학교로\n'+
+        '출고 등록을 먼저 진행하는 것을 권장합니다.\n\n'+
+        '출고 등록 없이 제조번호를 직접 입력하여 계속하시겠습니까?'
+      );
+      if(!proceed) return;
+    }
+  } else if(selTemplate.report_type==='cable'){
+    try{
+      var r2c=await fetch(API_BASE+'/reports/reports/school_installed_assets/?school_id='+selSchool.id,{headers:{'X-CSRFToken':CSRF_TOKEN}});
+      var d2c=await r2c.json();
+      schoolCurrentAssets=d2c.assets||[];
+    }catch(e){ console.error(e); }
+    try{
+      var rcc=await fetch(API_BASE+'/reports/reports/school_contacts/?school_id='+selSchool.id,{headers:{'X-CSRFToken':CSRF_TOKEN}});
+      var dcc=await rcc.json();
+      schoolContacts=dcc.contacts||[];
+    }catch(e){ console.error(e); }
+  }
+
+  wmStep=1; wmReportId=null; wmEditMode=false; wmEditReportId=null; wmRestoreSigs=null;
+  /* 헤더 */
+  document.getElementById('wm-title').textContent=selTemplate.name;
+  document.getElementById('wm-school').textContent=
+    (selCenter?document.getElementById('sel-center').options[document.getElementById('sel-center').selectedIndex].text:'')+
+    ' · '+(selType?document.getElementById('sel-type').options[document.getElementById('sel-type').selectedIndex].text:'')+
+    ' · '+selSchool.name;
+  renderWmForm();
+  setWmStep(1);
+  new bootstrap.Modal(document.getElementById('writeModal')).show();
+}
+
+function renderWmForm(){
+  /* 스위치 설치확인서 / 소규모 네트워크 포설 확인서는 완전 커스텀 폼 사용 */
+  if(selTemplate.report_type==='switch_install'){
+    renderSwitchInstallForm();
+    return;
+  }
+  if(selTemplate.report_type==='cable'){
+    renderCableInstallForm();
+    return;
+  }
+  var fields=(selTemplate.fields_schema&&selTemplate.fields_schema.fields)||[];
+  if(fields.length===0){
+    document.getElementById('wm-form-area').innerHTML='<div class="text-center py-4 text-muted">입력 항목이 없습니다.</div>';
+    return;
+  }
+  /* 필드를 섹션으로 그룹화 */
+  var sections={}, sectionOrder=[];
+  fields.forEach(f=>{
+    var sec=f.section||'기본 정보';
+    if(!sections[sec]){ sections[sec]=[]; sectionOrder.push(sec); }
+    sections[sec].push(f);
+  });
+  var html='';
+  /* 제목 입력 */
+  html+=`<div class="form-section">
+    <div class="form-section-title">보고서 제목</div>
+    <div class="form-field">
+      <label>제목 <span class="text-danger">*</span></label>
+      <input type="text" id="wm-report-title" class="form-control form-control-sm"
+        placeholder="예: ${selTemplate.name} (${selSchool.name})"
+        value="${selTemplate.name} (${escH(selSchool.name)})">
+    </div>
+  </div>`;
+  sectionOrder.forEach(sec=>{
+    html+=`<div class="form-section"><div class="form-section-title">${escH(sec)}</div><div class="row g-2">`;
+    sections[sec].forEach(f=>{
+      var colCls=f.type==='textarea'?'col-12':'col-12 col-sm-6';
+      if(f.wide) colCls='col-12';
+      html+=`<div class="${colCls}"><div class="form-field">${renderField(f)}</div></div>`;
+    });
+    html+='</div></div>';
+  });
+  document.getElementById('wm-form-area').innerHTML=html;
+  /* 일반: S/N 실시간 검증 */
+  var snField=document.getElementById('f-serial_number');
+  if(snField) snField.addEventListener('input', debounceSnCheck);
+}
+
+/* ────────────────────────────────────────────────
+   스위치 설치확인서 전용 폼 (완전 커스텀)
+──────────────────────────────────────────────── */
+function renderSwitchInstallForm(){
+  /* 오늘 날짜 */
+  var t=new Date();
+  var todayStr=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+
+  var html='';
+  html+='<div class="form-section">';
+  html+='<div class="form-section-title">기본 정보</div>';
+  html+='<div class="row g-2">';
+  /* 설치일자 */
+  html+='<div class="col-12 col-sm-6"><div class="form-field">';
+  html+='<label>설치일자 <span class="text-danger">*</span></label>';
+  html+='<input type="date" id="f-install_date" name="install_date" class="form-control form-control-sm" value="'+todayStr+'">';
+  html+='</div></div>';
+  /* 설치수량 — oninput/onchange 인라인 핸들러로 즉시 반응 */
+  html+='<div class="col-12 col-sm-6"><div class="form-field">';
+  html+='<label>설치수량 <span class="text-danger">*</span></label>';
+  html+='<input type="number" id="f-quantity" name="quantity" class="form-control form-control-sm" value="1" min="1" max="30"';
+  html+=' oninput="onSwitchQtyChange(this.value)" onchange="onSwitchQtyChange(this.value)">';
+  html+='<div class="field-note"><i class="bi bi-info-circle me-1"></i>수량 변경 시 아래 장비 항목이 자동 생성됩니다</div>';
+  html+='</div></div>';
+  html+='</div></div>';
+
+  /* 장비 목록 */
+  html+='<div class="form-section">';
+  html+='<div class="form-section-title">설치 장비 목록</div>';
+  html+='<div id="f-devices"></div>';
+  html+='</div>';
+
+  /* 비고 */
+  html+='<div class="form-section">';
+  html+='<div class="form-section-title">기타</div>';
+  html+='<div class="form-field">';
+  html+='<label>비고</label>';
+  html+='<textarea id="f-notes" name="notes" class="form-control form-control-sm" rows="2" placeholder="특이사항을 입력하세요"></textarea>';
+  html+='</div></div>';
+
+  document.getElementById('wm-form-area').innerHTML=html;
+  /* 초기 1대 장비 행 생성 */
+  renderSwitchDeviceRows(1);
+}
+
+/* 수량 변경 시 호출 (inline handler → 값을 직접 인자로 전달) */
+function onSwitchQtyChange(val){
+  var n=parseInt(val)||0;
+  if(n>=1) renderSwitchDeviceRows(n);
+}
+
+function renderSwitchDeviceRows(qty){
+  var container=document.getElementById('f-devices');
+  if(!container) return;
+
+  /* switchDevPhotos 크기 조정 (기존 데이터 유지) */
+  while(switchDevPhotos.length<qty) switchDevPhotos.push({before:null,after:null,serial:null});
+  switchDevPhotos.length=qty;
+
+  var hasOut=(schoolSwitchAssets.length>0);
+  var hasCur=(schoolCurrentAssets.length>0);
+  var hasVsdx=(schoolVsdxData.buildings.length>0);
+
+  /* 출고 장비 select options */
+  var outOpts='<option value="">-- 제조번호 선택 --</option>';
+  schoolSwitchAssets.forEach(function(a){
+    var lbl=a.serial_number;
+    if(a.model_name) lbl+=' ('+a.model_name+')';
+    outOpts+='<option value="'+escH(a.serial_number)+'" data-model="'+escH(a.model_name||'')+'" data-mfr="'+escH(a.manufacturer||'')+'" data-category="'+escH(a.category||'')+'" data-tag="'+escH(a.asset_tag||'')+'">'+escH(lbl)+'</option>';
+  });
+
+  /* 기설치 장비(SchoolEquipment) — 중복 없는 모델명 목록 */
+  var uniqueModels=[];
+  schoolCurrentAssets.forEach(function(a){
+    if(a.model_name && uniqueModels.indexOf(a.model_name)<0) uniqueModels.push(a.model_name);
+  });
+  uniqueModels.sort();
+  var prevModelOpts='<option value="">-- 선택 --</option>';
+  prevModelOpts+='<option value="__new__">신규설치</option>';
+  uniqueModels.forEach(function(m){
+    prevModelOpts+='<option value="'+escH(m)+'">'+escH(m)+'</option>';
+  });
+  prevModelOpts+='<option value="__other__">직접 입력</option>';
+
+  /* 건물·층·설치위치 옵션 */
+  function _makeLocOpts(list, placeholder){
+    var o='<option value="">'+placeholder+'</option>';
+    list.forEach(function(v){ o+='<option value="'+escH(v)+'">'+escH(v)+'</option>'; });
+    o+='<option value="__other__">직접 입력</option>';
+    return o;
+  }
+  var bldOpts=_makeLocOpts(schoolLocData.buildings,'-- 선택 --');
+  var flrOpts=_makeLocOpts(schoolLocData.floors,'-- 선택 --');
+  var locOpts=_makeLocOpts(schoolLocData.locations,'-- 선택 --');
+
+  /* 탭 헤더 */
+  var tabsHtml='<ul class="nav nav-tabs mb-0" id="devTabs" role="tablist">';
+  for(var i=0;i<qty;i++){
+    tabsHtml+='<li class="nav-item" role="presentation">';
+    tabsHtml+='<button class="nav-link'+(i===0?' active':'')+'" id="dev-tab-btn-'+i+'" data-bs-toggle="tab" data-bs-target="#dev-tab-'+i+'" type="button" role="tab">장비'+(i+1)+'</button>';
+    tabsHtml+='</li>';
+  }
+  tabsHtml+='</ul>';
+
+  /* 탭 내용 */
+  var contentHtml='<div class="tab-content border border-top-0 rounded-bottom p-2" id="devTabContent">';
+  for(var i=0;i<qty;i++){
+    contentHtml+='<div class="tab-pane fade'+(i===0?' show active':'')+'" id="dev-tab-'+i+'" role="tabpanel">';
+    contentHtml+='<div class="row g-2 pt-1">';
+
+    /* ① 교체전 장비 모델명 */
+    contentHtml+='<div class="col-12 col-sm-6"><small class="fw-semibold text-muted">① 교체전 장비 모델명</small>';
+    if(hasCur){
+      contentHtml+='<select id="dev-'+i+'-prev-model-sel" class="form-select form-select-sm mb-1" onchange="_onDevPrevModelSel('+i+')">'+prevModelOpts+'</select>';
+      contentHtml+='<input type="text" id="dev-'+i+'-prev-model" class="form-control form-control-sm d-none" placeholder="모델명 직접 입력">';
+    } else {
+      contentHtml+='<input type="text" id="dev-'+i+'-prev-model" class="form-control form-control-sm" placeholder="교체전 모델명">';
+    }
+    contentHtml+='</div>';
+
+    /* ② 교체전 제조사 */
+    contentHtml+='<div class="col-12 col-sm-6"><small class="fw-semibold text-muted">② 교체전 제조사</small>';
+    contentHtml+='<input type="text" id="dev-'+i+'-prev-mfr" class="form-control form-control-sm" placeholder="모델 선택 시 자동 입력"></div>';
+
+    /* ③ 건물 — 항상 select+input 렌더링, schoolLocData 여부로 초기 가시성 결정 */
+    var _bldHas=(schoolLocData.buildings.length>0);
+    contentHtml+='<div class="col-12 col-sm-4"><small class="fw-semibold text-muted">③ 건물</small>';
+    contentHtml+='<select id="dev-'+i+'-building-sel" class="form-select form-select-sm mb-1'+(_bldHas?'':' d-none')+'" onchange="_onLocSel(\'building\','+i+')">'+bldOpts+'</select>';
+    contentHtml+='<input type="text" id="dev-'+i+'-building" class="form-control form-control-sm'+(_bldHas?' d-none':'')+'" placeholder="본관, 별관 등">';
+    contentHtml+='</div>';
+
+    /* ④ 층 */
+    var _flrHas=(schoolLocData.floors.length>0);
+    contentHtml+='<div class="col-6 col-sm-2"><small class="fw-semibold text-muted">④ 층</small>';
+    contentHtml+='<select id="dev-'+i+'-floor-sel" class="form-select form-select-sm mb-1'+(_flrHas?'':' d-none')+'" onchange="_onLocSel(\'floor\','+i+')">'+flrOpts+'</select>';
+    contentHtml+='<input type="text" id="dev-'+i+'-floor" class="form-control form-control-sm'+(_flrHas?' d-none':'')+'" placeholder="1층, 2층 등">';
+    contentHtml+='</div>';
+
+    /* ⑤ 설치위치 */
+    var _locHas=(schoolLocData.locations.length>0);
+    contentHtml+='<div class="col-6 col-sm-6"><small class="fw-semibold text-muted">⑤ 설치위치</small>';
+    contentHtml+='<select id="dev-'+i+'-location-sel" class="form-select form-select-sm mb-1'+(_locHas?'':' d-none')+'" onchange="_onLocSel(\'location\','+i+')">'+locOpts+'</select>';
+    contentHtml+='<input type="text" id="dev-'+i+'-location" class="form-control form-control-sm'+(_locHas?' d-none':'')+'" placeholder="설치위치 직접 입력">';
+    contentHtml+='</div>';
+
+    /* ⑥ 설치장비 모델명 */
+    contentHtml+='<div class="col-12 col-sm-6"><small class="fw-semibold text-muted">⑥ 설치장비 모델명</small>';
+    contentHtml+='<input type="text" id="dev-'+i+'-model" class="form-control form-control-sm" value="C3100-24TL" placeholder="모델명"></div>';
+
+    /* ⑦ 설치장비 제조사 */
+    contentHtml+='<div class="col-12 col-sm-6"><small class="fw-semibold text-muted">⑦ 설치장비 제조사</small>';
+    contentHtml+='<input type="text" id="dev-'+i+'-manufacturer" class="form-control form-control-sm" value="CoreEdge" placeholder="제조사"></div>';
+
+    /* ⑧ 제조번호 */
+    contentHtml+='<div class="col-12 col-sm-6"><small class="fw-semibold text-muted">⑧ 제조번호(S/N) <span class="text-danger">*</span></small>';
+    if(hasOut){
+      contentHtml+='<select id="dev-'+i+'-serial" class="form-select form-select-sm" onchange="_onDevSerial('+i+')">'+outOpts+'</select>';
+    } else {
+      contentHtml+='<input type="text" id="dev-'+i+'-serial" class="form-control form-control-sm" placeholder="제조번호 직접 입력" style="font-family:monospace" oninput="_updateDevPhotoSnLabel('+i+')" onchange="_updateDevPhotoSnLabel('+i+')">';
+    }
+    contentHtml+='<input type="hidden" id="dev-'+i+'-category" value="">';
+    contentHtml+='</div>';
+
+    /* ⑨ 망 구분 */
+    contentHtml+='<div class="col-6 col-sm-3"><small class="fw-semibold text-muted">⑨ 망 구분 <span class="text-danger">*</span></small>';
+    contentHtml+='<select id="dev-'+i+'-nettype" class="form-select form-select-sm" onchange="_onDevNetType('+i+')">';
+    contentHtml+='<option value="">-- 선택 --</option>';
+    contentHtml+='<option value="교사망">교사망</option>';
+    contentHtml+='<option value="학생망">학생망</option>';
+    contentHtml+='<option value="기타망">기타망</option>';
+    contentHtml+='<option value="기타">기타</option>';
+    contentHtml+='</select></div>';
+
+    /* ⑩ 장비ID — 동일모델 여러 대 시 드롭다운으로 전환 */
+    contentHtml+='<div class="col-6 col-sm-3"><small class="fw-semibold text-muted">⑩ 장비ID</small>';
+    contentHtml+='<div id="dev-'+i+'-assetid-wrap">';
+    contentHtml+='<input type="text" id="dev-'+i+'-assetid" class="form-control form-control-sm" placeholder="장비ID 직접 입력" style="font-family:monospace">';
+    contentHtml+='</div></div>';
+
+    /* ⑪ 사진 */
+    contentHtml+='<div class="col-12"><small class="fw-semibold text-muted">⑪ 사진</small>';
+    contentHtml+='<div class="text-muted small mb-1" id="dev-'+i+'-photo-sn-label" style="font-family:monospace;"></div>';
+    contentHtml+='<div class="d-flex gap-2 flex-wrap mt-1">';
+    /* 교체전 사진 */
+    contentHtml+='<div class="border rounded p-2 text-center" style="min-width:120px;">';
+    contentHtml+='<div class="small text-muted mb-1">교체전</div>';
+    contentHtml+='<label class="btn btn-outline-secondary btn-sm" style="cursor:pointer;">';
+    contentHtml+='<i class="bi bi-camera me-1"></i>촬영/업로드';
+    contentHtml+='<input type="file" id="dev-'+i+'-photo-before" accept="image/*" class="d-none" onchange="_onDevPhoto('+i+',\'before\')">';
+    contentHtml+='</label>';
+    contentHtml+='<div id="dev-'+i+'-photo-before-preview" class="mt-1"></div>';
+    contentHtml+='</div>';
+    /* 교체후 사진 */
+    contentHtml+='<div class="border rounded p-2 text-center" style="min-width:120px;">';
+    contentHtml+='<div class="small text-muted mb-1">교체후</div>';
+    contentHtml+='<label class="btn btn-outline-secondary btn-sm" style="cursor:pointer;">';
+    contentHtml+='<i class="bi bi-camera me-1"></i>촬영/업로드';
+    contentHtml+='<input type="file" id="dev-'+i+'-photo-after" accept="image/*" class="d-none" onchange="_onDevPhoto('+i+',\'after\')">';
+    contentHtml+='</label>';
+    contentHtml+='<div id="dev-'+i+'-photo-after-preview" class="mt-1"></div>';
+    contentHtml+='</div>';
+    /* 제조번호 사진 */
+    contentHtml+='<div class="border rounded p-2 text-center" style="min-width:120px;">';
+    contentHtml+='<div class="small text-muted mb-1">제조번호</div>';
+    contentHtml+='<label class="btn btn-outline-secondary btn-sm" style="cursor:pointer;">';
+    contentHtml+='<i class="bi bi-camera me-1"></i>촬영/업로드';
+    contentHtml+='<input type="file" id="dev-'+i+'-photo-serial" accept="image/*" class="d-none" onchange="_onDevPhoto('+i+',\'serial\')">';
+    contentHtml+='</label>';
+    contentHtml+='<div id="dev-'+i+'-photo-serial-preview" class="mt-1"></div>';
+    contentHtml+='</div>';
+    contentHtml+='</div></div>';
+
+    contentHtml+='</div></div>'; /* row, tab-pane */
+  }
+  contentHtml+='</div>'; /* tab-content */
+
+  container.innerHTML=tabsHtml+contentHtml;
+}
+
+/* 다른 장비 행에서 이미 선택된 장비ID 집합 반환 (excludeIdx 제외) */
+function _getUsedAssetIds(excludeIdx){
+  var qty=parseInt((document.getElementById('f-quantity')||{}).value)||0;
+  var used=new Set();
+  for(var j=0;j<qty;j++){
+    if(j===excludeIdx) continue;
+    var s=document.getElementById('dev-'+j+'-assetid');
+    var val='';
+    if(s&&s.tagName==='SELECT'){
+      val=s.value==='__other__'?(document.getElementById('dev-'+j+'-assetid-txt')||{}).value||'':s.value;
+    } else if(s){ val=s.value.trim(); }
+    if(val) used.add(val);
+  }
+  return used;
+}
+
+/* 다른 장비 행과 장소가 같은지 여부 (건물+층+설치위치 모두 같아야 true) */
+function _isSameLocation(i, j){
+  var g=function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
+  return g('dev-'+i+'-building')===g('dev-'+j+'-building') &&
+         g('dev-'+i+'-floor')   ===g('dev-'+j+'-floor')    &&
+         g('dev-'+i+'-location')===g('dev-'+j+'-location');
+}
+
+/* 출고 장비 제조번호 선택 시 모델명·제조사·카테고리 자동 입력 + 사진 라벨 갱신 */
+function _onDevSerial(i){
+  var sel=document.getElementById('dev-'+i+'-serial'); if(!sel) return;
+  var opt=sel.options[sel.selectedIndex];
+  var modelEl=document.getElementById('dev-'+i+'-model');
+  if(modelEl&&opt.dataset.model) modelEl.value=opt.dataset.model;
+  var mfrEl=document.getElementById('dev-'+i+'-manufacturer');
+  if(mfrEl&&opt.dataset.mfr) mfrEl.value=opt.dataset.mfr;
+  var catEl=document.getElementById('dev-'+i+'-category');
+  if(catEl) catEl.value=opt.dataset.category||'';
+  _updateDevPhotoSnLabel(i);
+}
+function _updateDevPhotoSnLabel(i){
+  var snEl=document.getElementById('dev-'+i+'-serial');
+  var sn=snEl?snEl.value.trim():'';
+  var lbl=document.getElementById('dev-'+i+'-photo-sn-label');
+  if(lbl) lbl.textContent=sn?('S/N: '+sn):'';
+}
+
+/* ③④⑤ 건물·층·설치위치 드롭다운 공용 핸들러 */
+function _onLocSel(field, i){
+  var sel=document.getElementById('dev-'+i+'-'+field+'-sel'); if(!sel) return;
+  var inp=document.getElementById('dev-'+i+'-'+field);
+  if(sel.value==='__other__'){
+    if(inp){ inp.classList.remove('d-none'); inp.value=''; }
+  } else {
+    if(inp){ inp.classList.add('d-none'); inp.value=sel.value; }
+  }
+}
+
+/* 장비 필드 일괄 자동입력 헬퍼 */
+function _fillDevFields(i, asset){
+  var f=function(id,val){ var el=document.getElementById(id); if(el) el.value=val||''; };
+  f('dev-'+i+'-prev-mfr',  asset.manufacturer);
+  /* 장비ID — 다른 행에서 동일 ID를 사용 중이고 위치가 다르면 자동입력 생략 */
+  var usedIds=_getUsedAssetIds(i);
+  if(asset.device_id && usedIds.has(asset.device_id)){
+    f('dev-'+i+'-assetid', '');
+    alert('장비ID \'' + asset.device_id + '\' 은(는) 이미 다른 장비에 사용 중입니다.\n장비ID를 직접 확인·입력하세요.');
+  } else {
+    f('dev-'+i+'-assetid', asset.device_id);
+  }
+  /* 건물·층·설치위치 — 드롭다운 있으면 선택, 없으면 text */
+  ['building','floor','location'].forEach(function(field){
+    var val=field==='location'?asset.install_location:asset[field];
+    var sel=document.getElementById('dev-'+i+'-'+field+'-sel');
+    var inp=document.getElementById('dev-'+i+'-'+field);
+    if(sel){
+      sel.value=val||'';
+      if(sel.value===val&&val){ if(inp) inp.classList.add('d-none'); }
+      else { sel.value='__other__'; if(inp){ inp.classList.remove('d-none'); inp.value=val||''; } }
+    } else if(inp){ inp.value=val||''; }
+  });
+  /* ⑨ 망구분 select */
+  var nEl=document.getElementById('dev-'+i+'-nettype');
+  if(nEl&&asset.network_type){
+    var found=false;
+    for(var o=0;o<nEl.options.length;o++){
+      if(nEl.options[o].value===asset.network_type){ nEl.selectedIndex=o; found=true; break; }
+    }
+    if(!found){ /* 목록에 없으면 직접 입력 옵션 추가 후 선택 */
+      var opt=document.createElement('option');
+      opt.value=asset.network_type; opt.textContent=asset.network_type;
+      nEl.appendChild(opt); nEl.value=asset.network_type;
+    }
+  }
+}
+
+/* ① 교체전 장비 모델명 선택 */
+function _onDevPrevModelSel(i){
+  var sel=document.getElementById('dev-'+i+'-prev-model-sel'); if(!sel) return;
+  var modelInput=document.getElementById('dev-'+i+'-prev-model');
+
+  /* 신규설치 */
+  if(sel.value==='__new__'){
+    if(modelInput){ modelInput.classList.add('d-none'); modelInput.value=''; }
+    var mfrEl=document.getElementById('dev-'+i+'-prev-mfr');
+    if(mfrEl) mfrEl.value='신규설치';
+    _restoreLocDropdowns(i);
+    return;
+  }
+  /* 직접 입력 */
+  if(sel.value==='__other__'){
+    if(modelInput){ modelInput.classList.remove('d-none'); modelInput.value=''; }
+    _restoreLocDropdowns(i);
+    return;
+  }
+  if(modelInput) modelInput.classList.add('d-none');
+  if(!sel.value){ _restoreLocDropdowns(i); return; }
+
+  /* 해당 모델의 장비 목록 수집 */
+  var matched=schoolCurrentAssets.filter(function(a){ return a.model_name===sel.value; });
+
+  if(matched.length===0){ _restoreLocDropdowns(i); return; }
+  if(matched.length===1){
+    /* 1대 — 바로 자동입력 */
+    _fillDevFields(i, matched[0]);
+    return;
+  }
+  /* 여러 대 — 각 필드별 드롭다운으로 개별 표시 */
+  _updateModelFieldDropdowns(i, matched);
+}
+
+/* 동일모델 여러 대 — 각 필드별 드롭다운 업데이트 */
+function _updateModelFieldDropdowns(i, matched){
+  function uniq(arr){ return arr.filter(function(v,j){ return v && arr.indexOf(v)===j; }); }
+  _setLocSelOpts('dev-'+i+'-building-sel','dev-'+i+'-building', uniq(matched.map(function(a){return a.building;})), 'building', i);
+  _setLocSelOpts('dev-'+i+'-floor-sel',   'dev-'+i+'-floor',    uniq(matched.map(function(a){return a.floor;})),    'floor', i);
+  _setLocSelOpts('dev-'+i+'-location-sel','dev-'+i+'-location', uniq(matched.map(function(a){return a.install_location;})), 'location', i);
+  /* 다른 장비 행에서 이미 사용 중인 장비ID 제외 (위치가 같은 경우는 허용) */
+  var usedIds=_getUsedAssetIds(i);
+  var filteredIds=uniq(matched.map(function(a){return a.device_id;})).filter(function(id){
+    if(!id||!usedIds.has(id)) return true;
+    /* 동일 위치 행이 선택 중이면 허용 */
+    var qty=parseInt((document.getElementById('f-quantity')||{}).value)||0;
+    for(var j=0;j<qty;j++){
+      if(j===i) continue;
+      var s=document.getElementById('dev-'+j+'-assetid');
+      var usedVal=(s&&s.tagName==='SELECT'&&s.value==='__other__')?(document.getElementById('dev-'+j+'-assetid-txt')||{}).value||'':s?s.value.trim():'';
+      if(usedVal===id && _isSameLocation(i,j)) return true;
+    }
+    return false;
+  });
+  _setAssetIdOpts(i, filteredIds);
+  /* 제조사 — 동일 모델이므로 첫 번째 값으로 자동입력 */
+  var mfrEl=document.getElementById('dev-'+i+'-prev-mfr');
+  if(mfrEl && matched[0]) mfrEl.value=matched[0].manufacturer||'';
+  /* 망구분 — 1종류면 자동선택 */
+  var nets=uniq(matched.map(function(a){return a.network_type;}));
+  if(nets.length===1){ var nEl=document.getElementById('dev-'+i+'-nettype'); if(nEl) nEl.value=nets[0]||''; }
+}
+
+/* 건물/층/설치위치 select 옵션 교체 또는 동적 생성 */
+function _setLocSelOpts(selId, inpId, values, field, idx){
+  var sel=document.getElementById(selId);
+  var inp=document.getElementById(inpId);
+  if(values.length===0){
+    /* 값 없으면 select 숨기고 input 표시 */
+    if(sel){ sel.classList.add('d-none'); }
+    if(inp){ inp.classList.remove('d-none'); }
+    return;
+  }
+  var opts='<option value="">-- 선택 --</option>';
+  values.forEach(function(v){ opts+='<option value="'+escH(v)+'">'+escH(v)+'</option>'; });
+  opts+='<option value="__other__">직접 입력</option>';
+  if(sel){
+    sel.innerHTML=opts; sel.classList.remove('d-none');
+    if(inp){ inp.classList.add('d-none'); inp.value=''; }
+  } else if(inp){
+    /* select 없는 경우 동적 생성 */
+    var newSel=document.createElement('select');
+    newSel.id=selId; newSel.className='form-select form-select-sm mb-1'; newSel.innerHTML=opts;
+    newSel.onchange=function(){ _onLocSel(field, idx); };
+    inp.parentNode.insertBefore(newSel, inp); inp.classList.add('d-none'); inp.value='';
+  }
+}
+
+/* 장비ID — 드롭다운 또는 텍스트 입력 설정 */
+function _setAssetIdOpts(i, devIds){
+  var wrap=document.getElementById('dev-'+i+'-assetid-wrap'); if(!wrap) return;
+  if(devIds.length===0){
+    wrap.innerHTML='<input type="text" id="dev-'+i+'-assetid" class="form-control form-control-sm" placeholder="장비ID 직접 입력" style="font-family:monospace">';
+    return;
+  }
+  var opts='<option value="">-- 선택 --</option>';
+  devIds.forEach(function(d){ opts+='<option value="'+escH(d)+'">'+escH(d)+'</option>'; });
+  opts+='<option value="__other__">직접 입력</option>';
+  wrap.innerHTML='<select id="dev-'+i+'-assetid" class="form-select form-select-sm mb-1" onchange="_onAssetIdSel('+i+')">'+opts+'</select>'
+    +'<input type="text" id="dev-'+i+'-assetid-txt" class="form-control form-control-sm d-none mt-1" placeholder="장비ID 직접 입력" style="font-family:monospace">';
+  if(devIds.length===1) document.getElementById('dev-'+i+'-assetid').value=devIds[0];
+}
+
+function _onAssetIdSel(i){
+  var sel=document.getElementById('dev-'+i+'-assetid'); if(!sel) return;
+  var txt=document.getElementById('dev-'+i+'-assetid-txt');
+  if(sel.value==='__other__'){ if(txt){ txt.classList.remove('d-none'); txt.focus(); } }
+  else { if(txt) txt.classList.add('d-none'); }
+}
+
+/* 건물/층/설치위치/장비ID를 schoolLocData 기본값으로 복원 */
+function _restoreLocDropdowns(i){
+  _setLocSelOpts('dev-'+i+'-building-sel','dev-'+i+'-building', schoolLocData.buildings, 'building', i);
+  _setLocSelOpts('dev-'+i+'-floor-sel',   'dev-'+i+'-floor',    schoolLocData.floors,    'floor', i);
+  _setLocSelOpts('dev-'+i+'-location-sel','dev-'+i+'-location', schoolLocData.locations,  'location', i);
+  var wrap=document.getElementById('dev-'+i+'-assetid-wrap');
+  if(wrap) wrap.innerHTML='<input type="text" id="dev-'+i+'-assetid" class="form-control form-control-sm" placeholder="장비ID 직접 입력" style="font-family:monospace">';
+}
+
+/* ⑨ 망 구분 변경 (수동 선택 시 장비ID 초기화) */
+function _onDevNetType(i){
+  /* SchoolEquipment 연동으로 자동입력되므로 별도 목록갱신 없음 */
+}
+
+/* 사진 업로드 */
+async function _onDevPhoto(i, stage){
+  var inputId='dev-'+i+'-photo-'+stage;
+  var input=document.getElementById(inputId); if(!input||!input.files||!input.files[0]) return;
+  var previewEl=document.getElementById(inputId+'-preview');
+  if(previewEl) previewEl.innerHTML='<div class="spinner-border spinner-border-sm text-secondary"></div>';
+  var snEl=document.getElementById('dev-'+i+'-serial');
+  var sn=snEl?snEl.value.trim():'';
+  /* photo_stage: 모델에 before/after/other 만 존재 — serial은 other로 처리 */
+  var apiStage=(stage==='before'||stage==='after')?stage:'other';
+  var fd=new FormData();
+  fd.append('school', selSchool.id);
+  fd.append('photo_stage', apiStage);
+  fd.append('work_type_etc', '스위치 설치'+(stage==='serial'?' 제조번호':'')+(sn?' S/N:'+sn:''));
+  fd.append('taken_at', new Date().toISOString());
+  fd.append('image', input.files[0]);
+  try{
+    var res=await fetch(API_BASE+'/photos/photos/',{
+      method:'POST',
+      headers:{'X-CSRFToken':CSRF_TOKEN},
+      body: fd
+    });
+    if(!res.ok) throw new Error('업로드 실패');
+    var d=await res.json();
+    switchDevPhotos[i][stage]=d.id;
+    var url=d.image_url||d.image||'';
+    /* 절대 URL이면 경로만 추출 (포트 불일치 방지) */
+    try{ if(url.startsWith('http')) url=new URL(url).pathname; }catch(e){}
+    if(previewEl) previewEl.innerHTML='<img src="'+escH(url)+'" style="max-width:100px;max-height:70px;border-radius:4px;" alt="사진">'
+      +'<div class="text-success small mt-1"><i class="bi bi-check-circle me-1"></i>업로드 완료</div>';
+  }catch(e){
+    if(previewEl) previewEl.innerHTML='<div class="text-danger small">업로드 실패</div>';
+  }
+}
+
+function collectSwitchDevices(){
+  var qty=parseInt((document.getElementById('f-quantity')||{}).value)||0;
+  var devices=[];
+  for(var i=0;i<qty;i++){
+    var g=function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
+    var nEl=document.getElementById('dev-'+i+'-nettype');
+    /* 교체전 모델명 */
+    var prevModelSel=document.getElementById('dev-'+i+'-prev-model-sel');
+    var prevModel='';
+    if(prevModelSel&&prevModelSel.value==='__other__') prevModel=g('dev-'+i+'-prev-model');
+    else if(prevModelSel&&prevModelSel.value) prevModel=prevModelSel.value;
+    else prevModel=g('dev-'+i+'-prev-model');
+    /* 사진 IDs */
+    var photos=switchDevPhotos[i]||{};
+    devices.push({
+      serial_number:      g('dev-'+i+'-serial'),
+      model_name:         g('dev-'+i+'-model'),
+      manufacturer:       g('dev-'+i+'-manufacturer'),
+      category:           g('dev-'+i+'-category'),
+      asset_id:           (function(){ var s=document.getElementById('dev-'+i+'-assetid'); return (s&&s.tagName==='SELECT'&&s.value==='__other__')?g('dev-'+i+'-assetid-txt'):g('dev-'+i+'-assetid'); })(),
+      network_type:       nEl?nEl.value:'',
+      network_type_label: nEl&&nEl.value?(nEl.options[nEl.selectedIndex]||{}).text||nEl.value:'',
+      building:           g('dev-'+i+'-building'),
+      floor:              g('dev-'+i+'-floor'),
+      location:           g('dev-'+i+'-location'),
+      prev_model:         prevModel,
+      prev_manufacturer:  g('dev-'+i+'-prev-mfr'),
+      photo_before_id:    photos.before||null,
+      photo_after_id:     photos.after||null,
+      photo_serial_id:    photos.serial||null
+    });
+  }
+  return devices;
+}
+
+/* ══════════════════════════════════════════════════
+   소규모 네트워크 포설 확인서 커스텀 폼
+   ══════════════════════════════════════════════════ */
+function renderCableInstallForm(){
+  var t=new Date();
+  var todayStr=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+  var html='';
+  html+='<div class="form-section">';
+  html+='<div class="form-section-title">기본 정보</div>';
+  html+='<div class="row g-2">';
+  html+='<div class="col-12 col-sm-6"><div class="form-field">';
+  html+='<label>공사일 <span class="text-danger">*</span></label>';
+  html+='<input type="date" id="f-work_date" class="form-control form-control-sm" value="'+todayStr+'">';
+  html+='</div></div>';
+  html+='<div class="col-12 col-sm-6"><div class="form-field">';
+  html+='<label>포설 항목 수 <span class="text-danger">*</span></label>';
+  html+='<input type="number" id="f-cable-qty" class="form-control form-control-sm" value="1" min="1" max="20"';
+  html+=' oninput="onCableQtyChange(this.value)" onchange="onCableQtyChange(this.value)">';
+  html+='<div class="field-note"><i class="bi bi-info-circle me-1"></i>수량 변경 시 아래 항목이 자동 생성됩니다</div>';
+  html+='</div></div>';
+  html+='</div></div>';
+  html+='<div class="form-section">';
+  html+='<div class="form-section-title">포설 항목</div>';
+  html+='<div id="f-cable-runs"></div>';
+  html+='</div>';
+  html+='<div class="form-section">';
+  html+='<div class="form-section-title">기타</div>';
+  html+='<div class="form-field">';
+  html+='<label>비고</label>';
+  html+='<textarea id="f-cable-notes" class="form-control form-control-sm" rows="2" placeholder="특이사항을 입력하세요"></textarea>';
+  html+='</div></div>';
+  document.getElementById('wm-form-area').innerHTML=html;
+  renderCableRunRows(1);
+}
+
+function renderCableRunRows(qty){
+  var container=document.getElementById('f-cable-runs');
+  if(!container) return;
+  while(cablePhotos.length<qty) cablePhotos.push({sp_before:null,sp_after:null,ep_before:null,ep_after:null});
+  cablePhotos.length=qty;
+
+  var hasAssets=(schoolCurrentAssets.length>0);
+  var assetOpts='<option value="">-- 장비 선택 (선택 시 자동입력) --</option>';
+  schoolCurrentAssets.forEach(function(a,idx){
+    var lbl=a.model_name||'';
+    if(a.device_id) lbl+=' ('+a.device_id+')';
+    if(a.building) lbl+=' '+a.building;
+    if(a.floor) lbl+=' '+a.floor;
+    if(a.install_location) lbl+=' '+a.install_location;
+    assetOpts+='<option value="'+idx+'"'+
+      ' data-model="'+escH(a.model_name||'')+'"'+
+      ' data-building="'+escH(a.building||'')+'"'+
+      ' data-floor="'+escH(a.floor||'')+'"'+
+      ' data-location="'+escH(a.install_location||'')+'"'+
+      ' data-network="'+escH(a.network_type||'')+'"'+
+      ' data-devid="'+escH(a.device_id||'')+'"'+
+      '>'+escH(lbl)+'</option>';
+  });
+  assetOpts+='<option value="__other__">기타 (직접 입력)</option>';
+  var netOpts='<option value="">-- 선택 --</option>';
+  ['교사망','학생망','기타망','기타'].forEach(function(n){ netOpts+='<option value="'+n+'">'+n+'</option>'; });
+
+  function _epSection(i, ep, epLabel, colorClass){
+    var h='<div class="col-12"><div class="border rounded p-2 mt-1">';
+    h+='<div class="fw-semibold '+colorClass+' mb-2">'+epLabel+'</div>';
+    h+='<div class="row g-2">';
+    h+='<div class="col-12"><small class="text-muted">장비 선택</small>';
+    h+='<select id="cable-'+i+'-'+ep+'-asset" class="form-select form-select-sm mt-1" onchange="_onCableAssetSel('+i+',\''+ep+'\')">'+assetOpts+'</select></div>';
+    h+='<div class="col-12 col-sm-4"><small class="text-muted">건물</small>';
+    h+='<input type="text" id="cable-'+i+'-'+ep+'-building" class="form-control form-control-sm mt-1" placeholder="본관, 별관 등"></div>';
+    h+='<div class="col-6 col-sm-2"><small class="text-muted">층</small>';
+    h+='<input type="text" id="cable-'+i+'-'+ep+'-floor" class="form-control form-control-sm mt-1" placeholder="1층"></div>';
+    h+='<div class="col-6 col-sm-6"><small class="text-muted">설치장소</small>';
+    h+='<input type="text" id="cable-'+i+'-'+ep+'-location" class="form-control form-control-sm mt-1" placeholder="교무실, 서버실 등"></div>';
+    h+='<div class="col-12 col-sm-4"><small class="text-muted">망</small>';
+    h+='<select id="cable-'+i+'-'+ep+'-network" class="form-select form-select-sm mt-1">'+netOpts+'</select></div>';
+    h+='<div class="col-12 col-sm-4"><small class="text-muted">모델명</small>';
+    h+='<input type="text" id="cable-'+i+'-'+ep+'-model" class="form-control form-control-sm mt-1" placeholder="모델명"></div>';
+    h+='<div class="col-6 col-sm-2"><small class="text-muted">장비ID</small>';
+    h+='<input type="text" id="cable-'+i+'-'+ep+'-devid" class="form-control form-control-sm mt-1" placeholder="ID" style="font-family:monospace"></div>';
+    h+='<div class="col-6 col-sm-2"><small class="text-muted">Port</small>';
+    h+='<input type="text" id="cable-'+i+'-'+ep+'-port" class="form-control form-control-sm mt-1" placeholder=""></div>';
+    h+='</div></div></div>';
+    return h;
+  }
+
+  var tabsHtml='<ul class="nav nav-tabs mb-0" id="cableRunTabs" role="tablist">';
+  for(var i=0;i<qty;i++){
+    tabsHtml+='<li class="nav-item" role="presentation">';
+    tabsHtml+='<button class="nav-link'+(i===0?' active':'')+'" id="cable-tab-btn-'+i+'" data-bs-toggle="tab" data-bs-target="#cable-tab-'+i+'" type="button" role="tab">항목'+(i+1)+'</button>';
+    tabsHtml+='</li>';
+  }
+  tabsHtml+='</ul>';
+
+  var contentHtml='<div class="tab-content border border-top-0 rounded-bottom p-2" id="cableRunTabContent">';
+  for(var i=0;i<qty;i++){
+    contentHtml+='<div class="tab-pane fade'+(i===0?' show active':'')+'" id="cable-tab-'+i+'" role="tabpanel">';
+    contentHtml+='<div class="row g-2 pt-1">';
+    /* ① 작업내용 */
+    contentHtml+='<div class="col-12"><small class="fw-semibold text-muted">① 작업내용 (복수 선택 가능)</small>';
+    contentHtml+='<div class="d-flex flex-wrap gap-3 mt-1">';
+    ['망분리','업링크','장애처리','케이블단선'].forEach(function(wt){
+      contentHtml+='<div class="form-check"><input class="form-check-input" type="checkbox" id="cable-'+i+'-wt-'+wt+'" value="'+wt+'"><label class="form-check-label" for="cable-'+i+'-wt-'+wt+'">'+wt+'</label></div>';
+    });
+    contentHtml+='<div class="form-check"><input class="form-check-input" type="checkbox" id="cable-'+i+'-wt-기타" value="기타" onchange="_onCableWtOtherChk('+i+')">';
+    contentHtml+='<label class="form-check-label" for="cable-'+i+'-wt-기타">기타</label></div>';
+    contentHtml+='</div>';
+    contentHtml+='<input type="text" id="cable-'+i+'-wt-other-txt" class="form-control form-control-sm mt-1 d-none" placeholder="기타 작업내용 직접 입력">';
+    contentHtml+='</div>';
+    /* ② 케이블 종류 */
+    contentHtml+='<div class="col-12 col-sm-6"><small class="fw-semibold text-muted">② 케이블 종류</small>';
+    contentHtml+='<div class="d-flex gap-3 mt-1">';
+    ['Cat.6','광'].forEach(function(ct){
+      var cid='cable-'+i+'-ct-'+ct.replace('.','');
+      contentHtml+='<div class="form-check"><input class="form-check-input" type="radio" name="cable-'+i+'-cable-type" id="'+cid+'" value="'+ct+'"'+(ct==='Cat.6'?' checked':'')+'>'+
+        '<label class="form-check-label" for="'+cid+'">'+ct+'</label></div>';
+    });
+    contentHtml+='</div></div>';
+    /* ③ 케이블 길이 */
+    contentHtml+='<div class="col-12 col-sm-6"><small class="fw-semibold text-muted">③ 케이블 길이 (m)</small>';
+    contentHtml+='<input type="number" id="cable-'+i+'-length" class="form-control form-control-sm mt-1" placeholder="예: 10" min="0" step="1">';
+    contentHtml+='</div>';
+    /* ④ 시점 */
+    contentHtml+=_epSection(i,'sp','④ 시점 (SP)','text-primary');
+    /* ⑤ 종점 */
+    contentHtml+=_epSection(i,'ep','⑤ 종점 (EP)','text-success');
+    /* ⑥ 사진 */
+    contentHtml+='<div class="col-12"><small class="fw-semibold text-muted">⑥ 사진</small>';
+    contentHtml+='<div class="d-flex gap-2 flex-wrap mt-1">';
+    [['sp_before','시점 포설전'],['sp_after','시점 포설후'],['ep_before','종점 포설전'],['ep_after','종점 포설후']].forEach(function(pt){
+      var key=pt[0], lbl=pt[1];
+      contentHtml+='<div class="border rounded p-2 text-center" style="min-width:110px;">';
+      contentHtml+='<div class="small text-muted mb-1">'+lbl+'</div>';
+      contentHtml+='<label class="btn btn-outline-secondary btn-sm" style="cursor:pointer;">';
+      contentHtml+='<i class="bi bi-camera me-1"></i>업로드';
+      contentHtml+='<input type="file" id="cable-'+i+'-photo-'+key+'" accept="image/*" class="d-none" onchange="_onCablePhoto('+i+',\''+key+'\')">';
+      contentHtml+='</label>';
+      contentHtml+='<div id="cable-'+i+'-photo-'+key+'-preview" class="mt-1"></div>';
+      contentHtml+='</div>';
+    });
+    contentHtml+='</div></div>';
+    contentHtml+='</div></div>';
+  }
+  contentHtml+='</div>';
+  container.innerHTML=tabsHtml+contentHtml;
+}
+
+function onCableQtyChange(val){
+  var n=parseInt(val)||0;
+  if(n>=1) renderCableRunRows(n);
+}
+
+function _onCableWtOtherChk(i){
+  var chk=document.getElementById('cable-'+i+'-wt-기타');
+  var txt=document.getElementById('cable-'+i+'-wt-other-txt');
+  if(chk&&txt) txt.classList.toggle('d-none',!chk.checked);
+}
+
+function _onCableAssetSel(i, ep){
+  var sel=document.getElementById('cable-'+i+'-'+ep+'-asset');
+  if(!sel) return;
+  var modelEl=document.getElementById('cable-'+i+'-'+ep+'-model');
+  if(sel.value==='__other__'){
+    /* 기타: 모델명 입력란 초기화 후 포커스 */
+    ['building','floor','location','devid'].forEach(function(k){
+      var el=document.getElementById('cable-'+i+'-'+ep+'-'+k);
+      if(el) el.value='';
+    });
+    var netSel=document.getElementById('cable-'+i+'-'+ep+'-network');
+    if(netSel) netSel.value='';
+    if(modelEl){ modelEl.value=''; modelEl.removeAttribute('readonly'); modelEl.focus(); }
+    return;
+  }
+  if(sel.value==='') return;
+  var opt=sel.options[sel.selectedIndex];
+  ['building','floor','location','devid'].forEach(function(k){
+    var el=document.getElementById('cable-'+i+'-'+ep+'-'+k);
+    if(el) el.value=opt.dataset[k]||'';
+  });
+  var netSel=document.getElementById('cable-'+i+'-'+ep+'-network');
+  if(netSel) netSel.value=opt.dataset.network||'';
+  if(modelEl) modelEl.value=opt.dataset.model||'';
+}
+
+async function _onCablePhoto(i, type){
+  var input=document.getElementById('cable-'+i+'-photo-'+type);
+  var previewEl=document.getElementById('cable-'+i+'-photo-'+type+'-preview');
+  if(!input||!input.files||!input.files[0]) return;
+  if(previewEl) previewEl.innerHTML='<div class="text-muted small"><span class="spinner-border spinner-border-sm"></span></div>';
+  var apiStage=(type.indexOf('before')>=0)?'before':'after';
+  var fd=new FormData();
+  fd.append('school', selSchool.id);
+  fd.append('photo_stage', apiStage);
+  fd.append('work_type_etc', '네트워크 포설 '+(type.startsWith('sp')?'시점':'종점'));
+  fd.append('taken_at', new Date().toISOString());
+  fd.append('image', input.files[0]);
+  try{
+    var res=await fetch(API_BASE+'/photos/photos/',{method:'POST',headers:{'X-CSRFToken':CSRF_TOKEN},body:fd});
+    if(!res.ok) throw new Error('업로드 실패');
+    var d=await res.json();
+    if(!cablePhotos[i]) cablePhotos[i]={sp_before:null,sp_after:null,ep_before:null,ep_after:null};
+    cablePhotos[i][type]=d.id;
+    var url=d.image_url||d.image||'';
+    try{ if(url.startsWith('http')) url=new URL(url).pathname; }catch(e){}
+    if(previewEl) previewEl.innerHTML='<img src="'+escH(url)+'" style="max-width:100px;max-height:70px;border-radius:4px;" alt="사진">'
+      +'<div class="text-success small mt-1"><i class="bi bi-check-circle me-1"></i>완료</div>';
+  }catch(e){
+    if(previewEl) previewEl.innerHTML='<div class="text-danger small">업로드 실패</div>';
+  }
+}
+
+function collectCableRuns(){
+  var qty=parseInt((document.getElementById('f-cable-qty')||{}).value)||0;
+  var runs=[];
+  for(var i=0;i<qty;i++){
+    var g=function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
+    var wtList=[];
+    ['망분리','업링크','장애처리','케이블단선'].forEach(function(wt){
+      var chk=document.getElementById('cable-'+i+'-wt-'+wt);
+      if(chk&&chk.checked) wtList.push(wt);
+    });
+    var otherChk=document.getElementById('cable-'+i+'-wt-기타');
+    if(otherChk&&otherChk.checked){
+      var otherTxt=g('cable-'+i+'-wt-other-txt');
+      wtList.push(otherTxt||'기타');
+    }
+    var cableTypeEl=document.querySelector('input[name="cable-'+i+'-cable-type"]:checked');
+    var photos=cablePhotos[i]||{};
+    runs.push({
+      work_types:  wtList,
+      work_label:  wtList.join(', '),
+      cable_type:  cableTypeEl?cableTypeEl.value:'Cat.6',
+      cable_length:g('cable-'+i+'-length'),
+      start_point:{
+        model_name:g('cable-'+i+'-sp-model'),
+        building:  g('cable-'+i+'-sp-building'),
+        floor:     g('cable-'+i+'-sp-floor'),
+        location:  g('cable-'+i+'-sp-location'),
+        network:   g('cable-'+i+'-sp-network'),
+        device_id: g('cable-'+i+'-sp-devid'),
+        port:      g('cable-'+i+'-sp-port')
+      },
+      end_point:{
+        model_name:g('cable-'+i+'-ep-model'),
+        building:  g('cable-'+i+'-ep-building'),
+        floor:     g('cable-'+i+'-ep-floor'),
+        location:  g('cable-'+i+'-ep-location'),
+        network:   g('cable-'+i+'-ep-network'),
+        device_id: g('cable-'+i+'-ep-devid'),
+        port:      g('cable-'+i+'-ep-port')
+      },
+      photo_sp_before_id: photos.sp_before||null,
+      photo_sp_after_id:  photos.sp_after||null,
+      photo_ep_before_id: photos.ep_before||null,
+      photo_ep_after_id:  photos.ep_after||null
+    });
+  }
+  return runs;
+}
+
+function renderField(f){
+  var req=f.required?'<span class="text-danger">*</span>':'';
+  var note=f.note?`<div class="field-note"><i class="bi bi-info-circle me-1"></i>${escH(f.note)}</div>`:'';
+  var id='f-'+f.name, val=f.default||'';
+  var lbl=`<label for="${id}">${escH(f.label)} ${req}</label>`;
+  var inp='';
+  /* readonly 필드 */
+  if(f.readonly){
+    inp=`<input type="text" id="${id}" name="${f.name}" class="form-control form-control-sm bg-light" value="${escH(val)}" readonly>`;
+    return lbl+inp+note;
+  }
+  switch(f.type){
+    case 'date':
+      inp=`<input type="date" id="${id}" name="${f.name}" class="form-control form-control-sm" value="${val}">`;
+      break;
+    case 'datetime-local':
+      inp=`<input type="datetime-local" id="${id}" name="${f.name}" class="form-control form-control-sm" value="${val}">`;
+      break;
+    case 'number':
+      inp=`<input type="number" id="${id}" name="${f.name}" class="form-control form-control-sm" placeholder="${escH(f.placeholder||'')}" value="${val}" min="1" max="20">`;
+      break;
+    case 'textarea':
+      inp=`<textarea id="${id}" name="${f.name}" class="form-control form-control-sm" rows="3" placeholder="${escH(f.placeholder||'')}">${val}</textarea>`;
+      break;
+    case 'select':
+      var opts=(f.options||[]).map(o=>{ var v=typeof o==='object'?o.value:o, l=typeof o==='object'?o.label:o; return `<option value="${escH(v)}" ${v===val?'selected':''}>${escH(l)}</option>`; }).join('');
+      inp=`<select id="${id}" name="${f.name}" class="form-select form-select-sm"><option value="">-- 선택 --</option>${opts}</select>`;
+      break;
+    case 'checkbox':
+      inp=`<div class="form-check"><input type="checkbox" id="${id}" name="${f.name}" class="form-check-input" ${val?'checked':''}><label class="form-check-label" for="${id}">${escH(f.check_label||f.label)}</label></div>`;
+      break;
+    case 'switch_devices':
+      /* 장비 목록 컨테이너: initSwitchInstallForm() 에서 채워짐 */
+      inp=`<div id="${id}" class="switch-devices-wrap"></div>`;
+      break;
+    default:
+      inp=`<input type="text" id="${id}" name="${f.name}" class="form-control form-control-sm" placeholder="${escH(f.placeholder||'')}" value="${escH(val)}">`;
+      if(f.name==='serial_number') inp=inp.replace('class="form-control','class="form-control" id="f-serial_number" style="font-family:monospace"').replace('id="f-serial_number" ','');
+  }
+  return lbl+inp+note;
+}
+
+var _snTimer=null;
+function debounceSnCheck(){ clearTimeout(_snTimer); _snTimer=setTimeout(checkSerialNumber,400); }
+function checkSerialNumber(){
+  var inp=document.getElementById('f-serial_number'); if(!inp) return;
+  var sn=inp.value.trim(); if(!sn){ inp.classList.remove('is-valid','is-invalid'); return; }
+  fetch(API_BASE+'/reports/reports/validate_serial/?serial='+encodeURIComponent(sn),{headers:{'X-CSRFToken':CSRF_TOKEN}})
+    .then(r=>r.json()).then(d=>{
+      inp.classList.toggle('is-valid',d.valid);
+      inp.classList.toggle('is-invalid',!d.valid);
+      var fb=inp.nextElementSibling;
+      if(!fb||(!fb.classList.contains('valid-feedback')&&!fb.classList.contains('invalid-feedback'))){
+        fb=document.createElement('div'); inp.after(fb);
+      }
+      fb.className=d.valid?'valid-feedback':'invalid-feedback';
+      fb.textContent=d.message+(d.valid&&d.school?' (현재위치: '+d.school+')':'');
+    });
+}
+
+/* ────────────────────────────────────────────────
+   모달 스텝 제어
+──────────────────────────────────────────────── */
+function setWmStep(s){
+  wmStep=s;
+  document.querySelectorAll('.step-ind').forEach(el=>{
+    var n=+el.dataset.step;
+    el.classList.toggle('active',n===s);
+    el.classList.toggle('text-muted',n>s);
+    el.querySelector('.badge').className='badge '+(n<s?'bg-success':n===s?'bg-primary':'bg-secondary');
+  });
+  document.getElementById('wm-form-area').classList.toggle('d-none',s!==1);
+  document.getElementById('wm-confirm-area').classList.toggle('d-none',s!==2);
+  document.getElementById('wm-pdf-area').classList.toggle('d-none',s!==3);
+  document.getElementById('wm-btn-back').style.display=(s>1&&s<3)?'':'none';
+  document.getElementById('wm-btn-next').classList.toggle('d-none',s!==1);
+  var completeBtn=document.getElementById('wm-btn-complete');
+  completeBtn.classList.toggle('d-none',s!==2);
+  if(s===2){
+    /* 스텝2 진입 시 버튼 상태 초기화 (이전 오류로 disabled 잔존 방지) */
+    completeBtn.disabled=false;
+    if(wmEditMode){
+      completeBtn.innerHTML='<i class="bi bi-arrow-repeat me-1"></i>수정 · PDF 재생성';
+    } else {
+      completeBtn.innerHTML='<i class="bi bi-check2-circle me-1"></i>완료 · PDF 생성';
+    }
+  }
+  document.getElementById('wm-btn-cancel').textContent=(s===3)?'닫기':'취소';
+  /* 수정 모드: Step2에서 메모 입력란 표시 */
+  var noteWrap=document.getElementById('wm-edit-note-wrap');
+  if(noteWrap) noteWrap.classList.toggle('d-none',!(s===2&&wmEditMode));
+  if(s===2) renderWmConfirm();
+}
+
+function wmNext(){
+  /* 필수 검증 */
+  if(!validateWmForm()) return;
+  setWmStep(2);
+}
+function wmBack(){ setWmStep(wmStep-1); }
+
+function validateWmForm(){
+  /* 스위치 설치확인서: 전용 검증 (제목 입력 없음) */
+  if(selTemplate&&selTemplate.report_type==='switch_install'){
+    var ok=true;
+    var dEl=document.getElementById('f-install_date');
+    if(dEl&&!dEl.value){ dEl.classList.add('is-invalid'); ok=false; }
+    else if(dEl) dEl.classList.remove('is-invalid');
+    var qEl=document.getElementById('f-quantity');
+    if(qEl&&!(parseInt(qEl.value)>=1)){ qEl.classList.add('is-invalid'); ok=false; }
+    else if(qEl) qEl.classList.remove('is-invalid');
+    var qty=parseInt((qEl||{}).value)||0;
+    for(var i=0;i<qty;i++){
+      var sEl=document.getElementById('dev-'+i+'-serial');
+      var sVal=sEl?sEl.value.trim():'';
+      if(!sVal){ if(sEl) sEl.classList.add('is-invalid'); ok=false; }
+      else if(sEl) sEl.classList.remove('is-invalid');
+      var nEl=document.getElementById('dev-'+i+'-nettype');
+      if(nEl&&!nEl.value){ nEl.classList.add('is-invalid'); ok=false; }
+      else if(nEl) nEl.classList.remove('is-invalid');
+    }
+    if(!ok){ alert('필수 항목(*)을 모두 입력하세요.'); return false; }
+    /* 장비ID 중복 검증 — 위치가 다른데 같은 장비ID 사용 불가 */
+    var idLocMap={};
+    for(var k=0;k<qty;k++){
+      var aEl=document.getElementById('dev-'+k+'-assetid');
+      var aId='';
+      if(aEl&&aEl.tagName==='SELECT'&&aEl.value==='__other__') aId=(document.getElementById('dev-'+k+'-assetid-txt')||{}).value||'';
+      else if(aEl) aId=aEl.value.trim();
+      if(!aId) continue;
+      var gv=function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
+      var locKey=gv('dev-'+k+'-building')+'|'+gv('dev-'+k+'-floor')+'|'+gv('dev-'+k+'-location');
+      if(idLocMap[aId]!==undefined && idLocMap[aId]!==locKey){
+        alert('장비 '+(k+1)+'번의 장비ID \'' + aId + '\' 이(가) 다른 장비(다른 위치)와 중복됩니다.\n장비ID를 확인하세요.');
+        return false;
+      }
+      idLocMap[aId]=locKey;
+    }
+    return true;
+  }
+  /* 소규모 네트워크 포설 확인서 */
+  if(selTemplate&&selTemplate.report_type==='cable'){
+    var dEl2=document.getElementById('f-work_date');
+    if(dEl2&&!dEl2.value){ dEl2.classList.add('is-invalid'); alert('공사일을 입력하세요.'); return false; }
+    if(dEl2) dEl2.classList.remove('is-invalid');
+    var qEl2=document.getElementById('f-cable-qty');
+    if(qEl2&&!(parseInt(qEl2.value)>=1)){ qEl2.classList.add('is-invalid'); alert('포설 항목 수를 입력하세요.'); return false; }
+    if(qEl2) qEl2.classList.remove('is-invalid');
+    return true;
+  }
+  /* 일반 보고서 */
+  var fields=(selTemplate.fields_schema&&selTemplate.fields_schema.fields)||[];
+  var ok=true;
+  var title=document.getElementById('wm-report-title').value.trim();
+  if(!title){ document.getElementById('wm-report-title').classList.add('is-invalid'); ok=false; }
+  else document.getElementById('wm-report-title').classList.remove('is-invalid');
+  fields.filter(f=>f.required&&f.type!=='switch_devices').forEach(f=>{
+    var el=document.getElementById('f-'+f.name); if(!el) return;
+    var v=el.type==='checkbox'?el.checked:el.value.trim();
+    if(!v){ el.classList.add('is-invalid'); ok=false; }
+    else el.classList.remove('is-invalid');
+  });
+  if(!ok) alert('필수 항목을 모두 입력하세요.');
+  return ok;
+}
+
+function renderWmConfirm(){
+  if(selTemplate&&selTemplate.report_type==='switch_install'){
+    _renderSwitchInstallConfirm(); return;
+  }
+  if(selTemplate&&selTemplate.report_type==='cable'){
+    _renderCableInstallConfirm(); return;
+  }
+  var fields=(selTemplate.fields_schema&&selTemplate.fields_schema.fields)||[];
+  var title=document.getElementById('wm-report-title').value.trim();
+  var html=`<table class="table table-sm table-bordered small">
+    <tr class="table-light"><th style="width:35%;">항목</th><th>입력값</th></tr>
+    <tr><td class="fw-semibold">보고서 제목</td><td>${escH(title)}</td></tr>
+    <tr><td class="fw-semibold">학교</td><td>${escH(selSchool.name)}</td></tr>`;
+  fields.forEach(f=>{
+    var el=document.getElementById('f-'+f.name); if(!el) return;
+    var v=el.type==='checkbox'?(el.checked?'✔':'✘'):el.value;
+    if(!v) v='—';
+    html+=`<tr><td class="text-muted">${escH(f.label)}</td><td>${escH(v)}</td></tr>`;
+  });
+  html+='</table>';
+  document.getElementById('wm-confirm-table').innerHTML=html;
+}
+function _renderSwitchInstallConfirm(){
+  var dEl=document.getElementById('f-install_date');
+  var qEl=document.getElementById('f-quantity');
+  var nEl=document.getElementById('f-notes');
+  var devs=collectSwitchDevices();
+
+  /* ── 요약 테이블 ── */
+  var html='<table class="table table-sm table-bordered small mb-3">';
+  html+='<tr class="table-light"><th style="width:35%;">항목</th><th>입력값</th></tr>';
+  html+='<tr><td class="fw-semibold">학교</td><td>'+escH(selSchool.name)+'</td></tr>';
+  html+='<tr><td class="text-muted">설치일자</td><td>'+escH(dEl?dEl.value:'')+'</td></tr>';
+  html+='<tr><td class="text-muted">설치수량</td><td>'+escH(qEl?qEl.value:'')+'대</td></tr>';
+  html+='<tr><td class="text-muted">장비 목록</td><td>';
+  html+='<ol class="mb-0 ps-3 small">';
+  devs.forEach(function(d){
+    html+='<li>';
+    html+=escH(d.serial_number||'—')+' ('+escH(d.model_name||'—')+') | '+escH(d.network_type_label||'—');
+    var loc=[d.building,d.floor,d.location].filter(Boolean).join(' ');
+    if(loc) html+=' | '+escH(loc);
+    if(d.prev_model) html+=' | 교체전: '+escH(d.prev_model);
+    html+='</li>';
+  });
+  html+='</ol></td></tr>';
+  if(nEl&&nEl.value.trim()) html+='<tr><td class="text-muted">비고</td><td>'+escH(nEl.value)+'</td></tr>';
+  html+='</table>';
+
+  /* ── 전자서명 ── */
+  /* 학교 담당자 옵션 */
+  var contactOpts='<option value="">-- 선택 --</option>';
+  schoolContacts.forEach(function(c){
+    contactOpts+='<option value="'+escH(c.id)+'" data-phone="'+escH(c.phone||'')+'" data-name="'+escH(c.name)+'">'+escH(c.name)+'</option>';
+  });
+  contactOpts+='<option value="__other__">직접 입력 (신규 저장)</option>';
+
+  html+='<div class="border rounded p-2 mb-2" style="background:#f8f9fa;">';
+  html+='<div class="fw-semibold small mb-2"><i class="bi bi-pen me-1 text-primary"></i>전자서명</div>';
+  html+='<div class="row g-2">';
+
+  /* 세종아이티엘 측 */
+  html+='<div class="col-12 col-sm-6">';
+  html+='<div class="border rounded p-2 bg-white">';
+  html+='<div class="small fw-semibold text-primary mb-1">세종아이티엘 컨소시엄 측</div>';
+  html+='<div class="mb-1"><small class="text-muted">소속</small>';
+  html+='<input type="text" id="sig-itl-org" class="form-control form-control-sm" value="세종아이티엘 컨소시엄" readonly></div>';
+  html+='<div class="mb-1"><small class="text-muted">담당자</small>';
+  html+='<input type="text" id="sig-itl-name" class="form-control form-control-sm" value="'+escH(USER_NAME)+'"></div>';
+  html+='<div class="mb-1"><small class="text-muted">연락처</small>';
+  html+='<input type="text" id="sig-itl-phone" class="form-control form-control-sm" value="'+escH(USER_PHONE)+'"></div>';
+  html+='<div class="mb-1"><small class="text-muted">서명</small>';
+  html+='<canvas id="sig-itl-canvas" width="220" height="80" class="d-block border rounded" style="background:#fff;touch-action:none;cursor:crosshair;width:100%;"></canvas>';
+  html+='<button type="button" class="btn btn-xs btn-outline-danger mt-1" onclick="_sigClear(\'itl\')" style="font-size:.7rem;padding:1px 6px;">지우기</button>';
+  html+='</div>';
+  html+='</div></div>';
+
+  /* 학교 측 */
+  html+='<div class="col-12 col-sm-6">';
+  html+='<div class="border rounded p-2 bg-white">';
+  html+='<div class="small fw-semibold text-success mb-1">학교 측</div>';
+  html+='<div class="mb-1"><small class="text-muted">소속</small>';
+  html+='<input type="text" id="sig-sch-org" class="form-control form-control-sm" value="'+escH(selSchool.name)+'" readonly></div>';
+  html+='<div class="mb-1"><small class="text-muted">담당자</small>';
+  html+='<select id="sig-sch-contact-sel" class="form-select form-select-sm mb-1" onchange="_onSchContactSel()">'+contactOpts+'</select>';
+  html+='<input type="text" id="sig-sch-name" class="form-control form-control-sm d-none" placeholder="이름 직접 입력"></div>';
+  html+='<div class="mb-1"><small class="text-muted">연락처</small>';
+  html+='<input type="text" id="sig-sch-phone" class="form-control form-control-sm" placeholder="연락처"></div>';
+  html+='<div class="mb-1"><small class="text-muted">서명</small>';
+  html+='<canvas id="sig-sch-canvas" width="220" height="80" class="d-block border rounded" style="background:#fff;touch-action:none;cursor:crosshair;width:100%;"></canvas>';
+  html+='<button type="button" class="btn btn-xs btn-outline-danger mt-1" onclick="_sigClear(\'sch\')" style="font-size:.7rem;padding:1px 6px;">지우기</button>';
+  html+='</div>';
+  html+='</div></div>';
+
+  html+='</div></div>'; /* row, sig box */
+
+  document.getElementById('wm-confirm-table').innerHTML=html;
+
+  /* 서명 캔버스 초기화 */
+  _initSigCanvas('itl');
+  _initSigCanvas('sch');
+
+  /* 수정 모드: 기존 서명 데이터 복원 */
+  if(wmRestoreSigs){
+    var si=wmRestoreSigs.itl||{}, ss=wmRestoreSigs.sch||{};
+    /* ITL 측 텍스트 필드 */
+    [['sig-itl-org',si.org],['sig-itl-name',si.name],['sig-itl-phone',si.phone]]
+      .forEach(function(p){ var el=document.getElementById(p[0]); if(el&&p[1]) el.value=p[1]; });
+    /* 학교 측 담당자 SELECT 매칭 */
+    var ssSel=document.getElementById('sig-sch-contact-sel');
+    var ssNameInp=document.getElementById('sig-sch-name');
+    var ssPhoneEl=document.getElementById('sig-sch-phone');
+    if(ssSel&&ss.name){
+      var found=false;
+      for(var o=0;o<ssSel.options.length;o++){
+        var optName=ssSel.options[o].dataset.name||ssSel.options[o].text||'';
+        if(optName.trim()===ss.name.trim()){
+          ssSel.selectedIndex=o; found=true;
+          if(ssPhoneEl&&ssSel.options[o].dataset.phone) ssPhoneEl.value=ssSel.options[o].dataset.phone;
+          break;
+        }
+      }
+      if(!found){
+        ssSel.value='__other__';
+        if(ssNameInp){ ssNameInp.classList.remove('d-none'); ssNameInp.value=ss.name; }
+        if(ssPhoneEl&&ss.phone) ssPhoneEl.value=ss.phone;
+      }
+    }
+    /* 캔버스 서명 이미지 복원 */
+    if(si.data) _restoreSigCanvas('itl', si.data);
+    if(ss.data) _restoreSigCanvas('sch', ss.data);
+  }
+}
+
+function _renderCableInstallConfirm(){
+  var dEl=document.getElementById('f-work_date');
+  var qEl=document.getElementById('f-cable-qty');
+  var runs=collectCableRuns();
+
+  var html='<table class="table table-sm table-bordered small mb-3">';
+  html+='<tr class="table-light"><th style="width:35%;">항목</th><th>입력값</th></tr>';
+  html+='<tr><td class="fw-semibold">학교</td><td>'+escH(selSchool.name)+'</td></tr>';
+  html+='<tr><td class="text-muted">공사일</td><td>'+escH(dEl?dEl.value:'')+'</td></tr>';
+  html+='<tr><td class="text-muted">포설 항목 수</td><td>'+escH(qEl?qEl.value:'')+'건</td></tr>';
+  html+='<tr><td class="text-muted">포설 목록</td><td>';
+  html+='<ol class="mb-0 ps-3 small">';
+  runs.forEach(function(r){
+    html+='<li>';
+    html+='['+escH(r.cable_type)+'] '+escH(r.cable_length||'?')+'m';
+    if(r.work_label) html+=' / '+escH(r.work_label);
+    var sp=r.start_point, ep=r.end_point;
+    var spLoc=[sp.building,sp.floor,sp.location].filter(Boolean).join(' ');
+    var epLoc=[ep.building,ep.floor,ep.location].filter(Boolean).join(' ');
+    if(spLoc||sp.model_name) html+=' | 시점: '+escH(sp.model_name||'?')+(spLoc?' '+escH(spLoc):'');
+    if(epLoc||ep.model_name) html+=' | 종점: '+escH(ep.model_name||'?')+(epLoc?' '+escH(epLoc):'');
+    html+='</li>';
+  });
+  html+='</ol></td></tr>';
+  html+='</table>';
+
+  /* 전자서명 */
+  var contactOpts='<option value="">-- 선택 --</option>';
+  schoolContacts.forEach(function(c){
+    contactOpts+='<option value="'+escH(c.id)+'" data-phone="'+escH(c.phone||'')+'" data-name="'+escH(c.name)+'">'+escH(c.name)+'</option>';
+  });
+  contactOpts+='<option value="__other__">직접 입력 (신규 저장)</option>';
+
+  html+='<div class="border rounded p-2 mb-2" style="background:#f8f9fa;">';
+  html+='<div class="fw-semibold small mb-2"><i class="bi bi-pen me-1 text-primary"></i>전자서명</div>';
+  html+='<div class="row g-2">';
+  html+='<div class="col-12 col-sm-6"><div class="border rounded p-2 bg-white">';
+  html+='<div class="small fw-semibold text-primary mb-1">세종아이티엘 컨소시엄 측</div>';
+  html+='<div class="mb-1"><small class="text-muted">소속</small><input type="text" id="sig-itl-org" class="form-control form-control-sm" value="세종아이티엘 컨소시엄" readonly></div>';
+  html+='<div class="mb-1"><small class="text-muted">담당자</small><input type="text" id="sig-itl-name" class="form-control form-control-sm" value="'+escH(USER_NAME)+'"></div>';
+  html+='<div class="mb-1"><small class="text-muted">연락처</small><input type="text" id="sig-itl-phone" class="form-control form-control-sm" value="'+escH(USER_PHONE)+'"></div>';
+  html+='<div class="mb-1"><small class="text-muted">서명</small>';
+  html+='<canvas id="sig-itl-canvas" width="220" height="80" class="d-block border rounded" style="background:#fff;touch-action:none;cursor:crosshair;width:100%;"></canvas>';
+  html+='<button type="button" class="btn btn-xs btn-outline-danger mt-1" onclick="_sigClear(\'itl\')" style="font-size:.7rem;padding:1px 6px;">지우기</button>';
+  html+='</div></div></div>';
+  html+='<div class="col-12 col-sm-6"><div class="border rounded p-2 bg-white">';
+  html+='<div class="small fw-semibold text-success mb-1">학교 측</div>';
+  html+='<div class="mb-1"><small class="text-muted">소속</small><input type="text" id="sig-sch-org" class="form-control form-control-sm" value="'+escH(selSchool.name)+'" readonly></div>';
+  html+='<div class="mb-1"><small class="text-muted">담당자</small>';
+  html+='<select id="sig-sch-contact-sel" class="form-select form-select-sm mb-1" onchange="_onSchContactSel()">'+contactOpts+'</select>';
+  html+='<input type="text" id="sig-sch-name" class="form-control form-control-sm d-none" placeholder="이름 직접 입력"></div>';
+  html+='<div class="mb-1"><small class="text-muted">연락처</small><input type="text" id="sig-sch-phone" class="form-control form-control-sm" placeholder="연락처"></div>';
+  html+='<div class="mb-1"><small class="text-muted">서명</small>';
+  html+='<canvas id="sig-sch-canvas" width="220" height="80" class="d-block border rounded" style="background:#fff;touch-action:none;cursor:crosshair;width:100%;"></canvas>';
+  html+='<button type="button" class="btn btn-xs btn-outline-danger mt-1" onclick="_sigClear(\'sch\')" style="font-size:.7rem;padding:1px 6px;">지우기</button>';
+  html+='</div></div></div>';
+  html+='</div></div>';
+
+  document.getElementById('wm-confirm-table').innerHTML=html;
+  _initSigCanvas('itl');
+  _initSigCanvas('sch');
+}
+
+function _onSchContactSel(){
+  var sel=document.getElementById('sig-sch-contact-sel'); if(!sel) return;
+  var nameInput=document.getElementById('sig-sch-name');
+  var phoneInput=document.getElementById('sig-sch-phone');
+  if(sel.value==='__other__'){
+    if(nameInput){ nameInput.classList.remove('d-none'); nameInput.value=''; }
+    if(phoneInput) phoneInput.value='';
+  } else if(sel.value){
+    var opt=sel.options[sel.selectedIndex];
+    if(nameInput){ nameInput.classList.add('d-none'); nameInput.value=opt.dataset.name||''; }
+    if(phoneInput) phoneInput.value=opt.dataset.phone||'';
+  } else {
+    if(nameInput){ nameInput.classList.add('d-none'); nameInput.value=''; }
+    if(phoneInput) phoneInput.value='';
+  }
+}
+
+/* 서명 캔버스 그리기 */
+function _initSigCanvas(side){
+  var canvas=document.getElementById('sig-'+side+'-canvas'); if(!canvas) return;
+  var ctx=canvas.getContext('2d');
+  var drawing=false, lx=0, ly=0;
+  function getPos(e){
+    var r=canvas.getBoundingClientRect();
+    var sx=canvas.width/r.width, sy=canvas.height/r.height;
+    if(e.touches){ return {x:(e.touches[0].clientX-r.left)*sx, y:(e.touches[0].clientY-r.top)*sy}; }
+    return {x:(e.clientX-r.left)*sx, y:(e.clientY-r.top)*sy};
+  }
+  function start(e){ e.preventDefault(); drawing=true; var p=getPos(e); lx=p.x; ly=p.y; }
+  function move(e){ e.preventDefault(); if(!drawing) return; var p=getPos(e); ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(p.x,p.y); ctx.lineWidth=1.5; ctx.strokeStyle='#111'; ctx.lineCap='round'; ctx.stroke(); lx=p.x; ly=p.y; }
+  function end(e){ e.preventDefault(); drawing=false; }
+  canvas.addEventListener('mousedown',start); canvas.addEventListener('mousemove',move); canvas.addEventListener('mouseup',end); canvas.addEventListener('mouseleave',end);
+  canvas.addEventListener('touchstart',start,{passive:false}); canvas.addEventListener('touchmove',move,{passive:false}); canvas.addEventListener('touchend',end,{passive:false});
+}
+function _sigClear(side){
+  var canvas=document.getElementById('sig-'+side+'-canvas'); if(!canvas) return;
+  canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
+}
+function _getSigData(side){
+  var canvas=document.getElementById('sig-'+side+'-canvas'); if(!canvas) return null;
+  /* 빈 캔버스 체크 */
+  var ctx=canvas.getContext('2d');
+  var d=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+  for(var j=0;j<d.length;j+=4){ if(d[j+3]>0) return canvas.toDataURL('image/png'); }
+  return null;
+}
+
+async function wmComplete(){
+  document.getElementById('wm-btn-complete').disabled=true;
+  document.getElementById('wm-btn-complete').innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>저장 중...';
+
+  /* 데이터 수집 */
+  var title, data;
+  if(selTemplate&&selTemplate.report_type==='switch_install'){
+    /* 스위치 설치확인서: 제목 자동 생성, 커스텀 폼에서 수집 */
+    var t=new Date();
+    var ds=(document.getElementById('f-install_date')||{}).value||
+           (t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'));
+    title=''; /* doc_type 결정 후 아래에서 설정 */
+
+    /* 장비 수집 후 혼합설치 검증 + doc_type 결정 */
+    var devs=collectSwitchDevices();
+    var apCount=devs.filter(function(d){ return d.category==='ap'; }).length;
+    var nonApCount=devs.filter(function(d){ return d.serial_number&&d.category!=='ap'; }).length;
+    if(apCount>0&&nonApCount>0){
+      alert('혼합 설치(스위치+AP 동시)는 불가합니다.\n장비 종류를 통일하여 주세요.');
+      document.getElementById('wm-btn-complete').disabled=false;
+      document.getElementById('wm-btn-complete').innerHTML='<i class="bi bi-check2-circle me-1"></i>완료 · PDF 생성';
+      return;
+    }
+    var docType=(apCount>0)?'ap':'switch';
+    var docLabel=(docType==='ap')?'AP 설치 확인서':'스위치 설치 확인서';
+    title=docLabel+' - '+selSchool.name+' ('+ds+')';
+
+    /* 전자서명 수집 */
+    var schContactSel=document.getElementById('sig-sch-contact-sel');
+    var schName='';
+    if(schContactSel&&schContactSel.value==='__other__'){
+      schName=((document.getElementById('sig-sch-name')||{}).value||'').trim();
+      /* 신규 담당자 저장 (이름 있을 때) */
+      if(schName){
+        var schPhone=((document.getElementById('sig-sch-phone')||{}).value||'').trim();
+        try{
+          await fetch(API_BASE+'/reports/reports/school_contacts/',{
+            method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+            body:JSON.stringify({school_id:selSchool.id, name:schName, phone:schPhone})
+          });
+        }catch(e){ console.error(e); }
+      }
+    } else if(schContactSel&&schContactSel.value){
+      var schOpt=schContactSel.options[schContactSel.selectedIndex];
+      schName=schOpt.dataset.name||schOpt.text||'';
+    }
+
+    data={
+      install_date: ds,
+      doc_type:  docType,
+      quantity: (document.getElementById('f-quantity')||{}).value||'1',
+      notes:    ((document.getElementById('f-notes')||{}).value||'').trim(),
+      devices:  devs,
+      signature_itl: {
+        org:   ((document.getElementById('sig-itl-org')||{}).value||'').trim(),
+        name:  ((document.getElementById('sig-itl-name')||{}).value||'').trim(),
+        phone: ((document.getElementById('sig-itl-phone')||{}).value||'').trim(),
+        data:  _getSigData('itl')
+      },
+      signature_school: {
+        org:   ((document.getElementById('sig-sch-org')||{}).value||'').trim(),
+        name:  schName||((document.getElementById('sig-sch-name')||{}).value||'').trim(),
+        phone: ((document.getElementById('sig-sch-phone')||{}).value||'').trim(),
+        data:  _getSigData('sch')
+      }
+    };
+  } else if(selTemplate&&selTemplate.report_type==='cable'){
+    /* 소규모 네트워크 포설 확인서 */
+    var t2=new Date();
+    var ds2=(document.getElementById('f-work_date')||{}).value||
+            (t2.getFullYear()+'-'+String(t2.getMonth()+1).padStart(2,'0')+'-'+String(t2.getDate()).padStart(2,'0'));
+    var runs=collectCableRuns();
+    /* 학교 담당자 처리 */
+    var schContactSel2=document.getElementById('sig-sch-contact-sel');
+    var schName2='';
+    if(schContactSel2&&schContactSel2.value==='__other__'){
+      schName2=((document.getElementById('sig-sch-name')||{}).value||'').trim();
+      if(schName2){
+        var schPhone2=((document.getElementById('sig-sch-phone')||{}).value||'').trim();
+        try{
+          await fetch(API_BASE+'/reports/reports/school_contacts/',{
+            method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+            body:JSON.stringify({school_id:selSchool.id,name:schName2,phone:schPhone2})
+          });
+        }catch(e){ console.error(e); }
+      }
+    } else if(schContactSel2&&schContactSel2.value){
+      var schOpt2=schContactSel2.options[schContactSel2.selectedIndex];
+      schName2=schOpt2.dataset.name||schOpt2.text||'';
+    }
+    title='소규모 네트워크 포설 확인서 - '+selSchool.name+' ('+ds2+')';
+    data={
+      work_date: ds2,
+      notes: ((document.getElementById('f-cable-notes')||{}).value||'').trim(),
+      cables: runs,
+      signature_itl:{
+        org:   ((document.getElementById('sig-itl-org')||{}).value||'').trim(),
+        name:  ((document.getElementById('sig-itl-name')||{}).value||'').trim(),
+        phone: ((document.getElementById('sig-itl-phone')||{}).value||'').trim(),
+        data:  _getSigData('itl')
+      },
+      signature_school:{
+        org:   ((document.getElementById('sig-sch-org')||{}).value||'').trim(),
+        name:  schName2||((document.getElementById('sig-sch-name')||{}).value||'').trim(),
+        phone: ((document.getElementById('sig-sch-phone')||{}).value||'').trim(),
+        data:  _getSigData('sch')
+      }
+    };
+  } else {
+    var fields=(selTemplate.fields_schema&&selTemplate.fields_schema.fields)||[];
+    data={};
+    fields.forEach(f=>{
+      var el=document.getElementById('f-'+f.name); if(!el) return;
+      data[f.name]=(el.type==='checkbox')?el.checked:el.value;
+    });
+    title=document.getElementById('wm-report-title').value.trim();
+  }
+
+  try{
+    var reportId;
+    if(wmEditMode && wmEditReportId){
+      /* ── 수정 모드: 새 별도 문서 생성 (원본에 수정이력 기록) ── */
+      var editNote=((document.getElementById('wm-edit-note')||{}).value||'').trim();
+      var res=await fetch(API_BASE+'/reports/reports/'+wmEditReportId+'/save_data/',{
+        method:'PATCH', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+        body:JSON.stringify({data:data, title:title, note:editNote})
+      });
+      if(!res.ok){ var e=await res.json(); throw new Error(JSON.stringify(e)); }
+      var newRpt=await res.json();
+      reportId=newRpt.id;   /* 새로 생성된 Report ID */
+      wmReportId=reportId;
+    } else {
+      /* ── 신규 작성 ── */
+      var res=await fetch(API_BASE+'/reports/reports/',{
+        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+        body:JSON.stringify({template:selTemplate.id, school:selSchool.id, title:title, data:data})
+      });
+      if(!res.ok){ var e=await res.json(); throw new Error(JSON.stringify(e)); }
+      var report=await res.json();
+      reportId=report.id;
+      wmReportId=reportId;
+
+      /* 완료 처리 */
+      var r2=await fetch(API_BASE+'/reports/reports/'+reportId+'/complete/',{
+        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN}
+      });
+      if(!r2.ok) throw new Error('완료 처리 실패');
+
+      /* 정기점검 완료 → WBS 연동 안내 */
+      if(selTemplate&&selTemplate.report_type==='regular'){
+        document.getElementById('wm-footer-hint').textContent='✔ WBS 진척관리에 반영됨';
+      }
+      /* PDF 생성 트리거 (신규는 complete에서 이미 트리거, 추가 트리거) */
+      fetch(API_BASE+'/reports/reports/'+reportId+'/generate_pdf/',{
+        method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN}
+      });
+    }
+
+    setWmStep(3);
+    /* PDF 완료 폴링 */
+    pollPdf(reportId);
+
+    /* 목록 갱신 */
+    if(selSchool) loadRptList(1);
+
+  } catch(err){
+    document.getElementById('wm-btn-complete').disabled=false;
+    document.getElementById('wm-btn-complete').innerHTML='<i class="bi bi-check2-circle me-1"></i>완료 · PDF 생성';
+    alert('오류: '+err.message);
+  }
+}
+
+function pollPdf(id, tries){
+  tries=tries||0;
+  if(tries>20){ showPdfResult(false,id); return; }
+  setTimeout(function(){
+    fetch(API_BASE+'/reports/reports/'+id+'/',{headers:{'X-CSRFToken':CSRF_TOKEN}})
+      .then(r=>r.json()).then(d=>{
+        if(d.pdf_path){ showPdfResult(true,id,d.title); }
+        else pollPdf(id,tries+1);
+      }).catch(()=>{ showPdfResult(false,id); });
+  },2000);
+}
+
+function showPdfResult(ok, id, title){
+  document.getElementById('pdf-spinner').classList.add('d-none');
+  if(ok){
+    document.getElementById('pdf-done').classList.remove('d-none');
+    document.getElementById('pdf-done-name').textContent=title||'';
+    wmReportId=id;
+  } else {
+    document.getElementById('pdf-err').classList.remove('d-none');
+  }
+}
+
+function downloadCurrentPdf(){
+  if(!wmReportId) return;
+  window.open(API_BASE+'/reports/reports/'+wmReportId+'/download_pdf/','_blank');
+}
+
+/* ────────────────────────────────────────────────
+   보고서 조회
+──────────────────────────────────────────────── */
+function viewReport(id){
+  fetch(API_BASE+'/reports/reports/'+id+'/',{headers:{'X-CSRFToken':CSRF_TOKEN}})
+    .then(r=>r.json()).then(d=>{
+      document.getElementById('view-title').textContent=d.title;
+      document.getElementById('view-meta').textContent=
+        '작성: '+(d.created_by_name||'—')+'  |  '+(d.created_at||'').slice(0,16)
+        +(d.status==='completed'?' · 완료':d.status==='draft'?' · 작성중':'');
+      /* 데이터 렌더 — template_type은 API에서 직접 수신 */
+      var data=d.data||{};
+      var tmplType=d.template_type||'';
+      var html='';
+      if(tmplType==='switch_install'){
+        html=_viewSwitchInstall(data, d);
+      } else if(tmplType==='cable'){
+        html=_viewCableInstall(data, d);
+      } else {
+        var cachedTmpl=TEMPLATES.find(t=>t.id===(typeof d.template==='object'?d.template.id:d.template));
+        var fields=(cachedTmpl&&cachedTmpl.fields_schema&&cachedTmpl.fields_schema.fields)||[];
+        html='<table class="table table-sm table-bordered small">';
+        html+='<tr class="table-light"><th style="width:35%">항목</th><th>내용</th></tr>';
+        fields.forEach(function(f){
+          var v=data[f.name]!=null?data[f.name]:'—';
+          if(typeof v==='object') v=JSON.stringify(v);
+          html+=`<tr><td class="text-muted">${escH(f.label)}</td><td>${escH(String(v))}</td></tr>`;
+        });
+        html+='</table>';
+      }
+      /* 버전 이력 */
+      if(d.versions&&d.versions.length>0){
+        html+='<hr class="my-2">';
+        html+='<div class="fw-semibold small mb-1"><i class="bi bi-clock-history me-1 text-secondary"></i>수정 이력 ('+d.versions.length+'건) <small class="text-muted fw-normal">— 이전 버전을 선택해 불러올 수 있습니다</small></div>';
+        html+='<div class="list-group list-group-flush">';
+        d.versions.forEach(function(v){
+          var vData=JSON.stringify(v.data);
+          html+=`<div class="list-group-item px-2 py-1 d-flex align-items-center gap-2" style="font-size:.78rem;">
+            <span class="badge bg-secondary" style="min-width:28px">v${v.version}</span>
+            <span class="text-muted">${(v.saved_at||'').slice(0,16)}</span>
+            <span class="flex-fill">${escH(v.saved_by_name||'—')}</span>
+            <span class="text-muted fst-italic" style="font-size:.72rem">${escH(v.note||'')}</span>
+            <button class="btn btn-outline-warning btn-sm" style="font-size:.72rem;padding:2px 8px;white-space:nowrap;"
+              onclick="_restoreVersion(${id},${v.version})"><i class="bi bi-arrow-counterclockwise me-1"></i>이 버전으로</button>
+          </div>`;
+        });
+        html+='</div>';
+      }
+
+      document.getElementById('view-body').innerHTML=html;
+      /* 버전 데이터를 전역 캐시에 저장 (클릭 시 재조회 없이 사용) */
+      window._viewReportCache=d;
+
+      /* PDF 다운로드 버튼 */
+      var dlBtn=document.getElementById('view-dl-btn');
+      if(d.pdf_path){ dlBtn.classList.remove('d-none'); dlBtn.onclick=()=>window.open(API_BASE+'/reports/reports/'+id+'/download_pdf/','_blank'); }
+      else dlBtn.classList.add('d-none');
+      /* 최종 확정 버튼 (completed만) */
+      var finalBtn=document.getElementById('view-final-btn');
+      if(d.status==='completed'){
+        finalBtn.classList.remove('d-none');
+        if(d.is_final){
+          finalBtn.className='btn btn-sm btn-success d-flex align-items-center gap-1';
+          finalBtn.innerHTML='<i class="bi bi-patch-check-fill"></i>최종확정됨';
+          finalBtn.onclick=function(){ if(confirm('최종 확정을 해제하시겠습니까?')) toggleFinal(id,true).then(()=>{ bootstrap.Modal.getInstance(document.getElementById('viewModal')).hide(); }); };
+        } else {
+          finalBtn.className='btn btn-sm btn-outline-success d-flex align-items-center gap-1';
+          finalBtn.innerHTML='<i class="bi bi-patch-check"></i>최종 확정';
+          finalBtn.onclick=function(){ if(confirm('이 보고서를 최종 확정으로 설정하시겠습니까?\n\n※ 교체 장비 정보가 학교 장비목록에 자동 반영됩니다.')) { toggleFinal(id,false).then(()=>{ bootstrap.Modal.getInstance(document.getElementById('viewModal')).hide(); }); } };
+        }
+      } else {
+        finalBtn.classList.add('d-none');
+      }
+      /* 수정 버튼 (draft/completed 모두) */
+      var editBtn=document.getElementById('view-edit-btn');
+      if(d.status==='draft'||d.status==='completed'){
+        editBtn.classList.remove('d-none');
+        editBtn.onclick=function(){
+          bootstrap.Modal.getInstance(document.getElementById('viewModal')).hide();
+          setTimeout(function(){ loadReportToForm(id); }, 350);
+        };
+      } else {
+        editBtn.classList.add('d-none');
+      }
+      new bootstrap.Modal(document.getElementById('viewModal')).show();
+    });
+}
+
+function _viewSwitchInstall(data, report){
+  var html='';
+  /* 기본 정보 */
+  html+='<table class="table table-sm table-bordered small mb-2">';
+  html+=`<tr><th class="text-muted" style="width:25%">학교</th><td>${escH(report.school_name||'')}</td>`;
+  html+=`<th class="text-muted" style="width:25%">작성자</th><td>${escH(report.created_by_name||'')}</td></tr>`;
+  html+=`<tr><th class="text-muted">설치일자</th><td>${escH(data.install_date||'—')}</td>`;
+  html+=`<th class="text-muted">설치수량</th><td><strong>${escH(String(data.quantity||'—'))}대</strong></td></tr>`;
+  html+='</table>';
+  /* 장비 목록 */
+  var devs=data.devices||[];
+  html+='<div class="fw-semibold small mb-1">설치 장비 목록</div>';
+  html+='<table class="table table-sm table-bordered small">';
+  html+='<thead><tr class="table-light">';
+  html+='<th style="width:4%">No.</th><th>모델명/제조사</th><th>제조번호(S/N)</th>';
+  html+='<th>장비ID</th><th>망</th><th>설치위치</th><th>교체전 장비</th>';
+  html+='</tr></thead><tbody>';
+  if(devs.length>0){
+    devs.forEach(function(dv,i){
+      var loc=[dv.building,dv.floor,dv.location].filter(Boolean).join(' ');
+      html+=`<tr>
+        <td class="text-center">${i+1}</td>
+        <td>${escH(dv.model_name||'—')}<br><small class="text-muted">${escH(dv.manufacturer||'')}</small></td>
+        <td style="font-family:monospace">${escH(dv.serial_number||'—')}</td>
+        <td>${escH(dv.asset_id||'—')}</td>
+        <td>${escH(dv.network_type||'—')}</td>
+        <td>${escH(loc||'—')}</td>
+        <td>${escH((dv.prev_model||'—')+' / '+(dv.prev_manufacturer||'—'))}</td>
+      </tr>`;
+    });
+  } else {
+    html+='<tr><td colspan="7" class="text-center text-muted small py-2">장비 정보 없음</td></tr>';
+  }
+  html+='</tbody></table>';
+  /* 전자서명 */
+  var sigItl=data.signature_itl||{}, sigSch=data.signature_school||{};
+  if(sigItl.name||sigSch.name){
+    html+='<div class="fw-semibold small mb-1 mt-1">전자서명</div>';
+    html+='<div class="d-flex gap-3 flex-wrap">';
+    [[sigItl,'세종아이티엘'],[sigSch,report.school_name||'학교']].forEach(function(pair){
+      var sig=pair[0], orgDef=pair[1];
+      if(!sig.name) return;
+      html+='<div class="border rounded p-2 text-center" style="min-width:110px">';
+      html+=`<div class="text-muted" style="font-size:.72rem">${escH(sig.org||orgDef)}</div>`;
+      if(sig.data) html+=`<img src="${sig.data}" style="max-width:90px;max-height:42px;display:block;margin:3px auto;" alt="서명">`;
+      html+=`<div class="small fw-semibold">${escH(sig.name)}</div>`;
+      if(sig.phone) html+=`<div style="font-size:.7rem;color:#888">${escH(sig.phone)}</div>`;
+      html+='</div>';
+    });
+    html+='</div>';
+  }
+  /* 비고 */
+  if(data.notes) html+=`<div class="mt-2 small"><span class="fw-semibold">비고:</span> ${escH(data.notes)}</div>`;
+  return html;
+}
+
+function _viewCableInstall(data, report){
+  var html='';
+  /* 기본 정보 */
+  html+='<table class="table table-sm table-bordered small mb-2">';
+  html+=`<tr><th class="text-muted" style="width:25%">학교</th><td>${escH(report.school_name||'')}</td>`;
+  html+=`<th class="text-muted" style="width:25%">작성자</th><td>${escH(report.created_by_name||'')}</td></tr>`;
+  html+=`<tr><th class="text-muted">공사일</th><td>${escH(data.work_date||'—')}</td>`;
+  html+=`<th class="text-muted">포설 항목 수</th><td><strong>${escH(String((data.cables||[]).length))}건</strong></td></tr>`;
+  html+='</table>';
+  /* 포설 목록 */
+  var cables=data.cables||[];
+  if(cables.length>0){
+    html+='<div class="fw-semibold small mb-1">포설 목록</div>';
+    html+='<table class="table table-sm table-bordered small">';
+    html+='<thead><tr class="table-light">';
+    html+='<th>No.</th><th>작업내용</th><th>케이블</th><th>길이(m)</th><th>시점</th><th>종점</th>';
+    html+='</tr></thead><tbody>';
+    cables.forEach(function(c,i){
+      var sp=c.start_point||{}, ep=c.end_point||{};
+      var spLoc=[sp.building,sp.floor,sp.location].filter(Boolean).join(' ');
+      var epLoc=[ep.building,ep.floor,ep.location].filter(Boolean).join(' ');
+      var spTxt=(sp.model_name||'—')+(spLoc?' '+spLoc:'')+(sp.port?' Port:'+sp.port:'');
+      var epTxt=(ep.model_name||'—')+(epLoc?' '+epLoc:'')+(ep.port?' Port:'+ep.port:'');
+      var wtTxt=(c.work_types&&c.work_types.length>0)?c.work_types.join(', '):'—';
+      html+=`<tr>
+        <td class="text-center">${i+1}</td>
+        <td>${escH(wtTxt)}</td>
+        <td>${escH(c.cable_type||'—')}</td>
+        <td class="text-center">${escH(c.cable_length||'—')}</td>
+        <td>${escH(spTxt)}</td>
+        <td>${escH(epTxt)}</td>
+      </tr>`;
+    });
+    html+='</tbody></table>';
+  }
+  /* 전자서명 */
+  var sigItl=data.signature_itl||{}, sigSch=data.signature_school||{};
+  if(sigItl.name||sigSch.name){
+    html+='<div class="fw-semibold small mb-1 mt-1">전자서명</div>';
+    html+='<div class="d-flex gap-3 flex-wrap">';
+    [[sigItl,'세종아이티엘'],[sigSch,report.school_name||'학교']].forEach(function(pair){
+      var sig=pair[0], orgDef=pair[1];
+      if(!sig.name) return;
+      html+='<div class="border rounded p-2 text-center" style="min-width:110px">';
+      html+=`<div class="text-muted" style="font-size:.72rem">${escH(sig.org||orgDef)}</div>`;
+      if(sig.data) html+=`<img src="${sig.data}" style="max-width:90px;max-height:42px;display:block;margin:3px auto;" alt="서명">`;
+      html+=`<div class="small fw-semibold">${escH(sig.name)}</div>`;
+      if(sig.phone) html+=`<div style="font-size:.7rem;color:#888">${escH(sig.phone)}</div>`;
+      html+='</div>';
+    });
+    html+='</div>';
+  }
+  /* 비고 */
+  if(data.notes) html+=`<div class="mt-2 small"><span class="fw-semibold">비고:</span> ${escH(data.notes)}</div>`;
+  return html;
+}
+
+/* draft 보고서를 작성 폼에 불러오기 */
+async function loadReportToForm(idOrData){
+  if(!selSchool){ alert('학교를 먼저 선택하세요.'); return; }
+  /* ID 전달 시 API 조회 */
+  var d = (typeof idOrData==='object' && idOrData.data) ? idOrData : null;
+  if(!d){
+    try{
+      var res=await fetch(API_BASE+'/reports/reports/'+idOrData+'/',{headers:{'X-CSRFToken':CSRF_TOKEN}});
+      d=await res.json();
+    }catch(e){ alert('보고서 조회 실패'); return; }
+  }
+  var tmplId=typeof d.template==='object'?d.template.id:d.template;
+  var tmplType=d.template_type||'';
+  var tmpl=TEMPLATES.find(t=>t.id===tmplId);
+  if(!tmpl){ alert('템플릿을 찾을 수 없습니다.'); return; }
+  selTemplate=tmpl;
+  /* 수정 모드 설정 */
+  wmEditMode=true;
+  wmEditReportId=d.id;
+  /* 폼 열기 (기존 openWriteModal 로직 재사용) */
+  await openWriteModal(tmplId);
+  /* 수정 모드 재설정 (openWriteModal이 초기화하므로 복원) */
+  wmEditMode=true;
+  wmEditReportId=d.id;
+  /* 완료 버튼 텍스트 변경 */
+  var btnC=document.getElementById('wm-btn-complete');
+  if(btnC) btnC.innerHTML='<i class="bi bi-arrow-repeat me-1"></i>수정 · PDF 재생성';
+  /* 폼 DOM이 렌더된 뒤 기존 데이터 복원 */
+  setTimeout(function(){
+    var data=d.data||{};
+    if(tmplType==='switch_install'||tmpl.report_type==='switch_install'){
+      /* 기본 필드 */
+      var dEl=document.getElementById('f-install_date');
+      if(dEl&&data.install_date) dEl.value=data.install_date;
+      var qty=parseInt(data.quantity)||1;
+      var qEl=document.getElementById('f-quantity');
+      if(qEl){ qEl.value=qty; renderSwitchDeviceRows(qty); }
+      var nEl=document.getElementById('f-notes');
+      if(nEl&&data.notes) nEl.value=data.notes;
+      /* 장비별 필드 */
+      var devs=data.devices||[];
+      setTimeout(function(){
+        devs.forEach(function(dv,i){
+          function setVal(elId,val){ var el=document.getElementById(elId); if(el&&val!=null) el.value=val; }
+          function setSelOrInp(selId,inpId,val){
+            if(!val) return;
+            var sel=document.getElementById(selId), inp=document.getElementById(inpId);
+            if(sel){
+              /* 옵션에 없으면 동적으로 추가 후 선택 */
+              sel.value=val;
+              if(sel.value!==val){
+                var newOpt=document.createElement('option');
+                newOpt.value=val; newOpt.textContent=val;
+                sel.insertBefore(newOpt, sel.querySelector('option[value="__other__"]'));
+                sel.value=val;
+              }
+              if(sel.value===val){
+                /* select 보이게, input 숨김 */
+                sel.classList.remove('d-none');
+                if(inp) inp.classList.add('d-none');
+              } else {
+                /* 최후 폴백: text input 직접 입력 */
+                sel.value='__other__';
+                if(inp){ inp.classList.remove('d-none'); inp.value=val; }
+              }
+            } else if(inp){ inp.value=val; }
+          }
+          /* 기본 텍스트 필드 */
+          setVal('dev-'+i+'-serial',       dv.serial_number);
+          setVal('dev-'+i+'-model',        dv.model_name);
+          setVal('dev-'+i+'-manufacturer', dv.manufacturer);
+          setVal('dev-'+i+'-assetid',      dv.asset_id);
+          setVal('dev-'+i+'-prev-mfr',     dv.prev_manufacturer);
+          /* 망구분 select */
+          var nEl=document.getElementById('dev-'+i+'-nettype');
+          if(nEl&&dv.network_type) nEl.value=dv.network_type;
+          /* ① 교체전 모델명 — prev-model-sel SELECT 우선 */
+          var pmSel=document.getElementById('dev-'+i+'-prev-model-sel');
+          var pmInp=document.getElementById('dev-'+i+'-prev-model');
+          if(pmSel&&dv.prev_model){
+            pmSel.value=dv.prev_model;
+            if(pmSel.value===dv.prev_model){
+              if(pmInp) pmInp.classList.add('d-none');
+            } else {
+              pmSel.value='__other__';
+              if(pmInp){ pmInp.classList.remove('d-none'); pmInp.value=dv.prev_model; }
+            }
+          } else if(pmInp&&dv.prev_model){ pmInp.value=dv.prev_model; }
+          /* ③④⑤ 건물·층·설치위치 — SELECT 우선, 없으면 직접입력 */
+          setSelOrInp('dev-'+i+'-building-sel','dev-'+i+'-building', dv.building);
+          setSelOrInp('dev-'+i+'-floor-sel',   'dev-'+i+'-floor',    dv.floor);
+          setSelOrInp('dev-'+i+'-location-sel','dev-'+i+'-location', dv.location);
+          /* 사진 ID 복원 + preview 비동기 조회 */
+          if(switchDevPhotos[i]){
+            switchDevPhotos[i].before=dv.photo_before_id||null;
+            switchDevPhotos[i].after =dv.photo_after_id||null;
+            switchDevPhotos[i].serial=dv.photo_serial_id||null;
+          }
+          _restoreDevPhotoPreview(i, dv);
+        });
+        /* 전자서명 — 캔버스는 Step2에서 생성되므로 전역에 보관 후 Step2 렌더 시 복원 */
+        var si=data.signature_itl||{}, ss=data.signature_school||{};
+        wmRestoreSigs={itl:si, sch:ss};
+      }, 150);
+    }
+  }, 100);
+}
+
+/* ────────────────────────────────────────────────
+   버전 이력 복원
+──────────────────────────────────────────────── */
+function _restoreVersion(reportId, versionNum){
+  var cached=window._viewReportCache;
+  if(!cached||cached.id!==reportId){ alert('보고서 정보를 다시 불러오세요.'); return; }
+  var ver=cached.versions.find(function(v){ return v.version===versionNum; });
+  if(!ver){ alert('버전을 찾을 수 없습니다.'); return; }
+  if(!confirm('v'+versionNum+' ('+(ver.saved_at||'').slice(0,16)+') 버전을 불러와 수정 폼을 엽니다.\n계속하시겠습니까?')) return;
+  var modReport=Object.assign({},cached,{data:ver.data});
+  bootstrap.Modal.getInstance(document.getElementById('viewModal')).hide();
+  setTimeout(function(){ loadReportToForm(modReport); }, 350);
+}
+
+/* ────────────────────────────────────────────────
+   수정 모드 복원 헬퍼
+──────────────────────────────────────────────── */
+/* 사진 ID → 썸네일 미리보기 복원 */
+async function _restoreDevPhotoPreview(i, dv){
+  var stages=[
+    {stage:'before', id:dv.photo_before_id},
+    {stage:'after',  id:dv.photo_after_id},
+    {stage:'serial', id:dv.photo_serial_id}
+  ];
+  for(var s=0;s<stages.length;s++){
+    var st=stages[s];
+    if(!st.id) continue;
+    try{
+      var res=await fetch(API_BASE+'/photos/photos/'+st.id+'/',{headers:{'X-CSRFToken':CSRF_TOKEN}});
+      if(!res.ok) continue;
+      var pd=await res.json();
+      var url=pd.image_url||pd.image||'';
+      try{ if(url.startsWith('http')) url=new URL(url).pathname; }catch(e){}
+      var previewEl=document.getElementById('dev-'+i+'-photo-'+st.stage+'-preview');
+      if(previewEl&&url){
+        previewEl.innerHTML='<img src="'+escH(url)+'" style="max-width:100px;max-height:70px;border-radius:4px;" alt="사진">'
+          +'<div class="text-info small mt-1"><i class="bi bi-check-circle me-1"></i>기존 사진</div>';
+      }
+    }catch(e){ console.warn('사진 미리보기 복원 실패', st.id, e); }
+  }
+}
+
+/* 서명 base64 → canvas 복원 */
+function _restoreSigCanvas(side, base64Data){
+  var canvas=document.getElementById('sig-'+side+'-canvas');
+  if(!canvas||!base64Data) return;
+  var ctx=canvas.getContext('2d');
+  var img=new Image();
+  img.onload=function(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+  };
+  img.src=base64Data;
+}
+
+/* ────────────────────────────────────────────────
+   유틸
+──────────────────────────────────────────────── */
+function escH(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function downloadViewPdf(){} /* unused — replaced by dlBtn.onclick inline */
+
+/* ════════════════════════════════════════════
+   보고서 데이터 내보내기
+   ════════════════════════════════════════════ */
+function _populateExportSel(){
+  var sel=document.getElementById('export-tmpl-sel');
+  if(!sel) return;
+  var prev=sel.value;
+  sel.innerHTML='<option value="">-- 서류 선택 --</option>';
+  TEMPLATES.forEach(function(t){
+    sel.innerHTML+='<option value="'+escH(String(t.id))+'">'+escH(t.name)+'</option>';
+  });
+  if(prev) sel.value=prev;
+}
+
+async function exportReport(fmt){
+  var sel=document.getElementById('export-tmpl-sel');
+  var tmplId=sel?sel.value:'';
+  if(!tmplId){ alert('서류 종류를 선택하세요.'); return; }
+  var from=(document.getElementById('export-date-from')||{}).value||'';
+  var to=(document.getElementById('export-date-to')||{}).value||'';
+  var url=API_BASE+'/reports/reports/export/?template_id='+tmplId+'&fmt='+fmt;
+  if(from) url+='&date_from='+from;
+  if(to)   url+='&date_to='+to;
+  var hint=document.getElementById('export-hint');
+  if(hint) hint.innerHTML='<span class="spinner-border spinner-border-sm me-1"></span>다운로드 준비 중...';
+  try{
+    var res=await fetch(url,{headers:{'X-CSRFToken':CSRF_TOKEN}});
+    if(!res.ok){
+      var ct=res.headers.get('Content-Type')||'';
+      var msg='오류';
+      if(ct.indexOf('json')>=0){ var e=await res.json(); msg=e.error||msg; }
+      throw new Error(msg);
+    }
+    var blob=await res.blob();
+    var cd=res.headers.get('Content-Disposition')||'';
+    var fnMatch=cd.match(/filename\*=UTF-8''([^;\n]+)/i)||cd.match(/filename="?([^";\n]+)"?/);
+    var filename=fnMatch?decodeURIComponent(fnMatch[1]):(fmt==='csv'?'보고서.csv':'보고서.xlsx');
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }catch(e){
+    alert('내보내기 실패: '+e.message);
+  }finally{
+    if(hint) hint.innerHTML='<i class="bi bi-info-circle me-1"></i>서류 종류를 선택하고 Excel 또는 CSV 버튼을 누르세요. 날짜를 지정하면 해당 기간만 추출됩니다.';
+  }
+}
+</script>
+{% endblock %}

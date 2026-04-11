@@ -1,0 +1,134 @@
+name: NPMS Deploy — Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # ── 1단계: 테스트 ────────────────────────────────────────
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: npms_test
+          POSTGRES_USER: npms
+          POSTGRES_PASSWORD: testpass
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libpq-dev gcc \
+            libcairo2 libpango-1.0-0 libpangocairo-1.0-0 \
+            libgdk-pixbuf-2.0-0 libffi-dev shared-mime-info
+
+      - name: Install Python dependencies
+        run: pip install -r src/requirements-dev.txt
+
+      - name: Create test .env
+        run: |
+          cat > .env <<ENVEOF
+          SECRET_KEY=ci-test-secret-key
+          DEBUG=False
+          DB_NAME=npms_test
+          DB_USER=npms
+          DB_PASSWORD=testpass
+          DB_HOST=localhost
+          DB_PORT=5432
+          REDIS_URL=redis://localhost:6379/0
+          CELERY_BROKER_URL=redis://localhost:6379/1
+          CELERY_RESULT_BACKEND=redis://localhost:6379/2
+          NAS_ROOT=/tmp/nas
+          MEDIA_ROOT=/tmp/nas/media/npms
+          AI_SERVER_URL=http://localhost:8001
+          SMS_ENABLED=False
+          ANTHROPIC_API_KEY=
+          VWORLD_API_KEY=
+          SITE_URL=http://localhost/npms
+          ENVEOF
+
+      - name: Run migrations
+        working-directory: src
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+        run: python manage.py migrate --noinput
+
+      - name: Django system check
+        working-directory: src
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+        run: python manage.py check
+
+      - name: Run tests
+        working-directory: src
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+        run: python manage.py test --verbosity=1 --noinput
+
+  # ── 2단계: 운용서버 배포 ─────────────────────────────────
+  deploy:
+    name: Deploy to Production
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd /home/pms/seoul_npms
+
+            echo "=== [1/5] 소스 업데이트 ==="
+            git pull origin main
+
+            echo "=== [2/5] DB 마이그레이션 ==="
+            docker exec npms_web python manage.py migrate --noinput
+
+            echo "=== [3/5] 정적 파일 수집 ==="
+            docker exec npms_web python manage.py collectstatic --noinput
+
+            echo "=== [4/5] 서비스 재시작 ==="
+            docker compose restart npms_web npms_celery_worker npms_celery_beat
+
+            echo "=== [5/5] 헬스체크 ==="
+            sleep 5
+            curl -sf http://localhost:8001/health/ || (echo "헬스체크 실패!" && exit 1)
+
+            echo "=== 배포 완료 ==="
+
+      - name: 배포 실패 알림
+        if: failure()
+        run: |
+          echo "::error::배포 실패 — SSH 접속 후 확인 필요"
+          echo "롤백: bash /home/pms/seoul_npms/src/infra/rollback.sh HEAD~1"

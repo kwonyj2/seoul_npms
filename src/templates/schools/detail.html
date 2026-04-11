@@ -1,0 +1,581 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ school.name }}{% endblock %}
+{% block page_title %}<i class="bi bi-building me-2"></i>{{ school.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+  <!-- 브레드크럼 -->
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-0 small">
+        <li class="breadcrumb-item"><a href="{% url 'school-list' %}">학교 목록</a></li>
+        <li class="breadcrumb-item active">{{ school.name }}</li>
+      </ol>
+    </nav>
+    <a href="/npms/incidents/create/?school={{ school.id }}" class="btn btn-sm btn-warning">
+      <i class="bi bi-plus-circle me-1"></i>장애 접수
+    </a>
+  </div>
+
+  <div class="row g-2">
+
+    <!-- ══════════ 좌측 컬럼 ══════════ -->
+    <div class="col-lg-4">
+
+      <!-- 기본 정보 -->
+      <div class="card border-0 shadow-sm mb-2">
+        <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center">
+          <span class="fw-semibold small"><i class="bi bi-info-circle me-1"></i>기본 정보</span>
+          <span class="badge {% if school.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+            {% if school.is_active %}활성{% else %}비활성{% endif %}
+          </span>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <tbody>
+              <tr><th class="ps-3 text-muted fw-normal" style="width:38%">교육지원청</th><td>{{ school.support_center.name }}</td></tr>
+              <tr><th class="ps-3 text-muted fw-normal">학제</th><td>{{ school.school_type.name }}</td></tr>
+              <tr><th class="ps-3 text-muted fw-normal">학교코드</th><td>{{ school.code|default:'-' }}</td></tr>
+              <tr><th class="ps-3 text-muted fw-normal">주소</th><td><small>{{ school.address }}</small></td></tr>
+              <tr><th class="ps-3 text-muted fw-normal">대표전화</th><td>{{ school.phone|default:'-' }}</td></tr>
+              <tr><th class="ps-3 text-muted fw-normal">팩스</th><td>{{ school.fax|default:'-' }}</td></tr>
+              <tr><th class="ps-3 text-muted fw-normal">홈페이지</th>
+                <td>{% if school.homepage %}<a href="{{ school.homepage }}" target="_blank" class="text-truncate d-block" style="max-width:180px;font-size:.8rem;">{{ school.homepage }}</a>{% else %}-{% endif %}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 담당자 -->
+      <div class="card border-0 shadow-sm mb-2">
+        <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center">
+          <span class="fw-semibold small"><i class="bi bi-person-lines-fill me-1"></i>담당자</span>
+          <button class="btn btn-xs btn-outline-primary" onclick="showContactModal()"><i class="bi bi-plus"></i></button>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0">
+            <thead class="table-light"><tr><th>이름</th><th>직책</th><th>연락처</th><th>이메일</th></tr></thead>
+            <tbody id="contact-tbody">
+              <tr><td colspan="4" class="text-center text-muted py-2 small">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 최근 장애 이력 -->
+      <div class="card border-0 shadow-sm mb-2">
+        <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center">
+          <span class="fw-semibold small"><i class="bi bi-exclamation-triangle me-1"></i>최근 장애 이력</span>
+          <small class="text-muted" id="incident-count"></small>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr><th>접수번호</th><th>분류</th><th>상태</th><th>우선</th><th>접수일</th></tr>
+            </thead>
+            <tbody id="incident-tbody">
+              <tr><td colspan="5" class="text-center text-muted py-2 small">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer py-1 d-flex justify-content-between align-items-center">
+          <small class="text-muted" id="inc-page-info"></small>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" id="inc-prev" onclick="changeIncPage(-1)" disabled><i class="bi bi-chevron-left"></i></button>
+            <button class="btn btn-outline-secondary" id="inc-next" onclick="changeIncPage(1)"><i class="bi bi-chevron-right"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 점검 이력 -->
+      <div class="card border-0 shadow-sm mb-2">
+        <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center">
+          <span class="fw-semibold small"><i class="bi bi-clipboard2-check me-1"></i>점검 이력</span>
+          <small class="text-muted" id="insp-count"></small>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0" style="font-size:.78rem;">
+            <thead class="table-light">
+              <tr><th>계획명</th><th>유형</th><th>점검일</th><th>담당자</th><th>상태</th></tr>
+            </thead>
+            <tbody id="insp-tbody">
+              <tr><td colspan="5" class="text-center text-muted py-2 small">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 네트워크 문서 (카드형) -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-header py-2 bg-white border-bottom">
+          <span class="fw-semibold small"><i class="bi bi-folder2-open me-1"></i>네트워크 문서</span>
+        </div>
+        <div class="card-body p-2" id="network-doc-list">
+          <div class="text-center text-muted py-2 small">로딩 중...</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ══════════ 우측 컬럼 ══════════ -->
+    <div class="col-lg-8">
+
+      <!-- 위치 지도 -->
+      {% if school.lat and school.lng %}
+      <div class="card border-0 shadow-sm mb-2">
+        <div class="card-header py-2 bg-white border-bottom">
+          <span class="fw-semibold small"><i class="bi bi-geo-alt me-1"></i>위치</span>
+        </div>
+        <div id="school-map" style="height:200px;"></div>
+      </div>
+      {% endif %}
+
+      <!-- 네트워크 장비 목록 -->
+      <div class="card border-0 shadow-sm mb-2">
+        <div class="card-header py-2 bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
+          <span class="fw-semibold small me-1"><i class="bi bi-hdd-network me-1"></i>네트워크 장비</span>
+          <div class="btn-group btn-group-sm" style="font-size:.75rem;">
+            <button class="btn btn-primary"          onclick="setEquipFilter('')"       id="ebtn-all" style="font-size:.75rem;padding:.1rem .45rem;">전체</button>
+            <button class="btn btn-outline-primary"  onclick="setEquipFilter('스위치')" id="ebtn-sw"  style="font-size:.75rem;padding:.1rem .45rem;">스위치</button>
+            <button class="btn btn-outline-info"     onclick="setEquipFilter('PoE')"    id="ebtn-poe" style="font-size:.75rem;padding:.1rem .45rem;">PoE</button>
+            <button class="btn btn-outline-success"  onclick="setEquipFilter('AP')"     id="ebtn-ap"  style="font-size:.75rem;padding:.1rem .45rem;">AP</button>
+          </div>
+          <span class="badge bg-secondary ms-auto" id="equip-count">-</span>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0" style="font-size:.78rem;min-width:700px;">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th style="width:70px;">구분</th>
+                <th style="width:110px;">모델명</th>
+                <th style="width:80px;">제조사</th>
+                <th style="width:130px;">설치장소</th>
+                <th style="width:55px;">장비 ID</th>
+                <th style="width:65px;">망구분</th>
+                <th style="width:45px;">속도</th>
+                <th style="width:35px;">계위</th>
+                <th style="width:55px;">국산/외산</th>
+                <th style="width:45px;">MGMT</th>
+                <th style="width:50px;">도입년</th>
+              </tr>
+            </thead>
+            <tbody id="equip-tbody">
+              <tr><td colspan="11" class="text-center text-muted py-3">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer py-1 d-flex justify-content-between align-items-center">
+          <small class="text-muted" id="equip-page-info">-</small>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" id="equip-prev" onclick="changeEquipPage(-1)" disabled><i class="bi bi-chevron-left"></i></button>
+            <button class="btn btn-outline-secondary" id="equip-next" onclick="changeEquipPage(1)"  disabled><i class="bi bi-chevron-right"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 네트워크 정보 -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-header py-2 bg-white border-bottom">
+          <span class="fw-semibold small"><i class="bi bi-hdd-network me-1"></i>네트워크 정보</span>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0" id="network-info">
+            <tbody>
+              <tr><td colspan="2" class="text-center text-muted py-3 small">로딩 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- 담당자 추가 모달 -->
+<div class="modal fade" id="contactModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2"><h6 class="modal-title">담당자 추가</h6><button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-2"><input type="text" id="c-name" class="form-control form-control-sm" placeholder="이름 *"></div>
+        <div class="mb-2"><input type="text" id="c-position" class="form-control form-control-sm" placeholder="직책"></div>
+        <div class="mb-2"><input type="text" id="c-phone" class="form-control form-control-sm" placeholder="연락처 *"></div>
+        <div class="mb-2"><input type="email" id="c-email" class="form-control form-control-sm" placeholder="이메일"></div>
+        <div class="form-check"><input type="checkbox" class="form-check-input" id="c-primary"><label class="form-check-label small" for="c-primary">주담당자</label></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-primary" onclick="saveContact()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const SCHOOL_ID = {{ school.id }};
+const STATUS_BADGE = {
+  received:   '<span class="badge bg-secondary" style="font-size:.65rem;">접수</span>',
+  assigned:   '<span class="badge bg-info" style="font-size:.65rem;">배정</span>',
+  moving:     '<span class="badge bg-primary" style="font-size:.65rem;">이동</span>',
+  arrived:    '<span class="badge bg-primary" style="font-size:.65rem;">도착</span>',
+  processing: '<span class="badge bg-warning text-dark" style="font-size:.65rem;">처리중</span>',
+  completed:  '<span class="badge bg-success" style="font-size:.65rem;">완료</span>',
+};
+const PRI_BADGE = {
+  critical: '<span class="badge bg-danger" style="font-size:.65rem;">긴급</span>',
+  high:     '<span class="badge bg-warning text-dark" style="font-size:.65rem;">높음</span>',
+  medium:   '<span class="badge bg-info" style="font-size:.65rem;">보통</span>',
+  low:      '<span class="badge bg-secondary" style="font-size:.65rem;">낮음</span>',
+};
+
+let incPage = 1, incTotal = 1;
+
+// ── 네트워크 정보 ──────────────────────────────────────────────────────────
+async function loadNetworkInfo() {
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${SCHOOL_ID}/`);
+    const n = data.network;
+    const tbody = document.querySelector('#network-info tbody');
+    if (!n) { tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted small">정보 없음</td></tr>'; return; }
+    tbody.innerHTML = `
+      <tr><th class="ps-3 text-muted fw-normal" style="width:38%">IP 대역</th><td>${n.ip_range||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">게이트웨이</th><td>${n.gateway||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">주 DNS</th><td>${n.dns_primary||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">통신사</th><td>${n.isp||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">회선속도</th><td>${n.bandwidth||'-'}</td></tr>
+      <tr><th class="ps-3 text-muted fw-normal">SNMP Community</th><td>${n.snmp_community||'-'}</td></tr>
+    `;
+  } catch(e) {}
+}
+
+// ── 담당자 ─────────────────────────────────────────────────────────────────
+async function loadContacts() {
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${SCHOOL_ID}/all_contacts/`);
+    const tbody = document.getElementById('contact-tbody');
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted small">담당자 없음</td></tr>'; return; }
+    tbody.innerHTML = data.map(c => {
+      const srcBadge = c.source === 'incident'
+        ? '<span class="badge bg-warning text-dark ms-1" style="font-size:.6rem;">장애신고</span>'
+        : (c.is_primary ? '<span class="badge bg-primary ms-1" style="font-size:.6rem;">주</span>' : '');
+      return `<tr>
+        <td><small>${c.name}${srcBadge}</small></td>
+        <td><small class="text-muted">${c.position||'-'}</small></td>
+        <td><small>${c.phone||'-'}</small></td>
+        <td><small class="text-muted">${c.email||'-'}</small></td>
+      </tr>`;
+    }).join('');
+  } catch(e) {}
+}
+
+// ── 장비 목록 ──────────────────────────────────────────────────────────────
+let _equipAll = [], _equipFilter = '', _equipPage = 1;
+const EQUIP_PAGE_SIZE = 10;
+const CAT_COLOR = {
+  '스위치': 'bg-primary', 'PoE': 'bg-info text-dark', 'AP': 'bg-success',
+  '무선': 'bg-success', '라우터': 'bg-warning text-dark', '방화벽': 'bg-danger',
+};
+function catBadge(cat) {
+  const color = Object.entries(CAT_COLOR).find(([k]) => cat.includes(k))?.[1] || 'bg-secondary';
+  return `<span class="badge ${color}" style="font-size:.65rem;">${cat}</span>`;
+}
+
+function setEquipFilter(keyword) {
+  _equipFilter = keyword;
+  _equipPage   = 1;
+  // 버튼 활성화
+  document.querySelectorAll('[id^="ebtn-"]').forEach(b => {
+    b.className = b.className.replace(/\bbtn-(primary|info|success|outline-\w+)\b/g, '').trim();
+  });
+  const map = {'': ['ebtn-all','btn-primary'], '스위치': ['ebtn-sw','btn-primary'],
+               'PoE': ['ebtn-poe','btn-info'], 'AP': ['ebtn-ap','btn-success']};
+  const [id, cls] = map[keyword] || ['ebtn-all','btn-primary'];
+  const btn = document.getElementById(id);
+  if (btn) btn.classList.add(cls);
+  // outline으로 나머지
+  ['ebtn-all','ebtn-sw','ebtn-poe','ebtn-ap'].filter(x=>x!==id).forEach(x=>{
+    const b = document.getElementById(x);
+    if (b) {
+      const outline = x==='ebtn-poe' ? 'btn-outline-info'
+                    : x==='ebtn-ap'  ? 'btn-outline-success' : 'btn-outline-primary';
+      b.classList.add(outline);
+    }
+  });
+  renderEquipTable();
+}
+
+function renderEquipTable() {
+  const filtered = _equipFilter
+    ? _equipAll.filter(d => d.category && d.category.includes(_equipFilter))
+    : _equipAll;
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / EQUIP_PAGE_SIZE));
+  _equipPage = Math.min(_equipPage, totalPages);
+  const start = (_equipPage - 1) * EQUIP_PAGE_SIZE;
+  const rows  = filtered.slice(start, start + EQUIP_PAGE_SIZE);
+
+  document.getElementById('equip-count').textContent = total + '대';
+  document.getElementById('equip-page-info').textContent = `${_equipPage} / ${totalPages}`;
+  document.getElementById('equip-prev').disabled = _equipPage <= 1;
+  document.getElementById('equip-next').disabled = _equipPage >= totalPages;
+
+  const tbody = document.getElementById('equip-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-3 small">장비 없음</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(d => `<tr>
+    <td>${catBadge(d.category)}</td>
+    <td class="text-truncate" style="max-width:110px;" title="${d.model_name||''}">${d.model_name||'-'}</td>
+    <td class="text-truncate" style="max-width:80px;">${d.manufacturer||'-'}</td>
+    <td class="text-truncate" style="max-width:130px;" title="${d.install_location||''}">${d.install_location||'-'}</td>
+    <td><small class="text-muted">${d.device_id||'-'}</small></td>
+    <td><small>${d.network_type||'-'}</small></td>
+    <td><small>${d.speed||'-'}</small></td>
+    <td class="text-center"><small>${d.tier||'-'}</small></td>
+    <td class="text-center"><small>${d.origin||'-'}</small></td>
+    <td class="text-center"><span class="${d.mgmt==='Y'?'text-success':'text-muted'}">${d.mgmt||'-'}</span></td>
+    <td class="text-center"><small>${d.install_year||'-'}</small></td>
+  </tr>`).join('');
+}
+
+function changeEquipPage(delta) {
+  const filtered = _equipFilter ? _equipAll.filter(d=>d.category&&d.category.includes(_equipFilter)) : _equipAll;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / EQUIP_PAGE_SIZE));
+  _equipPage = Math.max(1, Math.min(totalPages, _equipPage + delta));
+  renderEquipTable();
+}
+
+async function loadEquipment() {
+  try {
+    _equipAll = await apiGet(`${API_BASE}/schools/schools/${SCHOOL_ID}/equipment/`);
+    setEquipFilter('');
+  } catch(e) {
+    document.getElementById('equip-tbody').innerHTML =
+      '<tr><td colspan="11" class="text-center text-danger py-3 small">로드 실패</td></tr>';
+  }
+}
+
+// ── 장애 이력 ──────────────────────────────────────────────────────────────
+async function loadIncidents() {
+  try {
+    const data = await apiGet(`${API_BASE}/incidents/incidents/`, { school: SCHOOL_ID, page: incPage, page_size: 8 });
+    incTotal = Math.ceil((data.count||0) / 8);
+    document.getElementById('incident-count').textContent = `총 ${data.count||0}건`;
+    document.getElementById('inc-page-info').textContent  = `${incPage} / ${incTotal||1}`;
+    document.getElementById('inc-prev').disabled = incPage <= 1;
+    document.getElementById('inc-next').disabled = incPage >= incTotal;
+
+    const tbody = document.getElementById('incident-tbody');
+    const items = data.results || [];
+    if (!items.length) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-2 small">장애 이력 없음</td></tr>'; return; }
+    tbody.innerHTML = items.map(i => `
+      <tr style="cursor:pointer;" onclick="location.href='/npms/incidents/${i.id}/'">
+        <td><small class="text-primary">${i.incident_number}</small></td>
+        <td><small>${i.category_name||'-'}</small></td>
+        <td>${STATUS_BADGE[i.status]||i.status}</td>
+        <td>${PRI_BADGE[i.priority]||i.priority}</td>
+        <td><small class="text-muted">${formatDate(i.received_at||i.created_at)}</small></td>
+      </tr>`).join('');
+  } catch(e) {}
+}
+
+function changeIncPage(d) { incPage = Math.max(1, Math.min(incTotal, incPage+d)); loadIncidents(); }
+
+// ── 담당자 저장 ────────────────────────────────────────────────────────────
+async function saveContact() {
+  const body = {
+    school: SCHOOL_ID,
+    name:       document.getElementById('c-name').value,
+    position:   document.getElementById('c-position').value,
+    phone:      document.getElementById('c-phone').value,
+    email:      document.getElementById('c-email').value,
+    is_primary: document.getElementById('c-primary').checked,
+  };
+  if (!body.name || !body.phone) { showToast('이름과 연락처는 필수입니다', 'warning'); return; }
+  try {
+    await apiPost(`${API_BASE}/schools/contacts/`, body);
+    bootstrap.Modal.getInstance(document.getElementById('contactModal')).hide();
+    showToast('담당자가 추가되었습니다', 'success');
+    loadContacts();
+  } catch(e) { showToast('저장 실패', 'error'); }
+}
+
+function showContactModal() {
+  ['c-name','c-position','c-phone','c-email'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('c-primary').checked = false;
+  new bootstrap.Modal(document.getElementById('contactModal')).show();
+}
+
+// ── 네트워크 문서 (카드형) ─────────────────────────────────────────────────
+const NETDOC_CATEGORIES = [
+  { key: '구성도',  label: '구성도',  accept: '.pptx,.ppt',      icon: 'bi-file-earmark-ppt',   iconColor: 'text-danger',  inline: false },
+  { key: '선번장',  label: '선번장',  accept: '.xlsx,.xlsm',     icon: 'bi-file-earmark-excel',  iconColor: 'text-success', inline: false },
+  { key: '랙실장도',label: '랙실장도',accept: '.xlsx,.xlsm',     icon: 'bi-file-earmark-excel',  iconColor: 'text-success', inline: false },
+  { key: '건물정보',label: '건물정보',accept: '.pdf',             icon: 'bi-file-earmark-pdf',    iconColor: 'text-danger',  inline: true  },
+  { key: '전산실랙',label: '전산실랙',accept: '.jpg,.jpeg,.png',  icon: 'bi-file-earmark-image',  iconColor: 'text-primary', inline: true  },
+];
+
+async function loadNetworkDocs() {
+  const box = document.getElementById('network-doc-list');
+  try {
+    const data = await apiGet(`${API_BASE}/schools/${SCHOOL_ID}/network-docs/`);
+    const docs = data.docs || {};
+
+    const cards = [];
+    for (const cat of NETDOC_CATEGORIES) {
+      const files = docs[cat.key] || [];
+      const inputId = `netdoc-input-${cat.key}`;
+
+      if (cat.key === '전산실랙' && files.length > 0) {
+        // 전산실랙: 파일마다 개별 카드
+        files.forEach((file, idx) => {
+          const shortName = file.name.length > 20 ? file.name.substring(0, 20) + '…' : file.name;
+          cards.push(`<div class="col-6 col-md-4">
+            <div class="card border h-100" style="min-height:80px;">
+              <div class="card-body p-2 d-flex flex-column align-items-center justify-content-center text-center gap-1">
+                <i class="bi ${cat.icon} ${cat.iconColor}" style="font-size:1.6rem;"></i>
+                <div class="fw-semibold" style="font-size:.75rem;">${cat.label}</div>
+                <a href="${file.url}" target="_blank" class="stretched-link text-decoration-none" title="${file.name}">
+                  <small class="text-muted" style="font-size:.65rem;">${shortName}</small>
+                </a>
+              </div>
+              ${idx === 0 ? `<div class="card-footer p-1 text-end border-top-0" style="background:transparent;">
+                <button class="btn btn-xs btn-link p-0 text-muted" title="업로드"
+                        onclick="document.getElementById('${inputId}').click();event.stopPropagation();">
+                  <i class="bi bi-cloud-upload" style="font-size:.8rem;"></i>
+                </button>
+                <input type="file" id="${inputId}" accept="${cat.accept}" style="display:none"
+                       onchange="uploadNetworkDoc(this,'${cat.key}')">
+              </div>` : ''}
+            </div>
+          </div>`);
+        });
+      } else {
+        // 나머지 카테고리: 단일 카드
+        const hasFile = files.length > 0;
+        const firstFile = files[0] || null;
+        const attrs = (cat.inline)
+          ? `href="${firstFile?.url}" target="_blank"`
+          : `href="${firstFile?.url}" download`;
+        const shortName = firstFile ? (firstFile.name.length > 20 ? firstFile.name.substring(0, 20) + '…' : firstFile.name) : '';
+
+        cards.push(`<div class="col-6 col-md-4">
+          <div class="card border h-100" style="min-height:80px;">
+            <div class="card-body p-2 d-flex flex-column align-items-center justify-content-center text-center gap-1">
+              <i class="bi ${cat.icon} ${cat.iconColor}" style="font-size:1.6rem;"></i>
+              <div class="fw-semibold" style="font-size:.75rem;">${cat.label}</div>
+              ${hasFile
+                ? `<a ${attrs} class="stretched-link text-decoration-none" title="${firstFile.name}">
+                     <small class="text-muted" style="font-size:.65rem;">${shortName}</small>
+                   </a>`
+                : `<small class="text-muted" style="font-size:.65rem;">파일 없음</small>`}
+            </div>
+            <div class="card-footer p-1 text-end border-top-0" style="background:transparent;">
+              <button class="btn btn-xs btn-link p-0 text-muted" title="업로드"
+                      onclick="document.getElementById('${inputId}').click();event.stopPropagation();">
+                <i class="bi bi-cloud-upload" style="font-size:.8rem;"></i>
+              </button>
+              <input type="file" id="${inputId}" accept="${cat.accept}" style="display:none"
+                     onchange="uploadNetworkDoc(this,'${cat.key}')">
+            </div>
+          </div>
+        </div>`);
+      }
+    }
+    box.innerHTML = `<div class="row g-2">${cards.join('')}</div>`;
+  } catch(e) {
+    box.innerHTML = '<div class="text-center text-muted py-2 small">로드 실패</div>';
+  }
+}
+
+async function uploadNetworkDoc(input, docType) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('doc_type', docType);
+  const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  try {
+    const resp = await fetch(`${API_BASE}/schools/${SCHOOL_ID}/network-docs/`, {
+      method: 'POST', headers: {'X-CSRFToken': csrf}, body: fd,
+    });
+    const data = await resp.json();
+    if (!resp.ok) { showToast(data.error || '업로드 실패', 'error'); return; }
+    showToast(`${data.name} 업로드 완료`, 'success');
+    loadNetworkDocs();
+  } catch(e) { showToast('업로드 오류', 'error'); }
+  input.value = '';
+}
+
+// ── 브이월드 지도 ──────────────────────────────────────────────────────────
+{% if school.lat and school.lng %}
+function initMap() {
+  if (typeof ol === 'undefined') return;
+  const coord = ol.proj.fromLonLat([{{ school.lng }}, {{ school.lat }}]);
+  const markerFeature = new ol.Feature({geometry: new ol.geom.Point(coord)});
+  markerFeature.setStyle(new ol.style.Style({
+    image: new ol.style.Circle({radius:10, fill: new ol.style.Fill({color:'#dc3545'}), stroke: new ol.style.Stroke({color:'#fff',width:2})}),
+    text:  new ol.style.Text({text:'학교', fill: new ol.style.Fill({color:'#fff'}), font:'bold 9px sans-serif'})
+  }));
+  const key = typeof VWORLD_API_KEY !== 'undefined' ? VWORLD_API_KEY : '';
+  new ol.Map({
+    target: 'school-map',
+    layers: [
+      new ol.layer.Tile({ source: new ol.source.XYZ({
+        url: `https://api.vworld.kr/req/wmts/1.0.0/${key}/Base/{z}/{y}/{x}.png`,
+        attributions: '© 국토정보플랫폼', maxZoom: 19,
+      })}),
+      new ol.layer.Vector({source: new ol.source.Vector({features: [markerFeature]})})
+    ],
+    view: new ol.View({center: coord, zoom: 15})
+  });
+}
+window.addEventListener('load', initMap);
+{% endif %}
+
+// ── 점검 이력 ──────────────────────────────────────────────────────────────
+async function loadInspectionHistory() {
+  const STATUS_BADGE = {
+    completed:   '<span class="badge bg-success" style="font-size:.62rem;">완료</span>',
+    in_progress: '<span class="badge bg-warning text-dark" style="font-size:.62rem;">진행중</span>',
+    scheduled:   '<span class="badge bg-info" style="font-size:.62rem;">예정</span>',
+    cancelled:   '<span class="badge bg-secondary" style="font-size:.62rem;">취소</span>',
+  };
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${SCHOOL_ID}/inspection_history/`);
+    const items = data.inspections || [];
+    document.getElementById('insp-count').textContent = `총 ${items.length}건`;
+    const tbody = document.getElementById('insp-tbody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-2 small">점검 이력 없음</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(i => `<tr>
+      <td class="text-truncate" style="max-width:110px;" title="${i.plan_name}">${i.plan_name}</td>
+      <td><span class="badge bg-primary" style="font-size:.6rem;">${i.plan_type}</span></td>
+      <td><small class="text-muted">${i.inspect_date || i.start_date || '-'}</small></td>
+      <td><small>${i.worker}</small></td>
+      <td>${STATUS_BADGE[i.status_code] || i.status}</td>
+    </tr>`).join('');
+  } catch(e) {
+    document.getElementById('insp-tbody').innerHTML =
+      '<tr><td colspan="5" class="text-center text-muted py-2 small">로드 실패</td></tr>';
+  }
+}
+
+// ── 초기 로드 ──────────────────────────────────────────────────────────────
+loadNetworkInfo();
+loadContacts();
+loadEquipment();
+loadIncidents();
+loadNetworkDocs();
+loadInspectionHistory();
+</script>
+{% endblock %}

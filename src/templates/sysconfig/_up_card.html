@@ -1,0 +1,58 @@
+{% comment %}
+업로드 카드 컴포넌트
+params: item_id, title, icon, color, badges, cols, upload_url, download_url, allow_reset
+{% endcomment %}
+<div class="col-12 col-md-6 col-xl-4">
+  <div class="up-card">
+    <div class="up-card-header">
+      <i class="bi {{ icon }} text-{{ color }} fs-5"></i>
+      <span class="fw-semibold small">{{ title }}</span>
+      <div class="ms-auto">
+        <span class="mod-badge bg-{{ color }} bg-opacity-10 text-{{ color }}">{{ badges }}</span>
+      </div>
+    </div>
+    <div class="up-card-body">
+      <p class="text-muted mb-2" style="font-size:.72rem;">{{ cols }}</p>
+
+      <!-- 모드 선택 -->
+      <div class="d-flex gap-1 mb-2">
+        <button class="mode-btn active" data-item="{{ item_id }}"
+                onclick="setMode('{{ item_id }}','add_update',this)">추가·수정</button>
+        {% if allow_reset %}
+        <button class="mode-btn danger" data-item="{{ item_id }}"
+                onclick="setMode('{{ item_id }}','reset',this)">초기화</button>
+        {% endif %}
+      </div>
+      <input type="hidden" id="mode-{{ item_id }}" value="add_update">
+
+      <!-- 파일 선택 -->
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <label class="btn btn-sm btn-outline-secondary mb-0" style="font-size:.72rem;cursor:pointer;">
+          <i class="bi bi-folder2-open me-1"></i>파일 선택
+          <input type="file" id="file-{{ item_id }}" accept=".csv" style="display:none"
+                 onchange="previewCSV(this,'{{ item_id }}')">
+        </label>
+        <span id="fn-{{ item_id }}" class="text-muted" style="font-size:.72rem;">선택된 파일 없음</span>
+      </div>
+
+      <!-- CSV 미리보기 -->
+      <div id="preview-{{ item_id }}" class="preview-wrap" style="display:none;"></div>
+
+      <!-- 액션 버튼 -->
+      <div class="d-flex gap-2 mt-2">
+        <button id="btn-up-{{ item_id }}" class="btn btn-sm btn-primary flex-fill" disabled
+                onclick="doUpload('{{ item_id }}','{{ upload_url }}')">
+          <i class="bi bi-cloud-upload me-1"></i>업로드 확정
+        </button>
+        <a class="btn btn-sm btn-outline-secondary"
+           onclick="this.href=API_BASE+'/{{ download_url }}';return true;" href="#"
+           title="CSV 템플릿 다운로드">
+          <i class="bi bi-download"></i>
+        </a>
+      </div>
+
+      <!-- 결과 -->
+      <div id="res-{{ item_id }}"></div>
+    </div>
+  </div>
+</div>

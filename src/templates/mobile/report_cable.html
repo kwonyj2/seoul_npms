@@ -1,0 +1,386 @@
+{% extends 'mobile/base.html' %}
+{% block title %}포설 확인서{% endblock %}
+{% block header_title %}포설 확인서{% endblock %}
+{% block nav_cable %}active{% endblock %}
+
+{% block extra_style %}
+<style>
+  .section-label { font-size:13px;font-weight:700;color:#1a5fa8;margin-bottom:8px;padding-left:4px; }
+  .report-item {
+    padding:14px; border-radius:12px; border:none;
+    box-shadow:0 1px 6px rgba(0,0,0,.08);
+    background:#fff; margin-bottom:10px; cursor:pointer;
+  }
+  .report-item:active { background:#f0f5ff; }
+  .status-badge { font-size:12px;padding:4px 10px;border-radius:12px; }
+  .detail-row { display:flex;gap:8px;font-size:13px;margin-bottom:4px; }
+  .detail-row .key { color:#6c757d;min-width:55px;flex-shrink:0; }
+  .detail-row .val { font-weight:600; }
+  .cable-row {
+    background:#f8f9fa;border-radius:8px;padding:10px;
+    margin-bottom:8px;font-size:13px;
+  }
+  .cable-row .ep-line { color:#6c757d;margin-top:4px;padding-left:12px;border-left:2px solid #dee2e6; }
+  .sign-status {
+    display:inline-flex;align-items:center;gap:4px;
+    font-size:12px;padding:3px 8px;border-radius:10px;
+  }
+  .sign-done { background:#e8f5e9;color:#2e7d32; }
+  .sign-none { background:#fff3e0;color:#e65100; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- 탭: 목록 / 신규 -->
+<ul class="nav nav-pills mb-3" id="cable-tab">
+  <li class="nav-item flex-fill text-center">
+    <a class="nav-link active" href="#" onclick="showTab('list');return false;">작성된 보고서</a>
+  </li>
+  <li class="nav-item flex-fill text-center">
+    <a class="nav-link" href="#" onclick="showTab('new');return false;">신규 작성</a>
+  </li>
+</ul>
+
+<!-- ① 목록 탭 -->
+<div id="tab-list">
+  <div id="report-list-wrap">
+    <div class="text-center py-4 text-muted">
+      <div class="spinner-border spinner-border-sm me-1"></div>불러오는 중...
+    </div>
+  </div>
+</div>
+
+<!-- ② 신규 작성 탭 -->
+<div id="tab-new" style="display:none;">
+  <div class="section-label">학교 선택</div>
+  <div class="card card-field">
+    <div class="card-body p-3">
+      <input type="text" id="new-school-search" class="form-control" placeholder="학교명 검색...">
+      <div id="new-school-dropdown" style="display:none;border:1px solid #dee2e6;border-radius:8px;
+           max-height:200px;overflow-y:auto;background:#fff;margin-top:4px;"></div>
+      <input type="hidden" id="new-school-id">
+      <div id="new-school-name" class="text-primary fw-bold mt-2" style="font-size:15px;display:none;"></div>
+    </div>
+  </div>
+
+  <div class="section-label">공사일</div>
+  <div class="card card-field">
+    <div class="card-body p-3">
+      <input type="date" id="new-work-date" class="form-control"
+             value="{{ today }}">
+    </div>
+  </div>
+
+  <div class="section-label">특이사항</div>
+  <div class="card card-field">
+    <div class="card-body p-3">
+      <textarea id="new-notes" class="form-control" rows="2" placeholder="특이사항 (선택)"></textarea>
+    </div>
+  </div>
+
+  <button class="btn btn-primary btn-field" onclick="createCableReport()">
+    <i class="bi bi-file-earmark-plus me-2"></i>보고서 생성 (PC에서 상세 입력)
+  </button>
+</div>
+
+<!-- 상세 패널 (슬라이드업) -->
+<div id="detail-panel" style="display:none;position:fixed;inset:0;z-index:300;background:#fff;overflow-y:auto;padding-bottom:80px;">
+  <div style="background:#1a5fa8;color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:1;">
+    <button onclick="closeDetail()" style="background:none;border:none;color:#fff;font-size:20px;">‹</button>
+    <span style="font-weight:700;font-size:16px;">포설 확인서 상세</span>
+  </div>
+  <div id="detail-content" class="p-3"></div>
+
+  <!-- 서명 버튼 -->
+  <div class="p-3 border-top" style="position:sticky;bottom:0;background:#fff;">
+    <button class="btn btn-success btn-field" data-bs-toggle="modal" data-bs-target="#signModal">
+      <i class="bi bi-pen me-2"></i>전자서명 하기
+    </button>
+    <button class="btn btn-outline-primary btn-field" onclick="completeCableReport()">
+      <i class="bi bi-check2-circle me-2"></i>보고서 완료 처리
+    </button>
+  </div>
+</div>
+
+<!-- 전자서명 모달 (inlined) -->
+<div class="modal fade" id="signModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:16px;">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title fw-bold">전자서명</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <div class="mb-2">
+          <input type="text" id="sign-name" class="form-control form-control-sm" placeholder="서명자 이름">
+        </div>
+        <div class="mb-3">
+          <input type="text" id="sign-role" class="form-control form-control-sm" placeholder="역할 (예: 설치자, 확인자)">
+        </div>
+        <div style="border:2px solid #dee2e6;border-radius:10px;background:#fafafa;position:relative;overflow:hidden;">
+          <canvas id="signature-canvas" style="display:block;width:100%;touch-action:none;" height="160"></canvas>
+          <div id="sign-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:14px;pointer-events:none;">여기에 서명하세요</div>
+        </div>
+        <div class="d-flex gap-2 mt-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="btn-sign-clear" onclick="signClear()">
+            <i class="bi bi-eraser me-1"></i>지우기
+          </button>
+          <button type="button" class="btn btn-primary btn-sm flex-fill" id="btn-sign-submit" onclick="signSubmit()">
+            <i class="bi bi-check-circle me-1"></i>서명 완료
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const canvas = document.getElementById('signature-canvas');
+  const ctx    = canvas.getContext('2d');
+  let drawing  = false;
+  let hasSig   = false;
+  function resize(){
+    const w = canvas.offsetWidth;
+    canvas.width  = w * window.devicePixelRatio;
+    canvas.height = 160 * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  }
+  function pos(e){ const r=canvas.getBoundingClientRect(); const t=e.touches?e.touches[0]:e; return {x:t.clientX-r.left,y:t.clientY-r.top}; }
+  canvas.addEventListener('mousedown',  e=>{ drawing=true; ctx.beginPath(); ctx.moveTo(...Object.values(pos(e))); });
+  canvas.addEventListener('mousemove',  e=>{ if(!drawing) return; const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); hasSig=true; document.getElementById('sign-placeholder').style.display='none'; });
+  canvas.addEventListener('mouseup',    ()=>drawing=false);
+  canvas.addEventListener('touchstart', e=>{ e.preventDefault(); drawing=true; ctx.beginPath(); ctx.moveTo(...Object.values(pos(e))); },{passive:false});
+  canvas.addEventListener('touchmove',  e=>{ e.preventDefault(); if(!drawing) return; const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); hasSig=true; document.getElementById('sign-placeholder').style.display='none'; },{passive:false});
+  canvas.addEventListener('touchend',   ()=>drawing=false);
+  window.signClear = function(){ ctx.clearRect(0,0,canvas.width/window.devicePixelRatio,canvas.height/window.devicePixelRatio); hasSig=false; document.getElementById('sign-placeholder').style.display='flex'; };
+  window.signGetData = function(){ return hasSig ? canvas.toDataURL('image/png') : null; };
+  window.signHasData = function(){ return hasSig; };
+  document.getElementById('signModal').addEventListener('shown.bs.modal', resize);
+  document.getElementById('signModal').addEventListener('hidden.bs.modal', ()=>{ signClear(); document.getElementById('sign-name').value=''; document.getElementById('sign-role').value=''; });
+})();
+</script>
+
+{% endblock %}
+
+{% block extra_script %}
+<script>
+const TEMPLATE_ID  = '{{ template_id }}';
+const REPORT_TYPE  = '{{ report_type }}';
+let   _currentReportId = null;
+let   _schools = [];
+
+/* ── 탭 전환 ────────────────────────── */
+function showTab(t){
+  document.getElementById('tab-list').style.display = t==='list'?'':'none';
+  document.getElementById('tab-new').style.display  = t==='new' ?'':'none';
+  document.querySelectorAll('#cable-tab .nav-link').forEach((el,i)=>{
+    el.classList.toggle('active', (t==='list'&&i===0)||(t==='new'&&i===1));
+  });
+}
+
+/* ── 보고서 목록 로드 ───────────────── */
+async function loadReports(){
+  const wrap = document.getElementById('report-list-wrap');
+  try {
+    const resp = await fetch(
+      `${API_BASE}/reports/reports/?template=${TEMPLATE_ID}&ordering=-created_at&page_size=30`,
+      {headers:{'X-CSRFToken':CSRF_TOKEN}}
+    );
+    const data = await resp.json();
+    const items = data.results||[];
+    if(!items.length){
+      wrap.innerHTML='<div class="text-center py-4 text-muted">작성된 보고서가 없습니다.<br><small>신규 작성 탭에서 생성하세요.</small></div>';
+      return;
+    }
+    const statusColor={draft:'warning',completed:'success',archived:'secondary'};
+    const statusLabel={draft:'작성중',completed:'완료',archived:'보관'};
+    wrap.innerHTML = items.map(r=>`
+      <div class="report-item" onclick="openDetail(${r.id})">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+          <span class="fw-bold" style="font-size:15px;">${r.school_name||'-'}</span>
+          <span class="badge bg-${statusColor[r.status]||'secondary'} status-badge">
+            ${statusLabel[r.status]||r.status}
+          </span>
+        </div>
+        <div class="text-muted" style="font-size:13px;">${r.title||''}</div>
+        <div class="d-flex justify-content-between mt-2">
+          <span class="text-muted" style="font-size:12px;">${(r.created_at||'').slice(0,10)}</span>
+          <span class="sign-status ${r.signature_count?'sign-done':'sign-none'}">
+            <i class="bi bi-${r.signature_count?'check-circle':'pen'}"></i>
+            ${r.signature_count?r.signature_count+'명 서명':'서명 필요'}
+          </span>
+        </div>
+      </div>`).join('');
+  } catch(e){
+    wrap.innerHTML='<div class="text-center py-4 text-danger">불러오기 실패</div>';
+  }
+}
+
+/* ── 보고서 상세 열기 ───────────────── */
+async function openDetail(id){
+  _currentReportId = id;
+  document.getElementById('detail-panel').style.display='block';
+  document.getElementById('detail-content').innerHTML =
+    '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+  const resp = await fetch(`${API_BASE}/reports/reports/${id}/`,
+    {headers:{'X-CSRFToken':CSRF_TOKEN}});
+  const r = await resp.json();
+  const d = r.data || {};
+  const cables = d.cables||[];
+
+  const cablesHtml = cables.length
+    ? cables.map((c,i)=>{
+        const sp=c.start_point||{}, ep=c.end_point||{};
+        return `<div class="cable-row">
+          <div class="fw-bold mb-1">회선 ${i+1} — ${c.cable_type||'-'} ${c.cable_length||''}m</div>
+          <div>🔵 시점: ${sp.building||'-'} ${sp.floor||'-'} ${sp.location||'-'}</div>
+          <div class="ep-line">🟢 종점: ${ep.building||'-'} ${ep.floor||'-'} ${ep.location||'-'}</div>
+        </div>`;
+      }).join('')
+    : '<div class="text-muted small">포설 정보 없음</div>';
+
+  const sigsHtml = (r.signatures||[]).map(s=>`
+    <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+      <div>
+        <div class="fw-bold">${s.signer_name||'-'}</div>
+        <div class="text-muted small">${s.role||''} · ${(s.signed_at||'').slice(0,16)}</div>
+      </div>
+      <img src="${s.signature_data||''}" style="height:40px;border:1px solid #eee;border-radius:4px;">
+    </div>`).join('');
+
+  document.getElementById('detail-content').innerHTML = `
+    <div class="detail-row"><span class="key">학교</span><span class="val">${r.school_name||'-'}</span></div>
+    <div class="detail-row"><span class="key">공사일</span><span class="val">${d.work_date||'-'}</span></div>
+    <div class="detail-row"><span class="key">상태</span><span class="val">${r.status||'-'}</span></div>
+    ${d.notes?`<div class="detail-row"><span class="key">비고</span><span class="val">${d.notes}</span></div>`:''}
+
+    <div class="section-label mt-3">포설 목록</div>
+    ${cablesHtml}
+
+    <div class="section-label mt-3">서명 현황</div>
+    ${sigsHtml||'<div class="text-muted small">서명 없음</div>'}
+  `;
+
+  // 서명자 이름 자동 입력
+  document.getElementById('sign-name').value = CURRENT_USER.name||'';
+  document.getElementById('sign-role').value = '설치자';
+}
+
+function closeDetail(){
+  document.getElementById('detail-panel').style.display='none';
+  _currentReportId=null;
+}
+
+/* ── 전자서명 제출 ──────────────────── */
+window.signSubmit = async function(){
+  if(!signHasData()){ alert('서명을 먼저 해주세요.'); return; }
+  const name = document.getElementById('sign-name').value.trim();
+  const role = document.getElementById('sign-role').value.trim();
+  if(!name){ alert('서명자 이름을 입력하세요.'); return; }
+
+  const btn = document.getElementById('btn-sign-submit');
+  btn.disabled=true; btn.textContent='저장 중...';
+  try {
+    const resp = await fetch(`${API_BASE}/reports/reports/${_currentReportId}/add_signature/`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+      body: JSON.stringify({
+        signature_data: signGetData(),
+        signer_name: name,
+        role: role,
+      }),
+    });
+    if(resp.ok){
+      bootstrap.Modal.getInstance(document.getElementById('signModal')).hide();
+      showToastLocal('서명이 저장되었습니다.','success');
+      openDetail(_currentReportId);
+      loadReports();
+    } else {
+      const e=await resp.json(); alert('서명 실패: '+(e.error||JSON.stringify(e)));
+    }
+  } catch(e){ alert('오류: '+e.message); }
+  btn.disabled=false; btn.innerHTML='<i class="bi bi-check-circle me-1"></i>서명 완료';
+};
+
+/* ── 보고서 완료 처리 ───────────────── */
+async function completeCableReport(){
+  if(!_currentReportId) return;
+  if(!confirm('보고서를 완료 처리하면 PDF가 생성됩니다.\n계속하시겠습니까?')) return;
+  const resp = await fetch(`${API_BASE}/reports/reports/${_currentReportId}/complete/`,{
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN}, body:'{}',
+  });
+  if(resp.ok){
+    showToastLocal('완료 처리되었습니다. PDF가 생성됩니다.','success');
+    closeDetail(); loadReports();
+  } else {
+    const e=await resp.json(); alert('실패: '+(e.error||JSON.stringify(e)));
+  }
+}
+
+/* ── 신규 보고서 생성 ───────────────── */
+async function loadSchoolsNew(){
+  const resp = await fetch(`${API_BASE}/schools/schools/?page_size=2000`);
+  const data = await resp.json();
+  _schools = data.results||[];
+}
+
+document.getElementById('new-school-search').addEventListener('input',function(){
+  const q=this.value.trim();
+  const dd=document.getElementById('new-school-dropdown');
+  if(q.length<1){dd.style.display='none';return;}
+  const hits=_schools.filter(s=>s.name.includes(q)).slice(0,12);
+  if(!hits.length){dd.style.display='none';return;}
+  dd.innerHTML=hits.map(s=>`<div style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:15px;"
+    onclick="selectNewSchool(${s.id},'${s.name.replace(/'/g,"\\'")}')">
+    ${s.name}<small class="text-muted ms-1">${s.support_center_name||''}</small></div>`).join('');
+  dd.style.display='block';
+});
+
+function selectNewSchool(id,name){
+  document.getElementById('new-school-id').value=id;
+  document.getElementById('new-school-search').value='';
+  document.getElementById('new-school-dropdown').style.display='none';
+  const nm=document.getElementById('new-school-name');
+  nm.textContent='✓ '+name; nm.style.display='block';
+}
+
+async function createCableReport(){
+  const schoolId=document.getElementById('new-school-id').value;
+  const workDate=document.getElementById('new-work-date').value;
+  if(!schoolId){alert('학교를 선택하세요.');return;}
+  if(!workDate){alert('공사일을 선택하세요.');return;}
+  if(!TEMPLATE_ID){alert('템플릿 설정 오류');return;}
+  const resp=await fetch(`${API_BASE}/reports/reports/`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+    body:JSON.stringify({
+      template:parseInt(TEMPLATE_ID),
+      school:parseInt(schoolId),
+      title:'소규모 네트워크 포설 확인서',
+      data:{work_date:workDate,notes:document.getElementById('new-notes').value||'',cables:[]},
+    }),
+  });
+  if(resp.ok){
+    const r=await resp.json();
+    showToastLocal('보고서가 생성되었습니다.','success');
+    showTab('list'); loadReports();
+    setTimeout(()=>openDetail(r.id),500);
+  } else {
+    const e=await resp.json(); alert('생성 실패: '+JSON.stringify(e));
+  }
+}
+
+// showToastLocal — mobile/utils.js 전역 함수 사용
+
+/* ── 초기화 ─────────────────────────── */
+loadReports();
+loadSchoolsNew();
+
+// 오늘 날짜 기본값
+document.getElementById('new-work-date').value = new Date().toISOString().slice(0,10);
+</script>
+{% endblock %}

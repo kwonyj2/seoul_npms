@@ -1,0 +1,1533 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}근태기록부{% endblock %}
+{% block page_title %}<i class="bi bi-person-check-fill me-2 text-success"></i>근태기록부{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── 공통 ─────────────────────────────────────────────────── */
+:root {
+  --att-normal:      #10b981;
+  --att-late:        #f59e0b;
+  --att-absent:      #ef4444;
+  --att-early:       #f97316;
+  --att-leave:       #3b82f6;
+  --att-business:    #8b5cf6;
+  --att-sick_leave:  #06b6d4;
+  --att-vacation:    #0ea5e9;
+  --att-half_leave:  #6366f1;
+  --att-resignation: #64748b;
+  --att-other:       #94a3b8;
+}
+
+/* ── 탭 헤더 ─────────────────────────────────────────────── */
+.att-tabs .nav-link {
+  font-size: .82rem;
+  font-weight: 600;
+  color: #64748b;
+  padding: .45rem .9rem;
+  border-radius: 6px 6px 0 0;
+  border: 1px solid transparent;
+  border-bottom: none;
+  transition: all .15s;
+}
+.att-tabs .nav-link.active {
+  color: #1e40af;
+  background: #fff;
+  border-color: #e2e8f0;
+}
+.att-tabs .nav-link:hover:not(.active) {
+  color: #334155;
+  background: #f8fafc;
+}
+
+/* ── 상태 뱃지 ──────────────────────────────────────────── */
+.att-badge {
+  display: inline-block;
+  font-size: .68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #fff;
+  white-space: nowrap;
+}
+.att-badge.normal      { background: var(--att-normal); }
+.att-badge.late        { background: var(--att-late); color:#1a1a1a; }
+.att-badge.absent      { background: var(--att-absent); }
+.att-badge.early       { background: var(--att-early); }
+.att-badge.leave       { background: var(--att-leave); }
+.att-badge.business    { background: var(--att-business); }
+.att-badge.sick_leave  { background: var(--att-sick_leave); }
+.att-badge.vacation    { background: var(--att-vacation); }
+.att-badge.half_leave  { background: var(--att-half_leave); }
+.att-badge.resignation { background: var(--att-resignation); }
+.att-badge.other       { background: var(--att-other); color:#1a1a1a; }
+
+/* ── 그리드 셀 (월별 매트릭스) ──────────────────────────── */
+.grid-cell {
+  width: 32px;
+  min-width: 32px;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+}
+.grid-cell:hover { background: #f0f9ff; }
+.grid-cell .cell-dot {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  margin: 0 auto;
+  background: #e2e8f0;
+  transition: transform .1s;
+}
+.grid-cell:hover .cell-dot { transform: scale(1.15); }
+.grid-cell .cell-dot.has-data { }
+.grid-cell .cell-time { font-size: .55rem; color: #94a3b8; display: block; line-height: 1.2; }
+.grid-thead-day { font-size: .68rem; font-weight: 700; color: #64748b; }
+.grid-thead-day.sat { color: #2563eb; }
+.grid-thead-day.sun { color: #dc2626; }
+
+/* ── 집계표 ─────────────────────────────────────────────── */
+.summary-table th, .summary-table td {
+  font-size: .78rem;
+  padding: 5px 8px;
+  vertical-align: middle;
+}
+.summary-table .cnt { font-weight: 700; text-align: center; }
+.summary-table tbody tr:hover { background: #f8fafc; }
+
+/* ── 개인뷰 카드 ─────────────────────────────────────────── */
+.personal-hero {
+  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #2563eb 100%);
+  border-radius: 16px;
+  color: #fff;
+  padding: 1.5rem 2rem;
+  margin-bottom: 1.25rem;
+}
+.btn-checkin {
+  background: linear-gradient(135deg,#10b981,#059669);
+  border: none;
+  color: #fff;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: .75rem 2rem;
+  box-shadow: 0 4px 15px rgba(16,185,129,.4);
+  transition: transform .15s, box-shadow .15s;
+}
+.btn-checkin:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(16,185,129,.45); color:#fff; }
+.btn-checkout {
+  background: linear-gradient(135deg,#f59e0b,#d97706);
+  border: none;
+  color: #fff;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: .75rem 2rem;
+  box-shadow: 0 4px 15px rgba(245,158,11,.4);
+  transition: transform .15s, box-shadow .15s;
+}
+.btn-checkout:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(245,158,11,.45); color:#fff; }
+
+/* ── 개인 월 캘린더 ─────────────────────────────────────── */
+.personal-cal td {
+  width: 14.28%;
+  text-align: center;
+  padding: 4px;
+  vertical-align: top;
+  font-size: .8rem;
+}
+.personal-cal .cal-day-num {
+  font-weight: 600;
+  font-size: .82rem;
+  display: block;
+}
+.personal-cal .sat { color: #2563eb; }
+.personal-cal .sun { color: #dc2626; }
+.personal-cal td.other-month { opacity: .3; }
+
+/* ── 필터바 ─────────────────────────────────────────────── */
+.filter-bar {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  padding: .6rem 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  align-items: flex-end;
+}
+.filter-bar .filter-group { display: flex; flex-direction: column; gap: 2px; }
+.filter-bar .filter-group label { font-size: .72rem; font-weight: 600; color: #64748b; }
+
+/* ── 스크롤 그리드 래퍼 ─────────────────────────────────── */
+.grid-wrap {
+  overflow-x: auto;
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+}
+.grid-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: max-content;
+}
+.grid-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  z-index: 10;
+  border-bottom: 2px solid #e2e8f0;
+}
+.grid-table .col-center {
+  position: sticky;
+  left: 0;
+  background: #f8fafc;
+  z-index: 5;
+  font-size: .75rem;
+  font-weight: 700;
+  color: #334155;
+  padding: 4px 10px;
+  border-right: 1px solid #e2e8f0;
+  min-width: 72px;
+  max-width: 72px;
+}
+.grid-table .col-worker {
+  position: sticky;
+  left: 72px;
+  background: #fff;
+  z-index: 5;
+  font-size: .78rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-right: 2px solid #e2e8f0;
+  min-width: 80px;
+  max-width: 80px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.grid-table thead .col-center,
+.grid-table thead .col-worker { z-index: 15; }
+.grid-table tbody tr:hover .col-worker,
+.grid-table tbody tr:hover .col-center { background: #f0f9ff; }
+
+/* center group header */
+.center-group-row td {
+  background: linear-gradient(90deg,#1e40af,#2563eb);
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 700;
+  padding: 4px 10px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+{% if user.role in 'worker resident' %}
+<!-- ═══════════════════════════════════════════════════════════
+     개인 뷰 (worker / resident)
+     ═══════════════════════════════════════════════════════════ -->
+
+<!-- Hero 카드 -->
+<div class="personal-hero shadow-lg mb-3">
+  <div class="row align-items-center g-3">
+    <div class="col-auto">
+      <div style="width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;">
+        <i class="bi bi-person-circle" style="font-size:2rem;"></i>
+      </div>
+    </div>
+    <div class="col">
+      <div style="font-size:1.2rem;font-weight:700;">{{ user.name }}</div>
+      <div style="font-size:.85rem;opacity:.8;" id="today-label">오늘 <span id="today-date-str"></span></div>
+      <div style="font-size:.9rem;margin-top:4px;" id="today-status-text">
+        <span class="spinner-border spinner-border-sm me-1"></span>상태 확인 중...
+      </div>
+    </div>
+    <div class="col-auto d-flex gap-2 flex-wrap">
+      <button class="btn-checkin btn" id="btn-checkin" onclick="doCheckIn()">
+        <i class="bi bi-box-arrow-in-right me-2"></i>GPS 출근
+      </button>
+      <button class="btn-checkout btn" id="btn-checkout" onclick="doCheckOut()">
+        <i class="bi bi-box-arrow-right me-2"></i>GPS 퇴근
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 개인 근태 등록 + 월 캘린더 -->
+<div class="row g-3">
+  <!-- 사유 등록 -->
+  <div class="col-12 col-lg-4">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-bottom py-2 d-flex align-items-center justify-content-between">
+        <span class="fw-semibold"><i class="bi bi-pencil-square me-1 text-primary"></i>근태 사유 등록</span>
+        <small class="text-muted">연차·병가·휴가 등</small>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">날짜</label>
+          <input type="date" id="sr-date" class="form-control form-control-sm">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">사유 구분</label>
+          <div class="d-flex flex-wrap gap-2" id="sr-status-btns">
+            <!-- JS로 생성 -->
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">비고 (선택)</label>
+          <textarea id="sr-note" class="form-control form-control-sm" rows="2" placeholder="세부 사유 입력..."></textarea>
+        </div>
+        <button class="btn btn-primary btn-sm w-100 fw-semibold" onclick="doSelfReport()">
+          <i class="bi bi-check-circle me-1"></i>등록하기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 개인 월 캘린더 -->
+  <div class="col-12 col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom py-2 d-flex align-items-center justify-content-between">
+        <span class="fw-semibold"><i class="bi bi-calendar3 me-1 text-info"></i>월별 근태 현황</span>
+        <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-sm btn-outline-secondary" onclick="personalCalPrev()"><i class="bi bi-chevron-left"></i></button>
+          <span class="fw-semibold" id="personal-cal-title" style="min-width:90px;text-align:center;"></span>
+          <button class="btn btn-sm btn-outline-secondary" onclick="personalCalNext()"><i class="bi bi-chevron-right"></i></button>
+          <button class="btn btn-sm btn-outline-secondary ms-1" onclick="downloadPersonalCsv()"><i class="bi bi-download me-1"></i>CSV</button>
+        </div>
+      </div>
+      <div class="card-body p-2">
+        <!-- 범례 -->
+        <div class="d-flex flex-wrap gap-2 mb-2 px-1" id="personal-legend"></div>
+        <table class="table table-bordered personal-cal mb-0" id="personal-cal-table">
+          <thead class="table-light">
+            <tr>
+              <th class="sun" style="font-size:.72rem;text-align:center;">일</th>
+              <th style="font-size:.72rem;text-align:center;">월</th>
+              <th style="font-size:.72rem;text-align:center;">화</th>
+              <th style="font-size:.72rem;text-align:center;">수</th>
+              <th style="font-size:.72rem;text-align:center;">목</th>
+              <th style="font-size:.72rem;text-align:center;">금</th>
+              <th class="sat" style="font-size:.72rem;text-align:center;">토</th>
+            </tr>
+          </thead>
+          <tbody id="personal-cal-tbody"></tbody>
+        </table>
+      </div>
+      <!-- 월 통계 -->
+      <div class="card-footer bg-white border-top py-2 d-flex flex-wrap gap-3" id="personal-month-stats"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 개인 일별 목록 -->
+<div class="card border-0 shadow-sm mt-3">
+  <div class="card-header bg-white border-bottom py-2 d-flex align-items-center justify-content-between">
+    <span class="fw-semibold"><i class="bi bi-list-ul me-1 text-secondary"></i>일별 기록</span>
+    <small class="text-muted" id="personal-list-range"></small>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>날짜</th>
+          <th>출근</th>
+          <th>퇴근</th>
+          <th>근무시간</th>
+          <th>상태</th>
+          <th>비고</th>
+        </tr>
+      </thead>
+      <tbody id="personal-list-tbody">
+        <tr><td colspan="6" class="text-center text-muted py-3">로딩 중...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% else %}
+<!-- ═══════════════════════════════════════════════════════════
+     관리자 뷰 (superadmin / admin)
+     ═══════════════════════════════════════════════════════════ -->
+
+<!-- KPI 카드 -->
+<div class="row g-2 mb-3" id="admin-kpi-row">
+  <div class="col-6 col-md-2">
+    <div class="card border-0 shadow-sm text-center py-2" style="border-top:3px solid var(--att-normal)!important;">
+      <div class="text-muted" style="font-size:.7rem;">정상 출근</div>
+      <div class="fw-bold fs-4" style="color:var(--att-normal);" id="kpi-normal">-</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card border-0 shadow-sm text-center py-2" style="border-top:3px solid var(--att-absent)!important;">
+      <div class="text-muted" style="font-size:.7rem;">결근</div>
+      <div class="fw-bold fs-4" style="color:var(--att-absent);" id="kpi-absent">-</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card border-0 shadow-sm text-center py-2" style="border-top:3px solid var(--att-late)!important;">
+      <div class="text-muted" style="font-size:.7rem;">지각</div>
+      <div class="fw-bold fs-4" style="color:var(--att-late);" id="kpi-late">-</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card border-0 shadow-sm text-center py-2" style="border-top:3px solid var(--att-leave)!important;">
+      <div class="text-muted" style="font-size:.7rem;">연차·휴가·병가</div>
+      <div class="fw-bold fs-4" style="color:var(--att-leave);" id="kpi-leave">-</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card border-0 shadow-sm text-center py-2" style="border-top:3px solid var(--att-business)!important;">
+      <div class="text-muted" style="font-size:.7rem;">출장·기타</div>
+      <div class="fw-bold fs-4" style="color:var(--att-business);" id="kpi-biz">-</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-2">
+    <div class="card border-0 shadow-sm text-center py-2" style="border-top:3px solid #10b981!important;">
+      <div class="text-muted" style="font-size:.7rem;">평균 근무시간</div>
+      <div class="fw-bold fs-4 text-success" id="kpi-avg">-</div>
+      <div class="text-muted" style="font-size:.65rem;">h/일</div>
+    </div>
+  </div>
+</div>
+
+<!-- 탭 네비게이션 -->
+<ul class="nav att-tabs mb-0 border-bottom" id="att-tab-nav">
+  <li class="nav-item">
+    <a class="nav-link active" href="#" data-tab="grid" onclick="switchTab('grid');return false;">
+      <i class="bi bi-grid-3x3 me-1"></i>지원청·인력
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="#" data-tab="month" onclick="switchTab('month');return false;">
+      <i class="bi bi-calendar-month me-1"></i>월별
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="#" data-tab="quarter" onclick="switchTab('quarter');return false;">
+      <i class="bi bi-calendar3 me-1"></i>분기별
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="#" data-tab="half" onclick="switchTab('half');return false;">
+      <i class="bi bi-calendar-range me-1"></i>반기별
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="#" data-tab="year" onclick="switchTab('year');return false;">
+      <i class="bi bi-calendar-check me-1"></i>연도별
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="#" data-tab="list" onclick="switchTab('list');return false;">
+      <i class="bi bi-list-ul me-1"></i>일별목록
+    </a>
+  </li>
+</ul>
+
+<!-- 탭 콘텐츠 컨테이너 -->
+<div class="card border-0 shadow-sm" style="border-radius:0 0 12px 12px;">
+
+  <!-- ── Tab: 지원청·인력 그리드 ── -->
+  <div id="tab-grid" class="tab-pane">
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>연도</label>
+        <input type="number" id="grid-year" class="form-control form-control-sm" style="width:90px;" value="">
+      </div>
+      <div class="filter-group">
+        <label>월</label>
+        <select id="grid-month" class="form-select form-select-sm" style="width:80px;"></select>
+      </div>
+      <div class="filter-group">
+        <label>지원청</label>
+        <select id="grid-center" class="form-select form-select-sm" style="width:130px;">
+          <option value="">전체</option>
+        </select>
+      </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <div class="d-flex gap-1">
+          <button class="btn btn-primary btn-sm fw-semibold" onclick="loadGrid()"><i class="bi bi-search me-1"></i>조회</button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="downloadAdminCsv()"><i class="bi bi-download me-1"></i>CSV</button>
+        </div>
+      </div>
+      <!-- 범례 -->
+      <div class="ms-auto d-flex flex-wrap gap-2 align-items-center" id="grid-legend"></div>
+    </div>
+    <div class="grid-wrap px-2 pb-2">
+      <div id="grid-loading" class="text-center text-muted py-5">
+        <span class="spinner-border spinner-border-sm me-2"></span>데이터 로딩 중...
+      </div>
+      <table class="grid-table d-none" id="grid-table">
+        <thead><tr id="grid-thead"></tr></thead>
+        <tbody id="grid-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Tab: 월별 집계 ── -->
+  <div id="tab-month" class="tab-pane d-none">
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>연도</label>
+        <input type="number" id="ms-year" class="form-control form-control-sm" style="width:90px;">
+      </div>
+      <div class="filter-group">
+        <label>월</label>
+        <select id="ms-month" class="form-select form-select-sm" style="width:80px;"></select>
+      </div>
+      <div class="filter-group">
+        <label>지원청</label>
+        <select id="ms-center" class="form-select form-select-sm" style="width:130px;"><option value="">전체</option></select>
+      </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary btn-sm fw-semibold" onclick="loadSummary('month')"><i class="bi bi-search me-1"></i>조회</button>
+      </div>
+    </div>
+    <div class="px-2 pb-3" id="summary-month-wrap">
+      <div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>데이터 로딩 중...</div>
+    </div>
+  </div>
+
+  <!-- ── Tab: 분기별 ── -->
+  <div id="tab-quarter" class="tab-pane d-none">
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>연도</label>
+        <input type="number" id="qs-year" class="form-control form-control-sm" style="width:90px;">
+      </div>
+      <div class="filter-group">
+        <label>분기</label>
+        <select id="qs-quarter" class="form-select form-select-sm" style="width:100px;">
+          <option value="1">1분기</option><option value="2">2분기</option>
+          <option value="3">3분기</option><option value="4">4분기</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>지원청</label>
+        <select id="qs-center" class="form-select form-select-sm" style="width:130px;"><option value="">전체</option></select>
+      </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary btn-sm fw-semibold" onclick="loadSummary('quarter')"><i class="bi bi-search me-1"></i>조회</button>
+      </div>
+    </div>
+    <div class="px-2 pb-3" id="summary-quarter-wrap">
+      <div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>데이터 로딩 중...</div>
+    </div>
+  </div>
+
+  <!-- ── Tab: 반기별 ── -->
+  <div id="tab-half" class="tab-pane d-none">
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>연도</label>
+        <input type="number" id="hs-year" class="form-control form-control-sm" style="width:90px;">
+      </div>
+      <div class="filter-group">
+        <label>반기</label>
+        <select id="hs-half" class="form-select form-select-sm" style="width:100px;">
+          <option value="1">상반기</option><option value="2">하반기</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>지원청</label>
+        <select id="hs-center" class="form-select form-select-sm" style="width:130px;"><option value="">전체</option></select>
+      </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary btn-sm fw-semibold" onclick="loadSummary('half')"><i class="bi bi-search me-1"></i>조회</button>
+      </div>
+    </div>
+    <div class="px-2 pb-3" id="summary-half-wrap">
+      <div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>데이터 로딩 중...</div>
+    </div>
+  </div>
+
+  <!-- ── Tab: 연도별 ── -->
+  <div id="tab-year" class="tab-pane d-none">
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>연도</label>
+        <input type="number" id="ys-year" class="form-control form-control-sm" style="width:90px;">
+      </div>
+      <div class="filter-group">
+        <label>지원청</label>
+        <select id="ys-center" class="form-select form-select-sm" style="width:130px;"><option value="">전체</option></select>
+      </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary btn-sm fw-semibold" onclick="loadSummary('year')"><i class="bi bi-search me-1"></i>조회</button>
+      </div>
+    </div>
+    <div class="px-2 pb-3" id="summary-year-wrap">
+      <div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>데이터 로딩 중...</div>
+    </div>
+  </div>
+
+  <!-- ── Tab: 일별 목록 ── -->
+  <div id="tab-list" class="tab-pane d-none">
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>시작일</label>
+        <input type="date" id="list-date-from" class="form-control form-control-sm" style="width:140px;">
+      </div>
+      <div class="filter-group">
+        <label>종료일</label>
+        <input type="date" id="list-date-to" class="form-control form-control-sm" style="width:140px;">
+      </div>
+      <div class="filter-group">
+        <label>인력</label>
+        <select id="list-worker" class="form-select form-select-sm" style="width:150px;">
+          <option value="">전체</option>
+        </select>
+      </div>
+      <!-- 빠른 기간 선택 -->
+      <div class="filter-group">
+        <label>빠른 선택</label>
+        <div class="d-flex gap-1 flex-wrap">
+          <button class="btn btn-sm btn-outline-secondary" onclick="setListRange('today')">오늘</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="setListRange('week')">이번주</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="setListRange('month')">이번달</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="setListRange('prev_month')">전월</button>
+        </div>
+      </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <div class="d-flex gap-1">
+          <button class="btn btn-primary btn-sm fw-semibold" onclick="loadList()"><i class="bi bi-search me-1"></i>조회</button>
+          <button class="btn btn-outline-secondary btn-sm" onclick="downloadAdminCsv()"><i class="bi bi-download me-1"></i>CSV</button>
+        </div>
+      </div>
+    </div>
+    <div class="table-responsive" style="max-height:calc(100vh - 320px);">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light sticky-top">
+          <tr>
+            <th>근무일</th><th>지원청</th><th>인력</th>
+            <th>출근</th><th>출근위치</th><th style="width:60px;">출근단말</th>
+            <th>퇴근</th><th>퇴근위치</th><th style="width:60px;">퇴근단말</th>
+            <th>근무시간</th><th>상태</th><th>비고</th>
+          </tr>
+        </thead>
+        <tbody id="list-tbody">
+          <tr><td colspan="12" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-1"></span>데이터 로딩 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="px-3 py-2 border-top d-flex justify-content-between align-items-center">
+      <small class="text-muted"><span id="list-count">0</span>건</small>
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-outline-secondary" id="list-prev" onclick="listChangePage(-1)" disabled><i class="bi bi-chevron-left"></i></button>
+        <button class="btn btn-outline-secondary disabled" id="list-page-info">-</button>
+        <button class="btn btn-outline-secondary" id="list-next" onclick="listChangePage(1)" disabled><i class="bi bi-chevron-right"></i></button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- card -->
+{% endif %}
+
+</div><!-- container -->
+
+<!-- ── 근태 편집 모달 (관리자용) ─────────────────────────── -->
+<div class="modal fade" id="attEditModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2 border-bottom">
+        <h6 class="modal-title fw-bold"><i class="bi bi-pencil me-1"></i>근태 편집</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <div class="fw-semibold text-primary" id="edit-worker-label"></div>
+          <small class="text-muted" id="edit-date-label"></small>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">상태</label>
+          <select id="edit-status" class="form-select form-select-sm"></select>
+        </div>
+        <div class="row g-1 mb-2">
+          <div class="col">
+            <label class="form-label small fw-semibold">출근시각</label>
+            <input type="time" id="edit-checkin" class="form-control form-control-sm">
+          </div>
+          <div class="col">
+            <label class="form-label small fw-semibold">퇴근시각</label>
+            <input type="time" id="edit-checkout" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">비고</label>
+          <input type="text" id="edit-note" class="form-control form-control-sm" placeholder="메모">
+        </div>
+        <input type="hidden" id="edit-worker-id">
+        <input type="hidden" id="edit-date">
+        <input type="hidden" id="edit-log-id">
+      </div>
+      <div class="modal-footer py-2 d-flex justify-content-between">
+        <button class="btn btn-sm btn-outline-danger" id="edit-delete-btn" onclick="deleteAttLog()">
+          <i class="bi bi-trash me-1"></i>삭제
+        </button>
+        <div class="d-flex gap-1">
+          <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+          <button class="btn btn-sm btn-primary fw-semibold" onclick="saveAttLog()">
+            <i class="bi bi-check me-1"></i>저장
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GPS 지도 모달 -->
+<div class="modal fade" id="mapModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" id="map-modal-title"><i class="bi bi-geo-alt-fill me-1 text-danger"></i>GPS 위치 확인</h6>
+        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <!-- 정보 바 -->
+        <div id="map-info-bar" class="px-3 py-2 border-bottom d-flex flex-wrap gap-3 align-items-center" style="font-size:.8rem;background:#f8fafc;">
+          <span id="map-info-worker" class="fw-semibold text-primary"></span>
+          <span id="map-info-date" class="text-muted"></span>
+          <span id="map-info-time" class="text-success fw-semibold"></span>
+          <span id="map-info-coords" class="text-muted font-monospace" style="font-size:.72rem;"></span>
+        </div>
+        <!-- 범례 -->
+        <div class="px-3 py-1 border-bottom d-flex gap-4 align-items-center" style="font-size:.78rem;background:#fff;">
+          <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#dc3545;vertical-align:middle;margin-right:4px;"></span>GPS 출퇴근 위치</span>
+          <span id="map-legend-field" class="d-none"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#2563eb;vertical-align:middle;margin-right:4px;"></span>현장(학교) 위치</span>
+        </div>
+        <div id="attendance-map" style="height:400px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const ME_ROLE = '{{ user.role }}';
+const IS_WORKER = ME_ROLE === 'worker' || ME_ROLE === 'resident';
+const TODAY_STR  = new Date().toISOString().slice(0,10);
+const TODAY_OBJ  = new Date();
+
+// ── 상태 메타 ────────────────────────────────────────────────────────────
+const STATUS_META = {
+  normal:      { label:'정상',  short:'정', color:'#10b981' },
+  late:        { label:'지각',  short:'지', color:'#f59e0b' },
+  absent:      { label:'결근',  short:'결', color:'#ef4444' },
+  early:       { label:'조퇴',  short:'조', color:'#f97316' },
+  leave:       { label:'연차',  short:'연', color:'#3b82f6' },
+  business:    { label:'출장',  short:'출', color:'#8b5cf6' },
+  sick_leave:  { label:'병가',  short:'병', color:'#06b6d4' },
+  vacation:    { label:'휴가',  short:'휴', color:'#0ea5e9' },
+  half_leave:  { label:'반차',  short:'반', color:'#6366f1' },
+  resignation: { label:'퇴직',  short:'퇴', color:'#64748b' },
+  other:       { label:'기타',  short:'기', color:'#94a3b8' },
+};
+
+function attBadge(status) {
+  const m = STATUS_META[status];
+  if (!m) return `<span class="att-badge other">${status}</span>`;
+  return `<span class="att-badge ${status}">${m.label}</span>`;
+}
+
+// ── 공통 헬퍼 (apiGet/apiPost는 npms.js 전역 사용) ──────────────────────
+async function apiDelete(url, params={}) {
+  const qs = new URLSearchParams(params).toString();
+  const r = await fetch(qs ? `${url}?${qs}` : url, {
+    method:'DELETE', headers:{'X-CSRFToken':CSRF_TOKEN},
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.status === 204 ? {} : r.json();
+}
+
+// ── 범례 렌더 ──────────────────────────────────────────────────────────
+function renderLegend(el) {
+  if (!el) return;
+  el.innerHTML = Object.entries(STATUS_META).map(([k,v]) =>
+    `<span style="font-size:.7rem;display:flex;align-items:center;gap:3px;">
+       <span style="width:10px;height:10px;border-radius:50%;background:${v.color};display:inline-block;"></span>${v.label}</span>`
+  ).join('');
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// ══ 개인 뷰 ══════════════════════════════════════════════════════════════
+// ────────────────────────────────────────────────────────────────────────
+{% if user.role in 'worker resident' %}
+
+let _personalYear  = TODAY_OBJ.getFullYear();
+let _personalMonth = TODAY_OBJ.getMonth() + 1;
+let _personalLogs  = {}; // {YYYY-MM-DD: logObj}
+
+// 오늘 날짜 문자열
+document.getElementById('today-date-str').textContent =
+  `${TODAY_OBJ.getFullYear()}년 ${TODAY_OBJ.getMonth()+1}월 ${TODAY_OBJ.getDate()}일`;
+
+// 사유 버튼
+const SELF_STATUS = ['leave','sick_leave','vacation','half_leave','business','early','resignation','other'];
+const srBtns = document.getElementById('sr-status-btns');
+let _srSelected = 'leave';
+SELF_STATUS.forEach(k => {
+  const m = STATUS_META[k];
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-sm';
+  btn.style.cssText = `background:${m.color};color:#fff;border:none;border-radius:8px;font-size:.75rem;font-weight:600;padding:3px 12px;`;
+  btn.textContent = m.label;
+  btn.dataset.status = k;
+  btn.onclick = () => {
+    srBtns.querySelectorAll('button').forEach(b => b.style.outline='none');
+    btn.style.outline = '2px solid #1e40af';
+    _srSelected = k;
+  };
+  srBtns.appendChild(btn);
+  if (k === 'leave') { btn.style.outline='2px solid #1e40af'; }
+});
+
+document.getElementById('sr-date').value = TODAY_STR;
+
+async function loadTodayStatus() {
+  try {
+    const data = await apiGet(`${API_BASE}/workforce/attendance/`, {date_from:TODAY_STR, date_to:TODAY_STR});
+    const log = (data.results||data)[0];
+    const el = document.getElementById('today-status-text');
+    if (!log) {
+      el.innerHTML = '<span style="color:rgba(255,255,255,.7);">미출근</span>';
+    } else {
+      const inT  = log.check_in_at  ? new Date(log.check_in_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : null;
+      const outT = log.check_out_at ? new Date(log.check_out_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : null;
+      const badge = attBadge(log.status);
+      el.innerHTML = badge + ' ' + (inT ? (outT ? `출근 ${inT} / 퇴근 ${outT}` : `출근 ${inT} 근무중`) : '미출근');
+    }
+  } catch(e) {}
+}
+
+function getGPS() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject(new Error('GPS 미지원')); return; }
+    navigator.geolocation.getCurrentPosition(
+      p => resolve({lat:p.coords.latitude, lng:p.coords.longitude}),
+      e => reject(e), {enableHighAccuracy:true, timeout:10000});
+  });
+}
+
+async function doCheckIn() {
+  const btn = document.getElementById('btn-checkin');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>위치 확인 중...';
+  try {
+    const pos = await getGPS();
+    await apiPost(`${API_BASE}/workforce/attendance/check_in/`, pos);
+    await loadTodayStatus();
+    await loadPersonalMonth();
+    showToast('출근 처리 완료!', 'success');
+  } catch(e) { showToast('출근 실패: '+(e.message||e), 'danger'); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-box-arrow-in-right me-2"></i>GPS 출근';
+  }
+}
+
+async function doCheckOut() {
+  const btn = document.getElementById('btn-checkout');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>위치 확인 중...';
+  try {
+    const pos = await getGPS();
+    await apiPost(`${API_BASE}/workforce/attendance/check_out/`, pos);
+    await loadTodayStatus();
+    await loadPersonalMonth();
+    showToast('퇴근 처리 완료!', 'success');
+  } catch(e) { showToast('퇴근 실패: '+(e.message||e), 'danger'); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-box-arrow-right me-2"></i>GPS 퇴근';
+  }
+}
+
+async function doSelfReport() {
+  const date   = document.getElementById('sr-date').value;
+  const status = _srSelected;
+  const note   = document.getElementById('sr-note').value.trim();
+  if (!date) { showToast('날짜를 선택하세요.','warning'); return; }
+  try {
+    await apiPost(`${API_BASE}/workforce/attendance/self_report/`, {work_date:date, status, note});
+    showToast('등록 완료!','success');
+    await loadPersonalMonth();
+    document.getElementById('sr-note').value = '';
+  } catch(e) { showToast('등록 실패: '+(e.message||e),'danger'); }
+}
+
+// 개인 월 캘린더
+function personalCalPrev() { _personalMonth--; if(_personalMonth<1){_personalMonth=12;_personalYear--;} loadPersonalMonth(); }
+function personalCalNext() { _personalMonth++; if(_personalMonth>12){_personalMonth=1;_personalYear++;} loadPersonalMonth(); }
+
+async function loadPersonalMonth() {
+  const y = _personalYear, m = _personalMonth;
+  document.getElementById('personal-cal-title').textContent = `${y}년 ${m}월`;
+  document.getElementById('personal-list-range').textContent = `${y}년 ${m}월`;
+  renderLegend(document.getElementById('personal-legend'));
+
+  const days = new Date(y, m, 0).getDate();
+  const dateFrom = `${y}-${String(m).padStart(2,'0')}-01`;
+  const dateTo   = `${y}-${String(m).padStart(2,'0')}-${String(days).padStart(2,'0')}`;
+  try {
+    const data = await apiGet(`${API_BASE}/workforce/attendance/`, {date_from:dateFrom, date_to:dateTo, page_size:100});
+    const logs = data.results || data;
+    _personalLogs = {};
+    logs.forEach(l => { _personalLogs[l.work_date] = l; });
+    renderPersonalCal(y, m, days);
+    renderPersonalList(logs);
+    renderPersonalStats(logs, days);
+  } catch(e) {}
+}
+
+function renderPersonalCal(y, m, days) {
+  const firstDay = new Date(y, m-1, 1).getDay(); // 0=Sun
+  const tbody = document.getElementById('personal-cal-tbody');
+  let html = '';
+  let col = 0;
+  let row = '<tr>';
+  // empty cells before first
+  for (let i=0; i<firstDay; i++) { row += '<td class="other-month"></td>'; col++; }
+  for (let d=1; d<=days; d++) {
+    const ds = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const lg = _personalLogs[ds];
+    const dow = new Date(y, m-1, d).getDay();
+    const cls = dow===0?'sun':dow===6?'sat':'';
+    const dot = lg
+      ? `<span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:${STATUS_META[lg.status]?.color||'#e2e8f0'};margin:2px auto;font-size:.6rem;color:#fff;line-height:24px;font-weight:700;">${STATUS_META[lg.status]?.short||'?'}</span>`
+      : '';
+    row += `<td><span class="cal-day-num ${cls}">${d}</span>${dot}</td>`;
+    col++;
+    if (col===7) { row += '</tr>'; html += row; row = '<tr>'; col = 0; }
+  }
+  if (col>0) { while(col<7){row+='<td class="other-month"></td>';col++;} row+='</tr>'; html+=row; }
+  tbody.innerHTML = html;
+}
+
+function renderPersonalList(logs) {
+  const tbody = document.getElementById('personal-list-tbody');
+  if (!logs.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">기록 없음</td></tr>';
+    return;
+  }
+  tbody.innerHTML = logs.map(r => {
+    const inT  = r.check_in_at  ? new Date(r.check_in_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : '-';
+    const outT = r.check_out_at ? new Date(r.check_out_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : '-';
+    const hrs  = r.work_hours != null ? `${r.work_hours}h` : '-';
+    return `<tr>
+      <td class="fw-semibold small">${r.work_date}</td>
+      <td><small class="${!r.check_in_at?'text-danger':''}">${inT}</small></td>
+      <td><small class="${!r.check_out_at?'text-muted':''}">${outT}</small></td>
+      <td><small>${hrs}</small></td>
+      <td>${attBadge(r.status)}</td>
+      <td><small class="text-muted">${r.note||''}</small></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPersonalStats(logs, totalDays) {
+  const el = document.getElementById('personal-month-stats');
+  if (!logs.length) { el.innerHTML = ''; return; }
+  const counts = {};
+  logs.forEach(l => { counts[l.status] = (counts[l.status]||0)+1; });
+  const hrs = logs.filter(l=>l.work_hours!=null).map(l=>l.work_hours);
+  const avgH = hrs.length ? (hrs.reduce((a,b)=>a+b,0)/hrs.length).toFixed(1) : '-';
+  let html = '';
+  Object.entries(counts).forEach(([k,v]) => {
+    const m = STATUS_META[k];
+    if (!m) return;
+    html += `<span style="font-size:.75rem;font-weight:600;color:${m.color};">${m.label}: ${v}일</span>`;
+  });
+  html += `<span style="font-size:.75rem;color:#64748b;" class="ms-2">평균 근무 ${avgH}h/일</span>`;
+  el.innerHTML = html;
+}
+
+function downloadPersonalCsv() {
+  const y=_personalYear, m=_personalMonth;
+  const days=new Date(y,m,0).getDate();
+  const dateFrom=`${y}-${String(m).padStart(2,'0')}-01`;
+  const dateTo=`${y}-${String(m).padStart(2,'0')}-${String(days).padStart(2,'0')}`;
+  window.location.href=`${API_BASE}/workforce/attendance/csv_download/?date_from=${dateFrom}&date_to=${dateTo}`;
+}
+
+loadTodayStatus();
+loadPersonalMonth();
+
+{% else %}
+// ────────────────────────────────────────────────────────────────────────
+// ══ 관리자 뷰 ════════════════════════════════════════════════════════════
+// ────────────────────────────────────────────────────────────────────────
+
+let _currentTab = 'grid';
+let _centers = [];
+let _listPage = 1, _listTotal = 0;
+let _listWorkers = [];
+
+// 탭 전환
+function switchTab(tab) {
+  document.querySelectorAll('#att-tab-nav .nav-link').forEach(a => {
+    a.classList.toggle('active', a.dataset.tab === tab);
+  });
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('d-none'));
+  document.getElementById(`tab-${tab}`).classList.remove('d-none');
+  _currentTab = tab;
+  // 아직 로드되지 않은 탭이면 자동 로드
+  if (!_tabLoaded[tab]) {
+    _tabLoaded[tab] = true;
+    if (tab === 'grid')    loadGrid();
+    else if (tab === 'month')   loadSummary('month');
+    else if (tab === 'quarter') loadSummary('quarter');
+    else if (tab === 'half')    loadSummary('half');
+    else if (tab === 'year')    loadSummary('year');
+    else if (tab === 'list')    loadList();
+  }
+}
+
+// 범례
+renderLegend(document.getElementById('grid-legend'));
+
+// 탭별 최초 로드 여부 추적
+const _tabLoaded = {grid:false, month:false, quarter:false, half:false, year:false, list:false};
+
+// 초기화: 연도·월·분기·반기 셀렉트 채우기 + 자동 로드
+function initAdminFilters() {
+  const now   = new Date();
+  const year  = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const quarter = Math.ceil(month / 3);          // 1~4
+  const half    = month <= 6 ? 1 : 2;            // 1 or 2
+
+  // 연도 입력
+  ['grid-year','ms-year','qs-year','hs-year','ys-year'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = year;
+  });
+
+  // 일별목록 기간 기본값: 이번달 1일~오늘
+  const y0 = String(year), m0 = String(month).padStart(2,'0');
+  document.getElementById('list-date-from').value = `${y0}-${m0}-01`;
+  document.getElementById('list-date-to').value   = TODAY_STR;
+
+  // 월 셀렉트 (그리드·월별 탭)
+  ['grid-month','ms-month'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = Array.from({length:12},(_,i) =>
+      `<option value="${i+1}"${i+1===month?' selected':''}>${i+1}월</option>`
+    ).join('');
+  });
+
+  // 분기 셀렉트 기본값
+  const qSel = document.getElementById('qs-quarter');
+  if (qSel) qSel.value = quarter;
+
+  // 반기 셀렉트 기본값
+  const hSel = document.getElementById('hs-half');
+  if (hSel) hSel.value = half;
+
+  // edit-status 옵션
+  const esel = document.getElementById('edit-status');
+  if (esel) {
+    esel.innerHTML = Object.entries(STATUS_META)
+      .map(([k,v]) => `<option value="${k}">${v.label}</option>`).join('');
+  }
+
+  // 지원청 셀렉트 채우기
+  apiGet(`${API_BASE}/workforce/center-tree/`).then(data => {
+    _centers = data.centers || [];
+    ['grid-center','ms-center','qs-center','hs-center','ys-center'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      _centers.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id; opt.textContent = c.name;
+        sel.appendChild(opt);
+      });
+    });
+  }).catch(()=>{});
+
+  // 인력 셀렉트 채우기 (worker + resident)
+  Promise.all([
+    apiGet(`${API_BASE}/accounts/api/users/`, {role:'worker',   page_size:200}),
+    apiGet(`${API_BASE}/accounts/api/users/`, {role:'resident', page_size:200}),
+  ]).then(([d1, d2]) => {
+    const workers = [...(d1.results||d1), ...(d2.results||d2)]
+      .sort((a,b) => a.name.localeCompare(b.name, 'ko'));
+    _listWorkers = workers;
+    const sel = document.getElementById('list-worker');
+    workers.forEach(w => {
+      const opt = document.createElement('option');
+      opt.value = w.id; opt.textContent = w.name;
+      sel.appendChild(opt);
+    });
+  }).catch(()=>{});
+
+  // ── 페이지 로드 시 모든 탭 자동 조회 ──────────────────────────
+  // 현재 탭(grid)은 즉시, 나머지는 병렬로 백그라운드 로드
+  loadGrid();
+  loadSummary('month');
+  loadSummary('quarter');
+  loadSummary('half');
+  loadSummary('year');
+  loadList();
+  Object.keys(_tabLoaded).forEach(k => _tabLoaded[k] = true);
+}
+
+// KPI 갱신
+function updateAdminKpi(workers) {
+  let normal=0,absent=0,late=0,leave=0,biz=0,hrs=[];
+  workers.forEach(w => {
+    const c = w.counts || {};
+    normal += c.normal||0;
+    absent += c.absent||0;
+    late   += c.late||0;
+    leave  += (c.leave||0)+(c.sick_leave||0)+(c.vacation||0)+(c.half_leave||0);
+    biz    += (c.business||0)+(c.other||0)+(c.early||0)+(c.resignation||0);
+    if (w.avg_hours) hrs.push(w.avg_hours);
+  });
+  const avg = hrs.length ? (hrs.reduce((a,b)=>a+b,0)/hrs.length).toFixed(1) : '-';
+  document.getElementById('kpi-normal').textContent  = normal;
+  document.getElementById('kpi-absent').textContent  = absent;
+  document.getElementById('kpi-late').textContent    = late;
+  document.getElementById('kpi-leave').textContent   = leave;
+  document.getElementById('kpi-biz').textContent     = biz;
+  document.getElementById('kpi-avg').textContent     = avg;
+}
+
+// ── 그리드 로드 ────────────────────────────────────────────────────────
+async function loadGrid() {
+  const year   = document.getElementById('grid-year').value;
+  const month  = document.getElementById('grid-month').value;
+  const center = document.getElementById('grid-center').value;
+  const loading = document.getElementById('grid-loading');
+  const table   = document.getElementById('grid-table');
+  loading.classList.remove('d-none');
+  loading.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>데이터 로드 중...';
+  table.classList.add('d-none');
+  try {
+    const data = await apiGet(`${API_BASE}/workforce/attendance/monthly_grid/`, {year, month, ...(center?{center}:{})});
+    renderGrid(data);
+    // KPI용 period_summary
+    const sumData = await apiGet(`${API_BASE}/workforce/attendance/period_summary/`, {year, period_type:'month', period_num:month, ...(center?{center}:{})});
+    updateAdminKpi(sumData.workers||[]);
+  } catch(e) {
+    loading.innerHTML = `<div class="text-danger py-3">오류: ${e.message}</div>`;
+  }
+}
+
+function renderGrid(data) {
+  const loading = document.getElementById('grid-loading');
+  const table   = document.getElementById('grid-table');
+  const thead   = document.getElementById('grid-thead');
+  const tbody   = document.getElementById('grid-tbody');
+  const days    = data.days;
+  const year    = data.year;
+  const month   = data.month;
+
+  // thead
+  thead.innerHTML =
+    `<th class="col-center" style="position:sticky;top:0;left:0;z-index:20;background:#f8fafc;">지원청</th>
+     <th class="col-worker" style="position:sticky;top:0;left:72px;z-index:20;background:#f8fafc;">인력</th>` +
+    Array.from({length:days},(_,i)=>{
+      const d = i+1;
+      const dow = new Date(year, month-1, d).getDay();
+      const cls = dow===0?'sun':dow===6?'sat':'';
+      return `<th class="grid-cell grid-thead-day ${cls}" style="font-size:.65rem;">${d}<br><span style="font-size:.55rem;opacity:.7;">${['일','월','화','수','목','금','토'][dow]}</span></th>`;
+    }).join('');
+
+  // tbody
+  let html = '';
+  let lastCenter = null;
+  (data.workers||[]).forEach(w => {
+    if (w.center_name !== lastCenter) {
+      lastCenter = w.center_name;
+      html += `<tr class="center-group-row">
+        <td colspan="${days+2}" style="position:sticky;left:0;">
+          <i class="bi bi-building me-1"></i>${w.center_name}
+        </td>
+      </tr>`;
+    }
+    html += `<tr>
+      <td class="col-center">${w.center_name}</td>
+      <td class="col-worker" title="${w.worker_name}">${w.worker_name}</td>
+      ${Array.from({length:days},(_,i)=>{
+        const d = i+1;
+        const cell = w.daily[d];
+        const dow = new Date(year,month-1,d).getDay();
+        const wkend = (dow===0||dow===6) ? 'style="background:#fafafe;"' : '';
+        if (!cell) {
+          return `<td class="grid-cell" ${wkend} onclick="openEditModal(${w.worker_id},'${w.worker_name}','${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}',null)">
+            <span class="cell-dot"></span>
+          </td>`;
+        }
+        const m = STATUS_META[cell.status];
+        return `<td class="grid-cell" ${wkend} onclick="openEditModal(${w.worker_id},'${w.worker_name}','${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}',${JSON.stringify(cell).replace(/"/g,'&quot;')})">
+          <span class="cell-dot has-data" style="background:${m?.color||'#e2e8f0'};" title="${m?.label||cell.status}${cell.check_in?' 출'+cell.check_in:''}${cell.check_out?' 퇴'+cell.check_out:''}"></span>
+          ${cell.check_in?`<span class="cell-time">${cell.check_in}</span>`:''}
+        </td>`;
+      }).join('')}
+    </tr>`;
+  });
+  tbody.innerHTML = html || '<tr><td colspan="40" class="text-center text-muted py-4">데이터 없음</td></tr>';
+  loading.classList.add('d-none');
+  table.classList.remove('d-none');
+}
+
+// ── 기간 집계 ──────────────────────────────────────────────────────────
+async function loadSummary(type) {
+  const year   = document.getElementById(`${type==='month'?'ms':type==='quarter'?'qs':type==='half'?'hs':'ys'}-year`).value;
+  const center = document.getElementById(`${type==='month'?'ms':type==='quarter'?'qs':type==='half'?'hs':'ys'}-center`).value;
+  let period_num = 1;
+  if (type==='month')   period_num = document.getElementById('ms-month').value;
+  if (type==='quarter') period_num = document.getElementById('qs-quarter').value;
+  if (type==='half')    period_num = document.getElementById('hs-half').value;
+  const wrap = document.getElementById(`summary-${type}-wrap`);
+  wrap.innerHTML = '<div class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-2"></span>로딩 중...</div>';
+  try {
+    const data = await apiGet(`${API_BASE}/workforce/attendance/period_summary/`, {
+      year, period_type:type, period_num, ...(center?{center}:{})
+    });
+    renderSummary(wrap, data, type, period_num);
+    updateAdminKpi(data.workers||[]);
+  } catch(e) {
+    wrap.innerHTML = `<div class="text-danger py-3">오류: ${e.message}</div>`;
+  }
+}
+
+function renderSummary(wrap, data, type, localPeriodNum) {
+  const workers = data.workers||[];
+  const statuses = Object.keys(STATUS_META);
+  const pnum = localPeriodNum !== undefined ? localPeriodNum : data.period_num;
+  let label = '';
+  if (type==='month') label=`${data.year}년 ${pnum}월`;
+  else if (type==='quarter') label=`${data.year}년 ${pnum}분기`;
+  else if (type==='half') label=`${data.year}년 ${pnum==1||pnum==='1'?'상':'하'}반기`;
+  else label=`${data.year}년 전체`;
+
+  let html = `
+  <div class="d-flex justify-content-between align-items-center mb-2 mt-1">
+    <span class="fw-bold text-primary">${label} 근태 집계</span>
+    <small class="text-muted">${data.date_from} ~ ${data.date_to}</small>
+  </div>
+  <div class="table-responsive">
+  <table class="table table-sm table-hover summary-table border">
+    <thead class="table-dark">
+      <tr>
+        <th>지원청</th><th>인력</th>
+        ${statuses.map(k=>`<th class="cnt" style="color:${STATUS_META[k].color};background:#1e293b;">${STATUS_META[k].label}</th>`).join('')}
+        <th class="cnt">총일수</th><th class="cnt">평균근무h</th>
+      </tr>
+    </thead>
+    <tbody>`;
+  let lastCenter = null;
+  workers.forEach(w => {
+    if (w.center_name !== lastCenter) {
+      lastCenter = w.center_name;
+      html += `<tr style="background:#f1f5f9;"><td colspan="${statuses.length+4}" class="fw-bold text-primary ps-2" style="font-size:.75rem;">
+        <i class="bi bi-building me-1"></i>${w.center_name}</td></tr>`;
+    }
+    const c = w.counts||{};
+    html += `<tr>
+      <td class="text-muted" style="font-size:.72rem;">${w.center_name}</td>
+      <td class="fw-semibold" style="font-size:.78rem;">${w.worker_name}</td>
+      ${statuses.map(k=>{
+        const v=c[k]||0;
+        return `<td class="cnt" style="color:${v>0?STATUS_META[k].color:'#cbd5e1'};">${v||''}</td>`;
+      }).join('')}
+      <td class="cnt fw-bold">${w.total_days||0}</td>
+      <td class="cnt text-primary">${w.avg_hours!=null?w.avg_hours+' h':'-'}</td>
+    </tr>`;
+  });
+  if (!workers.length) html += `<tr><td colspan="${statuses.length+4}" class="text-center text-muted py-3">데이터 없음</td></tr>`;
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
+}
+
+// ── 일별 목록 ──────────────────────────────────────────────────────────
+// 빠른 기간 선택
+function setListRange(preset) {
+  const now = new Date();
+  let from, to = TODAY_STR;
+  if (preset === 'today') {
+    from = TODAY_STR;
+  } else if (preset === 'week') {
+    const d = new Date(now); d.setDate(d.getDate() - d.getDay());
+    from = d.toISOString().slice(0,10);
+  } else if (preset === 'month') {
+    from = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  } else if (preset === 'prev_month') {
+    const prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    const last = new Date(now.getFullYear(), now.getMonth(), 0);
+    from = prev.toISOString().slice(0,10);
+    to   = last.toISOString().slice(0,10);
+  }
+  document.getElementById('list-date-from').value = from;
+  document.getElementById('list-date-to').value   = to;
+}
+
+let _listRows = []; // 위치확인용 행 보관
+
+async function loadList() {
+  const dateFrom = document.getElementById('list-date-from').value;
+  const dateTo   = document.getElementById('list-date-to').value;
+  const worker   = document.getElementById('list-worker').value;
+  if (!dateFrom || !dateTo) { showToast('시작일과 종료일을 선택하세요.','warning'); return; }
+  if (dateFrom > dateTo) { showToast('시작일이 종료일보다 클 수 없습니다.','warning'); return; }
+  const params = {date_from:dateFrom, date_to:dateTo, page:_listPage, page_size:50};
+  if (worker) params.worker = worker;
+  const tbody = document.getElementById('list-tbody');
+  tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-1"></span>로딩 중...</td></tr>';
+  try {
+    const data = await apiGet(`${API_BASE}/workforce/attendance/`, params);
+    const results = data.results || data;
+    _listRows = results;
+    _listTotal = Math.ceil((data.count||results.length)/50);
+    document.getElementById('list-count').textContent  = (data.count||results.length).toLocaleString();
+    document.getElementById('list-page-info').textContent = `${_listPage}/${_listTotal||1}`;
+    document.getElementById('list-prev').disabled = _listPage<=1;
+    document.getElementById('list-next').disabled = _listPage>=_listTotal;
+    if (!results.length) {
+      tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-4">기록 없음</td></tr>';
+      return;
+    }
+    const workerCenterMap = {};
+    _listWorkers.forEach(w => { workerCenterMap[w.id] = w.support_center_name||''; });
+    tbody.innerHTML = results.map((r, idx) => {
+      const inT   = r.check_in_at  ? new Date(r.check_in_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : '-';
+      const outT  = r.check_out_at ? new Date(r.check_out_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : '-';
+      const hrs   = r.work_hours != null ? `${r.work_hours}h` : '-';
+      const inLoc = r.check_in_lat
+        ? `<button class="btn btn-link btn-sm p-0 text-danger" onclick="openGpsMap(${idx},'in')" title="출근위치 보기">
+             <i class="bi bi-geo-alt-fill"></i></button>`
+        : '<span class="text-muted small">-</span>';
+      const outLoc = r.check_out_lat
+        ? `<button class="btn btn-link btn-sm p-0 text-primary" onclick="openGpsMap(${idx},'out')" title="퇴근위치 보기">
+             <i class="bi bi-geo-alt-fill"></i></button>`
+        : '<span class="text-muted small">-</span>';
+      // 단말 뱃지
+      const devMap = {pc:'<span style="font-size:.65rem;padding:1px 5px;border-radius:3px;background:#dbeafe;color:#1d4ed8;">🖥PC</span>', mobile:'<span style="font-size:.65rem;padding:1px 5px;border-radius:3px;background:#dcfce7;color:#15803d;">📱모바일</span>'};
+      const inDev  = devMap[r.check_in_device]  || '<span class="text-muted" style="font-size:.65rem;">-</span>';
+      const outDev = devMap[r.check_out_device] || '<span class="text-muted" style="font-size:.65rem;">-</span>';
+      return `<tr>
+        <td class="fw-semibold small">${r.work_date}</td>
+        <td class="small text-muted">${workerCenterMap[r.worker]||''}</td>
+        <td class="fw-semibold small">${r.worker_name||'-'}</td>
+        <td><small class="${!r.check_in_at?'text-danger':''}">${inT}</small></td>
+        <td>${inLoc}</td>
+        <td>${inDev}</td>
+        <td><small class="${!r.check_out_at?'text-muted':''}">${outT}</small></td>
+        <td>${outLoc}</td>
+        <td>${outDev}</td>
+        <td><small>${hrs}</small></td>
+        <td>${attBadge(r.status)}</td>
+        <td><small class="text-muted">${r.note||''}</small></td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="12" class="text-center text-danger py-3">오류: ${e.message}</td></tr>`;
+  }
+}
+
+function listChangePage(delta) {
+  _listPage = Math.max(1, Math.min(_listTotal, _listPage+delta));
+  loadList();
+}
+
+// ── CSV 다운로드 ────────────────────────────────────────────────────────
+function downloadAdminCsv() {
+  let dateFrom, dateTo, worker='';
+  if (_currentTab === 'grid') {
+    const y = document.getElementById('grid-year').value;
+    const m = document.getElementById('grid-month').value;
+    const days = new Date(+y,+m,0).getDate();
+    dateFrom = `${y}-${String(m).padStart(2,'0')}-01`;
+    dateTo   = `${y}-${String(m).padStart(2,'0')}-${String(days).padStart(2,'0')}`;
+  } else {
+    dateFrom = document.getElementById('list-date-from')?.value;
+    dateTo   = document.getElementById('list-date-to')?.value;
+    if (!dateFrom || !dateTo) { showToast('기간을 선택하세요.','warning'); return; }
+    worker   = document.getElementById('list-worker')?.value||'';
+  }
+  const p = new URLSearchParams({date_from:dateFrom, date_to:dateTo});
+  if (worker) p.set('worker', worker);
+  window.location.href = `${API_BASE}/workforce/attendance/csv_download/?${p}`;
+}
+
+// ── GPS 지도 ───────────────────────────────────────────────────────────
+let _attMap = null, _attMarkerSrc = null;
+
+function openGpsMap(rowIdx, type) {
+  const r = _listRows[rowIdx];
+  if (!r) return;
+  const lat  = type==='in'  ? parseFloat(r.check_in_lat)  : parseFloat(r.check_out_lat);
+  const lng  = type==='in'  ? parseFloat(r.check_in_lng)  : parseFloat(r.check_out_lng);
+  const time = type==='in'  ? r.check_in_at  : r.check_out_at;
+  const timeStr = time ? new Date(time).toLocaleString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+  const label = type==='in' ? '출근' : '퇴근';
+
+  // 모달 정보 업데이트
+  document.getElementById('map-modal-title').innerHTML =
+    `<i class="bi bi-geo-alt-fill me-1 text-${type==='in'?'danger':'primary'}"></i>${label} 위치 확인`;
+  document.getElementById('map-info-worker').textContent = r.worker_name || '';
+  document.getElementById('map-info-date').textContent   = r.work_date;
+  document.getElementById('map-info-time').textContent   = `${label} ${timeStr}`;
+  document.getElementById('map-info-coords').textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+  // 현장 위치(업무일정 학교)
+  const fieldLocs = r.field_locations || [];
+  document.getElementById('map-legend-field').classList.toggle('d-none', fieldLocs.length===0);
+
+  const modal = new bootstrap.Modal(document.getElementById('mapModal'));
+  modal.show();
+
+  document.getElementById('mapModal').addEventListener('shown.bs.modal', function handler() {
+    this.removeEventListener('shown.bs.modal', handler);
+    const coord = ol.proj.fromLonLat([lng, lat]);
+
+    // GPS 마커
+    const gpsFeature = new ol.Feature({ geometry: new ol.geom.Point(coord) });
+    gpsFeature.setStyle(new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 12,
+        fill:   new ol.style.Fill({ color: type==='in'?'#dc3545':'#2563eb' }),
+        stroke: new ol.style.Stroke({ color:'#fff', width:3 }),
+      }),
+      text: new ol.style.Text({
+        text: label,
+        offsetY: -22,
+        font: 'bold 12px sans-serif',
+        fill:   new ol.style.Fill({ color: type==='in'?'#dc3545':'#2563eb' }),
+        stroke: new ol.style.Stroke({ color:'#fff', width:3 }),
+      }),
+    }));
+
+    // 현장 마커
+    const fieldFeatures = fieldLocs.map(loc => {
+      const f = new ol.Feature({ geometry: new ol.geom.Point(ol.proj.fromLonLat([loc.lng, loc.lat])) });
+      f.setStyle(new ol.style.Style({
+        image: new ol.style.Circle({
+          radius: 9,
+          fill:   new ol.style.Fill({ color:'#10b981' }),
+          stroke: new ol.style.Stroke({ color:'#fff', width:2 }),
+        }),
+        text: new ol.style.Text({
+          text: loc.name || '현장',
+          offsetY: -18,
+          font: 'bold 11px sans-serif',
+          fill:   new ol.style.Fill({ color:'#10b981' }),
+          stroke: new ol.style.Stroke({ color:'#fff', width:3 }),
+        }),
+      }));
+      return f;
+    });
+
+    const allFeatures = [gpsFeature, ...fieldFeatures];
+    const allCoords   = [coord, ...fieldLocs.map(l => ol.proj.fromLonLat([l.lng, l.lat]))];
+    const apiKey = typeof VWORLD_API_KEY !== 'undefined' ? VWORLD_API_KEY : '';
+
+    if (_attMap) {
+      _attMarkerSrc.clear();
+      _attMarkerSrc.addFeatures(allFeatures);
+      _fitMapView(allCoords, coord);
+      _attMap.updateSize();
+      return;
+    }
+
+    _attMarkerSrc = new ol.source.Vector({ features: allFeatures });
+    _attMap = new ol.Map({
+      target: 'attendance-map',
+      layers: [
+        new ol.layer.Tile({
+          source: new ol.source.XYZ({
+            url: `https://api.vworld.kr/req/wmts/1.0.0/${apiKey}/Base/{z}/{y}/{x}.png`,
+            attributions: '© 국토정보플랫폼',
+            maxZoom: 19,
+          }),
+        }),
+        new ol.layer.Vector({ source: _attMarkerSrc }),
+      ],
+      view: new ol.View({ center: coord, zoom: 16 }),
+    });
+    _fitMapView(allCoords, coord);
+  });
+}
+
+function _fitMapView(allCoords, fallback) {
+  if (!_attMap) return;
+  if (allCoords.length > 1) {
+    const extent = ol.extent.boundingExtent(allCoords);
+    _attMap.getView().fit(extent, { padding:[60,60,60,60], maxZoom:16 });
+  } else {
+    _attMap.getView().setCenter(fallback);
+    _attMap.getView().setZoom(16);
+  }
+}
+
+// ── 근태 편집 모달 ──────────────────────────────────────────────────────
+let _editModal = null;
+function openEditModal(workerId, workerName, date, cell) {
+  document.getElementById('edit-worker-label').textContent = workerName;
+  document.getElementById('edit-date-label').textContent   = date;
+  document.getElementById('edit-worker-id').value = workerId;
+  document.getElementById('edit-date').value      = date;
+  document.getElementById('edit-log-id').value    = cell?.id || '';
+  document.getElementById('edit-status').value    = cell?.status || 'normal';
+  document.getElementById('edit-checkin').value   = cell?.check_in  || '';
+  document.getElementById('edit-checkout').value  = cell?.check_out || '';
+  document.getElementById('edit-note').value      = cell?.note      || '';
+  document.getElementById('edit-delete-btn').classList.toggle('d-none', !cell?.id);
+  if (!_editModal) _editModal = new bootstrap.Modal(document.getElementById('attEditModal'));
+  _editModal.show();
+}
+
+async function saveAttLog() {
+  const workerId  = document.getElementById('edit-worker-id').value;
+  const date      = document.getElementById('edit-date').value;
+  const status    = document.getElementById('edit-status').value;
+  const note      = document.getElementById('edit-note').value.trim();
+  const checkIn   = document.getElementById('edit-checkin').value;
+  const checkOut  = document.getElementById('edit-checkout').value;
+  const body = { worker: workerId, work_date: date, status, note };
+  if (checkIn)  body.check_in_at  = `${date}T${checkIn}:00`;
+  if (checkOut) body.check_out_at = `${date}T${checkOut}:00`;
+  try {
+    await apiPost(`${API_BASE}/workforce/attendance/admin_upsert/`, body);
+    _editModal.hide();
+    showToast('저장 완료', 'success');
+    loadGrid();
+  } catch(e) { showToast('저장 실패: '+(e.message||e),'danger'); }
+}
+
+async function deleteAttLog() {
+  const workerId = document.getElementById('edit-worker-id').value;
+  const date     = document.getElementById('edit-date').value;
+  if (!confirm(`${date} 근태 기록을 삭제할까요?`)) return;
+  try {
+    await apiDelete(`${API_BASE}/workforce/attendance/admin_delete/`, {worker:workerId, work_date:date});
+    _editModal.hide();
+    showToast('삭제 완료', 'success');
+    loadGrid();
+  } catch(e) { showToast('삭제 실패: '+(e.message||e),'danger'); }
+}
+
+initAdminFilters();
+{% endif %}
+
+// showToast — npms.js 전역 함수 사용
+</script>
+<style>@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}</style>
+{% endblock %}

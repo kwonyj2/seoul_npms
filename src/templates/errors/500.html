@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}500 — 서버 오류{% endblock %}
+{% block content %}
+<div class="d-flex flex-column align-items-center justify-content-center" style="min-height:60vh;gap:16px;">
+  <div style="font-size:72px;color:#dee2e6;">500</div>
+  <h4 class="text-muted">서버에서 오류가 발생했습니다.</h4>
+  <p class="text-muted small">관리자에게 문의하거나 잠시 후 다시 시도해주세요.</p>
+  <a href="/npms/" class="btn btn-primary">대시보드로 돌아가기</a>
+</div>
+{% endblock %}

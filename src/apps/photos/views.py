@@ -1,0 +1,155 @@
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.db.models import Q, Count
+
+@login_required
+def photos_view(request):
+    return render(request, 'photos/index.html')
+
+
+from .models import Photo, PhotoWorkType
+from .serializers import PhotoListSerializer, PhotoUploadSerializer, PhotoWorkTypeSerializer
+from core.pagination import StandardPagination
+from core.permissions.roles import IsAdmin, IsSuperAdmin
+
+
+class PhotoWorkTypeViewSet(viewsets.ModelViewSet):
+    """작업 유형 관리 — 조회: 전체, 등록/수정/삭제: 슈퍼관리자 전용"""
+    serializer_class = PhotoWorkTypeSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = PhotoWorkType.objects.all()   # is_active 무관하게 관리자에게 전체 노출
+
+    def get_queryset(self):
+        # 일반 사용자는 활성 작업명만, 슈퍼관리자는 전체
+        if self.request.user.role == 'superadmin':
+            return PhotoWorkType.objects.all().order_by('order', 'id')
+        return PhotoWorkType.objects.filter(is_active=True).order_by('order', 'id')
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsSuperAdmin()]
+        return [IsAuthenticated()]
+
+
+class PhotoViewSet(viewsets.ModelViewSet):
+    """현장 작업 사진 CRUD"""
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardPagination
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return PhotoUploadSerializer
+        return PhotoListSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Photo.objects.select_related(
+            'school__support_center', 'school__school_type',
+            'building', 'floor', 'room', 'work_type', 'taken_by', 'incident'
+        )
+        if user.role == 'worker':
+            qs = qs.filter(taken_by=user)
+
+        p = self.request.query_params
+        if p.get('center'):
+            qs = qs.filter(school__support_center__code=p['center'])
+        if p.get('school_type'):
+            qs = qs.filter(school__school_type__code=p['school_type'])
+        if p.get('school_id'):
+            qs = qs.filter(school_id=p['school_id'])
+        if p.get('incident_id'):
+            qs = qs.filter(incident_id=p['incident_id'])
+        if p.get('stage'):
+            qs = qs.filter(photo_stage=p['stage'])
+        if p.get('work_type_id'):
+            qs = qs.filter(work_type_id=p['work_type_id'])
+        if p.get('from'):
+            qs = qs.filter(taken_at__date__gte=p['from'])
+        if p.get('to'):
+            qs = qs.filter(taken_at__date__lte=p['to'])
+        if p.get('q'):
+            qs = qs.filter(
+                Q(school__name__icontains=p['q']) |
+                Q(work_type__name__icontains=p['q']) |
+                Q(work_type_etc__icontains=p['q']) |
+                Q(file_name__icontains=p['q'])
+            )
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def classify(self, request, pk=None):
+        """AI 분류 재실행"""
+        photo = self.get_object()
+        from .tasks import classify_photo_ai
+        classify_photo_ai.delay(photo.id)
+        return Response({'message': 'AI 분류 요청됨'})
+
+    @action(detail=True, methods=['post'])
+    def analyze(self, request, pk=None):
+        """AI 품질 검사 + 단계 분류 + 불량 감지 종합 분석"""
+        photo = self.get_object()
+        with photo.image.open('rb') as f:
+            img_bytes = f.read()
+        from .ai_service import analyze_photo
+        result = analyze_photo(photo, img_bytes, save=True)
+        return Response(result)
+
+    @action(detail=False, methods=['get'], url_path='quality-issues')
+    def quality_issues(self, request):
+        """재촬영 필요 사진 목록 (needs_retake=True)"""
+        qs = self.get_queryset().filter(needs_retake=True)
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def by_school(self, request):
+        """학교별 사진 통계"""
+        qs = Photo.objects.values('school__name').annotate(
+            cnt=Count('id')
+        ).order_by('-cnt')[:20]
+        return Response(list(qs))
+
+    @action(detail=False, methods=['post'])
+    def bulk_delete(self, request):
+        """선택 사진 일괄 삭제"""
+        ids = request.data.get('ids', [])
+        if not ids:
+            return Response({'error': '삭제할 사진 ID를 전달하세요.'}, status=status.HTTP_400_BAD_REQUEST)
+        qs = Photo.objects.filter(id__in=ids)
+        if request.user.role not in ('admin', 'manager'):
+            qs = qs.filter(taken_by=request.user)
+        deleted_cnt, _ = qs.delete()
+        return Response({'deleted': deleted_cnt})
+
+    @action(detail=False, methods=['post'])
+    def bulk_upload(self, request):
+        """다중 사진 업로드"""
+        files = request.FILES.getlist('images')
+        if not files:
+            return Response({'error': '이미지 파일이 없습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        results = []
+        errors  = []
+        for f in files:
+            data = request.data.copy()
+            data['image'] = f
+            ser = PhotoUploadSerializer(data=data, context={'request': request})
+            if ser.is_valid():
+                photo = ser.save()
+                results.append(photo.id)
+            else:
+                errors.append({'file': f.name, 'errors': ser.errors})
+        return Response({
+            'created': len(results),
+            'errors': errors,
+            'photo_ids': results,
+        }, status=status.HTTP_201_CREATED if results else status.HTTP_400_BAD_REQUEST)

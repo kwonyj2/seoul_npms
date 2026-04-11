@@ -1,0 +1,406 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}장애 접수{% endblock %}
+{% block page_title %}<i class="bi bi-plus-circle me-2 text-primary"></i>장애 접수{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-6">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header py-2 bg-white border-bottom">
+          <span class="fw-semibold"><i class="bi bi-exclamation-triangle text-danger me-1"></i>신규 장애 접수</span>
+        </div>
+        <div class="card-body">
+          <form id="create-form" novalidate>
+            <!-- 학교 선택: 지원청 → 학제 → 학교 -->
+            <div class="row g-2 mb-2">
+              <div class="col-12 col-md-4">
+                <label class="form-label small fw-semibold">지원청 <span class="text-danger">*</span></label>
+                <select id="sel-center" class="form-select form-select-sm" required>
+                  <option value="">지원청 선택...</option>
+                </select>
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label small fw-semibold">학제 <span class="text-danger">*</span></label>
+                <select id="sel-type" class="form-select form-select-sm" required disabled>
+                  <option value="">학제 선택...</option>
+                </select>
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label small fw-semibold">학교 <span class="text-danger">*</span></label>
+                <select id="sel-school" class="form-select form-select-sm" required disabled>
+                  <option value="">학교 선택...</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 장애 위치 (선택) -->
+            <div class="row g-1 mb-2" id="location-row" style="display:none;">
+              <div class="col-12 mb-1">
+                <label class="form-label small fw-semibold mb-0">
+                  <i class="bi bi-geo-alt me-1 text-secondary"></i>장애 위치 <small class="text-muted fw-normal">(선택)</small>
+                </label>
+              </div>
+              <div class="col-4">
+                <select id="sel-loc-building" class="form-select form-select-sm" onchange="loadLocFloors()">
+                  <option value="">건물 선택</option>
+                </select>
+              </div>
+              <div class="col-4">
+                <select id="sel-loc-floor" class="form-select form-select-sm" onchange="loadLocRooms()" disabled>
+                  <option value="">층 선택</option>
+                </select>
+              </div>
+              <div class="col-4">
+                <select id="sel-loc-room" class="form-select form-select-sm" disabled>
+                  <option value="">교실 선택</option>
+                </select>
+              </div>
+              <div class="col-12 mt-1">
+                <input type="text" id="txt-loc-detail" class="form-control form-control-sm"
+                       placeholder="위치 상세 (예: 서버실 2번 랙)">
+              </div>
+            </div>
+
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label small fw-semibold">분류 <span class="text-danger">*</span></label>
+                <select id="sel-category" class="form-select form-select-sm" required>
+                  <option value="">분류 선택...</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label small fw-semibold">세부 분류</label>
+                <select id="sel-subcategory" class="form-select form-select-sm" disabled>
+                  <option value="">세부분류 선택...</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">우선순위</label>
+              <select id="sel-priority" class="form-select form-select-sm">
+                <option value="medium" selected>중간</option>
+                <option value="critical">긴급</option>
+                <option value="high">높음</option>
+                <option value="low">낮음</option>
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label small fw-semibold">증상 설명 <span class="text-danger">*</span></label>
+              <textarea id="txt-symptom" class="form-control form-control-sm" rows="4"
+                        placeholder="발생한 장애 증상을 구체적으로 입력하세요..." required></textarea>
+            </div>
+
+            <!-- 담당 선생님 자동완성 -->
+            <div id="contact-hint" class="alert alert-info py-2 px-3 mb-2 small d-none">
+              <i class="bi bi-person-lines-fill me-1"></i>
+              <strong id="contact-hint-name"></strong>
+              <span class="text-muted ms-1" id="contact-hint-phone"></span>
+              <span class="ms-2">
+                <a href="#" class="me-2" id="btn-use-contact">이 선생님으로 입력</a>
+                <a href="#" class="text-muted" id="btn-other-contact">다른 분</a>
+              </span>
+            </div>
+
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label small fw-semibold">장애 요청자 <span class="text-danger">*</span></label>
+                <input type="text" id="txt-requester" class="form-control form-control-sm" placeholder="요청자 성명">
+              </div>
+              <div class="col-6">
+                <label class="form-label small fw-semibold">요청자 연락처 <span class="text-danger">*</span></label>
+                <input type="tel" id="txt-requester-phone" class="form-control form-control-sm" placeholder="010-xxxx-xxxx">
+              </div>
+            </div>
+
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label small fw-semibold">접수 경로</label>
+                <select id="sel-channel" class="form-select form-select-sm">
+                  <option value="phone">전화</option>
+                  <option value="email">이메일</option>
+                  <option value="system">시스템</option>
+                  <option value="visit">방문</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="d-flex gap-2 justify-content-end">
+              <a href="/npms/incidents/list/" class="btn btn-sm btn-outline-secondary">취소</a>
+              <button type="submit" class="btn btn-sm btn-primary">
+                <i class="bi bi-check-lg me-1"></i>접수 등록
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let _treeData = [];  // [{id, code, name, types:[{id,name,schools:[{id,name}]}]}]
+
+// ── 지원청/학제/학교 트리 로드 ────────────────────────────────────────────
+async function loadTree() {
+  try {
+    _treeData = await apiGet(`${API_BASE}/schools/schools/tree/`);
+    const centerSel = document.getElementById('sel-center');
+    centerSel.innerHTML = '<option value="">지원청 선택...</option>' +
+      _treeData.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+  } catch(e) {}
+}
+
+// 지원청 선택 → 학제 목록 채우기
+document.getElementById('sel-center').addEventListener('change', function() {
+  const code    = this.value;
+  const typeSel = document.getElementById('sel-type');
+  const schSel  = document.getElementById('sel-school');
+
+  typeSel.innerHTML = '<option value="">학제 선택...</option>';
+  schSel.innerHTML  = '<option value="">학교 선택...</option>';
+  typeSel.disabled  = true;
+  schSel.disabled   = true;
+
+  if (!code) return;
+  const center = _treeData.find(c => c.code === code);
+  if (!center) return;
+
+  center.types.forEach(t => {
+    typeSel.innerHTML += `<option value="${t.id}">${t.name} (${t.count})</option>`;
+  });
+  typeSel.disabled = false;
+});
+
+// 학제 선택 → 학교 목록 채우기
+document.getElementById('sel-type').addEventListener('change', function() {
+  const typeId = parseInt(this.value);
+  const code   = document.getElementById('sel-center').value;
+  const schSel = document.getElementById('sel-school');
+
+  schSel.innerHTML = '<option value="">학교 선택...</option>';
+  schSel.disabled  = true;
+  resetLocationCascade();
+
+  if (!typeId || !code) return;
+  const center = _treeData.find(c => c.code === code);
+  if (!center) return;
+  const type = center.types.find(t => t.id === typeId);
+  if (!type) return;
+
+  const sorted = [...type.schools].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  schSel.innerHTML = '<option value="">학교 선택...</option>' +
+    sorted.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  schSel.disabled = false;
+});
+
+// 학교 선택 → 위치 cascade 초기화 + 건물 로드 + 담당 선생님 자동완성
+document.getElementById('sel-school').addEventListener('change', function() {
+  resetLocationCascade();
+  const schoolId = this.value;
+  if (!schoolId) { hideContactHint(); return; }
+  loadLocBuildings(schoolId);
+  loadSchoolContact(schoolId);
+});
+
+// ── 담당 선생님 자동완성 ─────────────────────────────────────────────────────
+let _primaryContact = null;
+
+async function loadSchoolContact(schoolId) {
+  hideContactHint();
+  try {
+    const contacts = await apiGet(`${API_BASE}/schools/schools/${schoolId}/contacts/`);
+    // is_primary=true인 담당자 우선, 없으면 첫 번째
+    _primaryContact = contacts.find(c => c.is_primary) || contacts[0] || null;
+    if (!_primaryContact) return;
+    document.getElementById('contact-hint-name').textContent  = _primaryContact.name;
+    document.getElementById('contact-hint-phone').textContent = _primaryContact.phone || '';
+    document.getElementById('contact-hint').classList.remove('d-none');
+  } catch(e) { /* 담당자 없으면 무시 */ }
+}
+
+function hideContactHint() {
+  _primaryContact = null;
+  document.getElementById('contact-hint').classList.add('d-none');
+  document.getElementById('contact-hint-name').textContent  = '';
+  document.getElementById('contact-hint-phone').textContent = '';
+}
+
+document.getElementById('btn-use-contact').addEventListener('click', function(e) {
+  e.preventDefault();
+  if (!_primaryContact) return;
+  document.getElementById('txt-requester').value       = _primaryContact.name;
+  document.getElementById('txt-requester-phone').value = _primaryContact.phone || '';
+  document.getElementById('contact-hint').classList.add('d-none');
+});
+
+document.getElementById('btn-other-contact').addEventListener('click', function(e) {
+  e.preventDefault();
+  hideContactHint();
+  document.getElementById('txt-requester').value       = '';
+  document.getElementById('txt-requester-phone').value = '';
+  document.getElementById('txt-requester').focus();
+});
+
+// ── 위치 cascade ───────────────────────────────────────────────────────────
+let _locSchoolId = null;
+
+function resetLocationCascade() {
+  _locSchoolId = null;
+  document.getElementById('sel-loc-building').innerHTML = '<option value="">건물 선택</option>';
+  document.getElementById('sel-loc-floor').innerHTML    = '<option value="">층 선택</option>';
+  document.getElementById('sel-loc-room').innerHTML     = '<option value="">교실 선택</option>';
+  document.getElementById('sel-loc-floor').disabled = true;
+  document.getElementById('sel-loc-room').disabled  = true;
+  document.getElementById('location-row').style.display = 'none';
+}
+
+async function loadLocBuildings(schoolId) {
+  _locSchoolId = schoolId;
+  const sel = document.getElementById('sel-loc-building');
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${schoolId}/rooms_for_select/`);
+    if (!data || !data.length) return;
+    sel.innerHTML = '<option value="">건물 선택</option>' +
+      data.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+    document.getElementById('location-row').style.display = '';
+  } catch(e) {}
+}
+
+async function loadLocFloors() {
+  const bldId = document.getElementById('sel-loc-building').value;
+  const floorSel = document.getElementById('sel-loc-floor');
+  const roomSel  = document.getElementById('sel-loc-room');
+  floorSel.innerHTML = '<option value="">층 선택</option>';
+  roomSel.innerHTML  = '<option value="">교실 선택</option>';
+  floorSel.disabled = true;
+  roomSel.disabled  = true;
+  if (!bldId || !_locSchoolId) return;
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${_locSchoolId}/rooms_for_select/`, {building: bldId});
+    if (!data || !data.length) return;
+    floorSel.innerHTML = '<option value="">층 선택</option>' +
+      data.map(f => `<option value="${f.id}">${f.floor_name}</option>`).join('');
+    floorSel.disabled = false;
+  } catch(e) {}
+}
+
+async function loadLocRooms() {
+  const floorId = document.getElementById('sel-loc-floor').value;
+  const roomSel = document.getElementById('sel-loc-room');
+  roomSel.innerHTML = '<option value="">교실 선택</option>';
+  roomSel.disabled  = true;
+  if (!floorId || !_locSchoolId) return;
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${_locSchoolId}/rooms_for_select/`, {floor: floorId});
+    if (!data || !data.length) return;
+    roomSel.innerHTML = '<option value="">교실 선택</option>' +
+      data.map(r => `<option value="${r.id}">${r.room_number ? r.room_number+' '+r.name : r.name}</option>`).join('');
+    roomSel.disabled = false;
+  } catch(e) {}
+}
+
+// ── 분류 로드 ─────────────────────────────────────────────────────────────
+async function loadCategories() {
+  try {
+    const data = await apiGet(`${API_BASE}/incidents/categories/`);
+    const cats = data.results || data;
+    const sel  = document.getElementById('sel-category');
+    cats.forEach(c => { sel.innerHTML += `<option value="${c.id}">${c.name}</option>`; });
+    window._categories = cats;
+  } catch(e) {}
+}
+
+// 분류 변경 → 세부분류 로드
+document.getElementById('sel-category').addEventListener('change', function() {
+  const catId  = parseInt(this.value);
+  const subSel = document.getElementById('sel-subcategory');
+  const cat    = (window._categories || []).find(c => c.id === catId);
+  subSel.innerHTML = '<option value="">세부분류 선택...</option>';
+  if (cat && cat.subcategories && cat.subcategories.length) {
+    cat.subcategories.forEach(s => { subSel.innerHTML += `<option value="${s.id}">${s.name}</option>`; });
+    subSel.disabled = false;
+  } else {
+    subSel.disabled = true;
+  }
+});
+
+// ── 폼 제출 ───────────────────────────────────────────────────────────────
+document.getElementById('create-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const school     = document.getElementById('sel-school').value;
+  const category   = document.getElementById('sel-category').value;
+  const symptom    = document.getElementById('txt-symptom').value.trim();
+  const requester  = document.getElementById('txt-requester').value.trim();
+  const reqPhone   = document.getElementById('txt-requester-phone').value.trim();
+
+  if (!school)    { showToast('학교를 선택하세요', 'warning'); return; }
+  if (!category)  { showToast('분류를 선택하세요', 'warning'); return; }
+  if (!symptom)   { showToast('증상 설명을 입력하세요', 'warning'); return; }
+  if (!requester) { showToast('요청자 성명을 입력하세요', 'warning'); return; }
+  if (!reqPhone)  { showToast('요청자 연락처를 입력하세요', 'warning'); return; }
+
+  const payload = {
+    school:          parseInt(school),
+    category:        parseInt(category),
+    priority:        document.getElementById('sel-priority').value,
+    description:     symptom,
+    requester_name:  requester,
+    requester_phone: reqPhone,
+    contact_method:  document.getElementById('sel-channel').value,
+  };
+  const subcat = document.getElementById('sel-subcategory').value;
+  if (subcat) payload.subcategory = parseInt(subcat);
+
+  // 위치 정보
+  const locBld    = document.getElementById('sel-loc-building').value;
+  const locFloor  = document.getElementById('sel-loc-floor').value;
+  const locRoom   = document.getElementById('sel-loc-room').value;
+  const locDetail = document.getElementById('txt-loc-detail').value.trim();
+  if (locBld)    payload.location_building = parseInt(locBld);
+  if (locFloor)  payload.location_floor    = parseInt(locFloor);
+  if (locRoom)   payload.location_room     = parseInt(locRoom);
+  if (locDetail) payload.location_detail   = locDetail;
+
+  const btn = this.querySelector('[type=submit]');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>등록 중...';
+
+  try {
+    const result = await apiPost(`${API_BASE}/incidents/incidents/`, payload);
+    showToast(`접수 완료: ${result.incident_number}`, 'success');
+    setTimeout(() => location.href = `/npms/incidents/list/`, 1500);
+  } catch(err) {
+    let msg = '등록 실패. 다시 시도하세요.';
+    if (err?.detail) {
+      msg = err.detail;
+    } else if (typeof err === 'object') {
+      const fieldMap = {
+        school: '학교', category: '분류', description: '증상 설명',
+        requester_name: '요청자', requester_phone: '요청자 연락처',
+        contact_method: '접수 경로', non_field_errors: ''
+      };
+      const lines = [];
+      for (const [k, v] of Object.entries(err)) {
+        const label = fieldMap[k] || k;
+        const errs  = Array.isArray(v) ? v.join(', ') : v;
+        lines.push(label ? `[${label}] ${errs}` : errs);
+      }
+      if (lines.length) msg = lines.join('\n');
+    }
+    showToast(msg, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>접수 등록';
+  }
+});
+
+loadTree();
+loadCategories();
+</script>
+{% endblock %}

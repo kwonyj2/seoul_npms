@@ -1,0 +1,788 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}인력 관리{% endblock %}
+{% block page_title %}<i class="bi bi-person-badge me-2"></i>인력 관리{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ════════════════════════════════════════════════════
+   레이아웃
+════════════════════════════════════════════════════ */
+.wm-body {
+  display:grid; grid-template-columns:260px 1fr; gap:12px;
+  padding:12px 16px 20px;
+}
+@media(max-width:820px){ .wm-body{ grid-template-columns:1fr; } }
+
+/* ════════════════════════════════════════════════════
+   좌측 트리 패널 (업무일정과 동일)
+════════════════════════════════════════════════════ */
+.tree-panel {
+  background:#fff; border-radius:12px;
+  box-shadow:0 1px 4px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04);
+  display:flex; flex-direction:column; overflow:hidden;
+  max-height:calc(100vh - 170px);
+}
+.tree-header {
+  padding:12px 14px 10px; border-bottom:1px solid #f0f0f0; flex-shrink:0;
+  font-size:.78rem; font-weight:700; color:#1e293b;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.tree-search { padding:8px 10px; border-bottom:1px solid #f0f0f0; flex-shrink:0; }
+.tree-search input {
+  width:100%; border:1px solid #e2e8f0; border-radius:8px;
+  padding:6px 10px 6px 30px; font-size:.77rem; outline:none;
+  background:#f8fafc url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%239ca3af' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.243 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z'/%3E%3C/svg%3E") no-repeat 9px center;
+  transition:border-color .15s;
+}
+.tree-search input:focus { border-color:#2563eb; background-color:#fff; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+.tree-body { flex:1; overflow-y:auto; padding:4px 0; }
+.tree-body::-webkit-scrollbar { width:4px; }
+.tree-body::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:4px; }
+
+.center-node {
+  padding:6px 12px 5px; cursor:pointer; user-select:none;
+  display:flex; align-items:center; transition:background .1s;
+}
+.center-node:hover { background:#f8fafc; }
+.center-node .cname { font-size:.76rem; font-weight:700; color:#334155; flex:1; }
+.center-node .cbadge {
+  font-size:.62rem; background:#e2e8f0; color:#64748b;
+  border-radius:20px; padding:1px 8px; margin-left:4px; font-weight:600;
+}
+.center-node .toggle-icon { font-size:.68rem; color:#94a3b8; margin-left:4px; transition:transform .15s; }
+.center-node.open .toggle-icon { transform:rotate(0deg); }
+
+.worker-list { display:none; }
+.worker-list.open { display:block; }
+.worker-item {
+  padding:5px 12px 5px 18px; cursor:pointer; font-size:.75rem;
+  color:#475569; display:flex; align-items:center; gap:8px;
+  transition:background .1s; border-left:2px solid transparent;
+}
+.worker-item:hover { background:#f0f7ff; }
+.worker-item.active { background:#eff6ff; color:#1d4ed8; font-weight:700; border-left-color:#2563eb; }
+.worker-item .w-avatar {
+  width:26px; height:26px; border-radius:50%; object-fit:cover;
+  border:1px solid #e2e8f0; flex-shrink:0;
+}
+.worker-item .w-avatar-placeholder {
+  width:26px; height:26px; border-radius:50%; background:#e2e8f0;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  font-size:.65rem; color:#94a3b8;
+}
+.worker-item .w-status {
+  width:6px; height:6px; border-radius:50%; flex-shrink:0; margin-left:auto;
+}
+.worker-item .w-status.active { background:#22c55e; }
+.worker-item .w-status.inactive { background:#e5e7eb; }
+
+/* ════════════════════════════════════════════════════
+   우측 프로필 패널
+════════════════════════════════════════════════════ */
+.profile-panel {
+  background:#fff; border-radius:12px;
+  box-shadow:0 1px 4px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04);
+  display:flex; flex-direction:column; overflow:hidden;
+  min-height:calc(100vh - 170px);
+}
+.profile-placeholder {
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  color:#94a3b8; gap:12px;
+}
+.profile-placeholder i { font-size:3rem; }
+
+/* 프로필 헤더 (사진 + 기본 정보) */
+.profile-hero {
+  padding:20px 24px 16px; border-bottom:1px solid #f0f0f0;
+  display:flex; align-items:flex-start; gap:20px; background:#fafbff;
+}
+.photo-wrap {
+  position:relative; flex-shrink:0;
+  width:90px; height:110px; border-radius:8px;
+}
+.photo-wrap img, .photo-wrap .photo-placeholder {
+  width:90px; height:110px; border-radius:8px; object-fit:cover;
+  border:2px solid #e2e8f0; display:block;
+}
+.photo-wrap .photo-placeholder {
+  background:#f1f5f9; display:flex; align-items:center; justify-content:center;
+  color:#94a3b8; font-size:2.5rem;
+}
+/* 투명 파일 인풋 — 사진 영역 전체를 덮음 (opacity:0, NOT display:none) */
+.photo-wrap input[type="file"] {
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  opacity:0; cursor:pointer; z-index:20; margin:0; padding:0;
+  font-size:0;
+}
+/* 호버/드래그 오버레이 */
+.photo-hover-overlay {
+  position:absolute; inset:0; border-radius:8px;
+  background:rgba(0,0,0,.45); color:#fff;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:4px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:10;
+}
+.photo-hover-overlay i { font-size:1.4rem; }
+.photo-hover-overlay span { font-size:.62rem; font-weight:600; letter-spacing:.02em; }
+.photo-wrap:hover .photo-hover-overlay { opacity:1; }
+.photo-wrap.drag-over .photo-hover-overlay { opacity:1; }
+.photo-wrap.drag-over { outline:2px dashed #2563eb; outline-offset:2px; }
+.profile-hero-info { flex:1; min-width:0; }
+.hero-name { font-size:1.3rem; font-weight:800; color:#0f172a; margin-bottom:4px; }
+.hero-badges { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+.hero-row { display:flex; align-items:center; gap:6px; font-size:.8rem; color:#64748b; margin-bottom:3px; }
+.hero-row i { width:16px; text-align:center; color:#94a3b8; }
+
+/* 탭 */
+.profile-tabs {
+  display:flex; border-bottom:1px solid #e2e8f0; padding:0 20px; background:#fff;
+}
+.profile-tab {
+  padding:10px 16px; font-size:.8rem; font-weight:600; color:#64748b;
+  border-bottom:2px solid transparent; cursor:pointer; transition:all .15s; white-space:nowrap;
+}
+.profile-tab.active { color:#2563eb; border-bottom-color:#2563eb; }
+.profile-tab:hover:not(.active) { color:#374151; background:#f8fafc; }
+
+.tab-pane { display:none; padding:18px 20px; overflow-y:auto; }
+.tab-pane.active { display:block; }
+#tab-docs.active { display:flex; padding:10px 14px; overflow:hidden; flex:1; min-height:0; }
+.doc-list-col { max-height:calc(100vh - 320px); }
+.doc-preview-body { min-height:0; }
+
+/* 신상정보 테이블 */
+.info-table { width:100%; font-size:.82rem; }
+.info-table th {
+  width:120px; padding:7px 10px; background:#f8fafc; color:#64748b;
+  font-weight:600; border-bottom:1px solid #f0f0f0; vertical-align:middle; white-space:nowrap;
+}
+.info-table td { padding:7px 12px; border-bottom:1px solid #f0f0f0; color:#1e293b; }
+
+/* 경력 편집 폼 */
+.profile-field-label { font-size:.78rem; font-weight:600; color:#64748b; margin-bottom:4px; }
+.profile-textarea {
+  width:100%; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px;
+  font-size:.82rem; resize:vertical; outline:none; font-family:inherit;
+  transition:border-color .15s;
+}
+.profile-textarea:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+.profile-input {
+  border:1px solid #e2e8f0; border-radius:8px; padding:7px 12px;
+  font-size:.82rem; outline:none; font-family:inherit; transition:border-color .15s;
+}
+.profile-input:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+
+/* 서류관리 — 2분할 레이아웃 */
+#tab-docs {
+  display:flex; gap:0; overflow:hidden; flex:1;
+  height:100%;
+}
+.doc-list-col {
+  flex:0 0 420px; min-width:0; overflow-y:auto; border-right:1px solid #e2e8f0;
+  padding:0 12px 12px 0;
+}
+.doc-list-col::-webkit-scrollbar { width:4px; }
+.doc-list-col::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:4px; }
+
+/* 업로드 툴바 */
+.doc-toolbar {
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  padding:10px 0 10px 0; position:sticky; top:0; background:#fff; z-index:1;
+  border-bottom:1px solid #f0f0f0; margin-bottom:10px;
+}
+
+.doc-cat-card {
+  border:1px solid #e2e8f0; border-radius:10px; margin-bottom:12px; overflow:hidden;
+}
+.doc-cat-header {
+  padding:8px 12px; background:#f8fafc; border-bottom:1px solid #e2e8f0;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.doc-cat-title { font-size:.78rem; font-weight:700; color:#334155; }
+.doc-files-wrap { padding:8px 12px; display:flex; flex-wrap:wrap; gap:8px; }
+.doc-file-item {
+  width:80px; text-align:center; position:relative; cursor:pointer;
+}
+.doc-file-item img {
+  width:80px; height:80px; object-fit:cover; border-radius:6px;
+  border:2px solid transparent; transition:border-color .15s, box-shadow .15s;
+}
+.doc-file-item img:hover { box-shadow:0 2px 8px rgba(0,0,0,.15); }
+.doc-file-item img.doc-selected { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.2); }
+.doc-file-item .doc-pdf-icon {
+  width:80px; height:80px; border-radius:6px; border:2px solid transparent;
+  background:#fff5f5; display:flex; align-items:center; justify-content:center;
+  font-size:1.8rem; color:#e11d48; transition:border-color .15s, box-shadow .15s;
+}
+.doc-file-item .doc-pdf-icon:hover { box-shadow:0 2px 8px rgba(0,0,0,.15); }
+.doc-file-item .doc-pdf-icon.doc-selected { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.2); }
+.doc-file-name { font-size:.63rem; color:#64748b; margin-top:3px; word-break:break-all; line-height:1.2; }
+.doc-del-btn {
+  position:absolute; top:2px; right:2px; width:18px; height:18px; border-radius:50%;
+  background:rgba(239,68,68,.85); color:#fff; border:none; font-size:.55rem;
+  cursor:pointer; display:none; align-items:center; justify-content:center;
+  line-height:1;
+}
+.doc-file-item:hover .doc-del-btn { display:flex; }
+.doc-empty { font-size:.78rem; color:#94a3b8; padding:4px 0; }
+
+/* 우측 미리보기 패널 */
+.doc-preview-col {
+  flex:1; min-width:0; display:flex; flex-direction:column;
+  padding-left:14px; overflow:hidden;
+}
+.doc-preview-empty {
+  flex:1; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; color:#cbd5e1; gap:10px;
+}
+.doc-preview-empty i { font-size:3rem; }
+.doc-preview-empty span { font-size:.82rem; }
+.doc-preview-header {
+  display:flex; align-items:center; gap:8px; padding:8px 0 8px;
+  border-bottom:1px solid #f0f0f0; margin-bottom:10px; flex-shrink:0;
+}
+.doc-preview-filename {
+  font-size:.82rem; font-weight:600; color:#334155;
+  flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.doc-preview-body {
+  flex:1; overflow:hidden; display:flex; align-items:center; justify-content:center;
+  background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0;
+}
+.doc-preview-body img {
+  max-width:100%; max-height:100%; object-fit:contain; border-radius:6px;
+}
+.doc-preview-body iframe {
+  width:100%; height:100%; border:none; border-radius:6px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wm-body">
+
+  <!-- ══════════════ 좌측 트리 ══════════════ -->
+  <div class="tree-panel">
+    <div class="tree-header">
+      <span><i class="bi bi-people-fill me-1 text-primary"></i>현장기사</span>
+      <span class="badge bg-primary-subtle text-primary" id="tree-total">-</span>
+    </div>
+    <div class="tree-search">
+      <input type="text" id="tree-search-input" placeholder="이름 검색..." oninput="filterTree(this.value)">
+    </div>
+    <div class="tree-body" id="tree-body">
+      <div class="text-center text-muted py-4 small"><span class="spinner-border spinner-border-sm me-1"></span>로딩 중...</div>
+    </div>
+  </div>
+
+  <!-- ══════════════ 우측 프로필 ══════════════ -->
+  <div class="profile-panel" id="profile-panel">
+    <div class="profile-placeholder" id="profile-placeholder">
+      <i class="bi bi-person-bounding-box"></i>
+      <span class="fw-semibold">좌측 목록에서 인력을 선택하세요</span>
+    </div>
+
+    <!-- 프로필 내용 (선택 후 표시) -->
+    <div id="profile-content" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+
+      <!-- 헤더 (사진 + 기본) -->
+      <div class="profile-hero" id="hero-wrap">
+        <div class="photo-wrap" id="photo-drop-zone"
+             ondragover="event.preventDefault();this.classList.add('drag-over')"
+             ondragleave="this.classList.remove('drag-over')"
+             ondrop="handlePhotoDrop(event)">
+          <div class="photo-placeholder" id="hero-photo-placeholder"><i class="bi bi-person-fill"></i></div>
+          <img id="hero-photo-img" src="" alt="증명사진" style="display:none;">
+          <div class="photo-hover-overlay">
+            <i class="bi bi-camera-fill"></i>
+            <span>사진 변경</span>
+          </div>
+          <!-- opacity:0 으로 사진 영역 전체를 덮음 — 직접 클릭되므로 JS .click() 불필요 -->
+          <input type="file" id="photo-file-input" accept="image/*" onchange="uploadPhoto(this)">
+        </div>
+        <div class="profile-hero-info">
+          <div class="hero-name" id="hero-name">-</div>
+          <div class="hero-badges">
+            <span class="badge bg-primary" id="hero-center-badge">-</span>
+            <span class="badge" id="hero-status-badge">-</span>
+          </div>
+          <div class="hero-row"><i class="bi bi-telephone"></i><span id="hero-phone">-</span></div>
+          <div class="hero-row"><i class="bi bi-envelope"></i><span id="hero-email">-</span></div>
+          <div class="hero-row"><i class="bi bi-geo-alt"></i><span id="hero-address">-</span></div>
+        </div>
+      </div>
+
+      <!-- 탭 -->
+      <div class="profile-tabs">
+        <div class="profile-tab active" onclick="switchTab('info',this)"><i class="bi bi-person-vcard me-1"></i>신상정보</div>
+        <div class="profile-tab" onclick="switchTab('career',this)"><i class="bi bi-briefcase me-1"></i>경력프로필</div>
+        <div class="profile-tab" onclick="switchTab('docs',this)"><i class="bi bi-folder2-open me-1"></i>서류관리</div>
+      </div>
+
+      <!-- 신상정보 탭 -->
+      <div class="tab-pane active" id="tab-info">
+        <table class="info-table">
+          <tbody>
+            <tr><th>사용자명</th><td id="info-username">-</td></tr>
+            <tr><th>성명</th><td id="info-name">-</td></tr>
+            <tr><th>연락처</th><td id="info-phone">-</td></tr>
+            <tr><th>이메일</th><td id="info-email">-</td></tr>
+            <tr><th>소속 지원청</th><td id="info-center">-</td></tr>
+            <tr><th>자택주소</th><td id="info-address">-</td></tr>
+            <tr><th>생년월일</th><td id="info-birth">-</td></tr>
+            <tr><th>입사일</th><td id="info-join">-</td></tr>
+            <tr><th>등록일</th><td id="info-created">-</td></tr>
+            <tr><th>상태</th><td id="info-status">-</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 경력프로필 탭 -->
+      <div class="tab-pane" id="tab-career">
+        <div class="row g-3">
+          <div class="col-sm-6">
+            <div class="profile-field-label">생년월일</div>
+            <input type="date" class="profile-input" id="ed-birth" style="width:100%;">
+          </div>
+          <div class="col-sm-6">
+            <div class="profile-field-label">입사일</div>
+            <input type="date" class="profile-input" id="ed-join" style="width:100%;">
+          </div>
+          <div class="col-12">
+            <div class="profile-field-label">소개 / 특이사항</div>
+            <textarea class="profile-textarea" id="ed-bio" rows="3" placeholder="인력 소개 또는 특이사항을 입력하세요..."></textarea>
+          </div>
+          <div class="col-12">
+            <div class="profile-field-label">경력 요약</div>
+            <textarea class="profile-textarea" id="ed-career" rows="5" placeholder="경력 및 자격사항을 입력하세요...&#10;예) 2020~2023 ㈜네트웍코리아 네트워크 엔지니어&#10;     CCNA 자격증 보유"></textarea>
+          </div>
+          <div class="col-12">
+            <div class="profile-field-label">비고</div>
+            <textarea class="profile-textarea" id="ed-notes" rows="2" placeholder="추가 비고..."></textarea>
+          </div>
+          <div class="col-12 d-flex justify-content-end gap-2">
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadProfile(_selectedWorker)">초기화</button>
+            <button class="btn btn-sm btn-primary" onclick="saveCareer()"><i class="bi bi-check2 me-1"></i>저장</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 서류관리 탭 -->
+      <div class="tab-pane" id="tab-docs">
+        <!-- 좌측: 파일 목록 -->
+        <div class="doc-list-col">
+          <div class="doc-toolbar">
+            <select class="form-select form-select-sm" id="upload-cat" style="width:auto;flex-shrink:0;">
+              <option value="성범죄경력조회">성범죄 경력조회</option>
+              <option value="보안서약서">보안서약서</option>
+              <option value="경력증명서">경력증명서</option>
+              <option value="자격증">자격증</option>
+              <option value="기타">기타 서류</option>
+            </select>
+            <label class="btn btn-sm btn-outline-primary mb-0 ms-auto">
+              <i class="bi bi-upload me-1"></i>업로드
+              <input type="file" id="doc-file-input" accept="image/*,.pdf" multiple style="display:none" onchange="uploadDocs(this)">
+            </label>
+          </div>
+          <div id="docs-wrap">
+            <div class="text-center text-muted py-4 small">인력을 선택하면 서류가 표시됩니다.</div>
+          </div>
+        </div>
+        <!-- 우측: 미리보기 -->
+        <div class="doc-preview-col" id="doc-preview-col">
+          <div class="doc-preview-empty" id="doc-preview-empty">
+            <i class="bi bi-image"></i>
+            <span>파일을 선택하면 미리보기가 표시됩니다</span>
+          </div>
+          <div id="doc-preview-content" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+            <div class="doc-preview-header">
+              <i class="bi bi-file-earmark-image text-primary" id="doc-preview-icon"></i>
+              <span class="doc-preview-filename" id="doc-preview-filename"></span>
+              <a id="doc-preview-download" href="#" download class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-download me-1"></i>다운로드
+              </a>
+            </div>
+            <div class="doc-preview-body" id="doc-preview-body"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /profile-content -->
+  </div><!-- /profile-panel -->
+
+</div><!-- /wm-body -->
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// API_BASE는 base.html에서 '/npms/api'로 전역 선언됨
+const WM_BASE = API_BASE + '/workforce';
+let _treeData    = [];
+let _selectedWorker = null;
+
+// ── 트리 로드 ─────────────────────────────────────────────────────
+async function loadTree() {
+  try {
+    const res  = await fetch(`${WM_BASE}/worker-tree/`);
+    const data = await res.json();
+    _treeData  = data.centers || [];
+    renderTree(_treeData, '');
+
+    // 전체 인원수
+    const total = _treeData.reduce((s,c)=>s+c.workers.length, 0);
+    document.getElementById('tree-total').textContent = total + '명';
+  } catch(e) {
+    document.getElementById('tree-body').innerHTML =
+      '<div class="text-danger py-3 text-center small">트리 로드 실패</div>';
+  }
+}
+
+function renderTree(centers, keyword) {
+  const kw = keyword.toLowerCase();
+  let html = '';
+  centers.forEach(c => {
+    const visible = c.workers.filter(w =>
+      !kw || w.name.includes(keyword) || (w.phone||'').includes(keyword)
+    );
+    if (!visible.length) return;
+    const isOpen = !kw ? (c.workers.length > 0) : true;
+    html += `
+      <div class="center-node ${isOpen?'open':''}" onclick="toggleCenter(this)">
+        <span class="cname">${c.name}</span>
+        <span class="cbadge">${visible.length}</span>
+        <i class="bi bi-chevron-${isOpen?'up':'down'} toggle-icon"></i>
+      </div>
+      <div class="worker-list ${isOpen?'open':''}">
+        ${visible.map(w => `
+          <div class="worker-item" data-id="${w.id}" onclick="selectWorker(${w.id})">
+            ${w.has_photo
+              ? `<img class="w-avatar" src="${w.photo_url}" alt="">`
+              : `<div class="w-avatar-placeholder"><i class="bi bi-person-fill"></i></div>`
+            }
+            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${w.name}</span>
+            <div class="w-status ${w.is_active?'active':'inactive'}" title="${w.is_active?'재직중':'비활성'}"></div>
+          </div>
+        `).join('')}
+      </div>`;
+  });
+  document.getElementById('tree-body').innerHTML = html || '<div class="text-muted small py-3 text-center">검색 결과 없음</div>';
+}
+
+function toggleCenter(el) {
+  el.classList.toggle('open');
+  el.nextElementSibling.classList.toggle('open');
+  const icon = el.querySelector('.toggle-icon');
+  if (icon) {
+    icon.className = el.classList.contains('open')
+      ? 'bi bi-chevron-up toggle-icon'
+      : 'bi bi-chevron-down toggle-icon';
+  }
+}
+
+function filterTree(kw) {
+  renderTree(_treeData, kw);
+}
+
+// ── 인력 선택 ──────────────────────────────────────────────────────
+async function selectWorker(id) {
+  // 활성 표시
+  document.querySelectorAll('.worker-item').forEach(el => el.classList.remove('active'));
+  const el = document.querySelector(`.worker-item[data-id="${id}"]`);
+  if (el) el.classList.add('active');
+
+  _selectedWorker = id;
+  document.getElementById('profile-placeholder').style.display = 'none';
+  document.getElementById('profile-content').style.display = 'flex';
+
+  await loadProfile(id);
+
+  // 서류 탭이 활성화 상태면 바로 로드
+  const activeTab = document.querySelector('.profile-tab.active');
+  if (activeTab && activeTab.dataset.tab === 'docs') loadDocs(id);
+}
+
+async function loadProfile(id) {
+  try {
+    const data = await (await fetch(`${WM_BASE}/workers/${id}/profile/`)).json();
+    // Hero
+    document.getElementById('hero-name').textContent    = data.name || '-';
+    document.getElementById('hero-center-badge').textContent = data.center_name || '-';
+    const sb = document.getElementById('hero-status-badge');
+    sb.textContent = data.is_active ? '재직중' : '비활성';
+    sb.className   = `badge ${data.is_active ? 'bg-success' : 'bg-secondary'}`;
+    document.getElementById('hero-phone').textContent   = data.phone   || '-';
+    document.getElementById('hero-email').textContent   = data.email   || '-';
+    document.getElementById('hero-address').textContent = data.home_address || '-';
+
+    // Photo
+    if (data.photo_url) {
+      document.getElementById('hero-photo-placeholder').style.display = 'none';
+      const img = document.getElementById('hero-photo-img');
+      img.src = data.photo_url; img.style.display = '';
+    } else {
+      document.getElementById('hero-photo-placeholder').style.display = '';
+      document.getElementById('hero-photo-img').style.display = 'none';
+    }
+
+    // 신상정보 탭
+    document.getElementById('info-username').textContent = data.username    || '-';
+    document.getElementById('info-name').textContent     = data.name        || '-';
+    document.getElementById('info-phone').textContent    = data.phone       || '-';
+    document.getElementById('info-email').textContent    = data.email       || '-';
+    document.getElementById('info-center').textContent   = data.center_name || '-';
+    document.getElementById('info-address').textContent  = data.home_address|| '-';
+    document.getElementById('info-birth').textContent    = data.birth_date  || '-';
+    document.getElementById('info-join').textContent     = data.join_date   || '-';
+    document.getElementById('info-created').textContent  = data.created_at  || '-';
+    document.getElementById('info-status').innerHTML     =
+      data.is_active ? '<span class="badge bg-success">재직중</span>' : '<span class="badge bg-secondary">비활성</span>';
+
+    // 경력 탭
+    document.getElementById('ed-birth').value  = data.birth_date  || '';
+    document.getElementById('ed-join').value   = data.join_date   || '';
+    document.getElementById('ed-bio').value    = data.bio         || '';
+    document.getElementById('ed-career').value = data.career_summary || '';
+    document.getElementById('ed-notes').value  = data.notes       || '';
+  } catch(e) {
+    console.error('loadProfile error', e);
+  }
+}
+
+// ── 탭 전환 ────────────────────────────────────────────────────────
+function switchTab(name, el) {
+  document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  el.dataset.tab = name;
+  document.getElementById(`tab-${name}`).classList.add('active');
+  if (name === 'docs' && _selectedWorker) loadDocs(_selectedWorker);
+}
+
+// ── 드래그&드롭 ────────────────────────────────────────────────────
+function handlePhotoDrop(e) {
+  e.preventDefault();
+  document.getElementById('photo-drop-zone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  uploadPhotoFile(file);
+}
+
+// ── 사진 업로드 ────────────────────────────────────────────────────
+async function uploadPhoto(input) {
+  if (!input.files.length || !_selectedWorker) return;
+  uploadPhotoFile(input.files[0]);
+  input.value = '';
+}
+
+async function uploadPhotoFile(file) {
+  if (!_selectedWorker) { alert('인력을 먼저 선택하세요.'); return; }
+  if (!file.type.startsWith('image/')) { alert('이미지 파일만 업로드 가능합니다.'); return; }
+  const fd = new FormData();
+  fd.append('photo', file);
+  try {
+    const res  = await fetch(`${WM_BASE}/workers/${_selectedWorker}/photo/`, {
+      method:'POST', body:fd,
+      headers:{'X-CSRFToken': CSRF_TOKEN}
+    });
+    const data = await res.json();
+    if (data.ok) {
+      const img = document.getElementById('hero-photo-img');
+      img.src = data.photo_url + '?t=' + Date.now();
+      img.style.display = '';
+      document.getElementById('hero-photo-placeholder').style.display = 'none';
+      // 트리 아바타 갱신
+      const av = document.querySelector(`.worker-item[data-id="${_selectedWorker}"] .w-avatar`);
+      if (av) av.src = data.photo_url + '?t=' + Date.now();
+      else     loadTree();   // 없으면 트리 새로고침
+    } else {
+      alert(data.error || '업로드 실패');
+    }
+  } catch(e) { alert('업로드 오류'); }
+}
+
+// ── 경력 저장 ──────────────────────────────────────────────────────
+async function saveCareer() {
+  if (!_selectedWorker) return;
+  const body = {
+    birth_date:     document.getElementById('ed-birth').value  || '',
+    join_date:      document.getElementById('ed-join').value   || '',
+    bio:            document.getElementById('ed-bio').value,
+    career_summary: document.getElementById('ed-career').value,
+    notes:          document.getElementById('ed-notes').value,
+  };
+  try {
+    const res  = await fetch(`${WM_BASE}/workers/${_selectedWorker}/profile/`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('저장되었습니다.', 'success');
+      // 신상정보 탭 동기화
+      document.getElementById('info-birth').textContent = body.birth_date || '-';
+      document.getElementById('info-join').textContent  = body.join_date  || '-';
+    } else {
+      alert(data.error || '저장 실패');
+    }
+  } catch(e) { alert('저장 오류'); }
+}
+
+// ── 서류 로드 ──────────────────────────────────────────────────────
+async function loadDocs(id) {
+  const wrap = document.getElementById('docs-wrap');
+  wrap.innerHTML = '<div class="text-center text-muted py-3 small"><span class="spinner-border spinner-border-sm me-1"></span>로딩 중...</div>';
+  clearPreview();
+  try {
+    const data = await (await fetch(`${WM_BASE}/workers/${id}/docs/`)).json();
+    renderDocs(data.categories || []);
+  } catch(e) {
+    wrap.innerHTML = '<div class="text-danger small">서류 로드 실패</div>';
+  }
+}
+
+function renderDocs(categories) {
+  let html = '';
+  categories.forEach(cat => {
+    html += `
+    <div class="doc-cat-card">
+      <div class="doc-cat-header">
+        <span class="doc-cat-title"><i class="bi bi-folder2 me-1 text-warning"></i>${cat.label}</span>
+        <span class="badge bg-light text-secondary">${cat.files.length}개</span>
+      </div>
+      <div class="doc-files-wrap" id="docwrap-${cat.key}">
+        ${cat.files.length === 0
+          ? '<span class="doc-empty">등록된 서류가 없습니다.</span>'
+          : cat.files.map(f => renderDocFile(f, cat.key)).join('')
+        }
+      </div>
+    </div>`;
+  });
+  document.getElementById('docs-wrap').innerHTML = html;
+}
+
+function renderDocFile(f, catKey) {
+  const escapedUrl  = f.url.replace(/'/g, "\\'");
+  const escapedName = f.name.replace(/'/g, "\\'");
+  const isPdf = !f.is_image;
+  const thumb = f.is_image
+    ? `<img src="${f.url}" alt="${f.name}" data-url="${f.url}" data-name="${f.name}" data-pdf="0"
+           onclick="previewFile(this,'${escapedUrl}','${escapedName}',false)">`
+    : `<div class="doc-pdf-icon" data-url="${f.url}" data-name="${f.name}" data-pdf="1"
+           onclick="previewFile(this,'${escapedUrl}','${escapedName}',true)">
+         <i class="bi bi-file-earmark-pdf-fill"></i>
+       </div>`;
+  return `
+  <div class="doc-file-item">
+    ${thumb}
+    <button class="doc-del-btn" onclick="deleteDoc(event,'${catKey}','${f.name}')" title="삭제">
+      <i class="bi bi-x"></i>
+    </button>
+    <div class="doc-file-name">${f.name}</div>
+  </div>`;
+}
+
+async function uploadDocs(input) {
+  if (!_selectedWorker || !input.files.length) return;
+  const cat = document.getElementById('upload-cat').value;
+  const files = Array.from(input.files);
+  let ok = 0;
+  for (const file of files) {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('category', cat);
+    try {
+      const res  = await fetch(`${WM_BASE}/workers/${_selectedWorker}/docs/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': CSRF_TOKEN},
+        body: fd,
+      });
+      const data = await res.json();
+      if (data.ok) ok++;
+      else alert(data.error || '업로드 실패: ' + file.name);
+    } catch(e) { alert('업로드 오류'); }
+  }
+  input.value = '';
+  if (ok) { showToast(`${ok}개 파일 업로드 완료`, 'success'); loadDocs(_selectedWorker); }
+}
+
+async function deleteDoc(e, catKey, filename) {
+  e.stopPropagation();
+  if (!confirm(`'${filename}' 파일을 삭제하시겠습니까?`)) return;
+  try {
+    const res  = await fetch(`${WM_BASE}/workers/${_selectedWorker}/docs/`, {
+      method: 'DELETE',
+      headers: {'Content-Type':'application/json','X-CSRFToken': CSRF_TOKEN},
+      body: JSON.stringify({category: catKey, filename}),
+    });
+    const data = await res.json();
+    if (data.ok) { showToast('삭제되었습니다.', 'info'); loadDocs(_selectedWorker); }
+  } catch(e) { alert('삭제 오류'); }
+}
+
+// ── 우측 미리보기 패널 ─────────────────────────────────────────────
+let _previewEl = null; // 현재 선택된 썸네일 요소
+
+function previewFile(el, url, name, isPdf) {
+  // 이전 선택 해제
+  if (_previewEl) _previewEl.classList.remove('doc-selected');
+  _previewEl = el;
+  el.classList.add('doc-selected');
+
+  const empty   = document.getElementById('doc-preview-empty');
+  const content = document.getElementById('doc-preview-content');
+  const icon    = document.getElementById('doc-preview-icon');
+  const fname   = document.getElementById('doc-preview-filename');
+  const dlBtn   = document.getElementById('doc-preview-download');
+  const body    = document.getElementById('doc-preview-body');
+
+  empty.style.display   = 'none';
+  content.style.display = 'flex';
+
+  fname.textContent = name;
+  dlBtn.href        = url;
+  dlBtn.download    = name;
+
+  if (isPdf) {
+    icon.className = 'bi bi-file-earmark-pdf-fill text-danger';
+    body.innerHTML = `<iframe src="${url}"></iframe>`;
+  } else {
+    icon.className = 'bi bi-file-earmark-image text-primary';
+    body.innerHTML = `<img src="${url}" alt="${name}">`;
+  }
+}
+
+function clearPreview() {
+  if (_previewEl) _previewEl.classList.remove('doc-selected');
+  _previewEl = null;
+  document.getElementById('doc-preview-empty').style.display   = '';
+  document.getElementById('doc-preview-content').style.display = 'none';
+  document.getElementById('doc-preview-body').innerHTML = '';
+}
+
+// ── 유틸 ───────────────────────────────────────────────────────────
+function getCookie(name) {
+  const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return v ? v.pop() : '';
+}
+// showToast — npms.js 전역 함수 사용
+
+// ── 초기화 ────────────────────────────────────────────────────────
+// 탭에 data-tab 속성 설정
+(function() {
+  var names = ['info','career','docs'];
+  document.querySelectorAll('.profile-tab').forEach(function(t,i){
+    t.dataset.tab = names[i] || 'info';
+  });
+  // 모바일에서는 카메라 캡처 활성화
+  var isMobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+  if (isMobile) {
+    var inp = document.getElementById('photo-file-input');
+    if (inp) inp.setAttribute('capture', 'user');
+  }
+})();
+loadTree();
+</script>
+{% endblock %}

@@ -1,0 +1,376 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}업무공지/자료실{% endblock %}
+{% block page_title %}<i class="bi bi-megaphone me-2"></i>업무공지 / 자료실{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+<div class="row g-2">
+
+  <!-- ─── 좌: 목록 ─── -->
+  <div class="col-12 col-lg-5">
+
+    <!-- 탭 + 검색 -->
+    <div class="card border-0 shadow-sm mb-2">
+      <div class="card-body py-2 px-3">
+        <!-- 카테고리 탭 -->
+        <ul class="nav nav-pills nav-fill mb-2" id="cat-tabs">
+          <li class="nav-item">
+            <button class="nav-link active py-1" onclick="setCategory('')" id="tab-all">전체</button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link py-1" onclick="setCategory('notice')" id="tab-notice">
+              <i class="bi bi-megaphone me-1"></i>업무공지
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link py-1" onclick="setCategory('data_room')" id="tab-data">
+              <i class="bi bi-folder2 me-1"></i>자료실
+            </button>
+          </li>
+        </ul>
+        <!-- 검색 + 글쓰기 -->
+        <div class="d-flex gap-2 align-items-center">
+          <input type="text" id="search-q" class="form-control form-control-sm"
+                 style="width:240px;min-width:160px;" placeholder="제목, 내용 검색">
+          <button class="btn btn-sm btn-success flex-shrink-0 px-3" style="white-space:nowrap;" onclick="openWriteModal()">
+            <i class="bi bi-pencil-square me-1"></i>글쓰기
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 목록 -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom small fw-semibold d-flex justify-content-between align-items-center">
+        <span>총 <span id="total-count" class="text-primary">-</span>건</span>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-secondary" id="btn-prev" onclick="changePage(-1)" disabled>
+            <i class="bi bi-chevron-left"></i>
+          </button>
+          <span class="btn btn-outline-secondary disabled small px-2" id="page-info">1/1</span>
+          <button class="btn btn-outline-secondary" id="btn-next" onclick="changePage(1)" disabled>
+            <i class="bi bi-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+      <ul class="list-group list-group-flush" id="post-list">
+        <li class="list-group-item text-center py-4 text-muted">로딩 중...</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ─── 우: 게시글 상세 ─── -->
+  <div class="col-12 col-lg-7" id="detail-panel" style="display:none;">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex align-items-start gap-2">
+        <div class="flex-fill">
+          <span id="detail-cat-badge"></span>
+          <span id="detail-pinned" class="badge bg-warning text-dark ms-1" style="display:none;">
+            <i class="bi bi-pin-fill"></i> 공지
+          </span>
+          <div class="fw-semibold mt-1" id="detail-title"></div>
+          <small class="text-muted" id="detail-meta"></small>
+        </div>
+        <div class="d-flex flex-column gap-1 align-items-end flex-shrink-0">
+          <button class="btn btn-sm btn-outline-secondary" onclick="closeDetail()">
+            <i class="bi bi-x-lg"></i>
+          </button>
+          <div class="d-flex gap-1" id="detail-actions"></div>
+        </div>
+      </div>
+      <div class="card-body p-3">
+        <div id="detail-content" style="min-height:200px;white-space:pre-wrap;line-height:1.7;"></div>
+        <hr class="my-3">
+        <!-- 첨부파일 -->
+        <div id="attachment-section">
+          <div class="fw-semibold small mb-2"><i class="bi bi-paperclip me-1"></i>첨부파일</div>
+          <div id="attachment-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+
+<!-- ─── Modal: 글쓰기/수정 ─── -->
+<div class="modal fade" id="writeModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-bold" id="write-modal-title">글쓰기</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="edit-post-id">
+        <div class="row g-2 mb-2">
+          <div class="col-4">
+            <label class="form-label small fw-semibold">분류 <span class="text-danger">*</span></label>
+            <select id="write-category" class="form-select form-select-sm">
+              <option value="notice">업무공지</option>
+              <option value="data_room">자료실</option>
+            </select>
+          </div>
+          <div class="col-8">
+            <label class="form-label small fw-semibold">제목 <span class="text-danger">*</span></label>
+            <div class="d-flex gap-2">
+              <input type="text" id="write-title" class="form-control form-control-sm flex-fill"
+                     placeholder="제목을 입력하세요">
+              <div class="form-check form-switch d-flex align-items-center gap-1 ms-2 flex-shrink-0">
+                <input class="form-check-input" type="checkbox" id="write-pinned">
+                <label class="form-check-label small" for="write-pinned">공지고정</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">내용</label>
+          <textarea id="write-content" class="form-control form-control-sm" rows="10"
+                    placeholder="내용을 입력하세요..."></textarea>
+        </div>
+        <div>
+          <label class="form-label small fw-semibold">파일 첨부</label>
+          <input type="file" id="write-files" class="form-control form-control-sm" multiple>
+          <small class="text-muted">여러 파일 선택 가능</small>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-primary" onclick="submitPost()">
+          <i class="bi bi-check-lg me-1"></i>저장
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const API = API_BASE + '/bulletin/posts';
+const CAT_BADGE = {
+  notice:    '<span class="badge bg-danger">업무공지</span>',
+  data_room: '<span class="badge bg-primary">자료실</span>',
+};
+const FILE_ICON = ext => {
+  const m = { pdf:'bi-file-pdf text-danger', doc:'bi-file-word text-primary',
+    docx:'bi-file-word text-primary', xls:'bi-file-excel text-success',
+    xlsx:'bi-file-excel text-success', ppt:'bi-file-ppt text-warning',
+    pptx:'bi-file-ppt text-warning', zip:'bi-file-zip text-secondary',
+    jpg:'bi-file-image text-info', jpeg:'bi-file-image text-info',
+    png:'bi-file-image text-info' };
+  return m[ext?.toLowerCase()] || 'bi-file-earmark';
+};
+function fmtSize(bytes) {
+  if (!bytes) return '-';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1048576).toFixed(1) + ' MB';
+}
+
+let currentPage = 1, totalPages = 1;
+let currentCategory = '';
+let currentPostId = null;
+
+// ─────────────────────────────────────────
+// 목록 로드
+// ─────────────────────────────────────────
+async function loadPosts() {
+  const q = document.getElementById('search-q').value;
+  const params = { page: currentPage, page_size: 20 };
+  if (currentCategory) params.category = currentCategory;
+  if (q) params.q = q;
+
+  const list = document.getElementById('post-list');
+  list.innerHTML = '<li class="list-group-item text-center py-3 text-muted">로딩 중...</li>';
+  try {
+    const data = await apiGet(`${API}/`, params);
+    totalPages = Math.ceil((data.count||0) / 20);
+    document.getElementById('total-count').textContent = data.count||0;
+    document.getElementById('page-info').textContent   = `${currentPage}/${totalPages||1}`;
+    document.getElementById('btn-prev').disabled = currentPage <= 1;
+    document.getElementById('btn-next').disabled = currentPage >= totalPages;
+
+    const items = data.results || [];
+    if (!items.length) {
+      list.innerHTML = '<li class="list-group-item text-center py-4 text-muted">게시글 없음</li>';
+      return;
+    }
+    list.innerHTML = items.map(p => `
+      <li class="list-group-item list-group-item-action py-2 cursor-pointer ${p.is_pinned?'list-group-item-warning':''}"
+          onclick="openDetail(${p.id})">
+        <div class="d-flex align-items-start gap-2">
+          ${CAT_BADGE[p.category]||''}
+          ${p.is_pinned ? '<span class="badge bg-warning text-dark"><i class="bi bi-pin-fill"></i></span>' : ''}
+          <div class="flex-fill min-w-0">
+            <div class="fw-semibold text-truncate">${p.title}</div>
+            <small class="text-muted">${p.author_name||'-'} · ${formatDate(p.created_at)}
+              ${p.attachment_count ? `· <i class="bi bi-paperclip"></i>${p.attachment_count}` : ''}
+              · 조회 ${p.view_count}</small>
+          </div>
+        </div>
+      </li>`).join('');
+  } catch(e) { list.innerHTML = '<li class="list-group-item text-center py-3 text-danger">불러오기 실패</li>'; }
+}
+
+function changePage(d) { currentPage = Math.max(1, Math.min(totalPages, currentPage+d)); loadPosts(); }
+
+function setCategory(cat) {
+  currentCategory = cat;
+  currentPage = 1;
+  ['all','notice','data'].forEach(t => {
+    const tab = document.getElementById(`tab-${t}`);
+    if (tab) tab.classList.toggle('active',
+      (t==='all'&&cat==='') || (t==='notice'&&cat==='notice') || (t==='data'&&cat==='data_room'));
+  });
+  loadPosts();
+}
+
+// ─────────────────────────────────────────
+// 상세 보기
+// ─────────────────────────────────────────
+async function openDetail(id) {
+  currentPostId = id;
+  document.getElementById('detail-panel').style.display = '';
+  document.getElementById('detail-content').textContent = '로딩 중...';
+  try {
+    const p = await apiGet(`${API}/${id}/`);
+
+    document.getElementById('detail-cat-badge').innerHTML = CAT_BADGE[p.category]||'';
+    document.getElementById('detail-pinned').style.display = p.is_pinned ? '' : 'none';
+    document.getElementById('detail-title').textContent = p.title;
+    document.getElementById('detail-meta').textContent =
+      `${p.author_name||'-'} · ${formatDateTime(p.created_at)} · 조회 ${p.view_count}`;
+    document.getElementById('detail-content').textContent = p.content || '(내용 없음)';
+
+    // 수정/삭제 버튼 (작성자 본인 or 관리자)
+    const actEl = document.getElementById('detail-actions');
+    actEl.innerHTML = `
+      <button class="btn btn-xs btn-outline-primary" onclick="openEditModal(${p.id})">
+        <i class="bi bi-pencil"></i>
+      </button>
+      <button class="btn btn-xs btn-outline-danger" onclick="deletePost(${p.id})">
+        <i class="bi bi-trash"></i>
+      </button>`;
+
+    // 첨부파일
+    renderAttachments(p.attachments || [], id);
+  } catch(e) {
+    document.getElementById('detail-content').textContent = '불러오기 실패';
+  }
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').style.display = 'none';
+  currentPostId = null;
+}
+
+function renderAttachments(atts, postId) {
+  const el = document.getElementById('attachment-list');
+  if (!atts.length) { el.innerHTML = '<small class="text-muted">첨부파일 없음</small>'; return; }
+  el.innerHTML = atts.map(a => {
+    const ext = a.filename.split('.').pop();
+    return `<div class="d-flex align-items-center gap-2 py-1 border-bottom">
+      <i class="bi ${FILE_ICON(ext)} fs-5"></i>
+      <div class="flex-fill min-w-0">
+        <div class="text-truncate small fw-semibold">${a.filename}</div>
+        <small class="text-muted">${fmtSize(a.filesize)}</small>
+      </div>
+      <a href="${API}/${postId}/attachments/${a.id}/download/"
+         class="btn btn-xs btn-outline-secondary py-0 px-2" download>
+        <i class="bi bi-download"></i>
+      </a>
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────
+// 글쓰기 모달
+// ─────────────────────────────────────────
+function openWriteModal() {
+  document.getElementById('edit-post-id').value = '';
+  document.getElementById('write-modal-title').textContent = '새 글쓰기';
+  document.getElementById('write-category').value = currentCategory || 'notice';
+  document.getElementById('write-title').value   = '';
+  document.getElementById('write-content').value = '';
+  document.getElementById('write-pinned').checked = false;
+  document.getElementById('write-files').value   = '';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('writeModal')).show();
+}
+
+async function openEditModal(id) {
+  const p = await apiGet(`${API}/${id}/`);
+  document.getElementById('edit-post-id').value     = id;
+  document.getElementById('write-modal-title').textContent = '글 수정';
+  document.getElementById('write-category').value   = p.category;
+  document.getElementById('write-title').value      = p.title;
+  document.getElementById('write-content').value    = p.content || '';
+  document.getElementById('write-pinned').checked   = p.is_pinned;
+  document.getElementById('write-files').value      = '';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('writeModal')).show();
+}
+
+async function submitPost() {
+  const editId   = document.getElementById('edit-post-id').value;
+  const category = document.getElementById('write-category').value;
+  const title    = document.getElementById('write-title').value.trim();
+  const content  = document.getElementById('write-content').value;
+  const is_pinned = document.getElementById('write-pinned').checked;
+  const filesEl  = document.getElementById('write-files');
+
+  if (!title) { showToast('제목을 입력하세요.', 'warning'); return; }
+
+  try {
+    let post;
+    if (editId) {
+      post = await apiPatch(`${API}/${editId}/`, { category, title, content, is_pinned });
+    } else {
+      post = await apiPost(`${API}/`, { category, title, content, is_pinned });
+    }
+
+    // 파일 업로드
+    if (filesEl.files.length) {
+      const fd = new FormData();
+      Array.from(filesEl.files).forEach(f => fd.append('files', f));
+      await fetch(`${API}/${post.id}/upload/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCsrfToken() },
+        body: fd,
+      });
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById('writeModal')).hide();
+    showToast(editId ? '수정 완료' : '등록 완료', 'success');
+    loadPosts();
+    openDetail(post.id);
+  } catch(e) { showToast('저장 실패: ' + JSON.stringify(e), 'danger'); }
+}
+
+async function deletePost(id) {
+  if (!confirm('게시글을 삭제하시겠습니까?')) return;
+  try {
+    await fetch(`${API}/${id}/`, {
+      method: 'DELETE',
+      headers: { 'X-CSRFToken': getCsrfToken() }
+    });
+    closeDetail();
+    showToast('삭제 완료', 'success');
+    loadPosts();
+  } catch(e) { showToast('삭제 실패', 'danger'); }
+}
+
+// ─────────────────────────────────────────
+// 초기화
+// ─────────────────────────────────────────
+loadPosts();
+document.getElementById('search-q').addEventListener('input', (() => {
+  let t;
+  return () => { clearTimeout(t); t = setTimeout(() => { currentPage=1; loadPosts(); }, 400); };
+})());
+</script>
+{% endblock %}

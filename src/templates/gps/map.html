@@ -1,0 +1,455 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}위치 추적{% endblock %}
+{% block page_title %}<i class="bi bi-geo-alt-fill me-2 text-success"></i>실시간 인력 위치 추적{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── 전체 레이아웃 ───────────────────────────────── */
+.gps-wrap {
+  display: flex;
+  gap: 8px;
+  height: calc(100vh - 128px);
+  min-height: 400px;
+}
+
+/* ── 좌측 트리 패널 ──────────────────────────────── */
+.gps-tree-panel {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.gps-tree-panel .card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.gps-tree-panel .card-header { flex-shrink: 0; }
+.gps-tree-scroll {
+  flex: 1 1 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* 트리 아이템 */
+.center-item {
+  background: linear-gradient(90deg,#1e40af,#2563eb);
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 700;
+  padding: 5px 12px;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+.worker-item {
+  padding: 5px 14px 5px 24px;
+  font-size: .78rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background .1s;
+}
+.worker-item:hover { background: #eff6ff; }
+.worker-item.selected { background: #dbeafe; font-weight: 700; }
+.worker-item .w-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.worker-item .dev-badge {
+  font-size: .6rem; padding: 1px 4px; border-radius: 3px;
+  margin-left: auto; flex-shrink: 0;
+}
+.dev-badge.pc     { background: #dbeafe; color: #1d4ed8; }
+.dev-badge.mobile { background: #dcfce7; color: #15803d; }
+
+/* ── 우측 지도 영역 ──────────────────────────────── */
+.gps-map-panel {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.gps-map-panel .card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.gps-map-panel .card-header { flex-shrink: 0; }
+#gps-map {
+  flex: 1 1 0;
+  min-height: 0;
+  position: relative;
+}
+#gps-popup {
+  display: none;
+  position: absolute;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  z-index: 1000;
+  font-size: 12px;
+  pointer-events: none;
+  min-width: 140px;
+}
+
+/* 범례 */
+.map-legend {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  align-items: center; font-size: .72rem;
+}
+.map-legend span { display: flex; align-items: center; gap: 4px; }
+
+/* 출근 표시 */
+.checkin-badge {
+  display: inline-block; padding: 1px 5px; border-radius: 3px;
+  background: #dbeafe; color: #1d4ed8;
+  font-size: .6rem; font-weight: 700;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-1" style="height:calc(100vh - 108px);">
+<div class="gps-wrap">
+
+  <!-- ── 좌측: 지원청·인력 트리 ── -->
+  <div class="gps-tree-panel">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom">
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="fw-semibold" style="font-size:.85rem;"><i class="bi bi-people-fill me-1 text-success"></i>인력 목록</span>
+          <span class="badge bg-success" id="active-count">0</span>
+        </div>
+        <!-- 필터 토글 -->
+        <div class="mt-1 d-flex flex-column gap-1" style="font-size:.72rem;">
+          <label class="d-flex align-items-center gap-1 mb-0">
+            <input type="checkbox" id="toggle-gps" checked onchange="applyFilter()">
+            <span style="color:#10b981;">● GPS 실시간</span>
+          </label>
+          <label class="d-flex align-items-center gap-1 mb-0">
+            <input type="checkbox" id="toggle-checkin" checked onchange="applyFilter()">
+            <span style="color:#3b82f6;">■ 오늘 출근</span>
+          </label>
+        </div>
+        <!-- 전체 선택 해제 -->
+        <button class="btn btn-outline-secondary btn-sm w-100 mt-1 py-0" style="font-size:.72rem;" onclick="clearSelection()">
+          전체 표시
+        </button>
+      </div>
+      <div class="gps-tree-scroll" id="tree-scroll">
+        <div class="text-center text-muted small py-4">로딩 중...</div>
+      </div>
+      <!-- 하단 범례 -->
+      <div class="card-footer bg-white border-top py-2 map-legend">
+        <span><span style="width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block;"></span>이동중</span>
+        <span><span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>정지</span>
+        <span><span style="width:10px;height:10px;border-radius:3px;background:#3b82f6;display:inline-block;"></span>출근위치</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 우측: 지도 ── -->
+  <div class="gps-map-panel">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+          <span class="live-dot"></span>
+          <span class="fw-semibold" style="font-size:.85rem;"><i class="bi bi-map text-primary me-1"></i>실시간 위치 지도</span>
+          <small class="text-muted" id="last-refresh-label"></small>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <small id="selected-label" class="text-primary fw-semibold"></small>
+          <button class="btn btn-xs btn-outline-secondary px-2 py-0" onclick="doRefresh()" title="즉시 새로고침">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
+      </div>
+      <div id="gps-map">
+        <div id="gps-popup"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function timeAgo(isoStr) {
+  if (!isoStr) return '';
+  const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+  if (diff < 60)  return diff + '초 전';
+  if (diff < 3600) return Math.floor(diff/60) + '분 전';
+  if (diff < 86400) return Math.floor(diff/3600) + '시간 전';
+  return Math.floor(diff/86400) + '일 전';
+}
+
+let map, markerSource, popupOverlay;
+const workerMarkers  = {};  // workerId → ol.Feature (GPS)
+const checkinMarkers = {};  // workerId → ol.Feature (출근)
+
+// 상태
+let _selectedId   = null;  // null = 전체, 숫자 = 특정 인력
+let _gpsData      = [];
+let _checkinData  = [];
+let _treeData     = [];    // center-tree API 데이터
+
+function makeVworldTileLayer() {
+  const key = typeof VWORLD_API_KEY !== 'undefined' ? VWORLD_API_KEY : '';
+  return new ol.layer.Tile({
+    source: new ol.source.XYZ({
+      url: `https://api.vworld.kr/req/wmts/1.0.0/${key}/Base/{z}/{y}/{x}.png`,
+      attributions: '© 국토정보플랫폼',
+      maxZoom: 19,
+    }),
+  });
+}
+
+function initGpsMap() {
+  if (typeof ol === 'undefined') return;
+  markerSource = new ol.source.Vector();
+  map = new ol.Map({
+    target: 'gps-map',
+    pixelRatio: window.devicePixelRatio || 1,
+    layers: [makeVworldTileLayer(), new ol.layer.Vector({source: markerSource})],
+    view: new ol.View({center: ol.proj.fromLonLat([126.9780, 37.5665]), zoom: 10}),
+  });
+  const popupEl = document.getElementById('gps-popup');
+  popupOverlay  = new ol.Overlay({element: popupEl, autoPan: true});
+  map.addOverlay(popupOverlay);
+
+  map.on('click', evt => {
+    const f = map.forEachFeatureAtPixel(evt.pixel, f => f);
+    if (f?.get('info')) {
+      popupEl.innerHTML = f.get('info');
+      popupEl.style.display = 'block';
+      popupOverlay.setPosition(f.getGeometry().getCoordinates());
+    } else {
+      popupEl.style.display = 'none';
+      popupOverlay.setPosition(undefined);
+    }
+  });
+
+  setTimeout(() => map.updateSize(), 100);
+}
+
+// ── 트리 로드 ─────────────────────────────────────────────────
+async function loadTree() {
+  try {
+    const data = await apiGet(`${API_BASE}/workforce/center-tree/`);
+    _treeData = data.centers || [];
+    renderTree();
+  } catch(e) {}
+}
+
+function renderTree() {
+  const el = document.getElementById('tree-scroll');
+  if (!_treeData.length) { el.innerHTML = '<div class="text-muted small px-3 py-2">데이터 없음</div>'; return; }
+
+  // GPS/출근 데이터로 상태 맵 구성
+  const gpsMap     = Object.fromEntries(_gpsData.map(w => [w.worker, w]));
+  const checkinMap = Object.fromEntries(_checkinData.map(r => [r.worker, r]));
+
+  let html = '';
+  _treeData.forEach(center => {
+    html += `<div class="center-item"><i class="bi bi-building"></i>${center.name}</div>`;
+    center.workers.forEach(w => {
+      const gps     = gpsMap[w.id];
+      const checkin = checkinMap[w.id];
+      let dotColor = '#e2e8f0';
+      let devBadge = '';
+      let statusTxt = '<span style="color:#cbd5e1;font-size:.65rem;">오프라인</span>';
+
+      if (gps) {
+        dotColor  = gps.status === 'moving' ? '#10b981' : '#f59e0b';
+        devBadge  = gps.device_type === 'mobile'
+          ? '<span class="dev-badge mobile">📱모바일</span>'
+          : gps.device_type === 'pc'
+            ? '<span class="dev-badge pc">🖥PC</span>' : '';
+        statusTxt = `<span style="color:${dotColor};font-size:.65rem;">${gps.status==='moving'?'이동중':'정지'}</span>`;
+      } else if (checkin) {
+        dotColor  = '#3b82f6';
+        devBadge  = checkin.check_in_device === 'mobile'
+          ? '<span class="dev-badge mobile">📱</span>'
+          : checkin.check_in_device === 'pc'
+            ? '<span class="dev-badge pc">🖥</span>' : '';
+        statusTxt = '<span class="checkin-badge">출근</span>';
+      }
+
+      const selClass = _selectedId === w.id ? 'selected' : '';
+      html += `<div class="worker-item ${selClass}" id="wi-${w.id}" onclick="selectWorker(${w.id})">
+        <span class="w-dot" style="background:${dotColor};"></span>
+        <span class="text-truncate flex-grow-1" style="max-width:100px;" title="${w.name}">${w.name}</span>
+        ${statusTxt}
+        ${devBadge}
+      </div>`;
+    });
+  });
+  el.innerHTML = html;
+}
+
+// ── 인력 선택 ─────────────────────────────────────────────────
+function selectWorker(id) {
+  _selectedId = (_selectedId === id) ? null : id;  // 같은 인력 클릭 시 해제
+  renderTree();
+  applyFilter();
+  document.getElementById('selected-label').textContent =
+    _selectedId ? `선택: ${_getWorkerName(_selectedId)}` : '';
+}
+
+function clearSelection() {
+  _selectedId = null;
+  document.getElementById('selected-label').textContent = '';
+  renderTree();
+  applyFilter();
+}
+
+function _getWorkerName(id) {
+  for (const c of _treeData) {
+    const w = c.workers.find(w => w.id === id);
+    if (w) return w.name;
+  }
+  return '';
+}
+
+// ── 지도 필터 적용 ─────────────────────────────────────────────
+function applyFilter() {
+  if (!markerSource) return;
+  markerSource.clear();
+  const showGps     = document.getElementById('toggle-gps')?.checked ?? true;
+  const showCheckin = document.getElementById('toggle-checkin')?.checked ?? true;
+
+  const gpsIds = new Set(_gpsData.map(w => w.worker));
+
+  if (showGps) {
+    _gpsData.forEach(w => {
+      if (_selectedId && w.worker !== _selectedId) return;
+      const f = workerMarkers[w.worker];
+      if (f) markerSource.addFeature(f);
+    });
+  }
+
+  if (showCheckin) {
+    _checkinData.filter(r => !gpsIds.has(r.worker)).forEach(r => {
+      if (_selectedId && r.worker !== _selectedId) return;
+      const f = checkinMarkers[r.worker];
+      if (f) markerSource.addFeature(f);
+    });
+  }
+
+  // 단일 선택 시 해당 위치로 포커스
+  if (_selectedId) {
+    const gps = _gpsData.find(w => w.worker === _selectedId);
+    const ck  = _checkinData.find(r => r.worker === _selectedId);
+    if (gps && map) {
+      map.getView().animate({center: ol.proj.fromLonLat([parseFloat(gps.lng), parseFloat(gps.lat)]), zoom: 15, duration:400});
+    } else if (ck && map) {
+      map.getView().animate({center: ol.proj.fromLonLat([parseFloat(ck.check_in_lng), parseFloat(ck.check_in_lat)]), zoom: 15, duration:400});
+    }
+  }
+}
+
+// ── 위치 데이터 갱신 ───────────────────────────────────────────
+async function doRefresh() {
+  try {
+    // GPS 실시간
+    const gps = await apiGet(`${API_BASE}/gps/locations/active/`);
+    _gpsData = gps;
+
+    // 오늘 출근
+    const today = todayKST();
+    try {
+      const att = await apiGet(`${API_BASE}/workforce/attendance/`, {date_from:today, date_to:today, page_size:200});
+      _checkinData = (att.results||att).filter(r => r.check_in_lat);
+    } catch(e) { _checkinData = []; }
+
+    // 마커 재구성
+    rebuildMarkers();
+    applyFilter();
+    renderTree();
+
+    const total = new Set([..._gpsData.map(w=>w.worker), ..._checkinData.map(r=>r.worker)]).size;
+    document.getElementById('active-count').textContent = total;
+    document.getElementById('last-refresh-label').textContent =
+      new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) + ' 갱신';
+  } catch(e) { console.error('위치 갱신 오류:', e); }
+}
+
+function rebuildMarkers() {
+  // GPS 마커
+  Object.keys(workerMarkers).forEach(k => delete workerMarkers[k]);
+  _gpsData.forEach(w => {
+    const coord = ol.proj.fromLonLat([parseFloat(w.lng), parseFloat(w.lat)]);
+    const color = w.status === 'moving' ? '#10b981' : '#f59e0b';
+    const devIcon = w.device_type === 'mobile' ? '📱' : w.device_type === 'pc' ? '🖥' : '';
+    const f = new ol.Feature({geometry: new ol.geom.Point(coord)});
+    f.setStyle(new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: 13,
+        fill:   new ol.style.Fill({color}),
+        stroke: new ol.style.Stroke({color:'#fff', width:2.5}),
+      }),
+      text: new ol.style.Text({
+        text: (w.worker_name||'').charAt(0),
+        fill: new ol.style.Fill({color:'#fff'}),
+        font: 'bold 11px sans-serif',
+      }),
+    }));
+    f.set('info', `<div style="line-height:1.7;">
+      <b>${w.worker_name}</b> <span style="color:#64748b;font-size:.75rem;">${w.center_name||''}</span><br>
+      <span style="color:${color};">${w.status==='moving'?'🟢 이동중':'🟡 정지'}</span> ${devIcon}<br>
+      <span style="font-size:.7rem;color:#94a3b8;">${timeAgo(w.updated_at)}</span>
+    </div>`);
+    workerMarkers[w.worker] = f;
+  });
+
+  // 출근 마커
+  const gpsIds = new Set(_gpsData.map(w => w.worker));
+  Object.keys(checkinMarkers).forEach(k => delete checkinMarkers[k]);
+  _checkinData.filter(r => !gpsIds.has(r.worker)).forEach(r => {
+    const coord = ol.proj.fromLonLat([parseFloat(r.check_in_lng), parseFloat(r.check_in_lat)]);
+    const devIcon = r.check_in_device==='mobile' ? '📱' : r.check_in_device==='pc' ? '🖥' : '';
+    const inT = r.check_in_at ? new Date(r.check_in_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : '';
+    const f = new ol.Feature({geometry: new ol.geom.Point(coord)});
+    f.setStyle(new ol.style.Style({
+      image: new ol.style.RegularShape({
+        points: 4, radius: 11, angle: Math.PI/4,
+        fill:   new ol.style.Fill({color:'#3b82f6'}),
+        stroke: new ol.style.Stroke({color:'#fff', width:2}),
+      }),
+      text: new ol.style.Text({
+        text: (r.worker_name||'').charAt(0),
+        fill: new ol.style.Fill({color:'#fff'}),
+        font: 'bold 9px sans-serif',
+      }),
+    }));
+    f.set('info', `<div style="line-height:1.7;">
+      <b>${r.worker_name}</b><br>
+      <span style="color:#3b82f6;">🔵 출근 ${inT}</span> ${devIcon}<br>
+      <span style="font-size:.7rem;color:#94a3b8;">GPS 실시간 미수신</span>
+    </div>`);
+    checkinMarkers[r.worker] = f;
+  });
+}
+
+window.addEventListener('load', () => {
+  initGpsMap();
+  loadTree();
+  doRefresh();
+  setTimeout(() => { if (map) map.updateSize(); }, 150);
+});
+window.addEventListener('resize', () => { if (map) map.updateSize(); });
+setInterval(doRefresh, 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="origin-when-cross-origin">
+  <title>{% block title %}NPMS{% endblock %} | 학교 네트워크 장애관리 시스템</title>
+  {% load static %}
+  <!-- 폰트 preload (LCP 최적화) -->
+  <link rel="preload" href="{% static 'fonts/NanumGothic.ttf' %}" as="font" type="font/ttf" crossorigin="anonymous">
+  <!-- DNS prefetch (CDN 리소스) -->
+  <link rel="dns-prefetch" href="//cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <!-- Bootstrap 5 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <!-- OpenLayers (지도) -->
+  <link rel="stylesheet" href="https://openlayers.org/en/v4.6.5/css/ol.css">
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="{% static 'css/npms.css' %}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body class="npms-body">
+
+{% if user.is_authenticated %}
+<!-- ═══════════════════════════════════════════
+     사이드바
+═══════════════════════════════════════════ -->
+<nav id="sidebar" class="npms-sidebar d-flex flex-column">
+  <!-- 로고 -->
+  <div class="sidebar-header d-flex align-items-center px-3 py-3">
+    <div class="sidebar-logo me-2">
+      <i class="bi bi-diagram-3-fill text-primary fs-4"></i>
+    </div>
+    <div class="sidebar-title">
+      <div class="fw-bold text-white lh-1" style="font-size:0.85rem;">SNPMS</div>
+      <div class="text-white-50" style="font-size:0.65rem;">네트워크 장애관리</div>
+    </div>
+    <!-- 모바일 전용 닫기 버튼 -->
+    <button class="sidebar-close-btn btn btn-sm ms-auto" id="sidebar-close"
+            style="color:rgba(255,255,255,.6);background:none;border:none;font-size:1.3rem;line-height:1;padding:4px 6px;"
+            aria-label="메뉴 닫기">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+  <hr class="sidebar-divider">
+
+  <!-- 메뉴 -->
+  <ul class="nav flex-column sidebar-nav px-2">
+    <li class="nav-item">
+      <a href="/npms/" class="nav-link {% if request.resolver_match.app_name == 'dashboard' %}active{% endif %}">
+        <i class="bi bi-speedometer2"></i><span>대시보드</span>
+      </a>
+    </li>
+    {% if user_access.incidents %}
+    <li class="sidebar-section-label">장애관리</li>
+    <li class="nav-item">
+      <a href="/npms/incidents/list/" class="nav-link {% if request.resolver_match.app_name == 'incidents' %}active{% endif %}">
+        <i class="bi bi-exclamation-triangle"></i><span>장애 목록</span>
+        <span id="badge-incidents" class="badge bg-danger ms-auto"></span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.worker_list or user_access.schedule or user_access.attendance or user_access.gps %}
+    <li class="sidebar-section-label">인력/현장</li>
+    {% if user_access.worker_list %}
+    <li class="nav-item">
+      <a href="/npms/workforce/workers/" class="nav-link">
+        <i class="bi bi-person-badge"></i><span>인력 관리</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.schedule %}
+    <li class="nav-item">
+      <a href="/npms/workforce/" class="nav-link">
+        <i class="bi bi-calendar3"></i><span>업무 일정</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.attendance %}
+    <li class="nav-item">
+      <a href="/npms/workforce/attendance/" class="nav-link">
+        <i class="bi bi-person-check"></i><span>근태기록부</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.gps %}
+    <li class="nav-item">
+      <a href="/npms/gps/" class="nav-link">
+        <i class="bi bi-geo-alt"></i><span>위치 추적</span>
+      </a>
+    </li>
+    {% endif %}
+    {% endif %}
+    {% if user_access.materials or user_access.assets %}
+    <li class="sidebar-section-label">자원관리</li>
+    {% if user_access.materials %}
+    <li class="nav-item">
+      <a href="/npms/materials/" class="nav-link">
+        <i class="bi bi-boxes"></i><span>자재 관리</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.assets %}
+    <li class="nav-item">
+      <a href="/npms/assets/" class="nav-link">
+        <i class="bi bi-hdd-network"></i><span>장비 관리</span>
+      </a>
+    </li>
+    {% endif %}
+    {% endif %}
+    {% if user_access.network or user_access.ap_analyzer or user_access.schools or user_access.school_map %}
+    <li class="sidebar-section-label">네트워크/현황</li>
+    {% if user_access.network %}
+    <li class="nav-item">
+      <a href="/npms/network/" class="nav-link">
+        <i class="bi bi-activity"></i><span>NMS 모니터링</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.ap_analyzer %}
+    <li class="nav-item">
+      <a href="/npms/ap-analyzer/" class="nav-link {% if request.path == '/npms/ap-analyzer/' %}active{% endif %}">
+        <i class="bi bi-wifi"></i><span>AP 신호 측정</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.schools %}
+    <li class="nav-item">
+      <a href="/npms/schools/list/" class="nav-link">
+        <i class="bi bi-building"></i><span>학교 정보</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.school_map %}
+    <li class="nav-item">
+      <a href="/npms/schools/map/" class="nav-link {% if request.path == '/npms/schools/map/' %}active{% endif %}">
+        <i class="bi bi-geo-alt-fill"></i><span>학교 위치 지도</span>
+      </a>
+    </li>
+    {% endif %}
+    {% endif %}
+    {% if user_access.progress or user_access.audit or user_access.wbs %}
+    <li class="sidebar-section-label">점검관리</li>
+    {% if user_access.progress %}
+    <li class="nav-item">
+      <a href="/npms/progress/" class="nav-link">
+        <i class="bi bi-clipboard2-check"></i><span>진척관리</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.audit %}
+    <li class="nav-item">
+      <a href="/npms/audit/" class="nav-link {% if request.path|slice:':12' == '/npms/audit/' %}active{% endif %}">
+        <i class="bi bi-shield-check"></i><span>감리관리</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.wbs %}
+    <li class="nav-item">
+      <a href="/npms/wbs/" class="nav-link {% if request.path|slice:':10' == '/npms/wbs/' %}active{% endif %}">
+        <i class="bi bi-diagram-3"></i><span>WBS 관리</span>
+      </a>
+    </li>
+    {% endif %}
+    {% endif %}
+    {% if user_access.sla or user_access.performance or user_access.reports or user_access.statistics %}
+    <li class="sidebar-section-label">보고/성과관리</li>
+    {% if user_access.sla %}
+    <li class="nav-item">
+      <a href="/npms/incidents/sla/" class="nav-link {% if request.path == '/npms/incidents/sla/' %}active{% endif %}">
+        <i class="bi bi-shield-check"></i><span>SLA 관리</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.performance %}
+    <li class="nav-item">
+      <a href="/npms/performance/" class="nav-link {% if request.path|slice:':18' == '/npms/performance/' %}active{% endif %}">
+        <i class="bi bi-file-earmark-bar-graph"></i><span>성과보고서</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.reports %}
+    <li class="nav-item">
+      <a href="/npms/reports/" class="nav-link {% if request.path == '/npms/reports/' %}active{% endif %}">
+        <i class="bi bi-file-earmark-text"></i><span>업무보고서</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.statistics %}
+    <li class="nav-item">
+      <a href="/npms/statistics/" class="nav-link {% if request.path == '/npms/statistics/' %}active{% endif %}">
+        <i class="bi bi-bar-chart-line"></i><span>통계</span>
+      </a>
+    </li>
+    {% endif %}
+    {% endif %}
+    {% if user_access.education %}
+    <li class="sidebar-section-label">교육관리</li>
+    <li class="nav-item">
+      <a href="/npms/education/" class="nav-link {% if request.path|slice:':16' == '/npms/education/' %}active{% endif %}">
+        <i class="bi bi-mortarboard"></i><span>교육관리</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.deliverables or user_access.bulletin or user_access.nas or user_access.photos %}
+    <li class="sidebar-section-label">자료/공지</li>
+    {% if user_access.deliverables %}
+    <li class="nav-item">
+      <a href="/npms/deliverables/" class="nav-link">
+        <i class="bi bi-archive"></i><span>산출물 관리</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.bulletin %}
+    <li class="nav-item">
+      <a href="/npms/bulletin/" class="nav-link">
+        <i class="bi bi-megaphone"></i><span>업무공지/자료실</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.nas %}
+    <li class="nav-item">
+      <a href="/npms/nas/" class="nav-link">
+        <i class="bi bi-folder2-open"></i><span>NAS 파일</span>
+      </a>
+    </li>
+    {% endif %}
+    {% if user_access.photos %}
+    <li class="nav-item">
+      <a href="/npms/photos/" class="nav-link">
+        <i class="bi bi-camera"></i><span>사진 관리</span>
+      </a>
+    </li>
+    {% endif %}
+    {% endif %}
+    <li class="sidebar-section-label">시스템</li>
+    <li class="nav-item">
+      <a href="/npms/guide/" class="nav-link {% if request.path == '/npms/guide/' %}active{% endif %}">
+        <i class="bi bi-book"></i><span>사용 안내</span>
+      </a>
+    </li>
+    {% if user_access.system %}
+    <li class="nav-item">
+      <a href="/npms/system/" class="nav-link {% if request.path == '/npms/system/' %}active{% endif %}">
+        <i class="bi bi-gear"></i><span>시스템 설정</span>
+      </a>
+    </li>
+    {% endif %}
+  </ul>
+
+  <!-- 하단 고정 영역 -->
+  <div class="mt-auto px-2 pb-3">
+    <hr class="sidebar-divider">
+    <div class="sidebar-section-label">유관기관</div>
+    <div class="related-links px-1">
+      <a href="https://www.sen.go.kr/" target="_blank" class="related-link">서울특별시교육청</a>
+      <a href="https://www.schoolinfo.go.kr/" target="_blank" class="related-link">학교정보</a>
+    </div>
+  </div>
+</nav>
+
+<!-- 모바일 사이드바 오버레이 -->
+<div id="sidebar-overlay"></div>
+
+<!-- ═══════════════════════════════════════════
+     메인 콘텐츠
+═══════════════════════════════════════════ -->
+<div id="main-wrapper" class="npms-main">
+  <!-- 상단 헤더 -->
+  <header class="npms-header d-flex align-items-center px-3">
+    <!-- 햄버거 버튼 -->
+    <button id="sidebar-toggle" class="btn btn-sm btn-outline-secondary me-3" title="메뉴">
+      <i class="bi bi-list fs-5"></i>
+    </button>
+    <!-- 페이지 제목 -->
+    <h6 class="mb-0 fw-semibold text-truncate me-auto">{% block page_title %}{% endblock %}</h6>
+
+    <!-- 실시간 장애 카운트 -->
+    <div class="d-flex align-items-center gap-3 me-3 d-none d-md-flex">
+      <span class="hdr-badge" title="접수">
+        <i class="bi bi-telephone-fill text-warning"></i>
+        <span id="hdr-received">-</span>
+      </span>
+      <span class="hdr-badge" title="처리중">
+        <i class="bi bi-tools text-info"></i>
+        <span id="hdr-processing">-</span>
+      </span>
+      <span class="hdr-badge" title="SLA 준수율">
+        <i class="bi bi-shield-check text-success"></i>
+        <span id="hdr-sla">-</span>%
+      </span>
+    </div>
+
+    <!-- 접속자 -->
+    <div class="d-none d-md-flex align-items-center me-3">
+      <i class="bi bi-people-fill text-secondary me-1"></i>
+      <small id="hdr-online">-</small>명
+    </div>
+
+    <!-- 🔔 알림센터 -->
+    <div class="dropdown me-1">
+      <button class="btn btn-sm btn-outline-secondary position-relative"
+              id="noti-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+              title="알림" aria-label="알림센터">
+        <i class="bi bi-bell fs-6"></i>
+        <span id="noti-badge"
+              class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none"
+              style="font-size:.55rem;padding:2px 5px;"></span>
+      </button>
+      <!-- 알림 드롭다운 패널 -->
+      <div class="dropdown-menu dropdown-menu-end p-0 shadow"
+           style="width:320px;max-width:92vw;" id="noti-panel">
+        <!-- 헤더 -->
+        <div class="d-flex align-items-center px-3 py-2 border-bottom bg-light rounded-top">
+          <span class="fw-semibold small"><i class="bi bi-bell-fill me-1 text-primary"></i>알림</span>
+          <span class="badge bg-danger ms-1 d-none" id="noti-cnt-label" style="font-size:.6rem;"></span>
+          <div class="ms-auto d-flex gap-1">
+            <button class="btn btn-xs btn-link text-muted p-0" style="font-size:.72rem;"
+                    onclick="notiReadAll()" title="모두 읽음">모두 읽음</button>
+            <button class="btn btn-xs btn-link text-muted p-0 ms-2" style="font-size:.72rem;"
+                    onclick="notiClear()" title="읽은 알림 삭제">정리</button>
+          </div>
+        </div>
+        <!-- 알림 목록 -->
+        <div id="noti-list" style="max-height:360px;overflow-y:auto;"></div>
+        <!-- 빈 상태 -->
+        <div id="noti-empty" class="text-center py-4 text-muted small d-none">
+          <i class="bi bi-bell-slash d-block fs-4 mb-1 opacity-50"></i>새 알림이 없습니다
+        </div>
+      </div>
+    </div>
+
+    <!-- 사용자 드롭다운 -->
+    <div class="dropdown">
+      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+        <i class="bi bi-person-circle me-1"></i>{{ user.name }}
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><span class="dropdown-item-text text-muted small">{{ user.get_role_display }}</span></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="/npms/accounts/api/users/me/"><i class="bi bi-person me-2"></i>내 정보</a></li>
+        <li>
+          <form method="post" action="/npms/accounts/logout/">
+            {% csrf_token %}
+            <button class="dropdown-item text-danger" type="submit">
+              <i class="bi bi-box-arrow-right me-2"></i>로그아웃
+            </button>
+          </form>
+        </li>
+      </ul>
+    </div>
+    <!-- 출근/퇴근 토글 버튼 (worker/resident 전용) -->
+    {% if user.role == 'worker' or user.role == 'resident' %}
+    <button id="hdr-attendance-btn" class="btn btn-sm btn-success ms-2"
+            onclick="hdrAttendanceAction()" title="출근/퇴근">
+      <i class="bi bi-box-arrow-in-right"></i>
+    </button>
+    {% endif %}
+    <!-- 홈 버튼 -->
+    <a href="/npms/" class="btn btn-sm btn-outline-primary ms-2" title="홈">
+      <i class="bi bi-house-fill"></i>
+    </a>
+  </header>
+
+  <!-- 콘텐츠 영역 -->
+  <main class="npms-content">
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show mx-3 mt-2" role="alert">
+          {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+{% else %}
+  {% block auth_content %}{% endblock %}
+{% endif %}
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- OpenLayers JS -->
+<script src="https://openlayers.org/en/v4.6.5/build/ol.js"></script>
+<!-- 브이월드 API 키 -->
+{% if VWORLD_API_KEY %}
+<script>const VWORLD_API_KEY = '{{ VWORLD_API_KEY }}';</script>
+{% endif %}
+<!-- Custom JS -->
+<script src="{% static 'js/npms.js' %}"></script>
+
+<script>
+// CSRF 토큰 글로벌 설정
+const CSRF_TOKEN = '{{ csrf_token }}';
+const API_BASE   = '/npms/api';
+const USER_ROLE        = '{{ user.role }}';
+const USER_CENTER_CODE = '{{ user.support_center.code|default:"" }}';
+const USER_CENTER_ID   = {{ user.support_center.id|default:"null" }};
+const USER_NAME        = '{{ user.name|default:"" }}';
+const USER_PHONE       = '{{ user.phone|default:"" }}';
+
+/* ── KST 시간 유틸 (UTC+9 고정) ── */
+function _kstNow() { return new Date(Date.now() + 9 * 3600000); }
+function nowKST()       { return _kstNow().toISOString().slice(0, 16); }   // YYYY-MM-DDTHH:MM
+function todayKST()     { return _kstNow().toISOString().slice(0, 10); }   // YYYY-MM-DD
+function nowKSTFull()   { return _kstNow().toISOString().slice(0, 19).replace('T', ' '); } // YYYY-MM-DD HH:MM:SS
+function nowKSTFilename(){ return _kstNow().toISOString().slice(0, 10); }  // 파일명용 날짜
+function nowKSTISO() {
+  var d = _kstNow();
+  return d.getUTCFullYear() + '-' +
+    String(d.getUTCMonth()+1).padStart(2,'0') + '-' +
+    String(d.getUTCDate()).padStart(2,'0') + 'T' +
+    String(d.getUTCHours()).padStart(2,'0') + ':' +
+    String(d.getUTCMinutes()).padStart(2,'0') + ':' +
+    String(d.getUTCSeconds()).padStart(2,'0') + '+09:00';
+}
+function nowKSTLocale() {
+  var d = _kstNow();
+  return d.getUTCFullYear() + '. ' +
+    String(d.getUTCMonth()+1).padStart(2,'0') + '. ' +
+    String(d.getUTCDate()).padStart(2,'0') + '. ' +
+    String(d.getUTCHours()).padStart(2,'0') + ':' +
+    String(d.getUTCMinutes()).padStart(2,'0') + ':' +
+    String(d.getUTCSeconds()).padStart(2,'0');
+}
+
+// 사이드바 토글 (모바일/데스크톱 분기)
+function isMobile() { return window.innerWidth < 992; }
+
+function closeMobileSidebar() {
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebar-overlay').classList.remove('active');
+}
+
+document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
+  if (isMobile()) {
+    const isOpen = document.getElementById('sidebar').classList.toggle('mobile-open');
+    document.getElementById('sidebar-overlay').classList.toggle('active', isOpen);
+  } else {
+    document.getElementById('sidebar').classList.toggle('collapsed');
+    document.getElementById('main-wrapper').classList.toggle('expanded');
+  }
+});
+
+// 오버레이 클릭 시 사이드바 닫기
+document.getElementById('sidebar-overlay').addEventListener('click', closeMobileSidebar);
+
+// 모바일에서 메뉴 링크 클릭 시 사이드바 자동 닫기
+document.querySelectorAll('#sidebar .nav-link').forEach(link => {
+  link.addEventListener('click', () => { if (isMobile()) closeMobileSidebar(); });
+});
+
+// 현재 페이지 실시간 갱신
+{% if user.is_authenticated %}
+function updateCurrentPage() {
+  fetch(`${API_BASE}/accounts/api/sessions/update_page/`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF_TOKEN},
+    body: JSON.stringify({page: window.location.pathname})
+  });
+}
+setInterval(updateCurrentPage, 30000);
+updateCurrentPage();
+{% endif %}
+
+{% if user.role == 'worker' or user.role == 'resident' %}
+// ── 출근/퇴근 토글 버튼 ────────────────────────────────────────────────
+function updateAttendanceBtn(status) {
+  const btn = document.getElementById('hdr-attendance-btn');
+  if (!btn) return;
+  if (status === 'checked_in') {
+    btn.innerHTML = '<i class="bi bi-box-arrow-right"></i>';
+    btn.title = '퇴근';
+    btn.className = 'btn btn-sm btn-warning ms-2';
+    btn.disabled = false;
+  } else if (status === 'checked_out') {
+    btn.innerHTML = '<i class="bi bi-check2-circle"></i>';
+    btn.title = '퇴근완료';
+    btn.className = 'btn btn-sm btn-outline-secondary ms-2';
+    btn.disabled = true;
+  } else if (status === 'leave') {
+    btn.innerHTML = '<i class="bi bi-calendar-x"></i>';
+    btn.title = '연차';
+    btn.className = 'btn btn-sm btn-outline-secondary ms-2';
+    btn.disabled = true;
+  } else {
+    btn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i>';
+    btn.title = '출근';
+    btn.className = 'btn btn-sm btn-success ms-2';
+    btn.disabled = false;
+  }
+}
+
+async function hdrAttendanceAction() {
+  const btn = document.getElementById('hdr-attendance-btn');
+  if (!btn || btn.disabled) return;
+  const isCheckout = btn.title === '퇴근';
+  btn.disabled = true;
+  try {
+    const url = isCheckout ? `${API_BASE}/dashboard/checkout/` : `${API_BASE}/dashboard/checkin/`;
+    let gps = {};
+    if (navigator.geolocation) {
+      await new Promise(resolve => navigator.geolocation.getCurrentPosition(
+        p => { gps = {lat: p.coords.latitude, lng: p.coords.longitude}; resolve(); },
+        () => resolve(), {timeout: 5000}
+      ));
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json'},
+      body: JSON.stringify(gps),
+    });
+    if (res.ok) {
+      updateAttendanceBtn(isCheckout ? 'checked_out' : 'checked_in');
+      // 대시보드 근태현황 카드 동기화
+      if (typeof loadAttendanceStats === 'function') loadAttendanceStats('day', null);
+    } else {
+      btn.disabled = false;
+    }
+  } catch(e) { btn.disabled = false; }
+}
+
+// 페이지 로드 시 현재 상태 반영
+(async function() {
+  try {
+    const res = await fetch(`${API_BASE}/dashboard/attendance-stats/?period=day`);
+    if (!res.ok) return;
+    const d = await res.json();
+    updateAttendanceBtn(d.my_status);
+  } catch(e) {}
+})();
+{% endif %}
+</script>
+{% block extra_js %}{% endblock %}
+
+{% if user.is_authenticated %}
+<script>
+/* ══════════════════════════════════════════
+   알림센터 (🔔)
+══════════════════════════════════════════ */
+var _notiData = [];
+
+function notiLoad() {
+  fetch(API_BASE + '/dashboard/notifications/', { headers: { 'X-CSRFToken': CSRF_TOKEN } })
+    .then(function(r){ return r.json(); })
+    .then(function(list){
+      _notiData = list;
+      _notiRender(list);
+    }).catch(function(){});
+}
+
+function notiCheckCount() {
+  fetch(API_BASE + '/dashboard/notifications/unread_count/', { headers: { 'X-CSRFToken': CSRF_TOKEN } })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var cnt = d.count || 0;
+      var badge  = document.getElementById('noti-badge');
+      var label  = document.getElementById('noti-cnt-label');
+      if (cnt > 0) {
+        badge.textContent = cnt > 99 ? '99+' : cnt;
+        badge.classList.remove('d-none');
+        label.textContent = cnt;
+        label.classList.remove('d-none');
+      } else {
+        badge.classList.add('d-none');
+        label.classList.add('d-none');
+      }
+    }).catch(function(){});
+}
+
+function _notiRender(list) {
+  var el   = document.getElementById('noti-list');
+  var empty = document.getElementById('noti-empty');
+  if (!list || list.length === 0) {
+    el.innerHTML = '';
+    empty.classList.remove('d-none');
+    return;
+  }
+  empty.classList.add('d-none');
+  var html = '';
+  list.forEach(function(n) {
+    var bg = n.is_read ? '' : 'background:#f0f4ff;';
+    html += '<div class="noti-item d-flex align-items-start gap-2 px-3 py-2 border-bottom" ' +
+      'style="cursor:pointer;' + bg + 'transition:background .15s;" ' +
+      'onclick="notiClick(' + n.id + ',\'' + (n.link||'') + '\')" ' +
+      'onmouseover="this.style.background=\'#e8f0fe\'" ' +
+      'onmouseout="this.style.background=\'' + (n.is_read?'':'#f0f4ff') + '\'">' +
+      '<i class="bi ' + n.icon + ' ' + n.color + ' flex-shrink-0 mt-1" style="font-size:.95rem;"></i>' +
+      '<div class="flex-fill overflow-hidden">' +
+        '<div class="fw-semibold text-truncate" style="font-size:.78rem;">' + _escH(n.title) + '</div>' +
+        (n.message ? '<div class="text-muted text-truncate" style="font-size:.7rem;">' + _escH(n.message) + '</div>' : '') +
+        '<div class="text-muted" style="font-size:.65rem;">' + n.created_at + '</div>' +
+      '</div>' +
+      (n.is_read ? '' : '<span class="flex-shrink-0 rounded-circle bg-primary mt-1" style="width:7px;height:7px;display:inline-block;"></span>') +
+    '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function notiClick(id, link) {
+  fetch(API_BASE + '/dashboard/notifications/' + id + '/read/', {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }
+  }).then(function(){
+    notiCheckCount();
+    if (link) { window.location.href = link; }
+    else { notiLoad(); }
+  });
+}
+
+function notiReadAll() {
+  fetch(API_BASE + '/dashboard/notifications/read_all/', {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF_TOKEN }
+  }).then(function(){ notiLoad(); notiCheckCount(); });
+}
+
+function notiClear() {
+  fetch(API_BASE + '/dashboard/notifications/clear/', {
+    method: 'DELETE', headers: { 'X-CSRFToken': CSRF_TOKEN }
+  }).then(function(){ notiLoad(); notiCheckCount(); });
+}
+
+function _escH(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* 패널 열릴 때 목록 로드 */
+document.addEventListener('DOMContentLoaded', function(){
+  var btn = document.getElementById('noti-btn');
+  if (btn) {
+    btn.addEventListener('shown.bs.dropdown', function(){ notiLoad(); });
+  }
+  /* 최초 카운트 (WebSocket 연결 전 즉시 표시) */
+  notiCheckCount();
+  /* WebSocket 실시간 알림 연결 */
+  _notiWsConnect();
+});
+
+/* ── 실시간 알림 WebSocket ──────────────────────────────────── */
+(function(){
+  var _ws = null;
+  var _wsDelay = 1000;
+  var _wsPingTimer = null;
+
+  window._notiWsConnect = function() {
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var url = proto + '//' + location.host + '/npms/ws/notifications/';
+    _ws = new WebSocket(url);
+
+    _ws.onopen = function() {
+      _wsDelay = 1000;
+      _wsPingTimer = setInterval(function(){
+        if (_ws && _ws.readyState === WebSocket.OPEN) {
+          _ws.send(JSON.stringify({type: 'ping'}));
+        }
+      }, 30000);
+    };
+
+    _ws.onmessage = function(e) {
+      try {
+        var msg = JSON.parse(e.data);
+        if (msg.type === 'notification.count' || msg.type === 'notification.push') {
+          var cnt = msg.count || 0;
+          var badge = document.getElementById('noti-badge');
+          var label = document.getElementById('noti-cnt-label');
+          if (cnt > 0) {
+            badge.textContent = cnt > 99 ? '99+' : cnt;
+            badge.classList.remove('d-none');
+            label.textContent = cnt;
+            label.classList.remove('d-none');
+          } else {
+            badge.classList.add('d-none');
+            label.classList.add('d-none');
+          }
+        }
+      } catch(err) {}
+    };
+
+    _ws.onclose = function() {
+      clearInterval(_wsPingTimer);
+      /* 재연결 지수 백오프 */
+      setTimeout(_notiWsConnect, _wsDelay);
+      _wsDelay = Math.min(_wsDelay * 2, 30000);
+    };
+
+    _ws.onerror = function() { _ws.close(); };
+  };
+})();
+</script>
+{% endif %}
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4 landscape; margin: 15mm 20mm; }
+  body  { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; font-size: 11pt; color: #000; }
+
+  h2   { text-align: center; font-size: 20pt; font-weight: bold; margin: 0 0 4px; letter-spacing: 3px; }
+  .sub { text-align: center; font-size: 10pt; color: #555; margin-bottom: 14px; }
+
+  /* 기본 테이블 */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  th, td { border: 1px solid #333; padding: 6px 10px; font-size: 10.5pt; vertical-align: middle; }
+  th { background: #f0f0f0; font-weight: bold; text-align: center; white-space: nowrap; }
+
+  /* 정보 테이블 — 3쌍 균등 */
+  .info-table th { width: 12%; }
+
+  /* 자재 목록 헤더 */
+  .item-table thead th { background: #d0d8f0; font-size: 11pt; text-align: center; }
+  .item-table td       { text-align: center; }
+  .item-table td.name  { text-align: left; font-weight: bold; }
+  .item-table td.qty   { font-weight: bold; font-size: 12pt; }
+
+  /* 서명 테이블 */
+  .sign-table          { width: 100%; margin-top: 12px; }
+  .sign-table th       { background: #e8eaf6; font-size: 13pt; text-align: center;
+                         padding: 8px; width: 50%; }
+  .sign-table .area    { height: 110px; text-align: center; padding: 6px; border: 1px solid #333; }
+  .sign-table .area img{ max-height: 95px; max-width: 100%; }
+  .sign-table .sname   { text-align: center; font-size: 11pt; padding: 6px 10px;
+                         border: 1px solid #333; border-top: none; }
+
+  .footer { margin-top: 14px; text-align: center; font-size: 8.5pt; color: #777; }
+</style>
+</head>
+<body>
+
+<h2>자재 입고증</h2>
+<p class="sub">Material Inbound Receipt</p>
+
+<table class="info-table">
+  <tr>
+    <th>입고번호</th><td>{{ inbound.inbound_number }}</td>
+    <th>입고일자</th><td>{{ inbound.inbound_date }}</td>
+    <th>작성일시</th><td>{{ now|date:"Y년 m월 d일 H:i" }}</td>
+  </tr>
+  <tr>
+    <th>공급업체</th><td>{{ inbound.supplier|default:"-" }}</td>
+    <th>인계자</th><td>{{ inbound.handover_person|default:"-" }}{% if inbound.handover_phone %} ({{ inbound.handover_phone }}){% endif %}</td>
+    <th>인수자</th><td>{{ inbound.receiver_person|default:"-" }}{% if inbound.receiver_phone %} ({{ inbound.receiver_phone }}){% endif %}</td>
+  </tr>
+</table>
+
+<table class="item-table">
+  <thead>
+    <tr>
+      <th style="width:14%;">자재분류</th>
+      <th style="width:12%;">자재코드</th>
+      <th style="width:26%;">자재명</th>
+      <th style="width:22%;">규격/사양</th>
+      <th style="width:8%;">단위</th>
+      <th style="width:10%;">수량</th>
+      <th style="width:8%;">합계</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>{{ inbound.material.category.name }}</td>
+      <td>{{ inbound.material.code }}</td>
+      <td class="name">{{ inbound.material.name }}</td>
+      <td>{{ inbound.material.spec|default:"-" }}</td>
+      <td>{{ inbound.material.get_unit_display }}</td>
+      <td class="qty">{{ inbound.quantity }}</td>
+      <td class="qty">{{ inbound.quantity }}</td>
+    </tr>
+  </tbody>
+</table>
+
+{% if inbound.note %}
+<table>
+  <tr><th style="width:8%;">비고</th><td>{{ inbound.note }}</td></tr>
+</table>
+{% endif %}
+
+<table class="sign-table">
+  <tr>
+    <th>인계자 서명</th>
+    <th>인수자 서명</th>
+  </tr>
+  <tr>
+    <td class="area">
+      {% if inbound.handover_signature %}<img src="{{ inbound.handover_signature }}" alt="인계자서명">{% endif %}
+    </td>
+    <td class="area">
+      {% if inbound.receiver_signature %}<img src="{{ inbound.receiver_signature }}" alt="인수자서명">{% endif %}
+    </td>
+  </tr>
+  <tr>
+    <td class="sname">{{ inbound.handover_person|default:"" }}{% if inbound.handover_phone %} &nbsp;({{ inbound.handover_phone }}){% endif %}</td>
+    <td class="sname">{{ inbound.receiver_person|default:"" }}{% if inbound.receiver_phone %} &nbsp;({{ inbound.receiver_phone }}){% endif %}</td>
+  </tr>
+</table>
+
+<p class="footer">
+  본 입고증은 자재 관리 시스템(NPMS)에서 자동 생성되었습니다. &nbsp;|&nbsp; 생성일시: {{ now|date:"Y-m-d H:i:s" }}
+</p>
+
+</body>
+</html>
