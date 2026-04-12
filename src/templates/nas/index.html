@@ -69,7 +69,7 @@
 
     <!-- 우측: 파일/폴더 탐색 영역 -->
     <div class="col-12 col-xl-10 d-flex flex-column">
-      <div class="card border-0 shadow-sm flex-grow-1" style="min-height:0;">
+      <div class="card border-0 shadow-sm flex-grow-1" style="min-height:0;display:flex;flex-direction:column;">
 
         <!-- 상태 바 -->
         <div class="card-header py-2 bg-white border-bottom d-flex align-items-center">
@@ -77,16 +77,26 @@
         </div>
 
         <!-- 목록 뷰 -->
-        <div id="view-list" class="table-responsive flex-grow-1" style="overflow-y:auto;">
+        <div id="view-list" style="overflow-y:auto;flex:1 1 0;min-height:0;">
           <table class="table table-sm table-hover mb-0" style="table-layout:fixed;min-width:640px;">
-            <thead class="table-light sticky-top">
+            <thead class="table-light" style="position:sticky;top:0;z-index:2;">
               <tr>
                 <th style="width:32px;"></th>
-                <th style="width:220px;">이름</th>
-                <th style="width:70px;">유형</th>
-                <th style="width:75px;">분류</th>
-                <th style="width:65px;" class="text-end">크기</th>
-                <th style="width:88px;">업로드일</th>
+                <th style="width:220px;cursor:pointer;user-select:none;" onclick="sortBy('name')" id="th-name">
+                  이름 <span id="sort-icon-name" class="text-muted small"></span>
+                </th>
+                <th style="width:70px;cursor:pointer;user-select:none;" onclick="sortBy('type')" id="th-type">
+                  유형 <span id="sort-icon-type" class="text-muted small"></span>
+                </th>
+                <th style="width:75px;cursor:pointer;user-select:none;" onclick="sortBy('category')" id="th-category">
+                  분류 <span id="sort-icon-category" class="text-muted small"></span>
+                </th>
+                <th style="width:65px;cursor:pointer;user-select:none;" class="text-end" onclick="sortBy('size')" id="th-size">
+                  크기 <span id="sort-icon-size" class="text-muted small"></span>
+                </th>
+                <th style="width:88px;cursor:pointer;user-select:none;" onclick="sortBy('date')" id="th-date">
+                  업로드일 <span id="sort-icon-date" class="text-muted small"></span>
+                </th>
                 <th style="width:65px;">업로더</th>
                 <th style="width:68px;" class="text-center">작업</th>
               </tr>
@@ -128,10 +138,9 @@
           </table>
         </div>
 
-        <!-- 페이지네이션 -->
-        <div class="card-footer py-2 d-flex justify-content-between align-items-center">
-          <small class="text-muted" id="page-info">-</small>
-          <div id="pagination" class="d-flex gap-1"></div>
+        <!-- 상태바 (파일 수 표시) -->
+        <div class="card-footer py-1 px-3">
+          <small class="text-muted" id="page-info"></small>
         </div>
       </div>
     </div>
@@ -297,7 +306,13 @@ let navHistory      = [];     // 뒤로 가기 스택
 let currentView     = 'list';
 let currentPage     = 1;
 let selectedFiles   = [];
-const _ctxRowData   = {};     // 우클릭 row 데이터 캐시 { 'f<id>': {type,id,name}, 'fi<id>': {type,id,name,fileObj} }
+const _ctxRowData   = {};     // 우클릭 row 데이터 캐시
+
+// ── 정렬 상태 ────────────────────────────────────────────────
+let _sortKey = 'name';
+let _sortAsc = true;
+let _allFolders = [];
+let _allFiles   = [];
 
 // ── 초기화 ──────────────────────────────────────────────────
 async function init() {
@@ -448,41 +463,38 @@ function updateNavButtons() {
 }
 
 // ── 컨텐츠 로드 (폴더 + 파일) ───────────────────────────────
-async function loadContents(page = 1) {
-  currentPage = page;
+async function loadContents() {
   const q = document.getElementById('file-search').value.trim();
 
   setLoading(true);
   try {
-    // 하위 폴더 (검색 중이 아닐 때만)
+    // 하위 폴더
     let subFolders = [];
-    if (!q && currentFolderId !== null) {
-      const fd = await apiGet(`${API}/nas/folders/children/`, { parent_id: currentFolderId });
-      subFolders = fd;
-    } else if (!q && currentFolderId === null) {
-      const fd = await apiGet(`${API}/nas/folders/children/`, { parent_id: 'root' });
-      subFolders = fd;
+    const pid = currentFolderId === null ? 'root' : currentFolderId;
+    if (!q) {
+      subFolders = await apiGet(`${API}/nas/folders/children/`, { parent_id: pid });
     }
 
-    // 파일
-    const params = { page, page_size: 30 };
-    if (currentFolderId) params.folder_id = currentFolderId;
-    if (q) params.q = q;
-    const endpoint = q ? `${API}/nas/files/search/` : `${API}/nas/files/`;
-    const fileData = await apiGet(endpoint, params);
-    const files    = fileData.results || fileData;
-    const total    = fileData.count ?? files.length;
+    // 파일: 폴더 선택됐을 때만 로드 (루트에서는 파일 목록 비움)
+    let files = [];
+    if (currentFolderId !== null || q) {
+      const params = { page_size: 9999 };
+      if (currentFolderId) params.folder_id = currentFolderId;
+      if (q) params.q = q;
+      const endpoint = q ? `${API}/nas/files/search/` : `${API}/nas/files/`;
+      const fileData = await apiGet(endpoint, params);
+      files = fileData.results || fileData;
+    }
 
-    const folderCount = subFolders.length;
-    const fileCount   = total;
+    _allFolders = subFolders;
+    _allFiles   = files;
+
     document.getElementById('item-count').textContent =
-      `폴더 ${folderCount}개  파일 ${fileCount}개`;
+      `폴더 ${subFolders.length}개  파일 ${files.length}개`;
     document.getElementById('page-info').textContent =
-      fileCount > 30 ? `${page} / ${Math.ceil(fileCount/30)}` : '';
+      files.length ? `총 ${files.length}개 파일` : '';
 
-    renderPagination(fileCount, 30, page);
-
-    if (currentView === 'list') renderList(subFolders, files);
+    if (currentView === 'list') renderSorted();
     else                        renderGrid(subFolders, files);
   } catch(e) {
     document.getElementById('item-tbody').innerHTML =
@@ -546,11 +558,21 @@ function renderList(folders, files) {
 
   files.forEach(f => {
     const icon = mimeIcon(f.mime_type);
+    const displayName = (f.original_name || f.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
     _ctxRowData['fi' + f.id] = { type: 'file', id: f.id, name: f.original_name || f.name, fileObj: f };
     rows += `<tr style="cursor:pointer;" onclick="openPreview(${f.id})"
                 oncontextmenu="showCtxMenuById(event,'fi${f.id}')">
       <td class="text-center"><i class="bi ${icon.cls}" style="color:${icon.color};"></i></td>
-      <td class="text-truncate" title="${f.original_name||f.name}"><span class="small">${f.original_name || f.name}</span></td>
+      <td class="text-truncate" title="${f.original_name||f.name}" onclick="event.stopPropagation()">
+        <span class="small file-name-label" id="fn-label-${f.id}"
+              onclick="startInlineRename(event,${f.id})"
+              title="클릭하여 이름 변경"
+              style="cursor:text;">${f.original_name || f.name}</span>
+        <input class="form-control form-control-sm d-none file-name-input" id="fn-input-${f.id}"
+               style="height:22px;font-size:.8rem;padding:1px 4px;"
+               onblur="commitInlineRename(${f.id})"
+               onkeydown="if(event.key==='Enter')commitInlineRename(${f.id});if(event.key==='Escape')cancelInlineRename(${f.id});">
+      </td>
       <td><small class="text-muted">${mimeExt(f.mime_type)}</small></td>
       <td><span class="badge bg-light text-dark border" style="font-size:.65rem;">${f.category_display||f.category}</span></td>
       <td class="text-end"><small class="text-muted">${f.file_size_kb||0} KB</small></td>
@@ -613,20 +635,40 @@ function renderGrid(folders, files) {
   grid.innerHTML = cards;
 }
 
-// ── 페이지네이션 ─────────────────────────────────────────────
-function renderPagination(total, pageSize, current) {
-  const pages = Math.ceil(total / pageSize);
-  const el    = document.getElementById('pagination');
-  if (pages <= 1) { el.innerHTML = ''; return; }
-  let html = '';
-  const start = Math.max(1, current - 2);
-  const end   = Math.min(pages, current + 2);
-  if (start > 1) html += `<button class="btn btn-xs btn-outline-secondary" onclick="loadContents(1)">1</button><span class="text-muted small">…</span>`;
-  for (let i = start; i <= end; i++) {
-    html += `<button class="btn btn-xs ${i===current?'btn-primary':'btn-outline-secondary'}" onclick="loadContents(${i})">${i}</button>`;
+// ── 컬럼 정렬 ────────────────────────────────────────────────
+function sortBy(key) {
+  if (_sortKey === key) {
+    _sortAsc = !_sortAsc;
+  } else {
+    _sortKey = key;
+    _sortAsc = true;
   }
-  if (end < pages) html += `<span class="text-muted small">…</span><button class="btn btn-xs btn-outline-secondary" onclick="loadContents(${pages})">${pages}</button>`;
-  el.innerHTML = html;
+  updateSortIcons();
+  renderSorted();
+}
+
+function updateSortIcons() {
+  ['name','type','category','size','date'].forEach(k => {
+    const el = document.getElementById(`sort-icon-${k}`);
+    if (!el) return;
+    el.textContent = _sortKey === k ? (_sortAsc ? '▲' : '▼') : '';
+  });
+}
+
+function renderSorted() {
+  const sorted = [..._allFiles].sort((a, b) => {
+    let va, vb;
+    if (_sortKey === 'name')     { va = (a.original_name||a.name||'').toLowerCase(); vb = (b.original_name||b.name||'').toLowerCase(); }
+    else if (_sortKey === 'type'){ va = (a.mime_type||''); vb = (b.mime_type||''); }
+    else if (_sortKey === 'category') { va = (a.category_display||''); vb = (b.category_display||''); }
+    else if (_sortKey === 'size'){ va = a.file_size||0; vb = b.file_size||0; }
+    else if (_sortKey === 'date'){ va = a.uploaded_at||''; vb = b.uploaded_at||''; }
+    else { va = ''; vb = ''; }
+    if (va < vb) return _sortAsc ? -1 : 1;
+    if (va > vb) return _sortAsc ?  1 : -1;
+    return 0;
+  });
+  renderList(_allFolders, sorted);
 }
 
 // ── 뷰 전환 ──────────────────────────────────────────────────
@@ -636,19 +678,19 @@ function setView(v) {
   document.getElementById('view-grid').classList.toggle('d-none', v !== 'grid');
   document.getElementById('btn-list-view').classList.toggle('active', v === 'list');
   document.getElementById('btn-grid-view').classList.toggle('active', v === 'grid');
-  loadContents(currentPage);
+  loadContents();
 }
 
 // ── 검색 ─────────────────────────────────────────────────────
 let searchTimer;
 document.getElementById('file-search').addEventListener('input', () => {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => { currentPage = 1; loadContents(); }, 500);
+  searchTimer = setTimeout(() => { loadContents(); }, 500);
 });
 document.getElementById('file-search').addEventListener('keydown', e => {
   if (e.key === 'Enter') doSearch();
 });
-function doSearch() { currentPage = 1; loadContents(); }
+function doSearch() { loadContents(); }
 
 // ── 새 폴더 ──────────────────────────────────────────────────
 function createFolder() {
@@ -681,7 +723,7 @@ async function doCreateFolder() {
     if (currentFolderId === null) {
       await loadSideTree(null);
     }
-    loadContents(currentPage);
+    loadContents();
   } catch(e) { showToast('폴더 생성 실패', 'error'); }
 }
 
@@ -695,7 +737,7 @@ async function deleteFolder(e, folderId, folderName) {
     });
     showToast('폴더 삭제됨', 'success');
     if (currentFolderId === null) await loadSideTree(null);
-    loadContents(currentPage);
+    loadContents();
   } catch(e) { showToast('삭제 실패', 'error'); }
 }
 
@@ -709,11 +751,60 @@ async function deleteFile(e, fileId) {
     });
     if (r.ok) {
       showToast('파일이 휴지통으로 이동되었습니다', 'success');
-      loadContents(currentPage);
+      loadContents();
     } else {
       showToast('삭제 실패', 'error');
     }
   } catch(e) { showToast('삭제 실패', 'error'); }
+}
+
+// ── 파일명 인라인 편집 ───────────────────────────────────────
+function startInlineRename(e, fileId) {
+  e.stopPropagation();
+  const label = document.getElementById(`fn-label-${fileId}`);
+  const input = document.getElementById(`fn-input-${fileId}`);
+  if (!label || !input) return;
+  input.value = label.textContent.trim();
+  label.classList.add('d-none');
+  input.classList.remove('d-none');
+  input.focus();
+  input.select();
+}
+
+async function commitInlineRename(fileId) {
+  const label = document.getElementById(`fn-label-${fileId}`);
+  const input = document.getElementById(`fn-input-${fileId}`);
+  if (!label || !input) return;
+  const newName = input.value.trim();
+  if (!newName || newName === label.textContent.trim()) {
+    cancelInlineRename(fileId);
+    return;
+  }
+  try {
+    const r = await fetch(`${API}/nas/files/${fileId}/rename/`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+      body: JSON.stringify({ name: newName }),
+    });
+    if (r.ok) {
+      label.textContent = newName;
+      showToast('파일명 변경됨', 'success');
+      // _allFiles 캐시도 갱신
+      const f = _allFiles.find(f => f.id === fileId);
+      if (f) f.original_name = newName;
+    } else {
+      showToast('이름 변경 실패', 'error');
+    }
+  } catch(e) { showToast('오류 발생', 'error'); }
+  cancelInlineRename(fileId);
+}
+
+function cancelInlineRename(fileId) {
+  const label = document.getElementById(`fn-label-${fileId}`);
+  const input = document.getElementById(`fn-input-${fileId}`);
+  if (!label || !input) return;
+  label.classList.remove('d-none');
+  input.classList.add('d-none');
 }
 
 // ── 휴지통 토글 ──────────────────────────────────────────────
@@ -992,7 +1083,7 @@ async function doUpload() {
   showToast(`${done}개 파일 업로드 완료`, 'success');
   bootstrap.Modal.getInstance(document.getElementById('uploadModal'))?.hide();
   await loadSideTree(null);
-  loadContents(currentPage);
+  loadContents();
   loadStats();
 }
 
@@ -1151,7 +1242,7 @@ async function handleCtxAction(action) {
       if (cb.action === 'cut') _ctxClipboard = null;
       showToast(`'${cb.name}' 이동 완료`, 'success');
       await loadSideTree(null);
-      loadContents(currentPage);
+      loadContents();
     } catch(err) { showToast('이동 실패', 'error'); }
   }
 
@@ -1213,7 +1304,7 @@ async function doRename() {
     bootstrap.Modal.getInstance(document.getElementById('renameModal')).hide();
     showToast('이름 변경 완료', 'success');
     if (t.type === 'folder') await loadSideTree(null);
-    loadContents(currentPage);
+    loadContents();
   } catch(err) { showToast('이름 변경 실패', 'error'); }
 }
 
