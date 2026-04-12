@@ -237,3 +237,25 @@ def sync_nas_filesystem():
 
     logger.info(f'NAS sync 완료 — 폴더 {f_created}개, 파일 {p_created}개 신규 등록')
     return f'폴더+{f_created} 파일+{p_created}'
+
+
+@celery_app.task
+def purge_old_trash(days: int = 30):
+    """휴지통에서 30일 이상 지난 파일 영구 삭제"""
+    from django.utils import timezone
+    from datetime import timedelta
+    from .models import File
+
+    cutoff = timezone.now() - timedelta(days=days)
+    old_files = File.objects.filter(is_deleted=True, deleted_at__lt=cutoff)
+    count = 0
+    for f in old_files:
+        try:
+            if os.path.exists(f.file_path):
+                os.remove(f.file_path)
+        except Exception:
+            pass
+        f.delete()
+        count += 1
+    logger.info(f'휴지통 자동 정리: {count}개 파일 영구 삭제 (기준: {days}일)')
+    return f'{count}개 삭제'

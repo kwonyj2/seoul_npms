@@ -36,6 +36,7 @@ class FileSerializer(serializers.ModelSerializer):
     folder_path    = serializers.CharField(source='folder.full_path', read_only=True)
     school_name    = serializers.CharField(source='school.name', read_only=True)
     uploaded_by_name = serializers.CharField(source='uploaded_by.name', read_only=True)
+    deleted_by_name  = serializers.CharField(source='deleted_by.name', read_only=True)
     file_size_kb   = serializers.SerializerMethodField()
     category_display = serializers.CharField(source='get_category_display', read_only=True)
 
@@ -45,9 +46,10 @@ class FileSerializer(serializers.ModelSerializer):
                   'file_path', 'file_size', 'file_size_kb', 'mime_type',
                   'category', 'category_display', 'school', 'school_name',
                   'description', 'ocr_text', 'uploaded_by', 'uploaded_by_name',
-                  'uploaded_at']
+                  'uploaded_at', 'is_deleted', 'deleted_at', 'deleted_by', 'deleted_by_name', 'original_path']
         read_only_fields = ['id', 'name', 'file_path', 'file_size', 'mime_type',
-                            'ocr_text', 'uploaded_by', 'uploaded_at']
+                            'ocr_text', 'uploaded_by', 'uploaded_at',
+                            'is_deleted', 'deleted_at', 'deleted_by', 'original_path']
 
     def get_file_size_kb(self, obj):
         return round(obj.file_size / 1024, 1) if obj.file_size else 0

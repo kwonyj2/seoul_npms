@@ -45,6 +45,9 @@
       <button class="btn btn-sm btn-primary" onclick="openUploadModal()">
         <i class="bi bi-upload me-1"></i>업로드
       </button>
+      <button class="btn btn-sm btn-outline-danger ms-auto" id="btn-trash" onclick="toggleTrashView()" title="휴지통">
+        <i class="bi bi-trash me-1"></i>휴지통
+      </button>
     </div>
   </div>
 
@@ -97,6 +100,32 @@
         <!-- 그리드 뷰 -->
         <div id="view-grid" class="d-none p-3" style="overflow-y:auto;">
           <div class="row g-2" id="item-grid"></div>
+        </div>
+
+        <!-- 휴지통 뷰 -->
+        <div id="view-trash" class="d-none table-responsive flex-grow-1" style="overflow-y:auto;">
+          <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+            <span class="fw-semibold text-danger"><i class="bi bi-trash me-1"></i>휴지통</span>
+            <button class="btn btn-sm btn-outline-danger" onclick="emptyTrash()">
+              <i class="bi bi-trash3 me-1"></i>휴지통 비우기
+            </button>
+          </div>
+          <table class="table table-sm table-hover mb-0" style="table-layout:fixed;min-width:640px;">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th style="width:32px;"></th>
+                <th style="width:220px;">이름</th>
+                <th style="width:160px;">원본 경로</th>
+                <th style="width:65px;" class="text-end">크기</th>
+                <th style="width:100px;">삭제일시</th>
+                <th style="width:65px;">삭제자</th>
+                <th style="width:80px;" class="text-center">작업</th>
+              </tr>
+            </thead>
+            <tbody id="trash-tbody">
+              <tr><td colspan="7" class="text-center py-4 text-muted small">휴지통이 비어있습니다</td></tr>
+            </tbody>
+          </table>
         </div>
 
         <!-- 페이지네이션 -->
@@ -670,17 +699,113 @@ async function deleteFolder(e, folderId, folderName) {
   } catch(e) { showToast('삭제 실패', 'error'); }
 }
 
-// ── 파일 삭제 ────────────────────────────────────────────────
+// ── 파일 삭제 (휴지통으로 이동) ─────────────────────────────
 async function deleteFile(e, fileId) {
   e.stopPropagation();
-  if (!confirm('파일을 삭제하시겠습니까?')) return;
+  if (!confirm('파일을 휴지통으로 이동하시겠습니까?\n(30일 후 자동 영구 삭제됩니다)')) return;
   try {
-    await fetch(`${API}/nas/files/${fileId}/`, {
+    const r = await fetch(`${API}/nas/files/${fileId}/`, {
       method: 'DELETE', headers: { 'X-CSRFToken': getCsrfToken() }
     });
-    showToast('파일 삭제됨', 'success');
-    loadContents(currentPage);
+    if (r.ok) {
+      showToast('파일이 휴지통으로 이동되었습니다', 'success');
+      loadContents(currentPage);
+    } else {
+      showToast('삭제 실패', 'error');
+    }
   } catch(e) { showToast('삭제 실패', 'error'); }
+}
+
+// ── 휴지통 토글 ──────────────────────────────────────────────
+let _trashMode = false;
+function toggleTrashView() {
+  _trashMode = !_trashMode;
+  const trashView  = document.getElementById('view-trash');
+  const listView   = document.getElementById('view-list');
+  const gridView   = document.getElementById('view-grid');
+  const btn        = document.getElementById('btn-trash');
+  if (_trashMode) {
+    trashView.classList.remove('d-none');
+    listView.classList.add('d-none');
+    gridView.classList.add('d-none');
+    btn.classList.add('active');
+    loadTrash();
+  } else {
+    trashView.classList.add('d-none');
+    if (document.getElementById('btn-list-view').classList.contains('active')) {
+      listView.classList.remove('d-none');
+    } else {
+      gridView.classList.remove('d-none');
+    }
+    btn.classList.remove('active');
+  }
+}
+
+// ── 휴지통 목록 로드 ─────────────────────────────────────────
+async function loadTrash() {
+  try {
+    const r = await fetch(`${API}/nas/files/trash/`);
+    const data = await r.json();
+    const items = data.results || data;
+    const tbody = document.getElementById('trash-tbody');
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted small">휴지통이 비어있습니다</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(f => {
+      const ext = f.name.split('.').pop().toUpperCase();
+      const sizeKb = f.file_size_kb ? f.file_size_kb + ' KB' : '-';
+      const deletedAt = f.deleted_at ? f.deleted_at.substring(0, 16).replace('T', ' ') : '-';
+      const origPath = f.original_path ? f.original_path.split('/').slice(-3).join('/') : '-';
+      return `<tr>
+        <td class="text-center"><span class="badge bg-secondary">${ext}</span></td>
+        <td class="text-truncate" title="${f.original_name}">${f.original_name}</td>
+        <td class="text-truncate small text-muted" title="${f.original_path}">.../${origPath}</td>
+        <td class="text-end small">${sizeKb}</td>
+        <td class="small">${deletedAt}</td>
+        <td class="small">${f.deleted_by_name || '-'}</td>
+        <td class="text-center">
+          <button class="btn btn-xs btn-outline-success" onclick="restoreFile(${f.id})" title="복원">
+            <i class="bi bi-arrow-counterclockwise"></i>
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) { showToast('휴지통 로드 실패', 'error'); }
+}
+
+// ── 파일 복원 ────────────────────────────────────────────────
+async function restoreFile(fileId) {
+  if (!confirm('파일을 원래 위치로 복원하시겠습니까?')) return;
+  try {
+    const r = await fetch(`${API}/nas/files/${fileId}/restore/`, {
+      method: 'POST', headers: { 'X-CSRFToken': getCsrfToken() }
+    });
+    const data = await r.json();
+    if (r.ok) {
+      showToast('파일 복원 완료', 'success');
+      loadTrash();
+    } else {
+      showToast(data.error || '복원 실패', 'error');
+    }
+  } catch(e) { showToast('복원 실패', 'error'); }
+}
+
+// ── 휴지통 비우기 ────────────────────────────────────────────
+async function emptyTrash() {
+  if (!confirm('휴지통의 모든 파일을 영구 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
+  try {
+    const r = await fetch(`${API}/nas/files/empty_trash/`, {
+      method: 'DELETE', headers: { 'X-CSRFToken': getCsrfToken() }
+    });
+    const data = await r.json();
+    if (r.ok) {
+      showToast(data.message || '휴지통 비우기 완료', 'success');
+      loadTrash();
+    } else {
+      showToast(data.detail || '권한이 없습니다', 'error');
+    }
+  } catch(e) { showToast('오류 발생', 'error'); }
 }
 
 // ── 업로드 ───────────────────────────────────────────────────

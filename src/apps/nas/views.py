@@ -8,7 +8,9 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.http import FileResponse
 from django.conf import settings
 from django.db.models import Q
+from django.utils import timezone
 import os
+import shutil
 import mimetypes
 
 def file_open_view(request, token):
@@ -220,6 +222,8 @@ class FolderViewSet(viewsets.ModelViewSet):
             return Response([])
 
         for name in entries:
+            if name == '.trash':
+                continue
             child_fs = os.path.join(fs_path, name)
             if not os.path.isdir(child_fs):
                 continue
@@ -256,7 +260,7 @@ class FileViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
-        qs = File.objects.select_related('folder', 'school', 'uploaded_by')
+        qs = File.objects.select_related('folder', 'school', 'uploaded_by').filter(is_deleted=False)
         folder_id = self.request.query_params.get('folder_id')
         if folder_id:
             qs = qs.filter(folder_id=folder_id)
@@ -277,11 +281,11 @@ class FileViewSet(viewsets.ModelViewSet):
                                 file_size=os.path.getsize(full_path),
                                 mime_type=mime_type, folder=folder,
                             )
-                    # 없는 파일 DB에서 제거
+                    # 없는 파일 DB에서 제거 (휴지통 파일은 제외)
                     missing_ids = [f.id for f in qs if not os.path.exists(f.file_path)]
                     if missing_ids:
                         File.objects.filter(id__in=missing_ids).delete()
-                    qs = File.objects.select_related('folder', 'school', 'uploaded_by').filter(folder_id=folder_id)
+                    qs = File.objects.select_related('folder', 'school', 'uploaded_by').filter(folder_id=folder_id, is_deleted=False)
             except Exception:
                 pass
         school_id   = self.request.query_params.get('school_id')
@@ -376,6 +380,80 @@ class FileViewSet(viewsets.ModelViewSet):
             classify_nas_file.delay(file_obj.id)
 
         return Response(FileSerializer(file_obj).data, status=status.HTTP_201_CREATED)
+
+    def perform_destroy(self, instance):
+        """파일을 휴지통으로 이동 (소프트 삭제)"""
+        from rest_framework.exceptions import PermissionDenied
+        from apps.sysconfig.models import NasRoleConfig
+        if not NasRoleConfig.can_do(self.request.user.role, 'delete'):
+            raise PermissionDenied('파일 삭제 권한이 없습니다.')
+        nas_root = getattr(settings, 'NAS_MEDIA_ROOT', settings.MEDIA_ROOT)
+        trash_dir = os.path.join(nas_root, '.trash')
+        os.makedirs(trash_dir, exist_ok=True)
+        # 원본 경로 보존 후 파일 이동
+        original_path = instance.file_path
+        trash_name = f'{instance.id}__{instance.name}'
+        trash_dest = os.path.join(trash_dir, trash_name)
+        try:
+            if os.path.exists(original_path):
+                shutil.move(original_path, trash_dest)
+                instance.file_path = trash_dest
+        except Exception:
+            pass
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.deleted_by = self.request.user
+        instance.original_path = original_path
+        instance.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by', 'original_path', 'file_path'])
+
+    @action(detail=False, methods=['get'])
+    def trash(self, request):
+        """휴지통 목록"""
+        qs = File.objects.select_related('folder', 'deleted_by').filter(is_deleted=True).order_by('-deleted_at')
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            return self.get_paginated_response(FileSerializer(page, many=True).data)
+        return Response(FileSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=['post'])
+    def restore(self, request, pk=None):
+        """휴지통에서 파일 복원"""
+        file_obj = File.objects.filter(pk=pk, is_deleted=True).first()
+        if not file_obj:
+            return Response({'error': '휴지통에 해당 파일이 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+        original_path = file_obj.original_path
+        # 원본 경로 폴더 재생성
+        try:
+            os.makedirs(os.path.dirname(original_path), exist_ok=True)
+            if os.path.exists(file_obj.file_path):
+                shutil.move(file_obj.file_path, original_path)
+        except Exception as e:
+            return Response({'error': f'파일 복원 실패: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        file_obj.file_path = original_path
+        file_obj.is_deleted = False
+        file_obj.deleted_at = None
+        file_obj.deleted_by = None
+        file_obj.original_path = ''
+        file_obj.save(update_fields=['file_path', 'is_deleted', 'deleted_at', 'deleted_by', 'original_path'])
+        return Response({'message': '복원 완료', 'id': file_obj.id})
+
+    @action(detail=False, methods=['delete'])
+    def empty_trash(self, request):
+        """휴지통 비우기 (영구 삭제)"""
+        from rest_framework.exceptions import PermissionDenied
+        if request.user.role not in ('superadmin', 'admin'):
+            raise PermissionDenied('관리자만 휴지통을 비울 수 있습니다.')
+        qs = File.objects.filter(is_deleted=True)
+        count = 0
+        for f in qs:
+            try:
+                if os.path.exists(f.file_path):
+                    os.remove(f.file_path)
+            except Exception:
+                pass
+            f.delete()
+            count += 1
+        return Response({'message': f'{count}개 파일 영구 삭제 완료'})
 
     @action(detail=True, methods=['patch'])
     def rename(self, request, pk=None):

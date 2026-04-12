@@ -52,6 +52,11 @@ class File(models.Model):
     ocr_text     = models.TextField('OCR 추출 텍스트', blank=True)
     uploaded_by  = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, verbose_name='업로더')
     uploaded_at  = models.DateTimeField('업로드일시', auto_now_add=True)
+    # 휴지통
+    is_deleted   = models.BooleanField('휴지통', default=False)
+    deleted_at   = models.DateTimeField('삭제일시', null=True, blank=True)
+    deleted_by   = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='deleted_files', verbose_name='삭제자')
+    original_path = models.TextField('원본경로', blank=True)
 
     class Meta:
         db_table = 'nas_files'
