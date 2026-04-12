@@ -278,15 +278,15 @@
 </div>
 
 <!-- 미리보기 오프캔버스 -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="previewCanvas" style="width:560px;">
-  <div class="offcanvas-header py-2 border-bottom">
-    <h6 class="offcanvas-title mb-0 text-truncate" id="preview-title" style="max-width:440px;"></h6>
+<div class="offcanvas offcanvas-end" tabindex="-1" id="previewCanvas" style="width:600px;">
+  <div class="offcanvas-header py-2 border-bottom flex-shrink-0">
+    <h6 class="offcanvas-title mb-0 text-truncate" id="preview-title" style="max-width:480px;"></h6>
     <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
   </div>
-  <div class="offcanvas-body p-0 d-flex flex-column">
-    <div id="preview-meta" class="px-3 py-2 bg-light border-bottom small"></div>
-    <div id="preview-body" class="flex-grow-1 d-flex align-items-center justify-content-center" style="min-height:400px;overflow:auto;"></div>
-    <div class="p-2 border-top">
+  <div class="offcanvas-body p-0 d-flex flex-column" style="min-height:0;">
+    <div id="preview-meta" class="px-3 py-2 bg-light border-bottom small flex-shrink-0"></div>
+    <div id="preview-body" style="flex:1 1 0;min-height:0;overflow:auto;display:flex;flex-direction:column;"></div>
+    <div class="p-2 border-top flex-shrink-0">
       <a id="preview-dl-btn" href="#" class="btn btn-sm btn-primary w-100">
         <i class="bi bi-download me-1"></i>다운로드
       </a>
@@ -1103,12 +1103,14 @@ async function openPreview(id) {
     const mime = f.mime_type || '';
     const previewUrl = `${API}/nas/files/${id}/preview/`;
     if (mime.startsWith('image/')) {
-      body.innerHTML = `<img src="${previewUrl}" class="img-fluid p-2" style="max-height:500px;">`;
+      body.innerHTML = `<div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:8px;">
+        <img src="${previewUrl}" style="max-width:100%;max-height:100%;object-fit:contain;">
+      </div>`;
     } else if (mime === 'application/pdf') {
-      body.innerHTML = `<embed src="${previewUrl}" type="application/pdf" class="w-100" style="height:500px;">`;
+      body.innerHTML = `<iframe src="${previewUrl}" style="flex:1;width:100%;border:none;" allowfullscreen></iframe>`;
     } else {
       const icon = mimeIcon(mime);
-      body.innerHTML = `<div class="text-center p-4">
+      body.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;" class="p-4">
         <i class="bi ${icon.cls} display-1" style="color:${icon.color}"></i>
         <div class="mt-2 fw-semibold">${f.original_name||f.name}</div>
         <div class="text-muted small mt-1">${mime||'알 수 없는 형식'}</div>
