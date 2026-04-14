@@ -1133,13 +1133,15 @@ async function loadStats() {
 // ── MIME 아이콘 ──────────────────────────────────────────────
 function mimeIcon(mime) {
   if (!mime) return { cls: 'bi-file-earmark', color: '#6c757d' };
-  if (mime.startsWith('image/'))                            return { cls: 'bi-file-image',   color: '#0d6efd' };
-  if (mime === 'application/pdf')                           return { cls: 'bi-file-pdf',     color: '#dc3545' };
-  if (mime.includes('word'))                                return { cls: 'bi-file-word',    color: '#0d6efd' };
-  if (mime.includes('excel') || mime.includes('spreadsheet')) return { cls: 'bi-file-excel', color: '#198754' };
-  if (mime.includes('zip') || mime.includes('rar'))         return { cls: 'bi-file-zip',    color: '#ffc107' };
-  if (mime.startsWith('video/'))                            return { cls: 'bi-file-play',   color: '#6f42c1' };
-  if (mime.startsWith('text/'))                             return { cls: 'bi-file-text',   color: '#20c997' };
+  if (mime.startsWith('image/'))                                    return { cls: 'bi-file-image',    color: '#0d6efd' };
+  if (mime === 'application/pdf')                                   return { cls: 'bi-file-pdf',      color: '#dc3545' };
+  if (mime.includes('presentation') || mime.includes('powerpoint')) return { cls: 'bi-file-ppt',      color: '#dc3545' };
+  if (mime.includes('word'))                                        return { cls: 'bi-file-word',     color: '#0d6efd' };
+  if (mime.includes('excel') || mime.includes('spreadsheet'))       return { cls: 'bi-file-excel',    color: '#198754' };
+  if (mime.includes('zip') || mime.includes('rar'))                 return { cls: 'bi-file-zip',      color: '#ffc107' };
+  if (mime.includes('visio') || mime.includes('vnd.ms-visio'))      return { cls: 'bi-file-richtext', color: '#0d6efd' };
+  if (mime.startsWith('video/'))                                    return { cls: 'bi-file-play',     color: '#6f42c1' };
+  if (mime.startsWith('text/'))                                     return { cls: 'bi-file-text',     color: '#20c997' };
   return { cls: 'bi-file-earmark', color: '#6c757d' };
 }
 

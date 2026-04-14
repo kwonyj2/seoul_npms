@@ -212,9 +212,12 @@ const FILE_ICON = mime => {
   if (!mime) return 'bi-file-earmark text-secondary';
   if (mime.startsWith('image/')) return 'bi-file-image text-info';
   if (mime === 'application/pdf') return 'bi-file-pdf text-danger';
+  if (mime.includes('presentation') || mime.includes('powerpoint')) return 'bi-file-ppt text-danger';
   if (mime.includes('word')) return 'bi-file-word text-primary';
   if (mime.includes('sheet') || mime.includes('excel')) return 'bi-file-excel text-success';
   if (mime.includes('zip') || mime.includes('rar')) return 'bi-file-zip text-warning';
+  if (mime.includes('hwp') || mime.includes('hancom')) return 'bi-file-text text-info';
+  if (mime.includes('visio') || mime.includes('vnd.ms-visio')) return 'bi-file-richtext text-primary';
   if (mime.startsWith('text/')) return 'bi-file-text text-dark';
   return 'bi-file-earmark text-secondary';
 };
