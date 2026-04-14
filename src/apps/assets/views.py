@@ -378,6 +378,7 @@ class AssetViewSet(NoPaginateMixin, viewsets.ModelViewSet):
                 )
 
                 school = None
+                center = None
                 school_name = (row.get('설치학교명') or '').strip()
                 if school_name:
                     school = School.objects.filter(name=school_name).first()
@@ -389,11 +390,19 @@ class AssetViewSet(NoPaginateMixin, viewsets.ModelViewSet):
                 install_year = int(install_year_raw) if install_year_raw.isdigit() else None
                 project_name = (row.get('사업명') or '').strip()
 
+                # ── 상태 자동 결정 (학교명 기반) ──
+                if school:
+                    stat = 'installed'
+                    center = school.support_center
+                elif project_name == '창고':
+                    stat = 'warehouse'
+
                 asset = Asset.objects.create(
                     serial_number=sn,
                     asset_model=am,
                     status=stat,
                     current_school=school,
+                    current_center=center,
                     installed_at=installed_at,
                     install_year=install_year,
                     project_name=project_name,
@@ -405,6 +414,22 @@ class AssetViewSet(NoPaginateMixin, viewsets.ModelViewSet):
                     worker=request.user,
                     note='CSV 일괄 등록'
                 )
+
+                # ── 창고 장비 → AssetInbound 자동 생성 ──
+                if stat == 'warehouse':
+                    from .models import AssetInbound
+                    inbound_date = dt_date(2026, 5, 1)
+                    AssetInbound.objects.create(
+                        inbound_number=AssetInbound.generate_number(inbound_date),
+                        asset=asset,
+                        from_location_type='education_office',
+                        from_location_name='서울시교육청',
+                        to_location_type='warehouse',
+                        inbound_date=inbound_date,
+                        received_by=request.user,
+                        note='CSV 일괄 등록 자동 입고',
+                    )
+
                 created += 1
             except Exception as e:
                 errors.append(f'{row_num}행: {e}')
