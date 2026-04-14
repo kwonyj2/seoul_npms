@@ -250,6 +250,30 @@ class IncidentComment(models.Model):
         ordering = ['created_at']
 
 
+def incident_photo_upload_path(instance, filename):
+    """장애처리 현장사진 저장 경로 및 파일명 생성
+    저장경로: 산출물/장애처리 현장사진/
+    파일명 : 2026년 테크센터-장애처리 현장사진_학교명_장애접수번호[_N].jpg
+    """
+    import os
+    ext = os.path.splitext(filename)[1].lower() or '.jpg'
+    school_name = '미상'
+    incident_number = 'unknown'
+    if instance.incident_id:
+        try:
+            school_name = instance.incident.school.name
+        except Exception:
+            pass
+        incident_number = instance.incident.incident_number
+    base = f"2026년 테크센터-장애처리 현장사진_{school_name}_{incident_number}"
+    existing = IncidentPhoto.objects.filter(incident_id=instance.incident_id).count()
+    if existing == 0:
+        fname = f"{base}{ext}"
+    else:
+        fname = f"{base}_{existing + 1}{ext}"
+    return os.path.join('산출물', '장애처리 현장사진', fname)
+
+
 class IncidentPhoto(models.Model):
     """장애 첨부 사진"""
     PHOTO_TYPE_CHOICES = [
@@ -259,7 +283,7 @@ class IncidentPhoto(models.Model):
     ]
     incident    = models.ForeignKey(Incident, on_delete=models.CASCADE, verbose_name='장애', related_name='photos')
     photo_type  = models.CharField('사진유형', max_length=10, choices=PHOTO_TYPE_CHOICES, default='etc')
-    image       = models.ImageField('이미지', upload_to='incidents/photos/')
+    image       = models.ImageField('이미지', upload_to=incident_photo_upload_path)
     caption     = models.CharField('설명', max_length=200, blank=True)
     gps_lat     = models.DecimalField('위도', max_digits=10, decimal_places=7, null=True, blank=True)
     gps_lng     = models.DecimalField('경도', max_digits=10, decimal_places=7, null=True, blank=True)

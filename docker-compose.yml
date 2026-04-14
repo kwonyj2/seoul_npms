@@ -64,7 +64,7 @@ services:
     volumes:
       - ./src:/app
       - npms_static:/app/staticfiles
-      - /mnt/lvm-cache:/app/nas
+      - ${NAS_MOUNT_PATH:-/mnt/lvm-cache}:/app/nas
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.production
     command: sh /app/docker-entrypoint.sh
@@ -88,7 +88,7 @@ services:
         condition: service_healthy
     volumes:
       - ./src:/app
-      - /mnt/lvm-cache:/app/nas
+      - ${NAS_MOUNT_PATH:-/mnt/lvm-cache}:/app/nas
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.production
     command: celery -A config.celery worker --loglevel=info --concurrency=4
@@ -112,7 +112,7 @@ services:
         condition: service_healthy
     volumes:
       - ./src:/app
-      - /mnt/lvm-cache:/app/nas
+      - ${NAS_MOUNT_PATH:-/mnt/lvm-cache}:/app/nas
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.production
     command: celery -A config.celery beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
@@ -177,7 +177,7 @@ services:
     volumes:
       - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - npms_static:/app/staticfiles:ro
-      - /mnt/lvm-cache:/app/nas:ro
+      - ${NAS_MOUNT_PATH:-/mnt/lvm-cache}:/app/nas:ro
     depends_on:
       - web
     networks:
