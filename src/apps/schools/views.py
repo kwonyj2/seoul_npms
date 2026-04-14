@@ -79,48 +79,66 @@ def building_docs_api(request, pk):
 
 
 # 네트워크 문서 카테고리 정의
+# keyword: 산출물/2025년 테크센터/ 하위에서 이 글자가 포함된 폴더를 찾음
 NETDOC_CATEGORIES = [
     {
         'key':      '구성도',
-        'folder':   '구성도',
-        'prefix':   '구성도_',
+        'keyword':  '구성도',
         'exts':     ['.pptx', '.ppt'],
         'accept':   '.pptx,.ppt',
         'icon':     'ppt',
     },
     {
         'key':      '선번장',
-        'folder':   '선번장',
-        'prefix':   '선번장_',
+        'keyword':  '선번장',
         'exts':     ['.xlsx', '.xlsm'],
         'accept':   '.xlsx,.xlsm',
         'icon':     'xlsx',
     },
     {
         'key':      '랙실장도',
-        'folder':   '랙실장도',
-        'prefix':   '랙실장도_',
+        'keyword':  '랙실장도',
         'exts':     ['.xlsx', '.xlsm'],
         'accept':   '.xlsx,.xlsm',
         'icon':     'xlsx',
     },
     {
         'key':      '건물정보',
-        'folder':   '건물 정보',
-        'prefix':   '건물정보_',
+        'keyword':  '건물 정보',
         'exts':     ['.pdf'],
         'accept':   '.pdf',
         'icon':     'pdf',
     },
     {
         'key':      '전산실랙',
-        'folder':   '전산실랙',
-        'prefix':   '전산실랙_',
+        'keyword':  '전산실랙',
         'exts':     ['.jpg', '.jpeg', '.png'],
         'accept':   '.jpg,.jpeg,.png',
         'icon':     'image',
     },
 ]
+
+# 산출물 기준 폴더 (2025년/2026년 테크센터)
+_TECHCENTER_PATTERN = '테크센터'
+
+
+def _find_nas_doc_folders(nas_root, keyword):
+    """산출물/ 하위에서 keyword가 포함된 폴더 경로 목록 반환"""
+    import os
+    result = []
+    output_root = os.path.join(nas_root, '산출물')
+    if not os.path.isdir(output_root):
+        return result
+    for year_dir in sorted(os.listdir(output_root)):
+        if _TECHCENTER_PATTERN not in year_dir:
+            continue
+        year_path = os.path.join(output_root, year_dir)
+        if not os.path.isdir(year_path):
+            continue
+        for sub_dir in sorted(os.listdir(year_path)):
+            if keyword in sub_dir and os.path.isdir(os.path.join(year_path, sub_dir)):
+                result.append(os.path.join(year_path, sub_dir))
+    return result
 
 
 @login_required
@@ -130,32 +148,31 @@ def network_docs_api(request, pk):
     from django.conf import settings
     from django.shortcuts import get_object_or_404
     school = get_object_or_404(School, pk=pk)
+    nas_root = getattr(settings, 'NAS_MEDIA_ROOT', settings.MEDIA_ROOT)
 
     if request.method == 'GET':
         from urllib.parse import quote
         result = {}
         for cat in NETDOC_CATEGORIES:
             files = []
-            folder_abs = os.path.join(settings.MEDIA_ROOT, 'data', cat['folder'])
-            url_base   = f"{settings.MEDIA_URL}data/{quote(cat['folder'])}/"
 
-            # 1) 학교명 기반 레거시 파일
-            #    패턴: {prefix}{학교명}.ext  또는  {prefix}{학교명}_{번호}.ext
-            if os.path.isdir(folder_abs):
+            # 1) 산출물/테크센터/ 하위에서 keyword 폴더 찾기
+            for folder_abs in _find_nas_doc_folders(nas_root, cat['keyword']):
+                rel_path = os.path.relpath(folder_abs, nas_root)
+                url_base = f"{settings.MEDIA_URL}{quote(rel_path, safe='/')}/"
                 for fname in sorted(os.listdir(folder_abs)):
                     if os.path.isdir(os.path.join(folder_abs, fname)):
-                        continue  # 서브폴더(pk) 건너뜀
-                    ext = os.path.splitext(fname)[1].lower()
-                    if not (fname.startswith(cat['prefix']) and ext in cat['exts']):
                         continue
-                    # prefix 뒤에 학교명이 오는지 확인 (뒤에 _번호 있어도 매칭)
-                    school_part = fname[len(cat['prefix']):]
-                    if school_part.lower().startswith(school.name.lower()):
+                    ext = os.path.splitext(fname)[1].lower()
+                    if ext not in cat['exts']:
+                        continue
+                    # 파일명에 학교명이 포함되어 있는지 확인
+                    if school.name in fname:
                         files.append({'name': fname, 'url': url_base + quote(fname)})
 
-            # 2) pk 서브폴더 업로드 파일
-            pk_dir = os.path.join(folder_abs, str(pk))
-            pk_url_base = f"{settings.MEDIA_URL}data/{quote(cat['folder'])}/{pk}/"
+            # 2) 기존 data/ pk 서브폴더 업로드 파일 (하위 호환)
+            pk_dir = os.path.join(nas_root, 'data', cat['key'], str(pk))
+            pk_url_base = f"{settings.MEDIA_URL}data/{quote(cat['key'])}/{pk}/"
             if os.path.isdir(pk_dir):
                 for fname in sorted(os.listdir(pk_dir)):
                     ext = os.path.splitext(fname)[1].lower()
@@ -180,13 +197,13 @@ def network_docs_api(request, pk):
             return JsonResponse({'error': f"{cat['key']} 파일은 {', '.join(cat['exts'])} 형식만 허용됩니다."}, status=400)
 
         from urllib.parse import quote
-        dest_dir = os.path.join(settings.MEDIA_ROOT, 'data', cat['folder'], str(pk))
+        dest_dir = os.path.join(nas_root, 'data', cat['key'], str(pk))
         os.makedirs(dest_dir, exist_ok=True)
         dest = os.path.join(dest_dir, upload.name)
         with open(dest, 'wb') as f:
             for chunk in upload.chunks():
                 f.write(chunk)
-        url = f"{settings.MEDIA_URL}data/{quote(cat['folder'])}/{pk}/{quote(upload.name)}"
+        url = f"{settings.MEDIA_URL}data/{quote(cat['key'])}/{pk}/{quote(upload.name)}"
         return JsonResponse({'name': upload.name, 'url': url, 'doc_type': doc_type})
 
     return JsonResponse({'error': 'Method not allowed'}, status=405)

@@ -77,49 +77,40 @@ class SchoolListSerializer(serializers.ModelSerializer):
                 'total': obj.equipment_list.count()}
 
     def get_network_docs(self, obj):
-        """5개 문서 카테고리별 첫 번째 파일 URL + 총 건수 반환"""
-        import os, glob
+        """5개 문서 카테고리별 첫 번째 파일 URL + 총 건수 반환
+        산출물/테크센터/ 하위 폴더에서 keyword로 폴더를 찾고 학교명으로 파일 매칭
+        """
+        import os
         from urllib.parse import quote
         from django.conf import settings
+        from apps.schools.views import NETDOC_CATEGORIES, _find_nas_doc_folders
 
-        CATS = [
-            {'key': '구성도',  'folder': '구성도',   'prefix': '구성도_',  'exts': ['.pptx', '.ppt'],        'inline': False},
-            {'key': '선번장',  'folder': '선번장',   'prefix': '선번장_',  'exts': ['.xlsx', '.xlsm'],       'inline': False},
-            {'key': '랙실장도','folder': '랙실장도', 'prefix': '랙실장도_','exts': ['.xlsx', '.xlsm'],       'inline': False},
-            {'key': '건물정보','folder': '건물 정보','prefix': '건물정보_','exts': ['.pdf'],                  'inline': True},
-            {'key': '전산실랙','folder': '전산실랙', 'prefix': '전산실랙_','exts': ['.jpg', '.jpeg', '.png'],'inline': True},
-        ]
         result = {}
-        media_root = settings.MEDIA_ROOT
-        media_url  = settings.MEDIA_URL
+        nas_root = getattr(settings, 'NAS_MEDIA_ROOT', settings.MEDIA_ROOT)
+        media_url = settings.MEDIA_URL
 
-        for cat in CATS:
-            folder_abs = os.path.join(media_root, 'data', cat['folder'])
+        INLINE_KEYS = {'건물정보', '전산실랙'}
+
+        for cat in NETDOC_CATEGORIES:
             matches = []
-            # 학교명 기반 레거시 파일 (prefix_학교명*.ext, prefix_학교명_번호.ext 포함)
-            if os.path.isdir(folder_abs):
-                for ext in cat['exts']:
-                    pattern = os.path.join(folder_abs, f"{cat['prefix']}{obj.name}*{ext}")
-                    found = [f for f in glob.glob(pattern) if os.path.isfile(f)]
-                    matches.extend(sorted(found))
-            # pk 서브폴더
-            pk_dir = os.path.join(folder_abs, str(obj.pk))
-            if os.path.isdir(pk_dir):
-                for ext in cat['exts']:
-                    pattern = os.path.join(pk_dir, f"*{ext}")
-                    found = [f for f in glob.glob(pattern) if os.path.isfile(f)]
-                    matches.extend(sorted(found))
+            for folder_abs in _find_nas_doc_folders(nas_root, cat['keyword']):
+                rel_path = os.path.relpath(folder_abs, nas_root)
+                url_base = f"{media_url}{quote(rel_path, safe='/')}/"
+                for fname in sorted(os.listdir(folder_abs)):
+                    if os.path.isdir(os.path.join(folder_abs, fname)):
+                        continue
+                    ext = os.path.splitext(fname)[1].lower()
+                    if ext not in cat['exts']:
+                        continue
+                    if obj.name in fname:
+                        matches.append({'name': fname, 'url': url_base + quote(fname)})
 
             if matches:
-                first = matches[0]
-                # 파일이 pk_dir 안에 있는지 확인해 URL 구성
-                if first.startswith(pk_dir + os.sep):
-                    fname = os.path.basename(first)
-                    url = f"{media_url}data/{quote(cat['folder'])}/{obj.pk}/{quote(fname)}"
-                else:
-                    fname = os.path.basename(first)
-                    url = f"{media_url}data/{quote(cat['folder'])}/{quote(fname)}"
-                result[cat['key']] = {'url': url, 'count': len(matches), 'inline': cat['inline']}
+                result[cat['key']] = {
+                    'url': matches[0]['url'],
+                    'count': len(matches),
+                    'inline': cat['key'] in INLINE_KEYS,
+                }
             else:
                 result[cat['key']] = None
 
