@@ -235,8 +235,24 @@ def sync_nas_filesystem():
             except Exception as exc:
                 logger.warning(f'NAS sync 파일 등록 실패: {fpath}: {exc}')
 
-    logger.info(f'NAS sync 완료 — 폴더 {f_created}개, 파일 {p_created}개 신규 등록')
-    return f'폴더+{f_created} 파일+{p_created}'
+    # 3단계: 물리 파일이 삭제된 DB 레코드 정리
+    p_removed = 0
+    for f in File.objects.filter(is_deleted=False):
+        if not os.path.exists(f.file_path):
+            f.delete()
+            p_removed += 1
+
+    # 4단계: 빈 폴더 레코드 정리 (하위 파일·폴더 모두 없는 경우)
+    f_removed = 0
+    for folder in Folder.objects.order_by('-full_path'):
+        if not folder.children.exists() and not folder.files.exists():
+            abs_path = os.path.join(nas_root, folder.full_path.lstrip('/'))
+            if not os.path.exists(abs_path):
+                folder.delete()
+                f_removed += 1
+
+    logger.info(f'NAS sync 완료 — 폴더 +{f_created}/-{f_removed}, 파일 +{p_created}/-{p_removed}')
+    return f'폴더+{f_created}/-{f_removed} 파일+{p_created}/-{p_removed}'
 
 
 @celery_app.task
