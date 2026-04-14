@@ -169,7 +169,7 @@ services:
   # Nginx
   # ─────────────────────────────────────────
   nginx:
-    image: nginx:mainline-alpine
+    image: nginx:mainline
     container_name: npms_nginx
     restart: unless-stopped
     ports:
