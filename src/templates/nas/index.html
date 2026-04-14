@@ -1152,7 +1152,7 @@ function mimeIcon(mime) {
 async function syncCurrentFolder() {
   if (!currentFolderId) { showToast('폴더를 선택하세요', 'warning'); return; }
   try {
-    const data = await apiPost(`${NAS_API}/files/sync_folder/`, {folder_id: currentFolderId});
+    const data = await apiPost(`${API}/nas/files/sync_folder/`, {folder_id: currentFolderId});
     showToast(`동기화 완료 — 신규 ${data.new}건, 제거 ${data.removed}건`, 'success');
     loadContent();
   } catch(e) { showToast('동기화 실패', 'error'); }
