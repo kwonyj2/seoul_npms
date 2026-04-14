@@ -269,30 +269,6 @@ class FileViewSet(viewsets.ModelViewSet):
         folder_id = self.request.query_params.get('folder_id')
         if folder_id:
             qs = qs.filter(folder_id=folder_id)
-            # 파일시스템 스캔: 신규 파일 자동 등록 + 없는 파일 자동 제거
-            try:
-                folder = Folder.objects.get(pk=folder_id)
-                nas_root = getattr(settings, 'NAS_MEDIA_ROOT', settings.MEDIA_ROOT)
-                fs_path = os.path.join(nas_root, folder.full_path.lstrip('/'))
-                if os.path.isdir(fs_path):
-                    existing_paths = set(qs.values_list('file_path', flat=True))
-                    for name in os.listdir(fs_path):
-                        full_path = os.path.join(fs_path, name)
-                        if os.path.isfile(full_path) and full_path not in existing_paths:
-                            mime_type = mimetypes.guess_type(name)[0] or 'application/octet-stream'
-                            File.objects.create(
-                                name=name, original_name=name,
-                                file_path=full_path,
-                                file_size=os.path.getsize(full_path),
-                                mime_type=mime_type, folder=folder,
-                            )
-                    # 없는 파일 DB에서 제거 (휴지통 파일은 제외)
-                    missing_ids = [f.id for f in qs if not os.path.exists(f.file_path)]
-                    if missing_ids:
-                        File.objects.filter(id__in=missing_ids).delete()
-                    qs = File.objects.select_related('folder', 'school', 'uploaded_by').filter(folder_id=folder_id, is_deleted=False)
-            except Exception:
-                pass
         school_id   = self.request.query_params.get('school_id')
         school_name = self.request.query_params.get('school_name')
         if school_id:
@@ -328,6 +304,46 @@ class FileViewSet(viewsets.ModelViewSet):
         elif tab in TAB_KEYWORDS:
             qs = qs.filter(name__icontains=tab)
         return qs
+
+    @action(detail=False, methods=['post'])
+    def sync_folder(self, request):
+        """폴더 수동 동기화 — 신규 파일 등록 + 삭제된 파일 제거"""
+        folder_id = request.data.get('folder_id')
+        if not folder_id:
+            return Response({'error': 'folder_id 필수'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            folder = Folder.objects.get(pk=folder_id)
+        except Folder.DoesNotExist:
+            return Response({'error': '폴더 없음'}, status=status.HTTP_404_NOT_FOUND)
+
+        nas_root = getattr(settings, 'NAS_MEDIA_ROOT', settings.MEDIA_ROOT)
+        fs_path = os.path.join(nas_root, folder.full_path.lstrip('/'))
+        if not os.path.isdir(fs_path):
+            return Response({'error': '디렉토리 없음', 'path': fs_path}, status=status.HTTP_404_NOT_FOUND)
+
+        qs = File.objects.filter(folder=folder, is_deleted=False)
+        existing_paths = set(qs.values_list('file_path', flat=True))
+
+        new_count = 0
+        for name in os.listdir(fs_path):
+            full_path = os.path.join(fs_path, name)
+            if os.path.isfile(full_path) and full_path not in existing_paths:
+                mime_type = mimetypes.guess_type(name)[0] or 'application/octet-stream'
+                File.objects.create(
+                    name=name, original_name=name,
+                    file_path=full_path,
+                    file_size=os.path.getsize(full_path),
+                    mime_type=mime_type, folder=folder,
+                )
+                new_count += 1
+
+        removed_count = 0
+        for f in qs:
+            if not os.path.exists(f.file_path):
+                f.delete()
+                removed_count += 1
+
+        return Response({'new': new_count, 'removed': removed_count})
 
     def create(self, request, *args, **kwargs):
         """파일 업로드"""

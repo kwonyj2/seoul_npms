@@ -7,7 +7,7 @@ class StandardPagination(PageNumberPagination):
 
 
 class LargePagination(PageNumberPagination):
-    """NAS 파일 등 대량 목록용 — 폴더 내 전체 파일 표시"""
-    page_size = 5000
+    """NAS 파일 등 대량 목록용"""
+    page_size = 200
     page_size_query_param = 'page_size'
-    max_page_size = 10000
+    max_page_size = 2000
