@@ -22,8 +22,7 @@ def sync_photo_to_nas(self, photo_id):
     import shutil
     try:
         photo = Photo.objects.select_related(
-            'school__support_center', 'school__school_type',
-            'building', 'floor', 'room', 'work_type'
+            'school__support_center', 'school__school_type', 'work_type'
         ).get(id=photo_id)
 
         school = photo.school
@@ -33,12 +32,12 @@ def sync_photo_to_nas(self, photo_id):
         # ── 파일명 조립 ──────────────────────────────────────────────
         # 2026년 테크센터-작업명_학교명 건물명 층 위치 작업전(후)_번호.ext
         location_parts = [school.name]
-        if photo.building:
-            location_parts.append(photo.building.name)
-        if photo.floor:
-            location_parts.append(photo.floor.floor_name)
-        if photo.room:
-            location_parts.append(photo.room.name)
+        if photo.building_name:
+            location_parts.append(photo.building_name)
+        if photo.floor_name:
+            location_parts.append(f'{photo.floor_name}층')
+        if photo.room_name:
+            location_parts.append(photo.room_name)
         location = ' '.join(location_parts)
 
         # 같은 학교·날짜·작업명·단계의 순번

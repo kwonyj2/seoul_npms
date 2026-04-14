@@ -702,14 +702,18 @@ async function searchSchools(q) {
   }, 250);
 }
 
+let _switchLocations = [];  // 스위치 DB에서 로드된 위치 목록
+
 function selectSchool(id, name) {
   document.getElementById('up-school').value = id;
   document.getElementById('up-school-search').value = name;
   document.getElementById('school-dropdown').classList.remove('show');
   upSchoolId = id;
+  _selectedSchoolName = name;
   resetLocationSelects();
-  loadBuildings();
+  loadSwitchLocations(name);
 }
+let _selectedSchoolName = '';
 
 function resetLocationSelects() {
   ['up-building','up-floor','up-room'].forEach(id => {
@@ -720,24 +724,24 @@ function resetLocationSelects() {
     el.value = '';
     el.classList.add('d-none');
   });
+  _switchLocations = [];
 }
 
-async function loadBuildings() {
-  const schoolId = document.getElementById('up-school').value;
-  upSchoolId = schoolId || null;
-  resetLocationSelects();
-  if (!schoolId) return;
+async function loadSwitchLocations(schoolName) {
+  if (!schoolName) return;
   try {
-    const data = await apiGet(`${API_BASE}/schools/schools/${schoolId}/rooms_for_select/`);
+    const data = await apiGet(`${API_BASE}/photos/switch-locations/`, {school_name: schoolName});
+    _switchLocations = data.locations || [];
+    const buildings = data.buildings || [];
     const sel = document.getElementById('up-building');
-    (data || []).forEach(b => {
-      sel.insertAdjacentHTML('beforeend', `<option value="${b.id}">${b.name}</option>`);
+    buildings.forEach(b => {
+      sel.insertAdjacentHTML('beforeend', `<option value="${b}">${b}</option>`);
     });
-    sel.insertAdjacentHTML('beforeend', '<option value="__new__">+ 직접 입력</option>');
+    sel.insertAdjacentHTML('beforeend', '<option value="__etc__">기타(직접입력)</option>');
   } catch(e) {}
 }
 
-async function loadFloors() {
+function loadFloors() {
   const buildingVal = document.getElementById('up-building').value;
   const newEl = document.getElementById('up-building-new');
   const sel   = document.getElementById('up-floor');
@@ -745,83 +749,55 @@ async function loadFloors() {
   document.getElementById('up-room').innerHTML = '<option value="">선택</option>';
   document.getElementById('up-floor-new').classList.add('d-none');
   document.getElementById('up-room-new').classList.add('d-none');
-  if (buildingVal === '__new__') {
+  if (buildingVal === '__etc__') {
     newEl.classList.remove('d-none');
-    sel.insertAdjacentHTML('beforeend', '<option value="__new__">+ 직접 입력</option>');
     return;
   }
-  newEl.classList.add('d-none');
-  newEl.value = '';
-  if (!buildingVal || !upSchoolId) return;
-  try {
-    const data = await apiGet(`${API_BASE}/schools/schools/${upSchoolId}/rooms_for_select/`, {building: buildingVal});
-    (data || []).forEach(f => {
-      sel.insertAdjacentHTML('beforeend', `<option value="${f.id}">${f.floor_name}</option>`);
-    });
-    sel.insertAdjacentHTML('beforeend', '<option value="__new__">+ 직접 입력</option>');
-  } catch(e) {}
+  newEl.classList.add('d-none'); newEl.value = '';
+  if (!buildingVal) return;
+  const floors = [...new Set(_switchLocations.filter(l => l.building === buildingVal).map(l => l.floor))].sort();
+  floors.forEach(f => {
+    sel.insertAdjacentHTML('beforeend', `<option value="${f}">${f}층</option>`);
+  });
+  sel.insertAdjacentHTML('beforeend', '<option value="__etc__">기타(직접입력)</option>');
 }
 
-async function loadRooms() {
+function loadRooms() {
+  const buildingVal = document.getElementById('up-building').value;
   const floorVal = document.getElementById('up-floor').value;
   const newEl    = document.getElementById('up-floor-new');
   const sel      = document.getElementById('up-room');
   sel.innerHTML  = '<option value="">선택</option>';
   document.getElementById('up-room-new').classList.add('d-none');
-  if (floorVal === '__new__') {
+  if (floorVal === '__etc__') {
     newEl.classList.remove('d-none');
-    sel.insertAdjacentHTML('beforeend', '<option value="__new__">+ 직접 입력</option>');
     return;
   }
-  newEl.classList.add('d-none');
-  newEl.value = '';
-  if (!floorVal || !upSchoolId) return;
-  try {
-    const data = await apiGet(`${API_BASE}/schools/schools/${upSchoolId}/rooms_for_select/`, {floor: floorVal});
-    (data || []).forEach(r => {
-      const label = r.room_number ? `${r.room_number} ${r.name}` : r.name;
-      sel.insertAdjacentHTML('beforeend', `<option value="${r.id}">${label}</option>`);
-    });
-    sel.insertAdjacentHTML('beforeend', '<option value="__new__">+ 직접 입력</option>');
-  } catch(e) {}
+  newEl.classList.add('d-none'); newEl.value = '';
+  if (!floorVal) return;
+  const rooms = [...new Set(_switchLocations.filter(l => l.building === buildingVal && l.floor === floorVal).map(l => l.room))].sort();
+  rooms.forEach(r => {
+    sel.insertAdjacentHTML('beforeend', `<option value="${r}">${r}</option>`);
+  });
+  sel.insertAdjacentHTML('beforeend', '<option value="__etc__">기타(직접입력)</option>');
 }
 
 function onRoomSelectChange() {
   const val   = document.getElementById('up-room').value;
   const newEl = document.getElementById('up-room-new');
-  if (val === '__new__') {
-    newEl.classList.remove('d-none');
-  } else {
-    newEl.classList.add('d-none');
-    newEl.value = '';
-  }
+  if (val === '__etc__') newEl.classList.remove('d-none');
+  else { newEl.classList.add('d-none'); newEl.value = ''; }
 }
 
-// 직접 입력된 건물/층/교실을 서버에 생성 후 ID 반환
-async function resolveLocationIds() {
-  let buildingId = document.getElementById('up-building').value;
-  let floorId    = document.getElementById('up-floor').value;
-  let roomId     = document.getElementById('up-room').value;
-
-  if (buildingId === '__new__') {
-    const name = document.getElementById('up-building-new').value.trim();
-    if (!name) { showToast('건물명을 입력하세요.', 'warning'); return null; }
-    const res = await apiPost(`${API_BASE}/schools/schools/${upSchoolId}/add_building/`, {name});
-    buildingId = String(res.id);
-  }
-  if (floorId === '__new__') {
-    const floor_name = document.getElementById('up-floor-new').value.trim();
-    if (!floor_name) { showToast('층 이름을 입력하세요.', 'warning'); return null; }
-    const res = await apiPost(`${API_BASE}/schools/schools/${upSchoolId}/add_floor/`, {building_id: buildingId, floor_name});
-    floorId = String(res.id);
-  }
-  if (roomId === '__new__') {
-    const room_name = document.getElementById('up-room-new').value.trim();
-    if (!room_name) { showToast('교실명을 입력하세요.', 'warning'); return null; }
-    const res = await apiPost(`${API_BASE}/schools/schools/${upSchoolId}/add_room/`, {floor_id: floorId, room_name});
-    roomId = String(res.id);
-  }
-  return {buildingId, floorId, roomId};
+// 위치값 추출 (텍스트 기반 — FK ID가 아닌 문자열)
+function resolveLocationIds() {
+  let building = document.getElementById('up-building').value;
+  let floor    = document.getElementById('up-floor').value;
+  let room     = document.getElementById('up-room').value;
+  if (building === '__etc__') building = document.getElementById('up-building-new').value.trim();
+  if (floor === '__etc__')    floor = document.getElementById('up-floor-new').value.trim();
+  if (room === '__etc__')     room = document.getElementById('up-room-new').value.trim();
+  return {building: building || '', floor: floor || '', room: room || ''};
 }
 
 async function loadWorkTypes() {
@@ -886,13 +862,7 @@ async function submitUpload() {
   const stage   = document.querySelector('input[name="up-stage"]:checked')?.value || 'other';
   const etcText = document.getElementById('up-worktype-etc').value.trim();
 
-  const loc = await resolveLocationIds();
-  if (loc === null) {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-upload me-1"></i>업로드';
-    return;
-  }
-  const { buildingId, floorId, roomId } = loc;
+  const loc = resolveLocationIds();
 
   const btn = document.getElementById('btn-upload');
   btn.disabled = true;
@@ -907,9 +877,9 @@ async function submitUpload() {
     fd.append('taken_at',    nowKSTISO());
     if (workTypeId !== 'etc') fd.append('work_type', workTypeId);
     if (etcText)  fd.append('work_type_etc', etcText);
-    if (buildingId) fd.append('building', buildingId);
-    if (floorId)    fd.append('floor',    floorId);
-    if (roomId)     fd.append('room',     roomId);
+    if (loc.building) fd.append('building_name', loc.building);
+    if (loc.floor)    fd.append('floor_name',    loc.floor);
+    if (loc.room)     fd.append('room_name',     loc.room);
 
     try {
       const res = await fetch(`${API_BASE}/photos/photos/`, {

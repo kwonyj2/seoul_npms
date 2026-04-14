@@ -14,18 +14,15 @@ class PhotoListSerializer(serializers.ModelSerializer):
     work_type_name = serializers.CharField(source='work_type.name', read_only=True)
     taken_by_name  = serializers.CharField(source='taken_by.name', read_only=True)
     stage_display  = serializers.CharField(source='get_photo_stage_display', read_only=True)
-    building_name  = serializers.CharField(source='building.name', read_only=True)
-    floor_name     = serializers.CharField(source='floor.floor_name', read_only=True)
-    room_name      = serializers.CharField(source='room.name', read_only=True)
     image_url      = serializers.SerializerMethodField()
 
     class Meta:
         model = Photo
         fields = ['id', 'school', 'school_name',
-                  'building', 'building_name', 'floor', 'floor_name', 'room', 'room_name',
+                  'building_name', 'floor_name', 'room_name',
                   'work_type', 'work_type_name', 'work_type_etc', 'photo_stage', 'stage_display',
                   'image', 'image_url', 'nas_path', 'file_name', 'file_size',
-                  'gps_lat', 'gps_lng', 'ai_category', 'ai_confidence',
+                  'ai_category', 'ai_confidence',
                   'incident', 'taken_by', 'taken_by_name', 'taken_at', 'uploaded_at',
                   'is_deleted', 'deleted_at']
         read_only_fields = ['id', 'nas_path', 'file_name', 'file_size',
@@ -41,10 +38,9 @@ class PhotoUploadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Photo
-        fields = ['id', 'school', 'building', 'floor', 'room',
+        fields = ['id', 'school', 'building_name', 'floor_name', 'room_name',
                   'work_type', 'work_type_etc', 'photo_stage',
-                  'image', 'image_url', 'gps_lat', 'gps_lng', 'gps_accuracy',
-                  'incident', 'taken_at']
+                  'image', 'image_url', 'taken_at']
         read_only_fields = ['id', 'image_url']
 
     def get_image_url(self, obj):

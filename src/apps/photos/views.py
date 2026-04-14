@@ -13,6 +13,56 @@ def photos_view(request):
     return render(request, 'photos/index.html')
 
 
+# ── 스위치 DB 엑셀에서 건물/층/설치장소 조회 ──────────────────────────
+import os, logging
+from django.conf import settings
+from django.http import JsonResponse
+
+_switch_cache = None  # {학교명: [{building, floor, room}, ...]}
+
+def _load_switch_locations():
+    """장비목록_스위치.xlsx에서 학교별 건물/층/설치장소 캐시 로드"""
+    global _switch_cache
+    if _switch_cache is not None:
+        return _switch_cache
+    import openpyxl
+    nas_root = getattr(settings, 'NAS_MEDIA_ROOT', settings.MEDIA_ROOT)
+    xlsx_path = os.path.join(nas_root, 'data', '장비목록_스위치.xlsx')
+    _switch_cache = {}
+    if not os.path.exists(xlsx_path):
+        logging.getLogger(__name__).warning(f'스위치 DB 파일 없음: {xlsx_path}')
+        return _switch_cache
+    wb = openpyxl.load_workbook(xlsx_path, read_only=True, data_only=True)
+    ws = wb.active
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        school_name = str(row[3] or '').strip()
+        if not school_name:
+            continue
+        building = str(row[5] or '').strip()
+        floor = str(row[6] or '').strip()
+        room = str(row[7] or '').strip()
+        if school_name not in _switch_cache:
+            _switch_cache[school_name] = []
+        loc = {'building': building, 'floor': floor, 'room': room}
+        if loc not in _switch_cache[school_name]:
+            _switch_cache[school_name].append(loc)
+    wb.close()
+    return _switch_cache
+
+
+@login_required
+def switch_locations_api(request):
+    """학교명으로 스위치 DB의 건물/층/설치장소 조회"""
+    school_name = request.GET.get('school_name', '').strip()
+    if not school_name:
+        return JsonResponse({'locations': []})
+    cache = _load_switch_locations()
+    locations = cache.get(school_name, [])
+    # 고유 건물 목록
+    buildings = sorted(set(loc['building'] for loc in locations if loc['building']))
+    return JsonResponse({'locations': locations, 'buildings': buildings})
+
+
 from .models import Photo, PhotoWorkType
 from .serializers import PhotoListSerializer, PhotoUploadSerializer, PhotoWorkTypeSerializer
 from core.pagination import StandardPagination

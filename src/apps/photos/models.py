@@ -39,6 +39,11 @@ class Photo(models.Model):
     building    = models.ForeignKey('schools.SchoolBuilding', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='건물')
     floor       = models.ForeignKey('schools.SchoolFloor', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='층')
     room        = models.ForeignKey('schools.SchoolRoom', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='교실')
+    # 텍스트 기반 위치 (스위치 DB 연동)
+    building_name = models.CharField('건물명', max_length=100, blank=True)
+    floor_name    = models.CharField('층', max_length=50, blank=True)
+    room_name     = models.CharField('설치장소', max_length=100, blank=True)
+
     work_type   = models.ForeignKey(PhotoWorkType, on_delete=models.SET_NULL, null=True, verbose_name='작업명')
     work_type_etc = models.CharField('작업명(기타)', max_length=100, blank=True)
     photo_stage = models.CharField('단계', max_length=10, choices=PHOTO_STAGE_CHOICES, default='other')
