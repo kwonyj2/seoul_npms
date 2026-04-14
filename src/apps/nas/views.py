@@ -47,7 +47,7 @@ def deliverables_view(request):
 from .models import Folder, File, FileDownloadLog
 from .serializers import FolderSerializer, FileSerializer, FileUploadSerializer
 from core.permissions.roles import IsAdmin
-from core.pagination import StandardPagination
+from core.pagination import StandardPagination, LargePagination
 
 
 class FolderViewSet(viewsets.ModelViewSet):
@@ -261,7 +261,7 @@ class FileViewSet(viewsets.ModelViewSet):
     """NAS 파일 관리"""
     serializer_class = FileSerializer
     permission_classes = [IsAuthenticated]
-    pagination_class = None  # 페이지네이션 없음 — 폴더 내 전체 파일 표시
+    pagination_class = LargePagination  # 폴더 내 전체 파일 표시 (page_size=5000)
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
