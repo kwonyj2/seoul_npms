@@ -165,11 +165,11 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 # Flower 모니터링 URL (nginx 프록시 경유)
 FLOWER_URL = env('FLOWER_URL', default='/npms/flower/')
 CELERY_BEAT_SCHEDULE = {
-    # NAS 파일시스템 → DB 자동 동기화 (10분마다)
-    # schools·materials·reports 등 모든 앱에서 생성된 파일을 NAS DB에 자동 등록
+    # NAS 파일시스템 → DB 자동 동기화 (1분마다)
+    # schools·materials·reports 등 모든 앱에서 생성된 파일을 NAS DB에 자동 등록 + 삭제된 파일 정리
     'sync-nas-filesystem': {
         'task': 'apps.nas.tasks.sync_nas_filesystem',
-        'schedule': 600,  # 10분
+        'schedule': 60,  # 1분
     },
     # 미OCR 파일 일괄 처리 (1시간마다)
     'bulk-ocr-extract': {
