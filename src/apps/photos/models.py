@@ -78,6 +78,10 @@ class Photo(models.Model):
     taken_at    = models.DateTimeField('촬영일시')
     uploaded_at = models.DateTimeField('업로드일시', auto_now_add=True)
 
+    # 휴지통
+    is_deleted  = models.BooleanField('삭제여부', default=False)
+    deleted_at  = models.DateTimeField('삭제일시', null=True, blank=True)
+
     class Meta:
         db_table = 'photos'
         verbose_name = '작업 사진'

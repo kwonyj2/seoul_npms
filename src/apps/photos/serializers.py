@@ -26,7 +26,8 @@ class PhotoListSerializer(serializers.ModelSerializer):
                   'work_type', 'work_type_name', 'work_type_etc', 'photo_stage', 'stage_display',
                   'image', 'image_url', 'nas_path', 'file_name', 'file_size',
                   'gps_lat', 'gps_lng', 'ai_category', 'ai_confidence',
-                  'incident', 'taken_by', 'taken_by_name', 'taken_at', 'uploaded_at']
+                  'incident', 'taken_by', 'taken_by_name', 'taken_at', 'uploaded_at',
+                  'is_deleted', 'deleted_at']
         read_only_fields = ['id', 'nas_path', 'file_name', 'file_size',
                             'ai_category', 'ai_confidence', 'taken_by', 'uploaded_at']
 

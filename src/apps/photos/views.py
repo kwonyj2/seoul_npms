@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
+from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -52,7 +53,7 @@ class PhotoViewSet(viewsets.ModelViewSet):
         qs = Photo.objects.select_related(
             'school__support_center', 'school__school_type',
             'building', 'floor', 'room', 'work_type', 'taken_by', 'incident'
-        )
+        ).filter(is_deleted=False)
         if user.role == 'worker':
             qs = qs.filter(taken_by=user)
 
@@ -119,17 +120,64 @@ class PhotoViewSet(viewsets.ModelViewSet):
         ).order_by('-cnt')[:20]
         return Response(list(qs))
 
+    def perform_destroy(self, instance):
+        """삭제 → 휴지통 (소프트 삭제)"""
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.save(update_fields=['is_deleted', 'deleted_at'])
+
     @action(detail=False, methods=['post'])
     def bulk_delete(self, request):
-        """선택 사진 일괄 삭제"""
+        """선택 사진 일괄 휴지통 이동"""
         ids = request.data.get('ids', [])
         if not ids:
             return Response({'error': '삭제할 사진 ID를 전달하세요.'}, status=status.HTTP_400_BAD_REQUEST)
-        qs = Photo.objects.filter(id__in=ids)
-        if request.user.role not in ('admin', 'manager'):
+        qs = Photo.objects.filter(id__in=ids, is_deleted=False)
+        if request.user.role not in ('admin', 'manager', 'superadmin'):
             qs = qs.filter(taken_by=request.user)
-        deleted_cnt, _ = qs.delete()
-        return Response({'deleted': deleted_cnt})
+        cnt = qs.update(is_deleted=True, deleted_at=timezone.now())
+        return Response({'deleted': cnt})
+
+    @action(detail=False, methods=['get'])
+    def trash(self, request):
+        """휴지통 목록"""
+        qs = Photo.objects.select_related(
+            'school', 'work_type', 'taken_by'
+        ).filter(is_deleted=True).order_by('-deleted_at')
+        if request.user.role == 'worker':
+            qs = qs.filter(taken_by=request.user)
+        page = self.paginate_queryset(qs)
+        serializer = PhotoListSerializer(page or qs, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def restore(self, request):
+        """휴지통에서 복원"""
+        ids = request.data.get('ids', [])
+        if not ids:
+            return Response({'error': '복원할 사진 ID를 전달하세요.'}, status=status.HTTP_400_BAD_REQUEST)
+        cnt = Photo.objects.filter(id__in=ids, is_deleted=True).update(
+            is_deleted=False, deleted_at=None
+        )
+        return Response({'restored': cnt})
+
+    @action(detail=False, methods=['post'])
+    def permanent_delete(self, request):
+        """휴지통에서 영구 삭제"""
+        ids = request.data.get('ids', [])
+        if not ids:
+            return Response({'error': 'ID를 전달하세요.'}, status=status.HTTP_400_BAD_REQUEST)
+        import os
+        qs = Photo.objects.filter(id__in=ids, is_deleted=True)
+        for p in qs:
+            if p.nas_path and os.path.exists(p.nas_path):
+                os.remove(p.nas_path)
+            if p.image and os.path.exists(p.image.path):
+                os.remove(p.image.path)
+        cnt, _ = qs.delete()
+        return Response({'deleted': cnt})
 
     @action(detail=False, methods=['post'])
     def bulk_upload(self, request):

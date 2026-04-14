@@ -69,6 +69,9 @@
             </div>
           </div>
           <div class="d-flex gap-1 align-items-center">
+            <button class="btn btn-xs btn-outline-danger" id="btn-trash-mode" onclick="toggleTrash()" title="휴지통">
+              <i class="bi bi-trash"></i>
+            </button>
             <button class="btn btn-xs btn-outline-warning" id="btn-select-mode" onclick="toggleSelectMode()" title="사진 선택/삭제 모드">
               <i class="bi bi-check2-square"></i>
             </button>
@@ -245,23 +248,13 @@
 
           <!-- 좌측: 학교/위치 선택 -->
           <div class="col-12 col-md-6">
-            <div class="mb-2">
-              <label class="form-label small fw-semibold mb-1">교육지원청</label>
-              <select id="up-center" class="form-select form-select-sm" onchange="onCenterChange()">
-                <option value="">선택하세요</option>
-              </select>
-            </div>
-            <div class="mb-2">
-              <label class="form-label small fw-semibold mb-1">학제</label>
-              <select id="up-stype" class="form-select form-select-sm" onchange="loadSchoolsByCenter()">
-                <option value="">전체</option>
-              </select>
-            </div>
-            <div class="mb-2">
+            <div class="mb-2 position-relative">
               <label class="form-label small fw-semibold mb-1">학교 <span class="text-danger">*</span></label>
-              <select id="up-school" class="form-select form-select-sm" onchange="loadBuildings()">
-                <option value="">교육지원청 먼저 선택</option>
-              </select>
+              <input type="text" id="up-school-search" class="form-control form-control-sm"
+                     placeholder="학교명 입력 (예: 경기)" autocomplete="off"
+                     oninput="searchSchools(this.value)">
+              <input type="hidden" id="up-school" value="">
+              <div id="school-dropdown" class="dropdown-menu w-100" style="max-height:200px;overflow-y:auto;"></div>
             </div>
             <div class="row g-1 mb-2">
               <div class="col-4">
@@ -306,17 +299,6 @@
                 <label class="btn btn-outline-secondary btn-sm" for="stage-other">기타</label>
               </div>
             </div>
-            <!-- GPS -->
-            <div class="mb-2">
-              <label class="form-label small fw-semibold mb-1">GPS 위치</label>
-              <div class="d-flex gap-2 align-items-center">
-                <input type="text" id="up-gps" class="form-control form-control-sm" placeholder="위도, 경도" readonly>
-                <button class="btn btn-sm btn-outline-primary text-nowrap" onclick="captureGps()">
-                  <i class="bi bi-geo-alt-fill me-1"></i>현재 위치
-                </button>
-              </div>
-              <div id="gps-status" class="text-muted" style="font-size:.75rem;"></div>
-            </div>
           </div>
 
           <!-- 우측: 파일 선택 + 미리보기 -->
@@ -333,12 +315,6 @@
             </div>
             <!-- 미리보기 -->
             <div id="preview-grid" class="row g-1" style="max-height:220px; overflow-y:auto;"></div>
-            <div class="mt-2">
-              <label class="form-label small mb-1">관련 장애 (선택)</label>
-              <select id="up-incident" class="form-select form-select-sm">
-                <option value="">학교 선택 후 장애 목록 로드</option>
-              </select>
-            </div>
           </div>
 
         </div>
@@ -604,6 +580,7 @@ function resetFilter() {
 
 // ── 사진 목록 로드 ────────────────────────────────────────────────────────
 async function loadPhotos() {
+  if (_trashMode) { loadTrashPhotos(); return; }
   const pageSize = viewMode === 'list' ? 20 : 48;
   const params = { page: currentPage, page_size: pageSize };
   const center = document.getElementById('f-center').value;
@@ -706,27 +683,32 @@ async function loadSchoolTypes() {
   } catch(e) {}
 }
 
-function onCenterChange() {
-  document.getElementById('up-stype').value = '';
-  loadSchoolsByCenter();
+// ── 학교 자동완성 검색 ────────────────────────────────────────────
+let _searchTimer = null;
+async function searchSchools(q) {
+  clearTimeout(_searchTimer);
+  const dd = document.getElementById('school-dropdown');
+  if (!q || q.length < 1) { dd.classList.remove('show'); return; }
+  _searchTimer = setTimeout(async () => {
+    try {
+      const data = await apiGet(`${API_BASE}/schools/schools/search/`, {q: q});
+      const items = data || [];
+      if (!items.length) { dd.innerHTML = '<div class="dropdown-item text-muted small">결과 없음</div>'; dd.classList.add('show'); return; }
+      dd.innerHTML = items.map(s =>
+        `<a class="dropdown-item small" href="#" onclick="selectSchool(${s.id},'${s.name.replace(/'/g,"\\'")}'); return false;">${s.name} <span class="text-muted" style="font-size:.7rem;">${s.support_center_name||''}</span></a>`
+      ).join('');
+      dd.classList.add('show');
+    } catch(e) {}
+  }, 250);
 }
 
-async function loadSchoolsByCenter() {
-  const centerCode = document.getElementById('up-center').value;
-  const stypeCode  = document.getElementById('up-stype').value;
-  const sel = document.getElementById('up-school');
-  sel.innerHTML = '<option value="">선택하세요</option>';
+function selectSchool(id, name) {
+  document.getElementById('up-school').value = id;
+  document.getElementById('up-school-search').value = name;
+  document.getElementById('school-dropdown').classList.remove('show');
+  upSchoolId = id;
   resetLocationSelects();
-  upSchoolId = null;
-  if (!centerCode) return;
-  try {
-    const params = {center: centerCode};
-    if (stypeCode) params.type = stypeCode;
-    const data = await apiGet(`${API_BASE}/schools/schools/filter/`, params);
-    (data || []).forEach(s => {
-      sel.insertAdjacentHTML('beforeend', `<option value="${s.id}">${s.name}</option>`);
-    });
-  } catch(e) {}
+  loadBuildings();
 }
 
 function resetLocationSelects() {
@@ -738,17 +720,13 @@ function resetLocationSelects() {
     el.value = '';
     el.classList.add('d-none');
   });
-  document.getElementById('up-incident').innerHTML = '<option value="">학교 선택 후 장애 목록 로드</option>';
 }
-
 
 async function loadBuildings() {
   const schoolId = document.getElementById('up-school').value;
   upSchoolId = schoolId || null;
   resetLocationSelects();
   if (!schoolId) return;
-  // 관련 장애 로드
-  loadIncidentsBySchool(schoolId);
   try {
     const data = await apiGet(`${API_BASE}/schools/schools/${schoolId}/rooms_for_select/`);
     const sel = document.getElementById('up-building');
@@ -819,25 +797,6 @@ function onRoomSelectChange() {
   }
 }
 
-async function loadIncidentsBySchool(schoolId) {
-  const sel = document.getElementById('up-incident');
-  sel.innerHTML = '<option value="">없음 (선택 안 함)</option>';
-  if (!schoolId) return;
-  try {
-    const data = await apiGet(`${API_BASE}/incidents/incidents/`, {school: schoolId, page_size: 100});
-    const items = data.results || data;
-    if (!items.length) {
-      sel.insertAdjacentHTML('beforeend', '<option disabled>장애 이력 없음</option>');
-      return;
-    }
-    items.forEach(inc => {
-      const desc = (inc.description || '').substring(0, 30);
-      sel.insertAdjacentHTML('beforeend',
-        `<option value="${inc.id}">[${inc.incident_number}] ${desc}</option>`);
-    });
-  } catch(e) {}
-}
-
 // 직접 입력된 건물/층/교실을 서버에 생성 후 ID 반환
 async function resolveLocationIds() {
   let buildingId = document.getElementById('up-building').value;
@@ -880,27 +839,6 @@ async function loadWorkTypes() {
 function toggleWorkTypeEtc() {
   const val = document.getElementById('up-worktype').value;
   document.getElementById('worktype-etc-row').style.display = val === 'etc' ? '' : 'none';
-}
-
-// ── GPS 캡처 ────────────────────────────────────────────────────────────
-function captureGps() {
-  const statusEl = document.getElementById('gps-status');
-  statusEl.textContent = '위치 취득 중...';
-  if (!navigator.geolocation) {
-    statusEl.textContent = 'GPS 미지원 브라우저';
-    return;
-  }
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      gpsLat = pos.coords.latitude.toFixed(7);
-      gpsLng = pos.coords.longitude.toFixed(7);
-      gpsAccuracy = pos.coords.accuracy;
-      document.getElementById('up-gps').value = `${gpsLat}, ${gpsLng}`;
-      statusEl.innerHTML = `<i class="bi bi-check-circle-fill text-success me-1"></i>정확도: ${gpsAccuracy.toFixed(0)}m`;
-    },
-    (err) => { statusEl.textContent = 'GPS 취득 실패: ' + err.message; },
-    { enableHighAccuracy: true, timeout: 10000 }
-  );
 }
 
 // ── 파일 드래그&드롭 + 미리보기 ─────────────────────────────────────────
@@ -947,7 +885,6 @@ async function submitUpload() {
 
   const stage   = document.querySelector('input[name="up-stage"]:checked')?.value || 'other';
   const etcText = document.getElementById('up-worktype-etc').value.trim();
-  const incidentId = document.getElementById('up-incident').value;
 
   const loc = await resolveLocationIds();
   if (loc === null) {
@@ -973,10 +910,6 @@ async function submitUpload() {
     if (buildingId) fd.append('building', buildingId);
     if (floorId)    fd.append('floor',    floorId);
     if (roomId)     fd.append('room',     roomId);
-    if (gpsLat)      fd.append('gps_lat',  gpsLat);
-    if (gpsLng)      fd.append('gps_lng',  gpsLng);
-    if (gpsAccuracy) fd.append('gps_accuracy', gpsAccuracy);
-    if (incidentId)  fd.append('incident', incidentId);
 
     try {
       const res = await fetch(`${API_BASE}/photos/photos/`, {
@@ -1082,5 +1015,61 @@ loadCenters();         // 업로드 모달용
 loadSchoolTypes();     // 업로드 모달용
 loadWorkTypes();       // 업로드 모달용
 loadPhotos();
+
+// ── 휴지통 ──────────────────────────────────────────────────────────
+let _trashMode = false;
+function toggleTrash() {
+  _trashMode = !_trashMode;
+  const btn = document.getElementById('btn-trash-mode');
+  if (_trashMode) {
+    btn.classList.replace('btn-outline-danger', 'btn-danger');
+    document.querySelector('.fw-semibold.small').textContent = '휴지통';
+  } else {
+    btn.classList.replace('btn-danger', 'btn-outline-danger');
+    document.querySelector('.fw-semibold.small').textContent = '사진 목록';
+  }
+  loadPhotos();
+}
+
+async function loadTrashPhotos() {
+  try {
+    const data = await apiGet(`${API_BASE}/photos/photos/trash/`, {page_size: 48});
+    const photos = data.results || data;
+    const grid = document.getElementById('photo-grid');
+    if (!photos.length) {
+      grid.innerHTML = '<div class="text-center text-muted py-5">휴지통이 비어 있습니다</div>';
+      return;
+    }
+    grid.innerHTML = photos.map(p => `
+      <div class="photo-thumb position-relative" style="cursor:pointer;" onclick="selectPhoto(${p.id})">
+        <img src="${p.image_url||''}" style="width:100%;height:130px;object-fit:cover;border-radius:6px;opacity:.6;">
+        <span class="position-absolute bottom-0 start-0 w-100 text-center text-white small"
+              style="background:rgba(0,0,0,.55);border-radius:0 0 6px 6px;font-size:.68rem;padding:1px;">
+          ${p.school_name||''}</span>
+        <div class="position-absolute top-0 end-0 d-flex gap-1 m-1">
+          <button class="btn btn-success btn-sm px-1 py-0" style="font-size:.6rem;" onclick="event.stopPropagation(); restorePhoto(${p.id})">복원</button>
+          <button class="btn btn-danger btn-sm px-1 py-0" style="font-size:.6rem;" onclick="event.stopPropagation(); permanentDelete(${p.id})">영구삭제</button>
+        </div>
+      </div>`).join('');
+  } catch(e) {}
+}
+
+async function restorePhoto(id) {
+  if (!confirm('이 사진을 복원하시겠습니까?')) return;
+  try {
+    await apiPost(`${API_BASE}/photos/photos/restore/`, {ids: [id]});
+    showToast('복원 완료', 'success');
+    loadPhotos();
+  } catch(e) { showToast('복원 실패', 'error'); }
+}
+
+async function permanentDelete(id) {
+  if (!confirm('영구 삭제하시겠습니까? 복원할 수 없습니다.')) return;
+  try {
+    await apiPost(`${API_BASE}/photos/photos/permanent_delete/`, {ids: [id]});
+    showToast('영구 삭제 완료', 'success');
+    loadPhotos();
+  } catch(e) { showToast('삭제 실패', 'error'); }
+}
 </script>
 {% endblock %}

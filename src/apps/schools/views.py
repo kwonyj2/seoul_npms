@@ -255,6 +255,20 @@ class SchoolViewSet(viewsets.ModelViewSet):
         return Response(data)
 
     @action(detail=False, methods=['get'])
+    def search(self, request):
+        """학교명 자동완성 검색 (이름 부분 일치, 최대 15건)"""
+        q = request.query_params.get('q', '').strip()
+        if len(q) < 1:
+            return Response([])
+        qs = School.objects.filter(
+            is_active=True, name__icontains=q
+        ).select_related('support_center').order_by('name')[:15]
+        data = [{'id': s.id, 'name': s.name,
+                 'support_center_name': s.support_center.name if s.support_center else ''}
+                for s in qs]
+        return Response(data)
+
+    @action(detail=False, methods=['get'])
     def tree(self, request):
         """교육청 → 학제 → 학교 3단계 트리 데이터"""
         from collections import defaultdict
