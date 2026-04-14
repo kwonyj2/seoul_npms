@@ -921,6 +921,20 @@ class IncidentViewSet(viewsets.ModelViewSet):
         serializer.save(incident=incident, uploaded_by=request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=['delete'], url_path='photos/(?P<photo_id>[0-9]+)')
+    def photo_delete(self, request, pk=None, photo_id=None):
+        incident = self.get_object()
+        photo = incident.photos.filter(id=photo_id).first()
+        if not photo:
+            return Response({'error': '사진을 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+        if photo.image:
+            import os
+            path = photo.image.path
+            if os.path.exists(path):
+                os.remove(path)
+        photo.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     # ── 처리 이력(타임라인) ────────────────
     @action(detail=True, methods=['get'])
     def timeline(self, request, pk=None):

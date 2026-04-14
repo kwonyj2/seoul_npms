@@ -485,11 +485,23 @@ async function loadPhotos() {
       return;
     }
     grid.innerHTML = photos.map(p => `
-      <div class="col-6 col-md-4 col-lg-3">
+      <div class="col-6 col-md-4 col-lg-3 position-relative">
         <img src="${p.image}" class="img-fluid rounded cursor-pointer" style="height:90px;width:100%;object-fit:cover;"
              onclick="window.open('${p.image}','_blank')" title="${p.caption||''}">
+        <button class="btn btn-danger btn-sm position-absolute top-0 end-0 m-1 px-1 py-0"
+                style="font-size:.65rem;line-height:1.2;opacity:.85;"
+                onclick="deletePhoto(${p.id})" title="삭제">&times;</button>
       </div>`).join('');
   } catch(e) {}
+}
+
+async function deletePhoto(photoId) {
+  if (!confirm('이 사진을 삭제하시겠습니까?')) return;
+  try {
+    await apiDelete(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/photos/${photoId}/`);
+    showToast('사진 삭제 완료', 'success');
+    loadPhotos();
+  } catch(e) { showToast('삭제 실패', 'error'); }
 }
 
 async function changeStatus(newStatus) {
