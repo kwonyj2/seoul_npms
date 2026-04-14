@@ -566,10 +566,10 @@ class ReportViewSet(viewsets.ModelViewSet):
         if not school_id:
             return Response({'error': 'school_id 필요'}, status=400)
 
-        SWITCH_CATEGORIES = ['스위치', 'PoE']
+        from django.db.models import Q
         qs = SchoolEquipment.objects.filter(
+            Q(category='스위치') | Q(category__iexact='poe'),
             school_id=school_id,
-            category__in=SWITCH_CATEGORIES,
         ).order_by('model_name', 'building', 'floor')
 
         assets = []
