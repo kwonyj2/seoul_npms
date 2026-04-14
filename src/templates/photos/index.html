@@ -663,25 +663,7 @@ async function loadPhotos() {
 function changePage(d) { currentPage = Math.max(1, Math.min(totalPages, currentPage+d)); loadPhotos(); }
 
 // ── 업로드 모달: 교육지원청 / 학제 로드 ───────────────────────────────────
-async function loadCenters() {
-  const sel = document.getElementById('up-center');
-  try {
-    const data = await apiGet(`${API_BASE}/schools/centers/`);
-    (data.results || data).forEach(c => {
-      sel.insertAdjacentHTML('beforeend', `<option value="${c.code}">${c.name}</option>`);
-    });
-  } catch(e) {}
-}
-
-async function loadSchoolTypes() {
-  const sel = document.getElementById('up-stype');
-  try {
-    const data = await apiGet(`${API_BASE}/schools/types/`);
-    (data.results || data).forEach(t => {
-      sel.insertAdjacentHTML('beforeend', `<option value="${t.code}">${t.name}</option>`);
-    });
-  } catch(e) {}
-}
+// loadCenters, loadSchoolTypes 제거됨 — 업로드 모달이 학교 자동완성으로 변경
 
 // ── 학교 자동완성 검색 ────────────────────────────────────────────
 let _searchTimer = null;
@@ -981,7 +963,6 @@ document.getElementById('worktypeModal')?.addEventListener('show.bs.modal', load
 
 // ── 초기화 ──────────────────────────────────────────────────────────────
 initFilterSelects();   // 검색 필터용
-loadCenters();         // 업로드 모달용
 loadSchoolTypes();     // 업로드 모달용
 loadWorkTypes();       // 업로드 모달용
 loadPhotos();
