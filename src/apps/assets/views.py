@@ -394,7 +394,9 @@ class AssetViewSet(NoPaginateMixin, viewsets.ModelViewSet):
                 if school:
                     stat = 'installed'
                     center = school.support_center
-                elif project_name == '창고':
+                elif '교육지원청' in project_name:
+                    stat = 'edu_office'
+                elif '창고' in project_name:
                     stat = 'warehouse'
 
                 asset = Asset.objects.create(
