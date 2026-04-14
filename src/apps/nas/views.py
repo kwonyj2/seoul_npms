@@ -87,9 +87,14 @@ class FolderViewSet(viewsets.ModelViewSet):
         if not NasRoleConfig.can_do(role, 'create_folder'):
             raise PermissionDenied('폴더 생성 권한이 없습니다.')
         if parent and 'access_level' not in serializer.validated_data:
-            serializer.save(created_by=self.request.user, access_level=parent.access_level)
+            folder = serializer.save(created_by=self.request.user, access_level=parent.access_level)
         else:
-            serializer.save(created_by=self.request.user)
+            folder = serializer.save(created_by=self.request.user)
+        # 물리 디렉토리 즉시 생성
+        if folder.full_path:
+            nas_root = getattr(settings, 'NAS_MEDIA_ROOT', settings.MEDIA_ROOT)
+            fs_path = os.path.join(nas_root, folder.full_path.lstrip('/'))
+            os.makedirs(fs_path, exist_ok=True)
 
     def perform_destroy(self, instance):
         from rest_framework.exceptions import PermissionDenied
@@ -256,7 +261,7 @@ class FileViewSet(viewsets.ModelViewSet):
     """NAS 파일 관리"""
     serializer_class = FileSerializer
     permission_classes = [IsAuthenticated]
-    pagination_class = StandardPagination
+    pagination_class = None  # 페이지네이션 없음 — 폴더 내 전체 파일 표시
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
