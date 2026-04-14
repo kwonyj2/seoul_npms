@@ -4,6 +4,9 @@ incidents 앱 모델
 """
 from django.db import models
 from django.utils import timezone
+from core.storage import NasMediaStorage
+
+lazy_nas_storage = NasMediaStorage()
 
 
 class IncidentCategory(models.Model):
@@ -283,7 +286,8 @@ class IncidentPhoto(models.Model):
     ]
     incident    = models.ForeignKey(Incident, on_delete=models.CASCADE, verbose_name='장애', related_name='photos')
     photo_type  = models.CharField('사진유형', max_length=10, choices=PHOTO_TYPE_CHOICES, default='etc')
-    image       = models.ImageField('이미지', upload_to=incident_photo_upload_path)
+    image       = models.ImageField('이미지', upload_to=incident_photo_upload_path,
+                                        storage=lazy_nas_storage)
     caption     = models.CharField('설명', max_length=200, blank=True)
     gps_lat     = models.DecimalField('위도', max_digits=10, decimal_places=7, null=True, blank=True)
     gps_lng     = models.DecimalField('경도', max_digits=10, decimal_places=7, null=True, blank=True)

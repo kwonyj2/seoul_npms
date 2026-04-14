@@ -1,5 +1,9 @@
 """
-정적 파일 최적화 스토리지
+파일 스토리지
+
+NasMediaStorage:
+  - 한글 파일명·공백 보존 (Django 기본 동작: 공백→_ 변환 방지)
+  - NAS 미디어 저장용
 
 MinifyManifestStaticFilesStorage:
   - JS/CSS 파일 자동 minify (rcssmin/rjsmin)
@@ -7,8 +11,19 @@ MinifyManifestStaticFilesStorage:
     → gzip 압축 + 파일명 해시(캐시 무효화) 자동 처리
 """
 import logging
+import re
 from django.core.files.base import ContentFile
+from django.core.files.storage import FileSystemStorage
 from whitenoise.storage import CompressedManifestStaticFilesStorage
+
+
+class NasMediaStorage(FileSystemStorage):
+    """한글 파일명·공백을 보존하는 NAS 전용 스토리지"""
+
+    def get_valid_name(self, name):
+        s = str(name).strip()
+        s = re.sub(r'[\x00-\x1f\\:*?"<>|]', '', s)
+        return s
 
 logger = logging.getLogger(__name__)
 
