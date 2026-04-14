@@ -14,7 +14,7 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - npms_pgdata:/var/lib/postgresql/data
     networks:
@@ -33,7 +33,7 @@ services:
     container_name: npms_redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - npms_redis_data:/data
     networks:
@@ -60,7 +60,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8001:8000"
+      - "127.0.0.1:8001:8000"
     volumes:
       - ./src:/app
       - npms_static:/app/staticfiles
