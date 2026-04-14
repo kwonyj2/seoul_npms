@@ -568,7 +568,7 @@ class ReportViewSet(viewsets.ModelViewSet):
 
         from django.db.models import Q
         qs = SchoolEquipment.objects.filter(
-            Q(category='스위치') | Q(category__iexact='poe'),
+            Q(category__icontains='스위치') | Q(category__icontains='poe'),
             school_id=school_id,
         ).order_by('model_name', 'building', 'floor')
 
