@@ -1,9 +1,12 @@
 """
 WBS 앱 뷰
 """
-from datetime import date
+import io
+import urllib.parse
+from datetime import date, timedelta
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.db.models import Sum, F, ExpressionWrapper, FloatField
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -141,6 +144,162 @@ class WBSItemViewSet(viewsets.ModelViewSet):
         })
 
         return Response(result)
+
+    @action(detail=False, methods=['get'], url_path='s-curve')
+    def s_curve(self, request):
+        """S-Curve 데이터 — 주간 단위 계획 vs 실적 진척 추이"""
+        project_id = request.query_params.get('project')
+        if not project_id:
+            return Response({'error': 'project 파라미터 필요'}, status=400)
+
+        items = list(WBSItem.objects.filter(
+            project_id=project_id
+        ).exclude(progress_source='children'))
+        if not items:
+            return Response({'labels': [], 'planned': [], 'actual': []})
+
+        # 전체 기간 산출
+        starts = [i.planned_start for i in items if i.planned_start]
+        ends = [i.planned_end for i in items if i.planned_end]
+        if not starts or not ends:
+            return Response({'labels': [], 'planned': [], 'actual': []})
+
+        proj_start = min(starts)
+        proj_end = max(ends)
+        today = date.today()
+
+        tw = sum(float(i.weight) for i in items) or 1
+
+        # 주간 단위 포인트 생성
+        labels = []
+        planned_data = []
+        actual_data = []
+
+        cursor = proj_start
+        week_num = 1
+        while cursor <= proj_end:
+            labels.append(f'{cursor.month}/{cursor.day}')
+            # 계획 진척률 (이 날짜 기준)
+            planned = 0.0
+            for i in items:
+                w = float(i.weight)
+                if i.planned_end and i.planned_end <= cursor:
+                    planned += w * 100
+                elif i.planned_start and i.planned_start <= cursor and i.planned_end:
+                    elapsed = (cursor - i.planned_start).days
+                    total = (i.planned_end - i.planned_start).days or 1
+                    planned += w * min(elapsed / total * 100, 100)
+            planned_data.append(round(planned / tw, 1))
+
+            # 실적 진척률 (미래는 None)
+            if cursor <= today:
+                actual = sum(float(i.weight) * i.progress for i in items)
+                actual_data.append(round(actual / tw, 1))
+            else:
+                actual_data.append(None)
+
+            cursor += timedelta(days=7)
+            week_num += 1
+
+        return Response({
+            'labels': labels,
+            'planned': planned_data,
+            'actual': actual_data,
+        })
+
+    @action(detail=False, methods=['get'], url_path='delayed')
+    def delayed(self, request):
+        """지연 항목 목록 — planned_end < today & progress < 100%"""
+        project_id = request.query_params.get('project')
+        if not project_id:
+            return Response({'error': 'project 파라미터 필요'}, status=400)
+
+        today = date.today()
+        items = WBSItem.objects.filter(
+            project_id=project_id,
+            planned_end__lt=today,
+            progress__lt=100,
+        ).exclude(progress_source='children').order_by('planned_end')
+
+        data = []
+        for i in items:
+            delay_days = (today - i.planned_end).days
+            data.append({
+                'id': i.id,
+                'code': i.code,
+                'name': i.name,
+                'progress': i.progress,
+                'planned_end': i.planned_end.strftime('%Y-%m-%d'),
+                'delay_days': delay_days,
+                'assignee': i.assignee.name if i.assignee else '-',
+            })
+        return Response(data)
+
+    @action(detail=False, methods=['get'], url_path='export')
+    def export_excel(self, request):
+        """WBS 전체 Excel 내보내기"""
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+
+        project_id = request.query_params.get('project')
+        if not project_id:
+            return Response({'error': 'project 파라미터 필요'}, status=400)
+
+        items = WBSItem.objects.filter(project_id=project_id).select_related(
+            'assignee', 'parent'
+        ).order_by('seq')
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'WBS 진척현황'
+
+        headers = ['코드', '작업명', '단계', '깊이', '담당자', '가중치',
+                   '계획시작', '계획종료', '실적시작', '실적종료',
+                   '진척률(%)', '소스', '금주계획', '금주실적', '차주계획', '비고']
+        ws.append(headers)
+        hdr_fill = PatternFill('solid', fgColor='1F497D')
+        hdr_font = Font(bold=True, color='FFFFFF', size=10)
+        for cell in ws[1]:
+            cell.font = hdr_font
+            cell.fill = hdr_fill
+
+        SRC_KO = {'manual': '수동', 'artifact': '산출물', 'inspection': '점검',
+                  'incident': '장애', 'children': '하위합산'}
+        PHASE_KO = {'plan': '계획', 'execute': '수행', 'close': '종료'}
+
+        for i in items:
+            ws.append([
+                i.code, i.name, PHASE_KO.get(i.phase, i.phase), i.depth,
+                i.assignee.name if i.assignee else '',
+                float(i.weight),
+                i.planned_start.strftime('%Y-%m-%d') if i.planned_start else '',
+                i.planned_end.strftime('%Y-%m-%d') if i.planned_end else '',
+                i.actual_start.strftime('%Y-%m-%d') if i.actual_start else '',
+                i.actual_end.strftime('%Y-%m-%d') if i.actual_end else '',
+                i.progress, SRC_KO.get(i.progress_source, i.progress_source),
+                i.this_week_plan or '', i.this_week_actual or '',
+                i.next_week_plan or '', i.notes or '',
+            ])
+
+        # depth 1 행 굵게
+        for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+            if row[3].value == 1:
+                for cell in row:
+                    cell.font = Font(bold=True)
+
+        # 컬럼 너비
+        widths = [8, 30, 6, 4, 8, 6, 10, 10, 10, 10, 8, 8, 20, 20, 20, 20]
+        for ci, w in enumerate(widths, 1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(ci)].width = w
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        fname = 'WBS_진척현황.xlsx'
+        encoded = urllib.parse.quote(fname)
+        resp = HttpResponse(buf.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
+        return resp
 
     @action(detail=True, methods=['patch'], url_path='progress')
     def update_progress(self, request, pk=None):

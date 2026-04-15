@@ -154,6 +154,27 @@
     <div class="cc-card"><div class="label">로딩 중...</div></div>
   </div>
 
+  <!-- S-Curve + 준수율 게이지 -->
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-8">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <strong style="font-size:.85rem"><i class="bi bi-graph-up me-1 text-primary"></i>S-Curve (계획 vs 실적)</strong>
+        </div>
+        <canvas id="sCurveChart" height="200"></canvas>
+      </div>
+    </div>
+    <div class="col-12 col-lg-4">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;height:100%">
+        <strong style="font-size:.85rem"><i class="bi bi-speedometer2 me-1 text-success"></i>단계별 준수율</strong>
+        <canvas id="gaugeChart" height="180" class="mt-2"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 지연 경고 -->
+  <div id="delayAlert" style="display:none" class="mb-3"></div>
+
   <!-- 탭 네비게이션 -->
   <ul class="nav nav-tabs mb-3" id="wbs-tabs">
     <li class="nav-item">
@@ -166,8 +187,11 @@
         <i class="bi bi-bar-chart-steps me-1"></i>간트 차트
       </a>
     </li>
-    <li class="nav-item ms-auto d-flex align-items-center pe-1">
-      <span class="text-muted me-3" style="font-size:0.75rem"><i class="bi bi-info-circle me-1"></i>셀 클릭 → 인라인 편집</span>
+    <li class="nav-item ms-auto d-flex align-items-center gap-2 pe-1">
+      <span class="text-muted" style="font-size:0.75rem"><i class="bi bi-info-circle me-1"></i>셀 클릭 → 인라인 편집</span>
+      <button class="btn btn-sm btn-outline-success" onclick="wbsExportExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
       <button class="btn btn-sm btn-success" onclick="openItemModal(null)">
         <i class="bi bi-plus-lg me-1"></i>항목 추가
       </button>
@@ -338,6 +362,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 const API_WBS   = '/npms/api/wbs/items/';
 const API_AUDIT = '/npms/api/audit';
@@ -365,7 +390,7 @@ loadProjects();
 
 async function loadWbs() {
   if (!WBS_PID) return;
-  await Promise.all([loadSummary(), loadItems()]);
+  await Promise.all([loadSummary(), loadItems(), loadSCurve(), loadDelayed()]);
 }
 
 // ── 공정준수율 ────────────────────────────────────────
@@ -390,6 +415,136 @@ function renderSummary(rows) {
       <div class="cc-bar"><div class="cc-bar-inner" style="width:${r.actual_progress}%;background:${r.phase==='total'?'#4ade80':colors[r.phase]}"></div></div>
       <div class="cc-bar-plan" style="width:${r.planned_progress}%"></div>
     </div>`).join('');
+  renderGaugeChart(rows);
+}
+
+// ── S-Curve 차트 ─────────────────────────────────────
+let _sCurveChart = null;
+let _gaugeChart = null;
+
+async function loadSCurve() {
+  try {
+    const res = await fetch(`${API_WBS}s-curve/?project=${WBS_PID}`, {credentials:'same-origin'});
+    if (!res.ok) return;
+    const d = await res.json();
+    renderSCurve(d);
+  } catch(e) { console.error('loadSCurve:', e); }
+}
+
+function renderSCurve(d) {
+  const ctx = document.getElementById('sCurveChart');
+  if (!ctx) return;
+  if (_sCurveChart) _sCurveChart.destroy();
+  _sCurveChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: d.labels,
+      datasets: [
+        {
+          label: '계획 진척률',
+          data: d.planned,
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59,130,246,.1)',
+          fill: true,
+          tension: 0.3,
+          borderWidth: 2,
+          pointRadius: 2,
+        },
+        {
+          label: '실적 진척률',
+          data: d.actual,
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16,185,129,.1)',
+          fill: true,
+          tension: 0.3,
+          borderWidth: 2.5,
+          pointRadius: 3,
+          spanGaps: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 11 } } },
+        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y}%` } },
+      },
+      scales: {
+        y: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 10 } } },
+        x: { ticks: { font: { size: 9 }, maxRotation: 45 } },
+      }
+    }
+  });
+}
+
+// ── 준수율 게이지 (막대 차트) ────────────────────────
+function renderGaugeChart(summaryRows) {
+  const ctx = document.getElementById('gaugeChart');
+  if (!ctx) return;
+  if (_gaugeChart) _gaugeChart.destroy();
+
+  const phases = summaryRows.filter(r => r.phase !== 'total');
+  const labels = phases.map(r => r.phase_display);
+  const planned = phases.map(r => r.planned_progress);
+  const actual = phases.map(r => r.actual_progress);
+
+  _gaugeChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: '계획', data: planned, backgroundColor: 'rgba(59,130,246,.3)', borderColor: '#3b82f6', borderWidth: 1 },
+        { label: '실적', data: actual, backgroundColor: 'rgba(16,185,129,.6)', borderColor: '#10b981', borderWidth: 1 },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 10 } } },
+        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.x}%` } },
+      },
+      scales: {
+        x: { min: 0, max: 100, ticks: { callback: v => v + '%', font: { size: 10 } } },
+        y: { ticks: { font: { size: 11 } } },
+      }
+    }
+  });
+}
+
+// ── 지연 경고 ────────────────────────────────────────
+async function loadDelayed() {
+  try {
+    const res = await fetch(`${API_WBS}delayed/?project=${WBS_PID}`, {credentials:'same-origin'});
+    if (!res.ok) return;
+    const items = await res.json();
+    const el = document.getElementById('delayAlert');
+    if (!items.length) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    el.innerHTML = `
+      <div class="alert alert-danger py-2 px-3 mb-0" style="font-size:.82rem">
+        <strong><i class="bi bi-exclamation-triangle me-1"></i>지연 항목 ${items.length}건</strong>
+        <table class="table table-sm table-borderless mb-0 mt-1" style="font-size:.78rem">
+          <thead><tr class="text-muted"><th>코드</th><th>작업명</th><th>계획종료</th><th>지연일수</th><th>진척률</th><th>담당</th></tr></thead>
+          <tbody>${items.map(i => `<tr>
+            <td><span class="wbs-code">${i.code}</span></td>
+            <td>${i.name}</td>
+            <td>${i.planned_end}</td>
+            <td><strong class="text-danger">${i.delay_days}일</strong></td>
+            <td>${i.progress}%</td>
+            <td>${i.assignee}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>`;
+  } catch(e) { console.error('loadDelayed:', e); }
+}
+
+// ── Excel 내보내기 ───────────────────────────────────
+function wbsExportExcel() {
+  if (!WBS_PID) return;
+  window.location.href = `${API_WBS}export/?project=${WBS_PID}`;
 }
 
 // ── 트리 테이블 ───────────────────────────────────────
@@ -783,12 +938,18 @@ function renderGantt(items) {
   let html=`<table class="gantt-table"><thead><tr><th style="width:280px;min-width:280px">작업명</th><th style="width:42px">진척</th>`;
   months.forEach(m=>{ const d=new Date(m.getFullYear(),m.getMonth()+1,0).getDate(); html+=`<th style="width:${d*px}px">${m.getFullYear()}.${String(m.getMonth()+1).padStart(2,'0')}</th>`; });
   html+='</tr></thead><tbody>';
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayDate = new Date(todayStr);
   items.forEach(item=>{
     const indent=(item.depth-1)*14;
     const ms=item.is_milestone?'◆ ':'';
-    html+=`<tr class="${item.depth===1?'fw-bold':item.depth===2?'fw-semibold':''}">
-      <td style="padding-left:${8+indent}px;font-size:0.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:280px;min-width:280px" title="${item.text}">${ms}[${item.code}] ${item.text}</td>
-      <td class="text-center" style="font-size:0.73rem">${Math.round(item.progress*100)}%</td>`;
+    // 지연 판정: 계획 종료 < 오늘 & 진척 < 100%
+    const isDelayed = item.end_date && item.end_date < todayStr && item.progress < 1;
+    const rowStyle = isDelayed ? 'background:#fef2f2 !important;' : '';
+    const progColor = isDelayed ? 'color:#dc2626;font-weight:700' : '';
+    html+=`<tr class="${item.depth===1?'fw-bold':item.depth===2?'fw-semibold':''}" style="${rowStyle}">
+      <td style="padding-left:${8+indent}px;font-size:0.74rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:280px;min-width:280px" title="${item.text}">${isDelayed?'<i class="bi bi-exclamation-triangle-fill text-danger me-1" style="font-size:.65rem"></i>':''}${ms}[${item.code}] ${item.text}</td>
+      <td class="text-center" style="font-size:0.73rem;${progColor}">${Math.round(item.progress*100)}%</td>`;
     months.forEach(m=>{
       const ms2=new Date(m.getFullYear(),m.getMonth(),1), me=new Date(m.getFullYear(),m.getMonth()+1,0), md=me.getDate();
       let bar=`<div class="gantt-bar-wrap" style="width:${md*px}px">`;
@@ -805,6 +966,11 @@ function renderGantt(items) {
       if(item.is_milestone&&item.end_date){
         const pe=new Date(item.end_date);
         if(pe>=ms2&&pe<=me) bar+=`<div class="gantt-milestone" style="left:${(pe-ms2)/86400000*px}px">◆</div>`;
+      }
+      // 오늘 기준선
+      if(todayDate>=ms2&&todayDate<=me){
+        const tl=(todayDate-ms2)/86400000*px;
+        bar+=`<div style="position:absolute;left:${tl}px;top:0;width:2px;height:20px;background:#ef4444;z-index:5;opacity:.7"></div>`;
       }
       html+=`<td style="padding:2px">${bar}</div></td>`;
     });
