@@ -759,6 +759,7 @@ async function openUserModal(userId=null) {
 async function saveUser() {
   const pw=document.getElementById('um-password').value;
   const pw2=document.getElementById('um-password2').value;
+  if(!_editId && !pw){ alert('신규 등록 시 비밀번호는 필수입니다.'); return; }
   if(pw&&pw!==pw2){ alert('비밀번호가 일치하지 않습니다.'); return; }
   const payload={
     name:document.getElementById('um-name').value,
@@ -772,13 +773,19 @@ async function saveUser() {
     service_expiry:document.getElementById('um-expiry').value||null,
     is_active:document.getElementById('um-active').checked,
   };
-  if(pw) payload.password=pw;
+  if(pw){ payload.password=pw; payload.password2=pw2; }
   try {
+    let r;
     if(_editId){
-      await fetch(`${API_BASE}/accounts/api/users/${_editId}/`,{method:'PATCH',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},body:JSON.stringify(payload)});
+      r=await fetch(`${API_BASE}/accounts/api/users/${_editId}/`,{method:'PATCH',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},body:JSON.stringify(payload)});
     } else {
       payload.username=document.getElementById('um-username').value;
-      await fetch(`${API_BASE}/accounts/api/users/`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},body:JSON.stringify(payload)});
+      r=await fetch(`${API_BASE}/accounts/api/users/`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},body:JSON.stringify(payload)});
+    }
+    if(!r.ok){
+      const err=await r.json();
+      const msgs=Object.entries(err.detail||err).map(([k,v])=>`${k}: ${Array.isArray(v)?v.join(', '):v}`).join('\n');
+      alert('저장 실패:\n'+msgs); return;
     }
     bootstrap.Modal.getInstance(document.getElementById('userModal')).hide();
     loadUsers();
