@@ -76,51 +76,92 @@ def _get_pdf_model_configs():
     return configs
 
 
+# PDF 모델에 대한 한글 라벨 오버라이드
+_MODEL_LABEL_MAP = {
+    'incidents_incident': '장애처리보고서',
+    'assets_assetinbound': '장비입고증',
+    'assets_assetoutbound': '장비출고증',
+    'assets_assetreturn': '장비반납증',
+    'materials_materialinbound': '자재입고증',
+    'materials_materialoutbound': '자재출고증',
+}
+
+# 카테고리 분류
+_DOC_CATEGORIES = {
+    '업무보고서': ['report_'],
+    '장애관리': ['incidents_'],
+    '장비관리': ['assets_'],
+    '자재관리': ['materials_'],
+    '교육관리': ['education_'],
+}
+
+def _get_category(doc_id):
+    for cat, prefixes in _DOC_CATEGORIES.items():
+        for prefix in prefixes:
+            if doc_id.startswith(prefix):
+                return cat
+    return '기타'
+
+
 @login_required
 @_admin_required
 def doc_catalog(request):
-    """산출물 카탈로그 — 자동 탐지된 서류 유형 목록"""
-    catalog = []
+    """산출물 카탈로그 — 자동 탐지된 서류 유형 목록 (카테고리별 트리)"""
+    items = []
 
     # 1) Report 템플릿 기반 (JSON data 서류)
     try:
         from apps.reports.models import ReportTemplate, Report
         for tmpl in ReportTemplate.objects.all():
             count = Report.objects.filter(template=tmpl).count()
-            catalog.append({
+            items.append({
                 'id': f'report_{tmpl.id}',
                 'type': 'report_template',
-                'template_id': tmpl.id,
                 'name': tmpl.name,
                 'count': count,
-                'icon': 'bi-file-earmark-text',
+                'category': '업무보고서',
             })
     except Exception:
         pass
 
     # 2) PDF 생성 모델 기반 (pdf_path 필드)
     for cfg in _get_pdf_model_configs():
-        # reports.report는 위에서 처리했으므로 제외
         if cfg['app'] == 'reports' and cfg['model_name'] == 'report':
             continue
         model = cfg['model']
-        qs = model.objects.exclude(**{f'{cfg["pdf_field"]}__exact': ''}).exclude(
-            **{f'{cfg["pdf_field"]}__isnull': True})
-        count = qs.count()
-        if count == 0:
-            # PDF 없어도 레코드 자체는 표시
-            count = model.objects.count()
-        catalog.append({
-            'id': f'{cfg["app"]}_{cfg["model_name"]}',
+        count = model.objects.count()
+        doc_id = f'{cfg["app"]}_{cfg["model_name"]}'
+        items.append({
+            'id': doc_id,
             'type': 'pdf_model',
-            'app': cfg['app'],
-            'model_name': cfg['model_name'],
-            'name': cfg['label'],
+            'name': _MODEL_LABEL_MAP.get(doc_id, cfg['label']),
             'count': count,
-            'icon': 'bi-file-earmark-pdf',
+            'category': _get_category(doc_id),
         })
 
-    return JsonResponse({'catalog': catalog})
+    # 3) 교육이수증 (EducationCompletion - pdf_path 없지만 PDF 생성 가능)
+    try:
+        from apps.education.models import EducationCompletion
+        count = EducationCompletion.objects.count()
+        items.append({
+            'id': 'education_completion',
+            'type': 'education',
+            'name': '교육이수증',
+            'count': count,
+            'category': '교육관리',
+        })
+    except Exception:
+        pass
+
+    # 카테고리별 그룹핑
+    tree = {}
+    for item in items:
+        cat = item['category']
+        if cat not in tree:
+            tree[cat] = []
+        tree[cat].append(item)
+
+    return JsonResponse({'tree': tree, 'items': items})
 
 
 @login_required
@@ -136,6 +177,10 @@ def doc_data(request, doc_id):
     if doc_id.startswith('report_'):
         template_id = int(doc_id.replace('report_', ''))
         return _report_template_data(request, template_id, page, page_size, offset, q)
+
+    # 교육이수증
+    if doc_id == 'education_completion':
+        return _education_data(request, page, page_size, offset, q)
 
     # PDF 모델 기반
     for cfg in _get_pdf_model_configs():
@@ -351,8 +396,46 @@ def _pdf_model_data(request, cfg, page, page_size, offset, q):
                     row[field.name] = s[:60] if len(s) > 60 else s
         rows.append(row)
 
+    doc_id = f'{cfg["app"]}_{cfg["model_name"]}'
     return JsonResponse({
-        'name': cfg['label'],
+        'name': _MODEL_LABEL_MAP.get(doc_id, cfg['label']),
+        'columns': columns,
+        'rows': rows,
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+        'total_pages': (total + page_size - 1) // page_size,
+    })
+
+
+def _education_data(request, page, page_size, offset, q):
+    """교육이수증 데이터"""
+    from apps.education.models import EducationCompletion
+    qs = EducationCompletion.objects.select_related('user', 'course', 'course__category').order_by('-completed_at')
+    if q:
+        qs = qs.filter(Q(user__name__icontains=q) | Q(course__title__icontains=q) | Q(certificate_no__icontains=q))
+    total = qs.count()
+    columns = [
+        {'key': 'certificate_no', 'label': '이수증번호'},
+        {'key': 'user_name', 'label': '성명'},
+        {'key': 'course_title', 'label': '교육과정'},
+        {'key': 'category', 'label': '분류'},
+        {'key': 'score', 'label': '이수점수'},
+        {'key': 'completed_at', 'label': '이수일'},
+    ]
+    rows = []
+    for c in qs[offset:offset + page_size]:
+        rows.append({
+            '_pk': c.pk,
+            'certificate_no': c.certificate_no or '-',
+            'user_name': c.user.name if c.user else '-',
+            'course_title': c.course.title if c.course else '-',
+            'category': c.course.category.name if c.course and c.course.category else '-',
+            'score': c.score,
+            'completed_at': c.completed_at.strftime('%Y-%m-%d') if c.completed_at else '-',
+        })
+    return JsonResponse({
+        'name': '교육이수증',
         'columns': columns,
         'rows': rows,
         'total': total,
