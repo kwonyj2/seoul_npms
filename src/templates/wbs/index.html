@@ -154,26 +154,29 @@
     <div class="cc-card"><div class="label">로딩 중...</div></div>
   </div>
 
-  <!-- S-Curve + 준수율 게이지 -->
-  <div class="row g-3 mb-3">
+  <!-- S-Curve + 준수율 게이지 (접기/펼치기) -->
+  <div class="mb-2">
+    <a href="#" class="text-decoration-none text-muted" style="font-size:.8rem" onclick="document.getElementById('chartArea').style.display=document.getElementById('chartArea').style.display==='none'?'':'none';this.querySelector('i').classList.toggle('bi-chevron-down');this.querySelector('i').classList.toggle('bi-chevron-right');return false;">
+      <i class="bi bi-chevron-down me-1"></i>진척 차트
+    </a>
+  </div>
+  <div id="chartArea" class="row g-2 mb-3">
     <div class="col-12 col-lg-8">
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <strong style="font-size:.85rem"><i class="bi bi-graph-up me-1 text-primary"></i>S-Curve (계획 vs 실적)</strong>
-        </div>
-        <canvas id="sCurveChart" height="200"></canvas>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;height:220px">
+        <strong style="font-size:.78rem"><i class="bi bi-graph-up me-1 text-primary"></i>S-Curve</strong>
+        <div style="position:relative;height:185px"><canvas id="sCurveChart"></canvas></div>
       </div>
     </div>
     <div class="col-12 col-lg-4">
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;height:100%">
-        <strong style="font-size:.85rem"><i class="bi bi-speedometer2 me-1 text-success"></i>단계별 준수율</strong>
-        <canvas id="gaugeChart" height="180" class="mt-2"></canvas>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;height:220px">
+        <strong style="font-size:.78rem"><i class="bi bi-speedometer2 me-1 text-success"></i>단계별 준수율</strong>
+        <div style="position:relative;height:185px"><canvas id="gaugeChart"></canvas></div>
       </div>
     </div>
   </div>
 
   <!-- 지연 경고 -->
-  <div id="delayAlert" style="display:none" class="mb-3"></div>
+  <div id="delayAlert" style="display:none" class="mb-2"></div>
 
   <!-- 탭 네비게이션 -->
   <ul class="nav nav-tabs mb-3" id="wbs-tabs">
