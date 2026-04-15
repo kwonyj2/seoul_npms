@@ -803,7 +803,7 @@ def export_audit_data(request, data_type):
         ws.append(headers)
         for t in ArtifactTemplate.objects.filter(project=project).order_by('seq'):
             art = Artifact.objects.filter(template=t).first()
-            req_codes = ', '.join(t.requirement.values_list('code', flat=True)) if hasattr(t,'requirement') else ''
+            req_codes = t.requirement.code if t.requirement else ''
             ws.append([
                 t.code, t.name, t.get_audit_phase_display(), t.get_submit_timing_display(),
                 req_codes, SK.get(art.status, art.status) if art else '대기',
