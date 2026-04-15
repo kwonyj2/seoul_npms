@@ -1070,9 +1070,9 @@ function renderArt(pf){
           ${art.location_note?`<div class="text-truncate" style="font-size:.65rem;color:#8a9ab0;max-width:90px;" title="${art.location_note}">${art.location_note}</div>`:''}`
         :`<span style="color:#ccc;font-size:.72rem;">없음</span>`}
       </td>
-      <td class="btn-row">
-        <button class="btn btn-outline-primary" onclick="openArtModal(${t.id})"><i class="bi bi-upload"></i></button>
-        ${st==='submitted'?`<button class="btn btn-success" onclick="approveArt(${art.id})" title="승인"><i class="bi bi-check-lg"></i></button><button class="btn btn-danger" onclick="rejectArt(${art.id})" title="반려"><i class="bi bi-x-lg"></i></button>`:''}
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size:.68rem" onclick="openArtModal(${t.id})"><i class="bi bi-upload"></i></button>
+        ${st==='submitted'?`<button class="btn btn-sm btn-success py-0 px-1" style="font-size:.68rem" onclick="approveArt(${art.id})" title="승인"><i class="bi bi-check-lg"></i></button><button class="btn btn-sm btn-danger py-0 px-1" style="font-size:.68rem" onclick="rejectArt(${art.id})" title="반려"><i class="bi bi-x-lg"></i></button>`:''}
       </td>
     </tr>`;
   }
