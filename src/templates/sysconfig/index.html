@@ -80,6 +80,7 @@
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('nas',this);return false;"><i class="bi bi-folder me-1"></i>NAS 권한 설정</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('accesslog',this);return false;"><i class="bi bi-journal-text me-1"></i>접속이력</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('celery',this);return false;"><i class="bi bi-gear-wide-connected me-1"></i>작업 모니터링</a></li>
+    {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('dbadmin',this);return false;"><i class="bi bi-database-gear me-1"></i>DB 관리</a></li>{% endif %}
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('info',this);return false;"><i class="bi bi-info-circle me-1"></i>시스템 정보</a></li>
   </ul>
 
@@ -629,6 +630,45 @@
   </div>
 
   <!-- ══════════════════════════════════════════
+       탭: DB 관리
+  ══════════════════════════════════════════ -->
+  <div id="tab-dbadmin" class="sys-tab-content">
+    <div class="row g-0" style="min-height:500px">
+      <!-- 좌측: 모델 트리 -->
+      <div class="col-12 col-md-3 border-end" style="max-height:70vh;overflow-y:auto">
+        <div class="p-2">
+          <input type="text" id="da-search" class="form-control form-control-sm mb-2" placeholder="모델 검색…" oninput="filterDbTree(this.value)">
+          <div id="da-tree" style="font-size:.8rem"><div class="text-center text-muted py-4">로딩 중…</div></div>
+        </div>
+      </div>
+      <!-- 우측: 데이터 테이블 -->
+      <div class="col-12 col-md-9">
+        <div id="da-content" class="p-3">
+          <div class="text-center text-muted py-5"><i class="bi bi-database" style="font-size:3rem"></i><br>좌측에서 모델을 선택하세요</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 편집 모달 -->
+    <div class="modal fade" id="daEditModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header py-2">
+            <h6 class="modal-title" id="da-modal-title">레코드 편집</h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body" id="da-modal-body" style="max-height:65vh;overflow-y:auto"></div>
+          <div class="modal-footer py-2">
+            <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+            <button class="btn btn-sm btn-danger me-auto" id="da-delete-btn" onclick="daDelete()" style="display:none"><i class="bi bi-trash me-1"></i>삭제</button>
+            <button class="btn btn-sm btn-primary" onclick="daSave()"><i class="bi bi-check-lg me-1"></i>저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
        탭: 시스템 정보
   ══════════════════════════════════════════ -->
   <div id="tab-info" class="sys-tab-content">
@@ -667,7 +707,7 @@
 {% block extra_js %}
 <script>
 const SYSCONF_API = API_BASE.replace('/api','') + '/api/sysconfig';
-const SYS_TABS   = ['db','users','export','nas','accesslog','celery','info'];
+const SYS_TABS   = ['db','users','export','nas','accesslog','celery','dbadmin','info'];
 
 // ══ 탭 전환 ═══════════════════════════════════════════
 function switchTab(name, el) {
@@ -679,6 +719,7 @@ function switchTab(name, el) {
   if (name==='nas'    && !window._nLoaded)  { loadNasFolders(); loadNasRolePerms(); window._nLoaded=true; }
   if (name==='accesslog') { /* 수동 조회 */ }
   if (name==='celery') { loadCelery(); }
+  if (name==='dbadmin' && !window._daLoaded) { loadDbTree(); window._daLoaded=true; }
   if (name==='info'   && !window._iLoaded)  { loadSysInfo(); window._iLoaded=true; }
 }
 
@@ -1221,6 +1262,212 @@ function loadCelery() {
   });
 }
 function celLoadTasks(page){ _celPage=page; loadCelery(); }
+
+// ══ DB 관리 ══════════════════════════════════════════
+let _daTree = {};
+let _daApp = '', _daModel = '', _daFields = [], _daPage = 1, _daEditPk = null;
+
+function loadDbTree() {
+  fetch(SYSCONF_API+'/db/schema/').then(r=>r.json()).then(d=>{
+    _daTree = d.tree;
+    renderDbTree('');
+  }).catch(()=>{ document.getElementById('da-tree').innerHTML='<div class="text-danger text-center py-3">로드 실패</div>'; });
+}
+
+function filterDbTree(q) { renderDbTree(q.toLowerCase()); }
+
+function renderDbTree(q) {
+  let html = '';
+  for (const [app, info] of Object.entries(_daTree)) {
+    const models = info.models.filter(m => !q || m.label.toLowerCase().includes(q) || app.includes(q));
+    if (!models.length) continue;
+    html += `<div class="mb-1"><div class="fw-semibold text-muted px-1 py-1" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.5px">${escH(app)}</div>`;
+    for (const m of models) {
+      const active = (_daApp===app && _daModel===m.name) ? 'bg-primary text-white' : '';
+      html += `<a href="#" class="d-flex justify-content-between align-items-center px-2 py-1 rounded text-decoration-none ${active}" style="font-size:.8rem;color:inherit" onclick="daSelectModel('${app}','${m.name}');return false;">
+        <span>${escH(m.label)}</span><span class="badge bg-secondary bg-opacity-25 text-muted" style="font-size:.65rem">${m.count.toLocaleString()}</span>
+      </a>`;
+    }
+    html += '</div>';
+  }
+  document.getElementById('da-tree').innerHTML = html || '<div class="text-muted text-center py-3">결과 없음</div>';
+}
+
+function daSelectModel(app, model) {
+  _daApp = app; _daModel = model; _daPage = 1;
+  renderDbTree(document.getElementById('da-search').value.toLowerCase());
+  // 스키마 로드 후 데이터 로드
+  fetch(`${SYSCONF_API}/db/${app}/${model}/schema/`).then(r=>r.json()).then(d=>{
+    _daFields = d.fields;
+    daLoadData();
+  });
+}
+
+function daLoadData() {
+  const q = document.getElementById('da-q')?.value || '';
+  const sort = document.getElementById('da-sort')?.value || '-pk';
+  let url = `${SYSCONF_API}/db/${_daApp}/${_daModel}/?page=${_daPage}&sort=${sort}`;
+  if (q) url += `&q=${encodeURIComponent(q)}`;
+
+  const label = _daFields.length ? (_daTree[_daApp]?.models.find(m=>m.name===_daModel)?.label || _daModel) : _daModel;
+  const displayFields = _daFields.filter(f=>f.type!=='file').slice(0, 8);
+
+  // 헤더 + 컨트롤 바 렌더
+  let headerHtml = `
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h6 class="mb-0"><i class="bi bi-table me-1 text-primary"></i>${escH(label)}</h6>
+      <div class="d-flex gap-2">
+        <div class="input-group input-group-sm" style="width:180px">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" id="da-q" class="form-control" placeholder="검색" value="${escH(q)}" onkeydown="if(event.key==='Enter'){_daPage=1;daLoadData();}">
+        </div>
+        <select id="da-sort" class="form-select form-select-sm" style="width:auto;font-size:.75rem" onchange="_daPage=1;daLoadData()">
+          <option value="-pk" ${sort==='-pk'?'selected':''}>최신순</option>
+          <option value="pk" ${sort==='pk'?'selected':''}>오래된순</option>
+        </select>
+        <button class="btn btn-sm btn-success" onclick="daOpenEdit(null)"><i class="bi bi-plus me-1"></i>신규</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="daLoadData()"><i class="bi bi-arrow-clockwise"></i></button>
+      </div>
+    </div>`;
+
+  document.getElementById('da-content').innerHTML = headerHtml + `
+    <div class="card border-0 shadow-sm">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.78rem">
+          <thead class="table-light"><tr>
+            ${displayFields.map(f=>`<th>${escH(f.label)}</th>`).join('')}
+            <th style="width:50px"></th>
+          </tr></thead>
+          <tbody id="da-tbody"><tr><td colspan="${displayFields.length+1}" class="text-center py-4"><span class="spinner-border spinner-border-sm me-1"></span>로딩 중…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center">
+        <small class="text-muted" id="da-page-info"></small>
+        <ul class="pagination pagination-sm mb-0" id="da-pager"></ul>
+      </div>
+    </div>`;
+
+  fetch(url).then(r=>r.json()).then(d=>{
+    if(!d.rows||!d.rows.length){
+      document.getElementById('da-tbody').innerHTML=`<tr><td colspan="${displayFields.length+1}" class="text-center text-muted py-4">데이터 없음</td></tr>`;
+      document.getElementById('da-page-info').textContent=`총 ${d.total}건`;
+      document.getElementById('da-pager').innerHTML='';
+      return;
+    }
+    document.getElementById('da-page-info').textContent=`${d.page}/${d.total_pages} 페이지 (총 ${d.total.toLocaleString()}건)`;
+    document.getElementById('da-tbody').innerHTML = d.rows.map(row=>{
+      const cells = displayFields.map(f=>{
+        const key = f.name;
+        let val = row[key];
+        if(val===null||val===undefined) return '<td class="text-muted">-</td>';
+        if(f.type==='boolean') return `<td>${val?'<i class="bi bi-check-circle-fill text-success"></i>':'<i class="bi bi-x-circle text-muted"></i>'}</td>`;
+        if(f.type==='fk' && typeof val==='object') return `<td>${escH(val.label||'-')}</td>`;
+        if(f.type==='select' && f.choices){
+          const ch=f.choices.find(c=>c.id==val);
+          return `<td>${ch?escH(ch.label):escH(String(val))}</td>`;
+        }
+        const s = String(val);
+        return `<td title="${escH(s)}">${escH(s.length>40?s.substring(0,40)+'…':s)}</td>`;
+      }).join('');
+      return `<tr style="cursor:pointer" onclick="daOpenEdit(${row.pk})">${cells}<td><button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="event.stopPropagation();daOpenEdit(${row.pk})"><i class="bi bi-pencil"></i></button></td></tr>`;
+    }).join('');
+
+    // 페이저
+    const tp=d.total_pages, cp=d.page;
+    if(tp<=1){document.getElementById('da-pager').innerHTML='';return;}
+    const range=[];for(let i=Math.max(1,cp-3);i<=Math.min(tp,cp+3);i++)range.push(i);
+    let ph=`<li class="page-item ${cp===1?'disabled':''}"><a class="page-link" href="#" onclick="_daPage=${cp-1};daLoadData();return false;">‹</a></li>`;
+    range.forEach(i=>{ph+=`<li class="page-item ${i===cp?'active':''}"><a class="page-link" href="#" onclick="_daPage=${i};daLoadData();return false;">${i}</a></li>`;});
+    ph+=`<li class="page-item ${cp===tp?'disabled':''}"><a class="page-link" href="#" onclick="_daPage=${cp+1};daLoadData();return false;">›</a></li>`;
+    document.getElementById('da-pager').innerHTML=ph;
+  });
+}
+
+function daOpenEdit(pk) {
+  _daEditPk = pk;
+  const isNew = pk === null;
+  document.getElementById('da-modal-title').textContent = isNew ? '신규 레코드' : `레코드 #${pk} 편집`;
+  document.getElementById('da-delete-btn').style.display = isNew ? 'none' : '';
+
+  const buildForm = (data) => {
+    let html = '';
+    for (const f of _daFields) {
+      if (f.type === 'auto') continue;
+      const val = data ? (data[f.name] ?? '') : '';
+      const ro = f.readonly ? 'disabled' : '';
+      const req = f.required ? '<span class="text-danger">*</span>' : '';
+      html += `<div class="mb-2 row"><label class="col-sm-3 col-form-label col-form-label-sm text-end">${escH(f.label)} ${req}</label><div class="col-sm-9">`;
+
+      if (f.type === 'boolean') {
+        html += `<div class="form-check mt-1"><input type="checkbox" class="form-check-input" id="da-f-${f.name}" ${val?'checked':''} ${ro}></div>`;
+      } else if (f.type === 'select' && f.choices) {
+        html += `<select class="form-select form-select-sm" id="da-f-${f.name}" ${ro}><option value="">선택…</option>`;
+        for (const c of f.choices) html += `<option value="${c.id}" ${c.id==val?'selected':''}>${escH(c.label)}</option>`;
+        html += '</select>';
+      } else if (f.type === 'fk' && f.choices) {
+        const fkVal = typeof val === 'object' ? (val?.id||'') : val;
+        html += `<select class="form-select form-select-sm" id="da-f-${f.name}" ${ro}><option value="">선택…</option>`;
+        for (const c of f.choices) html += `<option value="${c.id}" ${c.id==fkVal?'selected':''}>${escH(c.label)}</option>`;
+        html += '</select>';
+      } else if (f.type === 'textarea') {
+        html += `<textarea class="form-control form-control-sm" id="da-f-${f.name}" rows="3" ${ro}>${escH(typeof val==='object'?JSON.stringify(val):String(val||''))}</textarea>`;
+      } else if (f.type === 'date') {
+        html += `<input type="date" class="form-control form-control-sm" id="da-f-${f.name}" value="${escH(val||'')}" ${ro}>`;
+      } else if (f.type === 'datetime') {
+        const dtVal = val ? val.replace(' ','T').substring(0,16) : '';
+        html += `<input type="datetime-local" class="form-control form-control-sm" id="da-f-${f.name}" value="${dtVal}" ${ro}>`;
+      } else if (f.type === 'file') {
+        html += `<div class="form-control-plaintext form-control-sm">${val?escH(String(val)):'(없음)'}</div>`;
+      } else {
+        html += `<input type="${f.type==='integer'||f.type==='number'?'number':'text'}" class="form-control form-control-sm" id="da-f-${f.name}" value="${escH(typeof val==='object'?JSON.stringify(val):String(val||''))}" ${f.max_length?`maxlength="${f.max_length}"`:''}  ${ro}>`;
+      }
+      html += '</div></div>';
+    }
+    document.getElementById('da-modal-body').innerHTML = html;
+    new bootstrap.Modal(document.getElementById('daEditModal')).show();
+  };
+
+  if (isNew) {
+    buildForm(null);
+  } else {
+    fetch(`${SYSCONF_API}/db/${_daApp}/${_daModel}/${pk}/`).then(r=>r.json()).then(d=>{
+      buildForm(d.row);
+    });
+  }
+}
+
+function daSave() {
+  const payload = {};
+  for (const f of _daFields) {
+    if (f.type === 'auto' || f.readonly) continue;
+    const el = document.getElementById('da-f-'+f.name);
+    if (!el) continue;
+    if (f.type === 'boolean') payload[f.name] = el.checked;
+    else if (f.type === 'integer') payload[f.name] = el.value ? parseInt(el.value) : null;
+    else if (f.type === 'number') payload[f.name] = el.value ? parseFloat(el.value) : null;
+    else payload[f.name] = el.value || null;
+  }
+  const isNew = _daEditPk === null;
+  const url = isNew ? `${SYSCONF_API}/db/${_daApp}/${_daModel}/` : `${SYSCONF_API}/db/${_daApp}/${_daModel}/${_daEditPk}/`;
+  const method = isNew ? 'POST' : 'PATCH';
+
+  fetch(url, {method, headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN}, body:JSON.stringify(payload)})
+  .then(r=>r.json()).then(d=>{
+    if(d.error){ alert('저장 실패:\n'+d.error); return; }
+    bootstrap.Modal.getInstance(document.getElementById('daEditModal')).hide();
+    daLoadData(); loadDbTree();
+  }).catch(e=>alert('저장 실패: '+e.message));
+}
+
+function daDelete() {
+  if(!_daEditPk || !confirm('이 레코드를 삭제하시겠습니까?')) return;
+  fetch(`${SYSCONF_API}/db/${_daApp}/${_daModel}/${_daEditPk}/`, {method:'DELETE',headers:{'X-CSRFToken':CSRF_TOKEN}})
+  .then(r=>r.json()).then(d=>{
+    if(d.error){ alert('삭제 실패:\n'+d.error); return; }
+    bootstrap.Modal.getInstance(document.getElementById('daEditModal')).hide();
+    daLoadData(); loadDbTree();
+  }).catch(e=>alert('삭제 실패: '+e.message));
+}
 
 // ══ 시스템 정보 ══════════════════════════════════════
 const COUNT_LBL={schools:'학교 수',buildings:'건물 수',contacts:'교직원(담당자)',incidents:'장애 건수',inc_cats:'장애 분류',sla_rules:'SLA 규칙',assets:'장비 수',materials:'자재 종류',inventory:'창고 재고 항목',users:'전체 사용자',workers:'현장기사 수',worker_profiles:'인력 프로필',nas_folders:'NAS 폴더',nas_files:'NAS 파일',photos:'사진 수'};
