@@ -50,6 +50,8 @@
 .wbs-row-d1 td { background: #f0f4f8 !important; font-weight: 700; }
 .wbs-row-d2 .col-name { padding-left: 20px; font-weight: 600; }
 .wbs-row-d3 .col-name { padding-left: 38px; }
+.wbs-row-d4 .col-name { padding-left: 54px; font-size: .78rem; }
+.wbs-row-d5 .col-name { padding-left: 68px; font-size: .76rem; }
 
 /* 코드 */
 .wbs-code { font-family: monospace; font-size: 0.74rem; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 3px; }
@@ -279,6 +281,28 @@
         <div id="delayAlert" class="w-100"></div>
       </div>
     </div>
+
+    <!-- 기준선 관리 + 변경 이력 -->
+    <div class="row g-3 mt-2">
+      <div class="col-12 col-lg-6">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong style="font-size:.85rem"><i class="bi bi-bookmark-check me-1 text-primary"></i>기준선 (Baseline)</strong>
+            <button class="btn btn-sm btn-primary" onclick="saveBaseline()"><i class="bi bi-plus me-1"></i>기준선 저장</button>
+          </div>
+          <div id="baselineList" style="max-height:180px;overflow-y:auto;font-size:.82rem"><div class="text-muted text-center py-3">로딩 중…</div></div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-6">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px">
+          <strong style="font-size:.85rem"><i class="bi bi-clock-history me-1 text-warning"></i>변경 이력</strong>
+          <div id="changeLogList" style="max-height:180px;overflow-y:auto;font-size:.8rem;margin-top:8px"><div class="text-muted text-center py-3">로딩 중…</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 기준선 비교 결과 -->
+    <div id="baselineCompare" class="mt-3" style="display:none"></div>
   </div>
 
 </div>
@@ -641,6 +665,89 @@ async function loadDelayed() {
 }
 
 // ── Excel 내보내기 ───────────────────────────────────
+// ── 기준선 관리 ─────────────────────────────────────
+async function loadBaselines() {
+  try {
+    const res = await fetch(`${API_WBS}baselines/?project=${WBS_PID}`, {credentials:'same-origin'});
+    const data = await res.json();
+    const el = document.getElementById('baselineList');
+    if (!data.length) { el.innerHTML='<div class="text-muted text-center py-2">저장된 기준선 없음</div>'; return; }
+    el.innerHTML = data.map(b => `
+      <div class="d-flex justify-content-between align-items-center border-bottom py-1">
+        <div><strong>v${b.version}</strong> ${b.name} <small class="text-muted">(${b.item_count}건, ${b.created_at})</small></div>
+        <button class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:.72rem" onclick="compareBaseline(${b.id})">비교</button>
+      </div>`).join('');
+  } catch(e) {}
+}
+
+async function saveBaseline() {
+  const name = prompt('기준선명을 입력하세요 (예: 최초계획, 1차변경):');
+  if (!name) return;
+  const desc = prompt('변경 사유 (선택):') || '';
+  const res = await fetch(`${API_WBS}baselines/?project=${WBS_PID}`, {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCsrf()},
+    body: JSON.stringify({project:WBS_PID, name, description:desc}), credentials:'same-origin',
+  });
+  const d = await res.json();
+  if (d.error) { alert(d.error); return; }
+  alert(`기준선 v${d.version} "${d.name}" 저장 완료 (${d.item_count}건)`);
+  loadBaselines();
+}
+
+async function compareBaseline(blId) {
+  const res = await fetch(`${API_WBS}baseline-compare/?project=${WBS_PID}&baseline=${blId}`, {credentials:'same-origin'});
+  const d = await res.json();
+  if (d.error) { alert(d.error); return; }
+  const el = document.getElementById('baselineCompare');
+  el.style.display = '';
+  const s = d.summary;
+  const statusBadge = {same:'bg-secondary',changed:'bg-warning text-dark',added:'bg-success',deleted:'bg-danger'};
+  el.innerHTML = `
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <strong style="font-size:.85rem"><i class="bi bi-arrow-left-right me-1 text-info"></i>기준선 비교: v${d.baseline.version} "${d.baseline.name}" (${d.baseline.created_at}) vs 현재</strong>
+        <div>
+          <span class="badge bg-secondary me-1">동일 ${s.same}</span>
+          <span class="badge bg-warning text-dark me-1">변경 ${s.changed}</span>
+          <span class="badge bg-success me-1">추가 ${s.added}</span>
+          <span class="badge bg-danger">삭제 ${s.deleted}</span>
+        </div>
+      </div>
+      <div style="max-height:300px;overflow-y:auto">
+      <table class="table table-sm table-hover mb-0" style="font-size:.78rem">
+        <thead class="table-light"><tr><th>코드</th><th>작업명</th><th>상태</th><th>기준선 시작</th><th>현재 시작</th><th>차이</th><th>기준선 종료</th><th>현재 종료</th><th>차이</th></tr></thead>
+        <tbody>${d.rows.filter(r=>r.status!=='same').map(r => `<tr>
+          <td><span class="wbs-code">${r.code}</span></td>
+          <td style="padding-left:${(r.depth-1)*12}px">${r.name}</td>
+          <td><span class="badge ${statusBadge[r.status]}">${r.status_label}</span></td>
+          <td>${r.bl_start}</td><td>${r.cur_start}</td>
+          <td class="${r.start_diff>0?'text-danger':r.start_diff<0?'text-success':''}">${r.start_diff?r.start_diff+'일':'-'}</td>
+          <td>${r.bl_end}</td><td>${r.cur_end}</td>
+          <td class="${r.end_diff>0?'text-danger':r.end_diff<0?'text-success':''}">${r.end_diff?r.end_diff+'일':'-'}</td>
+        </tr>`).join('')}
+        ${d.rows.filter(r=>r.status!=='same').length===0?'<tr><td colspan="9" class="text-center text-muted py-3">변경 사항 없음</td></tr>':''}
+        </tbody>
+      </table>
+      </div>
+    </div>`;
+}
+
+async function loadChangeLog() {
+  try {
+    const res = await fetch(`${API_WBS}change-log/?project=${WBS_PID}`, {credentials:'same-origin'});
+    const d = await res.json();
+    const el = document.getElementById('changeLogList');
+    if (!d.rows.length) { el.innerHTML='<div class="text-muted text-center py-2">변경 이력 없음</div>'; return; }
+    el.innerHTML = d.rows.map(c => `
+      <div class="border-bottom py-1">
+        <span class="wbs-code">${c.code}</span>
+        <span class="badge ${c.change_type.includes('일정')?'bg-info-subtle text-info':'bg-warning-subtle text-warning'}" style="font-size:.65rem">${c.change_type}</span>
+        ${c.field} <span class="text-muted">${c.old}</span> → <strong>${c.new}</strong>
+        <small class="text-muted float-end">${c.by} ${c.at}</small>
+      </div>`).join('');
+  } catch(e) {}
+}
+
 function wbsExportExcel() {
   if (!WBS_PID) return;
   window.location.href = `${API_WBS}export/?project=${WBS_PID}`;
@@ -1109,7 +1216,7 @@ function switchView(view, el) {
   document.querySelectorAll('#wbs-tabs .nav-link').forEach(a => a.classList.remove('active'));
   if (el) el.classList.add('active');
   if (view==='gantt' && WBS_PID) loadGantt();
-  if (view==='evm' && WBS_PID) { loadEVM(); loadSCurve(); loadDelayed(); }
+  if (view==='evm' && WBS_PID) { loadEVM(); loadSCurve(); loadDelayed(); loadBaselines(); loadChangeLog(); }
 }
 
 // ── CSRF ─────────────────────────────────────────────

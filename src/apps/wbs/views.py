@@ -27,6 +27,24 @@ class WBSItemViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     pagination_class   = None
 
+    def perform_update(self, serializer):
+        """PATCH 시 일정 변경 이력 자동 기록"""
+        from .models import WBSChangeLog
+        item = serializer.instance
+        tracked = ['planned_start', 'planned_end', 'actual_start', 'actual_end', 'name', 'weight', 'phase']
+        for f in tracked:
+            if f in serializer.validated_data:
+                old = str(getattr(item, f, '') or '')
+                new = str(serializer.validated_data[f] or '')
+                if old != new:
+                    ct = 'schedule' if 'start' in f or 'end' in f else 'edit'
+                    WBSChangeLog.objects.create(
+                        item=item, change_type=ct, field_name=f,
+                        old_value=old, new_value=new,
+                        changed_by=self.request.user,
+                    )
+        serializer.save()
+
     def get_queryset(self):
         qs = WBSItem.objects.select_related(
             'parent', 'assignee', 'linked_template', 'linked_inspection'
@@ -283,6 +301,164 @@ class WBSItemViewSet(viewsets.ModelViewSet):
         from .tasks import snapshot_wbs_progress
         result = snapshot_wbs_progress()
         return Response(result)
+
+    # ── 기준선 관리 ─────────────────────────────────
+    @action(detail=False, methods=['get', 'post'], url_path='baselines')
+    def baselines(self, request):
+        """기준선 목록 조회 / 신규 기준선 저장"""
+        from .models import WBSBaseline, WBSBaselineItem
+
+        project_id = request.query_params.get('project') or request.data.get('project')
+        if not project_id:
+            return Response({'error': 'project 파라미터 필요'}, status=400)
+
+        if request.method == 'GET':
+            bls = WBSBaseline.objects.filter(project_id=project_id).select_related('created_by')
+            return Response([{
+                'id': b.id, 'version': b.version, 'name': b.name,
+                'description': b.description,
+                'created_by': b.created_by.name if b.created_by else '',
+                'created_at': b.created_at.strftime('%Y-%m-%d %H:%M'),
+                'item_count': b.items.count(),
+            } for b in bls])
+
+        # POST: 기준선 저장
+        name = request.data.get('name', '')
+        desc = request.data.get('description', '')
+        if not name:
+            return Response({'error': '기준선명을 입력하세요'}, status=400)
+
+        last = WBSBaseline.objects.filter(project_id=project_id).order_by('-version').first()
+        version = (last.version + 1) if last else 1
+
+        baseline = WBSBaseline.objects.create(
+            project_id=project_id, version=version,
+            name=name, description=desc, created_by=request.user
+        )
+        items = WBSItem.objects.filter(project_id=project_id)
+        bl_items = [
+            WBSBaselineItem(
+                baseline=baseline, code=i.code, name=i.name, depth=i.depth,
+                phase=i.phase, weight=i.weight,
+                planned_start=i.planned_start, planned_end=i.planned_end,
+                progress=i.progress,
+            ) for i in items
+        ]
+        WBSBaselineItem.objects.bulk_create(bl_items)
+
+        return Response({
+            'ok': True, 'version': version, 'name': name,
+            'item_count': len(bl_items),
+        })
+
+    @action(detail=False, methods=['get'], url_path='baseline-compare')
+    def baseline_compare(self, request):
+        """기준선 vs 현재 비교"""
+        from .models import WBSBaseline, WBSBaselineItem
+
+        project_id = request.query_params.get('project')
+        baseline_id = request.query_params.get('baseline')
+        if not project_id:
+            return Response({'error': 'project 파라미터 필요'}, status=400)
+
+        # 기준선 선택 (없으면 최초 기준선)
+        if baseline_id:
+            try:
+                baseline = WBSBaseline.objects.get(id=baseline_id)
+            except WBSBaseline.DoesNotExist:
+                return Response({'error': '기준선 없음'}, status=404)
+        else:
+            baseline = WBSBaseline.objects.filter(project_id=project_id).order_by('version').first()
+            if not baseline:
+                return Response({'error': '저장된 기준선이 없습니다', 'baselines': []}, status=200)
+
+        bl_items = {bi.code: bi for bi in baseline.items.all()}
+        current_items = WBSItem.objects.filter(project_id=project_id).order_by('seq')
+
+        rows = []
+        for item in current_items:
+            bl = bl_items.get(item.code)
+            if not bl:
+                rows.append({
+                    'code': item.code, 'name': item.name, 'depth': item.depth,
+                    'status': 'added', 'status_label': '신규',
+                    'cur_start': str(item.planned_start or ''), 'cur_end': str(item.planned_end or ''),
+                    'bl_start': '', 'bl_end': '',
+                    'start_diff': 0, 'end_diff': 0,
+                    'cur_progress': item.progress, 'bl_progress': 0,
+                })
+                continue
+
+            start_diff = 0
+            end_diff = 0
+            changed = False
+            if item.planned_start and bl.planned_start:
+                start_diff = (item.planned_start - bl.planned_start).days
+                if start_diff != 0: changed = True
+            if item.planned_end and bl.planned_end:
+                end_diff = (item.planned_end - bl.planned_end).days
+                if end_diff != 0: changed = True
+
+            rows.append({
+                'code': item.code, 'name': item.name, 'depth': item.depth,
+                'status': 'changed' if changed else 'same',
+                'status_label': '변경' if changed else '동일',
+                'cur_start': str(item.planned_start or ''),
+                'cur_end': str(item.planned_end or ''),
+                'bl_start': str(bl.planned_start or ''),
+                'bl_end': str(bl.planned_end or ''),
+                'start_diff': start_diff, 'end_diff': end_diff,
+                'cur_progress': item.progress, 'bl_progress': bl.progress,
+            })
+
+        # 삭제된 항목 (기준선에 있으나 현재 없는)
+        current_codes = {i.code for i in current_items}
+        for code, bl in bl_items.items():
+            if code not in current_codes:
+                rows.append({
+                    'code': code, 'name': bl.name, 'depth': bl.depth,
+                    'status': 'deleted', 'status_label': '삭제',
+                    'cur_start': '', 'cur_end': '',
+                    'bl_start': str(bl.planned_start or ''), 'bl_end': str(bl.planned_end or ''),
+                    'start_diff': 0, 'end_diff': 0,
+                    'cur_progress': 0, 'bl_progress': bl.progress,
+                })
+
+        return Response({
+            'baseline': {'id': baseline.id, 'version': baseline.version, 'name': baseline.name,
+                         'created_at': baseline.created_at.strftime('%Y-%m-%d')},
+            'rows': rows,
+            'summary': {
+                'total': len(rows),
+                'same': sum(1 for r in rows if r['status'] == 'same'),
+                'changed': sum(1 for r in rows if r['status'] == 'changed'),
+                'added': sum(1 for r in rows if r['status'] == 'added'),
+                'deleted': sum(1 for r in rows if r['status'] == 'deleted'),
+            }
+        })
+
+    @action(detail=False, methods=['get'], url_path='change-log')
+    def change_log(self, request):
+        """변경 이력 조회"""
+        from .models import WBSChangeLog
+        project_id = request.query_params.get('project')
+        if not project_id:
+            return Response({'error': 'project 파라미터 필요'}, status=400)
+        page = max(1, int(request.query_params.get('page', 1)))
+        page_size = 30
+        offset = (page - 1) * page_size
+
+        qs = WBSChangeLog.objects.filter(item__project_id=project_id).select_related('item', 'changed_by').order_by('-changed_at')
+        total = qs.count()
+        rows = [{
+            'code': c.item.code, 'name': c.item.name,
+            'change_type': c.get_change_type_display(),
+            'field': c.field_name, 'old': c.old_value[:50], 'new': c.new_value[:50],
+            'reason': c.reason, 'by': c.changed_by.name if c.changed_by else '',
+            'at': c.changed_at.strftime('%Y-%m-%d %H:%M'),
+        } for c in qs[offset:offset + page_size]]
+        return Response({'rows': rows, 'total': total, 'page': page,
+                         'total_pages': (total + page_size - 1) // page_size})
 
     @action(detail=False, methods=['get'], url_path='s-curve')
     def s_curve(self, request):
@@ -590,6 +766,27 @@ class WBSItemViewSet(viewsets.ModelViewSet):
             return Response({'error': '0~100 사이 값 필요'}, status=400)
         if not (0 <= progress_int <= 100):
             return Response({'error': '0~100 사이 값 필요'}, status=400)
+
+        # 변경 이력 기록
+        from .models import WBSChangeLog
+        old_progress = item.progress
+        if old_progress != progress_int:
+            WBSChangeLog.objects.create(
+                item=item, change_type='progress', field_name='progress',
+                old_value=str(old_progress), new_value=str(progress_int),
+                changed_by=request.user,
+            )
+        for f in ['actual_start', 'actual_end', 'planned_start', 'planned_end']:
+            if f in request.data:
+                old_val = str(getattr(item, f, '') or '')
+                new_val = str(request.data[f] or '')
+                if old_val != new_val:
+                    WBSChangeLog.objects.create(
+                        item=item, change_type='schedule', field_name=f,
+                        old_value=old_val, new_value=new_val,
+                        changed_by=request.user,
+                    )
+
         item.progress = progress_int
         fields = ['progress', 'updated_at']
         for f in ['this_week_plan', 'this_week_actual', 'next_week_plan', 'notes',

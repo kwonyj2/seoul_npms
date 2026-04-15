@@ -117,3 +117,81 @@ class WBSProgressHistory(models.Model):
 
     def __str__(self):
         return f'{self.item.code} {self.week_date} {self.progress}%'
+
+
+class WBSBaseline(models.Model):
+    """WBS 기준선 — 특정 시점의 전체 계획 스냅샷"""
+    project    = models.ForeignKey(
+        'audit.AuditProject', on_delete=models.CASCADE,
+        related_name='wbs_baselines', verbose_name='프로젝트'
+    )
+    version    = models.PositiveSmallIntegerField('버전')
+    name       = models.CharField('기준선명', max_length=100)
+    description = models.TextField('변경 사유', blank=True)
+    created_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True,
+        verbose_name='생성자'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wbs_baselines'
+        verbose_name = 'WBS 기준선'
+        unique_together = [['project', 'version']]
+        ordering = ['-version']
+
+    def __str__(self):
+        return f'v{self.version} {self.name}'
+
+
+class WBSBaselineItem(models.Model):
+    """기준선에 저장된 WBS 항목 스냅샷"""
+    baseline      = models.ForeignKey(WBSBaseline, on_delete=models.CASCADE,
+                                      related_name='items', verbose_name='기준선')
+    code          = models.CharField('WBS 코드', max_length=20)
+    name          = models.CharField('작업명', max_length=200)
+    depth         = models.PositiveSmallIntegerField('깊이')
+    phase         = models.CharField('단계', max_length=10)
+    weight        = models.DecimalField('가중치', max_digits=6, decimal_places=4, default=0)
+    planned_start = models.DateField('계획 시작일', null=True, blank=True)
+    planned_end   = models.DateField('계획 종료일', null=True, blank=True)
+    progress      = models.PositiveSmallIntegerField('진척률(%)', default=0)
+
+    class Meta:
+        db_table = 'wbs_baseline_items'
+        verbose_name = '기준선 항목'
+        ordering = ['code']
+
+    def __str__(self):
+        return f'{self.baseline} [{self.code}] {self.name}'
+
+
+class WBSChangeLog(models.Model):
+    """WBS 변경 이력 — 일정·진척 변경 시 자동 기록"""
+    CHANGE_TYPES = [
+        ('schedule', '일정 변경'),
+        ('progress', '진척률 변경'),
+        ('add', '항목 추가'),
+        ('delete', '항목 삭제'),
+        ('edit', '내용 수정'),
+    ]
+    item       = models.ForeignKey(WBSItem, on_delete=models.CASCADE,
+                                   related_name='changes', verbose_name='WBS 항목')
+    change_type = models.CharField('변경유형', max_length=20, choices=CHANGE_TYPES)
+    field_name = models.CharField('변경필드', max_length=50, blank=True)
+    old_value  = models.TextField('변경 전', blank=True)
+    new_value  = models.TextField('변경 후', blank=True)
+    reason     = models.TextField('변경 사유', blank=True)
+    changed_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True,
+        verbose_name='변경자'
+    )
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wbs_change_log'
+        verbose_name = 'WBS 변경 이력'
+        ordering = ['-changed_at']
+
+    def __str__(self):
+        return f'{self.item.code} {self.change_type} {self.changed_at}'
