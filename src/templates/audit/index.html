@@ -792,6 +792,36 @@
     </div>
   </div>
 </div>
+<!-- 모달: 추가제안/기술협상 등록 -->
+<div class="modal fade" id="m-add-item" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" id="add-modal-title">항목 등록</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label form-label-sm fw-semibold">항목명 <span class="text-danger">*</span></label>
+          <input type="text" id="add-f-name" class="form-control form-control-sm" placeholder="예: 네트워크 이중화 구성">
+        </div>
+        <div class="mb-2">
+          <label class="form-label form-label-sm fw-semibold">내용/설명</label>
+          <textarea id="add-f-desc" class="form-control form-control-sm" rows="3" placeholder="상세 내용"></textarea>
+        </div>
+        <div class="mb-2">
+          <label class="form-label form-label-sm fw-semibold">SLA / 이행기준</label>
+          <input type="text" id="add-f-sla" class="form-control form-control-sm" placeholder="예: 구축 완료 후 1주 내 검증">
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-primary" onclick="saveAddItem()"><i class="bi bi-check-lg me-1"></i>등록</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -897,7 +927,7 @@ async function loadTmpl(){
 async function loadReqs(){
   try{
     const d=await get(`${API}/requirements/?project=${PID}&ordering=category,code`);
-    REQS=d.results||d; renderRTM();
+    REQS=d.results||d; renderRTM(); renderAddTab();
   }catch(e){}
 }
 
@@ -1440,7 +1470,51 @@ async function verifyCA(id){
 }
 
 function showNewCAModal(){alert('시정조치는 감리 체크리스트에서 [부적합] 결과 입력 시 자동 연계 등록됩니다.');}
-function showAddModal(t){alert(`${t} 항목 등록: 기술협상 완료 후 요구사항으로 추가 등록하세요`);}
+let _addType='';
+function showAddModal(t){
+  _addType=t;
+  document.getElementById('add-modal-title').textContent=t+' 항목 등록';
+  document.getElementById('add-f-name').value='';
+  document.getElementById('add-f-desc').value='';
+  document.getElementById('add-f-sla').value='';
+  new bootstrap.Modal(document.getElementById('m-add-item')).show();
+}
+async function saveAddItem(){
+  const name=document.getElementById('add-f-name').value.trim();
+  const desc=document.getElementById('add-f-desc').value.trim();
+  const sla=document.getElementById('add-f-sla').value.trim();
+  if(!name){alert('항목명을 입력하세요');return;}
+  // 요구사항에 ADD 분류로 등록
+  const code=`ADD-${String(REQS.filter(r=>r.category==='ADD').length+1).padStart(3,'0')}`;
+  try{
+    const r=await fetch(`${API}/requirements/`,{
+      method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body:JSON.stringify({project:PID,code:code,category:'ADD',name:name,description:desc,sla_target:sla,status:'not_started',is_additional:true}),
+      credentials:'same-origin'
+    });
+    const d=await r.json();
+    if(!r.ok){alert('등록 실패: '+(d.detail||d.error||JSON.stringify(d)));return;}
+    bootstrap.Modal.getInstance(document.getElementById('m-add-item')).hide();
+    toast(`${_addType} 항목 등록 완료: ${code}`);
+    loadReqs(); renderAddTab();
+  }catch(e){alert('오류: '+e.message);}
+}
+function renderAddTab(){
+  const items=REQS.filter(r=>r.is_additional||r.category==='ADD');
+  const tb=document.getElementById('tb-add');
+  if(!items.length){tb.innerHTML=`<tr><td colspan="7" class="text-center py-3 text-muted" style="font-size:.8rem;">등록된 추가제안/기술협상 항목이 없습니다</td></tr>`;return;}
+  const RSL={'not_started':'미착수','in_progress':'진행중','completed':'완료','excluded':'점검제외'};
+  const RSB2={'not_started':'bs-nc','in_progress':'bs-draft','completed':'bs-submitted','excluded':'bs-nc'};
+  tb.innerHTML=items.map((r,i)=>`<tr>
+    <td style="color:#aaa;font-size:.7rem">${i+1}</td>
+    <td><span class="badge ${r.category==='ADD'?'bg-warning text-dark':'bg-info'}" style="font-size:.65rem">${r.code.startsWith('ADD')?'추가제안':'기술협상'}</span></td>
+    <td style="font-family:monospace;font-size:.72rem">${r.code}</td>
+    <td class="wrap">${r.name}</td>
+    <td class="wrap" style="font-size:.75rem;color:#6c757d">${r.sla_target||'-'}</td>
+    <td><span class="bs ${RSB2[r.status]||'bs-nc'}">${RSL[r.status]||r.status}</span></td>
+    <td><button class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size:.68rem" onclick="openRTMModal(${r.id})"><i class="bi bi-pencil"></i></button></td>
+  </tr>`).join('');
+}
 
 /* ── 유틸 ──────────── */
 function noProject(){document.getElementById('tb-art').innerHTML=`<tr><td colspan="10" class="text-center py-4 text-danger"><i class="bi bi-exclamation-triangle me-2"></i>감리 프로젝트가 없습니다. init_audit_data를 실행하세요.</td></tr>`;}
