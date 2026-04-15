@@ -67,26 +67,27 @@
   width:100%; table-layout:fixed;
 }
 .audit-table thead th {
-  background:#f0f4f8; color:#495057; font-weight:600; font-size:0.72rem;
-  letter-spacing:0.03em; padding:8px 10px; border-bottom:2px solid #dee2e6;
+  background:#f0f4f8; color:#495057; font-weight:600; font-size:0.75rem;
+  padding:5px 8px; border-bottom:2px solid #dee2e6;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   position:sticky; top:0; z-index:10;
 }
-.audit-table tbody tr:hover td { background:#f0f5fa; }
+.audit-table tbody tr:hover td { background:#f8fafc; }
 .audit-table tbody td {
-  padding:7px 10px; border-bottom:1px solid #f1f5f9;
+  padding:4px 8px; border-bottom:1px solid #f1f5f9;
   vertical-align:middle; color:#212529; background:#fff;
+  font-size:0.78rem;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .audit-table tbody td.wrap { white-space:normal; word-break:keep-all; }
 .audit-table tbody tr.srow td {
   background:#f8f9fa !important; font-weight:600;
-  font-size:0.75rem; color:#212529; padding:5px 10px; white-space:nowrap;
+  font-size:0.75rem; color:#212529; padding:4px 8px; white-space:nowrap;
 }
 .audit-table tbody tr.catrow td {
   background:#e9ecef !important; color:#495057 !important;
   font-size:0.72rem !important; font-weight:700 !important;
-  letter-spacing:0.05em; padding:5px 10px !important; white-space:nowrap !important;
+  padding:4px 8px !important; white-space:nowrap !important;
 }
 
 /* 뱃지 */
@@ -266,12 +267,12 @@
 
 <!-- ── 탭2 산출물 보관함 (트리) ────────────────────── -->
 <div class="tab-panel tab-pane fade" id="t-vault">
-  <div class="filter-bar">
-    <span style="font-size:.8rem;font-weight:600;color:#2c3e55;"><i class="bi bi-folder2-open me-1"></i>산출물 보관함</span>
-    <span style="font-size:.74rem;color:#8a9ab0;margin-left:6px;">NAS: 2026감리산출물/{코드}/{파일명}</span>
+  <div class="filter-bar" style="position:sticky;top:0;z-index:20;background:#fff;padding-top:8px;padding-bottom:8px;border-bottom:1px solid #dee2e6;">
+    <span style="font-size:.8rem;font-weight:600;color:#212529;"><i class="bi bi-folder2-open me-1"></i>산출물 보관함</span>
+    <span style="font-size:.74rem;color:#adb5bd;margin-left:6px;">NAS: 2026감리산출물/{코드}/{파일명}</span>
     <div class="ms-auto d-flex gap-2 align-items-center">
       <span style="font-size:.72rem;color:#8a9ab0;" id="vault-scan-status"></span>
-      <button class="btn btn-sm" style="background:#3d5a7a;color:#fff;font-size:.72rem;padding:3px 12px;" onclick="scanNas()">
+      <button class="btn btn-sm" style="background:#0d6efd;color:#fff;font-size:.72rem;padding:3px 12px;" onclick="scanNas()">
         <i class="bi bi-arrow-clockwise me-1"></i>NAS 스캔
       </button>
     </div>
@@ -315,8 +316,8 @@
           <div class="table-responsive" style="max-height:420px;overflow-y:auto;">
             <table class="audit-table" style="table-layout:fixed;">
               <colgroup>
-                <col style="width:36px"><col style="width:180px"><col>
-                <col style="width:100px"><col style="width:80px"><col style="width:80px"><col style="width:96px">
+                <col style="width:32px"><col style="width:90px"><col style="width:180px">
+                <col style="width:70px"><col style="width:70px"><col style="width:78px"><col style="width:80px">
               </colgroup>
               <thead><tr>
                 <th>No.</th><th>날짜</th><th>장소/대상 · 파일명</th>
@@ -329,7 +330,7 @@
       </div>
       <div class="modal-footer gap-2">
         <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">닫기</button>
-        <button type="button" class="btn btn-sm" style="background:#3d5a7a;color:#fff;font-size:.74rem;" onclick="dlAllVault()">
+        <button type="button" class="btn btn-sm" style="background:#0d6efd;color:#fff;font-size:.74rem;" onclick="dlAllVault()">
           <i class="bi bi-download me-1"></i>전체 다운로드
         </button>
       </div>
@@ -351,7 +352,10 @@
       <option value="">전체 상태</option>
       <option value="not_started">미착수</option><option value="in_progress">진행중</option><option value="completed">완료</option>
     </select>
-    <div class="ms-auto"><button class="btn btn-sm btn-outline-secondary" style="font-size:.74rem;" onclick="exportRTM()"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button></div>
+    <div class="ms-auto d-flex gap-2">
+      <button class="btn btn-sm btn-outline-success" style="font-size:.74rem;" onclick="exportRTM()"><i class="bi bi-download me-1"></i>Excel</button>
+      <label class="btn btn-sm btn-outline-primary mb-0" style="font-size:.74rem;cursor:pointer"><i class="bi bi-upload me-1"></i>Excel 업로드<input type="file" accept=".xlsx" hidden onchange="importAudit('requirements',this)"></label>
+    </div>
   </div>
   <div class="table-responsive" style="max-height:calc(100vh - 200px);overflow-y:auto;">
   <table class="audit-table" style="min-width:840px;">
@@ -377,7 +381,8 @@
     <button class="btn-phase" data-cp="closing" onclick="filterChk('closing',this)">종료감리</button>
     <div class="ms-auto d-flex align-items-center gap-2">
       <span class="text-muted" style="font-size:.75rem;">적합 <strong id="chk-p">0</strong> / 부적합 <strong id="chk-f">0</strong> / 미점검 <strong id="chk-n">0</strong></span>
-      <button class="btn btn-sm btn-outline-success" style="font-size:.74rem;" onclick="dlAuditExcel('checklist')"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+      <button class="btn btn-sm btn-outline-success" style="font-size:.74rem;" onclick="dlAuditExcel('checklist')"><i class="bi bi-download me-1"></i>Excel</button>
+      <label class="btn btn-sm btn-outline-primary mb-0" style="font-size:.74rem;cursor:pointer"><i class="bi bi-upload me-1"></i>업로드<input type="file" accept=".xlsx" hidden onchange="importAudit('checklist',this)"></label>
     </div>
   </div>
   <div class="table-responsive" style="max-height:calc(100vh - 200px);overflow-y:auto;">
@@ -442,19 +447,19 @@
       기술협상 및 추가제안 항목은 사업 수주 확정 이후 등록할 수 있습니다.<br>
       상단의 <strong>[수주 상태 변경]</strong> 버튼으로 수주 상태를 변경해 주세요.
     </p>
-    <button class="btn btn-sm" style="background:#3d5a7a;color:#fff;font-size:.78rem;" onclick="toggleAwarded()"><i class="bi bi-unlock me-1"></i>수주 상태 변경</button>
+    <button class="btn btn-sm" style="background:#0d6efd;color:#fff;font-size:.78rem;" onclick="toggleAwarded()"><i class="bi bi-unlock me-1"></i>수주 상태 변경</button>
   </div>
   <div id="add-cont" style="display:none;">
     <div class="filter-bar">
-      <button class="btn btn-sm" style="background:#3d5a7a;color:#fff;font-size:.74rem;" onclick="showAddModal('추가제안')"><i class="bi bi-plus me-1"></i>추가제안 항목 등록</button>
+      <button class="btn btn-sm" style="background:#0d6efd;color:#fff;font-size:.74rem;" onclick="showAddModal('추가제안')"><i class="bi bi-plus me-1"></i>추가제안 항목 등록</button>
       <button class="btn btn-sm btn-outline-secondary ms-2" style="font-size:.74rem;" onclick="showAddModal('기술협상')"><i class="bi bi-plus me-1"></i>기술협상 항목 등록</button>
       <span class="ms-3 text-muted" style="font-size:.74rem;">기술협상 완료 후 최종 확정된 항목만 등록하세요</span>
     </div>
     <div class="table-responsive" style="max-height:calc(100vh - 200px);overflow-y:auto;">
     <table class="audit-table" style="min-width:760px;">
       <colgroup>
-        <col style="width:36px"><col style="width:84px"><col style="width:126px">
-        <col><col style="width:196px"><col style="width:74px"><col style="width:88px">
+        <col style="width:32px"><col style="width:70px"><col style="width:100px">
+        <col style="width:160px"><col style="width:160px"><col style="width:74px"><col style="width:70px">
       </colgroup>
       <thead><tr>
         <th>No.</th><th>구분</th><th>항목코드</th><th>항목명</th><th>내용</th><th>이행상태</th><th>처리</th>
@@ -1448,6 +1453,19 @@ function toast(msg){
 }
 function exportRTM(){
   window.location.href = `/npms/api/audit/export/rtm/${PID ? '?project='+PID : ''}`;
+}
+async function importAudit(type, input){
+  if(!input.files[0]) return;
+  const fd=new FormData();
+  fd.append('file',input.files[0]);
+  fd.append('project',PID);
+  const r=await fetch(`${API}/import/${type}/?project=${PID}`,{method:'POST',headers:{'X-CSRFToken':csrf()},body:fd,credentials:'same-origin'});
+  const d=await r.json();
+  if(d.error){alert(d.error);return;}
+  alert(`수정: ${d.updated}건${d.errors?.length?`, 오류: ${d.errors.length}건`:''}`);
+  input.value='';
+  if(type==='requirements') loadReqs();
+  else if(type==='checklist'){loadChkl();loadCA2();}
 }
 function dlAuditExcel(type){
   window.location.href = `/npms/api/audit/export/${type}/${PID ? '?project='+PID : ''}`;

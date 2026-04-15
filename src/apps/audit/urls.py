@@ -4,7 +4,7 @@ from .views import (
     AuditProjectViewSet, RequirementViewSet,
     ArtifactTemplateViewSet, ArtifactViewSet,
     AuditPlanViewSet, ChecklistItemViewSet, CorrectiveActionViewSet,
-    ArtifactFileViewSet, export_rtm_excel, export_audit_data,
+    ArtifactFileViewSet, export_rtm_excel, export_audit_data, import_audit_data,
 )
 
 app_name = 'audit'
@@ -22,5 +22,6 @@ router.register(r'artifact-files', ArtifactFileViewSet,     basename='artifact-f
 urlpatterns = [
     path('export/rtm/', export_rtm_excel, name='export-rtm'),
     path('export/<str:data_type>/', export_audit_data, name='export-audit-data'),
+    path('import/<str:data_type>/', import_audit_data, name='import-audit-data'),
     path('', include(router.urls)),
 ]

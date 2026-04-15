@@ -852,3 +852,88 @@ def export_audit_data(request, data_type):
     resp = HttpResponse(buf.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
     return resp
+
+
+@login_required
+def import_audit_data(request, data_type):
+    """감리 데이터 Excel 업로드 — 요구사항/체크리스트 일괄 수정"""
+    import openpyxl
+    from django.http import JsonResponse
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST만 허용'}, status=405)
+
+    project_id = request.POST.get('project') or request.GET.get('project')
+    project = AuditProject.objects.filter(id=project_id).first() if project_id else AuditProject.objects.filter(is_active=True).first()
+    if not project:
+        return JsonResponse({'error': '프로젝트 없음'}, status=404)
+
+    f = request.FILES.get('file')
+    if not f:
+        return JsonResponse({'error': '파일을 첨부하세요'}, status=400)
+
+    try:
+        wb = openpyxl.load_workbook(f, read_only=True)
+        ws = wb.active
+    except Exception as e:
+        return JsonResponse({'error': f'Excel 오류: {e}'}, status=400)
+
+    updated = 0
+    errors = []
+
+    if data_type == 'requirements':
+        # 코드 기준 매칭: 이행상태, 증빙내용 업데이트
+        ST_MAP = {'미착수': 'not_started', '진행중': 'in_progress', '완료': 'completed', '점검제외': 'excluded'}
+        existing = {r.code: r for r in Requirement.objects.filter(project=project)}
+        for ri, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+            if not row or not row[0]:
+                continue
+            code = str(row[0]).strip()
+            req = existing.get(code)
+            if not req:
+                continue
+            try:
+                if len(row) > 4 and row[4]:
+                    st = str(row[4]).strip()
+                    req.status = ST_MAP.get(st, st)
+                if len(row) > 5 and row[5]:
+                    req.evidence = str(row[5]).strip()
+                req.save()
+                updated += 1
+            except Exception as e:
+                errors.append({'row': ri, 'error': str(e)})
+
+    elif data_type == 'checklist':
+        # No. 기준 매칭: 결과, 확인내용, 지적사항 업데이트
+        RS_MAP = {'미점검': 'not_checked', '적합': 'pass', '부적합': 'fail', '점검제외': 'excluded'}
+        items = list(ChecklistItem.objects.filter(audit_plan__project=project).order_by('audit_plan__phase', 'area', 'seq'))
+        for ri, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+            if not row or not row[0]:
+                continue
+            try:
+                idx = int(row[0]) - 1
+                if idx < 0 or idx >= len(items):
+                    continue
+                item = items[idx]
+                if len(row) > 6 and row[6]:
+                    rs = str(row[6]).strip()
+                    item.result = RS_MAP.get(rs, rs)
+                if len(row) > 7 and row[7]:
+                    item.evidence = str(row[7]).strip()
+                if len(row) > 8 and row[8]:
+                    item.finding = str(row[8]).strip()
+                item.save()
+                # 부적합 시 시정조치 자동 생성
+                if item.result == 'fail' and item.finding:
+                    if not CorrectiveAction.objects.filter(checklist_item=item).exists():
+                        CorrectiveAction.objects.create(
+                            checklist_item=item, action_type='mandatory',
+                            issue_description=item.finding, status='open',
+                        )
+                updated += 1
+            except Exception as e:
+                errors.append({'row': ri, 'error': str(e)})
+    else:
+        return JsonResponse({'error': '알 수 없는 유형'}, status=400)
+
+    return JsonResponse({'updated': updated, 'errors': errors})
