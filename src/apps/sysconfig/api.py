@@ -360,12 +360,12 @@ def access_log(request):
 
         # 기간 필터 (기본: 최근 7일)
         if date_from:
-            since = datetime.datetime.strptime(date_from, '%Y-%m-%d').replace(tzinfo=tz.utc)
+            since = datetime.datetime.strptime(date_from, '%Y-%m-%d').replace(tzinfo=datetime.timezone.utc)
         else:
             since = tz.now() - datetime.timedelta(days=7)
         if date_to:
             until = datetime.datetime.strptime(date_to, '%Y-%m-%d').replace(
-                hour=23, minute=59, second=59, tzinfo=tz.utc)
+                hour=23, minute=59, second=59, tzinfo=datetime.timezone.utc)
         else:
             until = tz.now()
 
