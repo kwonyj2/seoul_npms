@@ -448,7 +448,7 @@ async function loadEVM() {
 }
 function renderEVM(d) {
   const el = document.getElementById('evmCards');
-  if (!d.pv && !d.ev) { el.style.display='none'; return; }
+  if (d.bac === undefined) { el.style.display='none'; return; }
   el.style.display='';
   const spiClass = d.spi_status==='good'?'evm-good':d.spi_status==='warning'?'evm-warning':'evm-danger';
   const spiColor = d.spi_status==='good'?'#16a34a':d.spi_status==='warning'?'#f59e0b':'#dc2626';
