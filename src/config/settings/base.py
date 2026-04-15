@@ -202,7 +202,7 @@ CELERY_BEAT_SCHEDULE = {
 # ─────────────────────────────────────────
 # DB 자동 백업
 # ─────────────────────────────────────────
-DB_BACKUP_DIR      = env('DB_BACKUP_DIR',      default='/home/kwonyj/network_pms/backups')
+DB_BACKUP_DIR      = env('DB_BACKUP_DIR',      default='/app/nas/backups')
 DB_BACKUP_KEEP_DAYS = env.int('DB_BACKUP_KEEP_DAYS', default=30)
 
 # ─────────────────────────────────────────
