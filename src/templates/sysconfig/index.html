@@ -633,17 +633,17 @@
        탭: DB 관리
   ══════════════════════════════════════════ -->
   <div id="tab-dbadmin" class="sys-tab-content">
-    <div class="row g-0" style="min-height:500px">
+    <div class="row g-0" style="height:calc(100vh - 180px);min-height:500px">
       <!-- 좌측: 모델 트리 -->
-      <div class="col-12 col-md-3 border-end" style="max-height:70vh;overflow-y:auto">
-        <div class="p-2">
-          <input type="text" id="da-search" class="form-control form-control-sm mb-2" placeholder="모델 검색…" oninput="filterDbTree(this.value)">
-          <div id="da-tree" style="font-size:.8rem"><div class="text-center text-muted py-4">로딩 중…</div></div>
+      <div class="col-12 col-md-3 border-end d-flex flex-column" style="height:100%">
+        <div class="p-2 border-bottom" style="flex-shrink:0">
+          <input type="text" id="da-search" class="form-control form-control-sm" placeholder="모델 검색…" oninput="filterDbTree(this.value)">
         </div>
+        <div id="da-tree" class="p-2" style="flex:1;overflow-y:auto;font-size:.8rem"><div class="text-center text-muted py-4">로딩 중…</div></div>
       </div>
       <!-- 우측: 데이터 테이블 -->
-      <div class="col-12 col-md-9">
-        <div id="da-content" class="p-3">
+      <div class="col-12 col-md-9 d-flex flex-column" style="height:100%">
+        <div id="da-content" class="p-3 d-flex flex-column" style="flex:1;overflow:hidden">
           <div class="text-center text-muted py-5"><i class="bi bi-database" style="font-size:3rem"></i><br>좌측에서 모델을 선택하세요</div>
         </div>
       </div>
@@ -1332,17 +1332,17 @@ function daLoadData() {
     </div>`;
 
   document.getElementById('da-content').innerHTML = headerHtml + `
-    <div class="card border-0 shadow-sm">
-      <div class="table-responsive">
+    <div class="card border-0 shadow-sm d-flex flex-column" style="flex:1;overflow:hidden">
+      <div class="table-responsive" style="flex:1;overflow-y:auto">
         <table class="table table-sm table-hover align-middle mb-0" style="font-size:.78rem">
-          <thead class="table-light"><tr>
-            ${displayFields.map(f=>`<th>${escH(f.label)}</th>`).join('')}
+          <thead class="table-light" style="position:sticky;top:0;z-index:1"><tr>
+            ${displayFields.map(f=>`<th style="white-space:nowrap">${escH(f.label)}</th>`).join('')}
             <th style="width:50px"></th>
           </tr></thead>
           <tbody id="da-tbody"><tr><td colspan="${displayFields.length+1}" class="text-center py-4"><span class="spinner-border spinner-border-sm me-1"></span>로딩 중…</td></tr></tbody>
         </table>
       </div>
-      <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center">
+      <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center" style="flex-shrink:0">
         <small class="text-muted" id="da-page-info"></small>
         <ul class="pagination pagination-sm mb-0" id="da-pager"></ul>
       </div>
