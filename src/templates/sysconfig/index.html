@@ -80,6 +80,7 @@
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('nas',this);return false;"><i class="bi bi-folder me-1"></i>NAS 권한 설정</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('accesslog',this);return false;"><i class="bi bi-journal-text me-1"></i>접속이력</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('celery',this);return false;"><i class="bi bi-gear-wide-connected me-1"></i>작업 모니터링</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('docs',this);return false;"><i class="bi bi-file-earmark-ruled me-1"></i>산출물 조회</a></li>
     {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('dbadmin',this);return false;"><i class="bi bi-database-gear me-1"></i>DB 관리</a></li>{% endif %}
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('info',this);return false;"><i class="bi bi-info-circle me-1"></i>시스템 정보</a></li>
   </ul>
@@ -630,6 +631,40 @@
   </div>
 
   <!-- ══════════════════════════════════════════
+       탭: 산출물 조회
+  ══════════════════════════════════════════ -->
+  <div id="tab-docs" class="sys-tab-content">
+    <!-- 서류 유형 카드 -->
+    <div id="doc-catalog" class="row g-2 mb-3"><div class="col-12 text-center text-muted py-4">로딩 중…</div></div>
+    <!-- 데이터 테이블 영역 -->
+    <div id="doc-data-area" style="display:none">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0" id="doc-data-title"></h6>
+        <div class="d-flex gap-2">
+          <div class="input-group input-group-sm" style="width:200px">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" id="doc-q" class="form-control" placeholder="검색" onkeydown="if(event.key==='Enter'){_docPage=1;loadDocData();}">
+          </div>
+          <button class="btn btn-sm btn-outline-success" onclick="docExport()"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadDocData()"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+      </div>
+      <div class="card border-0 shadow-sm">
+        <div class="table-responsive" style="max-height:55vh;overflow-y:auto">
+          <table class="table table-sm table-hover align-middle mb-0" style="font-size:.75rem">
+            <thead class="table-light" style="position:sticky;top:0;z-index:1" id="doc-thead"></thead>
+            <tbody id="doc-tbody"><tr><td class="text-center text-muted py-4">로딩 중…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center">
+          <small class="text-muted" id="doc-page-info"></small>
+          <ul class="pagination pagination-sm mb-0" id="doc-pager"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
        탭: DB 관리
   ══════════════════════════════════════════ -->
   <div id="tab-dbadmin" class="sys-tab-content">
@@ -707,7 +742,7 @@
 {% block extra_js %}
 <script>
 const SYSCONF_API = API_BASE.replace('/api','') + '/api/sysconfig';
-const SYS_TABS   = ['db','users','export','nas','accesslog','celery','dbadmin','info'];
+const SYS_TABS   = ['db','users','export','nas','accesslog','celery','docs','dbadmin','info'];
 
 // ══ 탭 전환 ═══════════════════════════════════════════
 function switchTab(name, el) {
@@ -719,6 +754,7 @@ function switchTab(name, el) {
   if (name==='nas'    && !window._nLoaded)  { loadNasFolders(); loadNasRolePerms(); window._nLoaded=true; }
   if (name==='accesslog') { /* 수동 조회 */ }
   if (name==='celery') { loadCelery(); }
+  if (name==='docs' && !window._docLoaded) { loadDocCatalog(); window._docLoaded=true; }
   if (name==='dbadmin' && !window._daLoaded) { loadDbTree(); window._daLoaded=true; }
   if (name==='info'   && !window._iLoaded)  { loadSysInfo(); window._iLoaded=true; }
 }
@@ -1262,6 +1298,94 @@ function loadCelery() {
   });
 }
 function celLoadTasks(page){ _celPage=page; loadCelery(); }
+
+// ══ 산출물 조회 ══════════════════════════════════════
+let _docId = '', _docPage = 1;
+const STATUS_KO = {draft:'작성중',completed:'완료',pending:'대기',cancelled:'취소'};
+
+function loadDocCatalog() {
+  fetch(SYSCONF_API+'/docs/catalog/').then(r=>r.json()).then(d=>{
+    const cats = d.catalog || [];
+    if(!cats.length){ document.getElementById('doc-catalog').innerHTML='<div class="col-12 text-center text-muted py-4">등록된 서류 없음</div>'; return; }
+    document.getElementById('doc-catalog').innerHTML = cats.map(c=>{
+      const active = _docId===c.id ? 'border-primary bg-primary bg-opacity-10' : '';
+      return `<div class="col-6 col-md-4 col-xl-3">
+        <div class="card border shadow-sm h-100 ${active}" style="cursor:pointer" onclick="docSelect('${c.id}')">
+          <div class="card-body py-2 px-3 d-flex align-items-center gap-2">
+            <i class="bi ${c.icon} text-primary" style="font-size:1.2rem"></i>
+            <div class="flex-grow-1">
+              <div class="fw-semibold" style="font-size:.8rem">${escH(c.name)}</div>
+              <small class="text-muted">${c.count.toLocaleString()}건</small>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }).catch(()=>{ document.getElementById('doc-catalog').innerHTML='<div class="col-12 text-center text-danger py-3">로드 실패</div>'; });
+}
+
+function docSelect(id) {
+  _docId = id; _docPage = 1;
+  document.getElementById('doc-q').value = '';
+  loadDocCatalog(); // 활성 카드 갱신
+  loadDocData();
+}
+
+function loadDocData() {
+  if(!_docId) return;
+  const q = document.getElementById('doc-q').value.trim();
+  let url = `${SYSCONF_API}/docs/${_docId}/data/?page=${_docPage}`;
+  if(q) url += `&q=${encodeURIComponent(q)}`;
+
+  document.getElementById('doc-data-area').style.display = '';
+  document.getElementById('doc-tbody').innerHTML = '<tr><td colspan="20" class="text-center py-4"><span class="spinner-border spinner-border-sm me-1"></span>로딩 중…</td></tr>';
+
+  fetch(url).then(r=>r.json()).then(d=>{
+    if(d.error){ document.getElementById('doc-tbody').innerHTML=`<tr><td class="text-danger text-center py-4">${escH(d.error)}</td></tr>`; return; }
+
+    document.getElementById('doc-data-title').innerHTML = `<i class="bi bi-file-earmark-ruled me-1 text-primary"></i>${escH(d.name)} <small class="text-muted fw-normal">(${d.total.toLocaleString()}건)</small>`;
+
+    const cols = d.columns || [];
+    // 헤더
+    document.getElementById('doc-thead').innerHTML = '<tr>' + cols.map(c=>`<th style="white-space:nowrap">${escH(c.label)}</th>`).join('') + '</tr>';
+
+    // 데이터
+    if(!d.rows.length){
+      document.getElementById('doc-tbody').innerHTML=`<tr><td colspan="${cols.length}" class="text-center text-muted py-4">데이터 없음</td></tr>`;
+    } else {
+      document.getElementById('doc-tbody').innerHTML = d.rows.map(row=>{
+        return '<tr>' + cols.map(c=>{
+          let val = row[c.key];
+          if(val===null||val===undefined||val===''||val==='-') return '<td class="text-muted">-</td>';
+          if(typeof val==='boolean') return `<td>${val?'<i class="bi bi-check-circle-fill text-success"></i>':'<i class="bi bi-x-circle text-muted"></i>'}</td>`;
+          if(c.key==='_status') { val=STATUS_KO[val]||val; return `<td><span class="badge ${val==='완료'?'bg-success':'bg-secondary'} bg-opacity-75">${escH(val)}</span></td>`; }
+          const s = String(val);
+          return `<td title="${escH(s)}" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(s)}</td>`;
+        }).join('') + '</tr>';
+      }).join('');
+    }
+
+    // 페이지 정보
+    document.getElementById('doc-page-info').textContent = d.total ? `${d.page}/${d.total_pages} 페이지` : '';
+    const tp=d.total_pages, cp=d.page;
+    if(tp<=1){ document.getElementById('doc-pager').innerHTML=''; return; }
+    const range=[];for(let i=Math.max(1,cp-3);i<=Math.min(tp,cp+3);i++)range.push(i);
+    let ph=`<li class="page-item ${cp===1?'disabled':''}"><a class="page-link" href="#" onclick="_docPage=${cp-1};loadDocData();return false;">‹</a></li>`;
+    range.forEach(i=>{ph+=`<li class="page-item ${i===cp?'active':''}"><a class="page-link" href="#" onclick="_docPage=${i};loadDocData();return false;">${i}</a></li>`;});
+    ph+=`<li class="page-item ${cp===tp?'disabled':''}"><a class="page-link" href="#" onclick="_docPage=${cp+1};loadDocData();return false;">›</a></li>`;
+    document.getElementById('doc-pager').innerHTML=ph;
+  }).catch(()=>{
+    document.getElementById('doc-tbody').innerHTML='<tr><td class="text-center text-danger py-4">서버 오류</td></tr>';
+  });
+}
+
+function docExport() {
+  if(!_docId){ alert('서류를 먼저 선택하세요.'); return; }
+  const q = document.getElementById('doc-q').value.trim();
+  let url = `${SYSCONF_API}/docs/${_docId}/export/`;
+  if(q) url += `?q=${encodeURIComponent(q)}`;
+  window.location.href = url;
+}
 
 // ══ DB 관리 ══════════════════════════════════════════
 let _daTree = {};

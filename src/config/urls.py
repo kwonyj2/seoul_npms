@@ -46,6 +46,7 @@ from apps.sysconfig.api import (
 )
 from apps.sysconfig.exports import export_view
 from apps.sysconfig.db_admin import db_schema, db_model_schema, db_crud, db_export
+from apps.sysconfig.doc_viewer import doc_catalog, doc_data, doc_export as doc_excel_export
 from core.permissions.roles import module_required
 
 # ─────────────────────────────────────────
@@ -194,6 +195,11 @@ urlpatterns = [
     # DB 관리 (범용 CRUD)
     path('api/sysconfig/db/schema/',                              db_schema,        name='db-schema'),
     path('api/sysconfig/db/<str:app_label>/<str:model_name>/schema/', db_model_schema, name='db-model-schema'),
+    # 산출물 통합 조회
+    path('api/sysconfig/docs/catalog/',                     doc_catalog,      name='doc-catalog'),
+    path('api/sysconfig/docs/<str:doc_id>/data/',           doc_data,         name='doc-data'),
+    path('api/sysconfig/docs/<str:doc_id>/export/',         doc_excel_export, name='doc-export'),
+    # DB 관리
     path('api/sysconfig/db/<str:app_label>/<str:model_name>/export/', db_export,    name='db-export'),
     path('api/sysconfig/db/<str:app_label>/<str:model_name>/',    db_crud,          name='db-crud-list'),
     path('api/sysconfig/db/<str:app_label>/<str:model_name>/<int:pk>/', db_crud,    name='db-crud-detail'),
