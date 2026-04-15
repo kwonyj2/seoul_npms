@@ -5,6 +5,7 @@ NPMS 접속 세션 추적 미들웨어
 """
 import re
 from django.utils import timezone
+from core.utils.network import get_client_ip
 
 # URL 경로 → 한글 화면명 (순서 중요: 구체적인 것 먼저)
 PAGE_MAP = [
@@ -80,7 +81,7 @@ class SessionTrackingMiddleware:
                         session_key=session_key,
                         defaults={
                             'user':         request.user,
-                            'ip_address':   request.META.get('REMOTE_ADDR'),
+                            'ip_address':   get_client_ip(request),
                             'user_agent':   request.META.get('HTTP_USER_AGENT', '')[:200],
                             'current_page': page_name or '접속중',
                             'is_active':    True,

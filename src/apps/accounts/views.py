@@ -43,7 +43,8 @@ class LoginView(View):
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '')
 
-        ip = request.META.get('REMOTE_ADDR')
+        from core.utils.network import get_client_ip
+        ip = get_client_ip(request)
         ua = request.META.get('HTTP_USER_AGENT', '')
 
         # ── 계정 잠금 확인 (Redis 캐시) ─────────────────────────
@@ -74,7 +75,7 @@ class LoginView(View):
                 fail_reason = f'인증 실패 ({fail_count}/{MAX_FAILS})'
             failed_user = User.objects.filter(username=username).first()
             LoginHistory.objects.create(
-                user=failed_user,
+                user=failed_user, attempted_username=username,
                 ip_address=ip, user_agent=ua, success=False, fail_reason=fail_reason
             )
             UserActivityLog.objects.create(
@@ -98,7 +99,7 @@ class LoginView(View):
         cache.delete(LOCK_KEY)
 
         login(request, user)
-        LoginHistory.objects.create(user=user, ip_address=ip, user_agent=ua, success=True)
+        LoginHistory.objects.create(user=user, attempted_username=username, ip_address=ip, user_agent=ua, success=True)
         UserActivityLog.objects.create(
             user=user, action='login',
             detail='로그인 성공',
@@ -120,10 +121,11 @@ class LogoutView(View):
             UserSession.objects.filter(
                 session_key=request.session.session_key
             ).update(is_active=False)
+            from core.utils.network import get_client_ip
             UserActivityLog.objects.create(
                 user=request.user, action='logout',
                 detail='로그아웃',
-                ip_address=request.META.get('REMOTE_ADDR'),
+                ip_address=get_client_ip(request),
             )
         logout(request)
         return redirect('accounts:login')

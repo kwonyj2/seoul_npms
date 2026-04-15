@@ -515,6 +515,7 @@
       <li class="nav-item"><button class="btn btn-sm btn-primary" onclick="alSwitchKind('login',this)"><i class="bi bi-box-arrow-in-right me-1"></i>로그인 이력</button></li>
       <li class="nav-item"><button class="btn btn-sm btn-outline-secondary" onclick="alSwitchKind('activity',this)"><i class="bi bi-activity me-1"></i>활동 로그</button></li>
       <li class="nav-item"><button class="btn btn-sm btn-outline-secondary" onclick="alSwitchKind('session',this)"><i class="bi bi-person-check me-1"></i>현재 접속자</button></li>
+      <li class="nav-item"><button class="btn btn-sm btn-outline-danger" onclick="alSwitchKind('security',this)"><i class="bi bi-shield-exclamation me-1"></i>보안 탐지</button></li>
     </ul>
 
     <!-- 검색 필터 -->
@@ -952,11 +953,13 @@ const AL_HEADS = {
   login:    ['사용자', '성명', 'IP', '브라우저', '결과', '실패사유', '시도일시'],
   activity: ['사용자', '성명', '행위', '대상', '상세', 'IP', '발생일시'],
   session:  ['사용자', '성명', 'IP', '현재 화면', '로그인시각', '마지막활동'],
+  security: ['IP 주소', '실패 횟수', '시도 계정', '성공 이력', '위험도', '최초 시도', '최근 시도'],
 };
 const AL_COLS = {
   login:    ['username','name','ip','user_agent','success','fail_reason','created_at'],
   activity: ['username','name','action','target','detail','ip','created_at'],
   session:  ['username','name','ip','current_page','login_at','last_active'],
+  security: ['ip','fail_count','attempted_users','has_success','threat','first_attempt','last_attempt'],
 };
 
 function alSwitchKind(kind, el) {
@@ -1014,6 +1017,29 @@ function alLoadPage(page) {
       return;
     }
 
+    // 보안 탐지 요약 카드
+    if (_alKind === 'security' && d.summary) {
+      const s = d.summary;
+      const summaryHtml = `<div class="alert alert-${s.total_fails>50?'danger':s.total_fails>10?'warning':'info'} py-2 px-3 mb-2 d-flex flex-wrap gap-3 align-items-center" style="font-size:.8rem">
+        <span><i class="bi bi-calendar3 me-1"></i>${s.period}</span>
+        <span><strong>실패 ${s.total_fails}건</strong> / 성공 ${s.total_success}건</span>
+        <span>공격 IP <strong>${s.unique_ips}개</strong></span>
+        <span class="text-danger">미등록 계정 시도 <strong>${s.unknown_user_fails}건</strong></span>
+        <span class="text-danger">계정 잠금 <strong>${s.locked_count}건</strong></span>
+      </div>`;
+      const existing = document.getElementById('al-security-summary');
+      if (existing) existing.innerHTML = summaryHtml;
+      else {
+        const div = document.createElement('div');
+        div.id = 'al-security-summary';
+        div.innerHTML = summaryHtml;
+        document.getElementById('al-tbody').closest('.card').before(div);
+      }
+    } else {
+      const existing = document.getElementById('al-security-summary');
+      if (existing) existing.remove();
+    }
+
     // 테이블 렌더
     document.getElementById('al-tbody').innerHTML = d.rows.map(row => {
       const cells = cols.map(c => {
@@ -1022,6 +1048,17 @@ function alLoadPage(page) {
           val = row.success
             ? '<span class="badge bg-success-subtle text-success">성공</span>'
             : '<span class="badge bg-danger-subtle text-danger">실패</span>';
+        }
+        if (c === 'threat') {
+          const tmap = {critical:'<span class="badge bg-danger">심각</span>',high:'<span class="badge bg-warning text-dark">높음</span>',medium:'<span class="badge bg-info text-dark">주의</span>',low:'<span class="badge bg-secondary">낮음</span>'};
+          val = tmap[row.threat] || row.threat;
+        }
+        if (c === 'has_success') {
+          val = row.has_success ? '<span class="text-success">있음</span>' : '<span class="text-muted">없음</span>';
+        }
+        if (c === 'fail_count') {
+          const n = row.fail_count;
+          val = n >= 20 ? `<strong class="text-danger">${n}</strong>` : n >= 10 ? `<strong class="text-warning">${n}</strong>` : n;
         }
         return `<td>${val}</td>`;
       });

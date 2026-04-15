@@ -282,7 +282,8 @@ def access_log(request):
         qs = LoginHistory.objects.select_related('user').order_by('-created_at')
         if q:
             qs = qs.filter(
-                Q(user__name__icontains=q) | Q(user__username__icontains=q) | Q(ip_address__icontains=q)
+                Q(user__name__icontains=q) | Q(user__username__icontains=q)
+                | Q(ip_address__icontains=q) | Q(attempted_username__icontains=q)
             )
         if date_from:
             qs = qs.filter(created_at__date__gte=date_from)
@@ -293,8 +294,8 @@ def access_log(request):
         for r in qs[offset:offset + page_size]:
             rows.append({
                 'id':          r.id,
-                'username':    r.user.username if r.user else '-',
-                'name':        r.user.name    if r.user else '-',
+                'username':    r.attempted_username or (r.user.username if r.user else '-'),
+                'name':        r.user.name if r.user else '(미등록 계정)',
                 'ip':          r.ip_address or '-',
                 'user_agent':  r.user_agent[:80] if r.user_agent else '-',
                 'success':     r.success,
@@ -351,6 +352,98 @@ def access_log(request):
                 'login_at':     r.login_at.strftime('%Y-%m-%d %H:%M:%S'),
                 'last_active':  r.last_active.strftime('%Y-%m-%d %H:%M:%S'),
             })
+
+    elif kind == 'security':
+        import datetime
+        from django.db.models import Count, Max, Min
+        from django.utils import timezone as tz
+
+        # 기간 필터 (기본: 최근 7일)
+        if date_from:
+            since = datetime.datetime.strptime(date_from, '%Y-%m-%d').replace(tzinfo=tz.utc)
+        else:
+            since = tz.now() - datetime.timedelta(days=7)
+        if date_to:
+            until = datetime.datetime.strptime(date_to, '%Y-%m-%d').replace(
+                hour=23, minute=59, second=59, tzinfo=tz.utc)
+        else:
+            until = tz.now()
+
+        fail_qs = LoginHistory.objects.filter(
+            success=False, created_at__gte=since, created_at__lte=until
+        )
+        if q:
+            fail_qs = fail_qs.filter(
+                Q(ip_address__icontains=q) | Q(attempted_username__icontains=q)
+            )
+
+        # IP별 실패 집계
+        ip_stats = fail_qs.values('ip_address').annotate(
+            fail_count=Count('id'),
+            last_attempt=Max('created_at'),
+            first_attempt=Min('created_at'),
+        ).order_by('-fail_count')
+
+        # 각 IP의 시도 계정 목록
+        total = ip_stats.count()
+        rows = []
+        for row in ip_stats[offset:offset + page_size]:
+            ip = row['ip_address']
+            # 해당 IP에서 시도한 계정명 목록 (중복 제거)
+            usernames = sorted(set(
+                fail_qs.filter(ip_address=ip)
+                .exclude(attempted_username='')
+                .values_list('attempted_username', flat=True)
+            ))[:10]
+            # 해당 IP의 성공 이력 유무
+            has_success = LoginHistory.objects.filter(
+                ip_address=ip, success=True,
+                created_at__gte=since, created_at__lte=until,
+            ).exists()
+            # 위험도 판정
+            if row['fail_count'] >= 20:
+                threat = 'critical'
+            elif row['fail_count'] >= 10:
+                threat = 'high'
+            elif row['fail_count'] >= 5:
+                threat = 'medium'
+            else:
+                threat = 'low'
+
+            rows.append({
+                'ip':             ip or '-',
+                'fail_count':     row['fail_count'],
+                'attempted_users': ', '.join(u for u in usernames if u) or '-',
+                'has_success':    has_success,
+                'threat':         threat,
+                'first_attempt':  row['first_attempt'].strftime('%Y-%m-%d %H:%M'),
+                'last_attempt':   row['last_attempt'].strftime('%Y-%m-%d %H:%M'),
+            })
+
+        # 요약 통계
+        total_fails = fail_qs.count()
+        total_success = LoginHistory.objects.filter(
+            success=True, created_at__gte=since, created_at__lte=until,
+        ).count()
+        unknown_user_fails = fail_qs.filter(user__isnull=True).count()
+        locked_count = fail_qs.filter(fail_reason__icontains='잠금').count()
+
+        return JsonResponse({
+            'rows': rows,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total + page_size - 1) // page_size,
+            'summary': {
+                'period': f'{since.strftime("%Y-%m-%d")} ~ {until.strftime("%Y-%m-%d")}',
+                'total_fails': total_fails,
+                'total_success': total_success,
+                'unique_ips': total,
+                'unknown_user_fails': unknown_user_fails,
+                'locked_count': locked_count,
+            },
+        })
+
     else:
         return JsonResponse({'error': '잘못된 kind'}, status=400)
 

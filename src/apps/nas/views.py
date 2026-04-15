@@ -12,6 +12,7 @@ from django.utils import timezone
 import os
 import shutil
 import mimetypes
+from core.utils.network import get_client_ip
 
 def file_open_view(request, token):
     """임시 토큰으로 파일 제공 (인증 불필요 — Office URI 스킴 전용)"""
@@ -526,7 +527,7 @@ class FileViewSet(viewsets.ModelViewSet):
         FileDownloadLog.objects.create(
             file=file_obj,
             user=request.user,
-            ip_address=request.META.get('REMOTE_ADDR'),
+            ip_address=get_client_ip(request),
         )
         return FileResponse(
             open(file_obj.file_path, 'rb'),

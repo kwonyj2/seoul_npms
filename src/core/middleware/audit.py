@@ -1,5 +1,6 @@
 import logging
 from django.utils import timezone
+from core.utils.network import get_client_ip
 
 logger = logging.getLogger('audit')
 
@@ -46,7 +47,7 @@ class AuditLogMiddleware:
                     action=action,
                     target=target[:200],
                     detail=f'status={response.status_code}',
-                    ip_address=request.META.get('REMOTE_ADDR'),
+                    ip_address=get_client_ip(request),
                 )
             except Exception as e:
                 logger.debug('UserActivityLog DB 저장 실패: %s', e)

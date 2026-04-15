@@ -132,7 +132,9 @@ class UserActivityLog(models.Model):
 
 class LoginHistory(models.Model):
     """로그인 이력"""
-    user        = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='사용자', related_name='login_history')
+    user        = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='사용자',
+                                    related_name='login_history', null=True, blank=True)
+    attempted_username = models.CharField('시도 아이디', max_length=100, blank=True)
     ip_address  = models.GenericIPAddressField('IP주소', null=True, blank=True)
     user_agent  = models.TextField('브라우저정보', blank=True)
     success     = models.BooleanField('성공여부', default=True)
