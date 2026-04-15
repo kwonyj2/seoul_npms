@@ -9,46 +9,46 @@
 .audit-wrap { padding: 0.75rem 1rem; }
 
 /* 타임라인 */
-.phase-timeline { display: flex; gap: 0; margin-bottom: 1.25rem; border-radius: 8px; overflow: hidden; }
+.phase-timeline { display: flex; gap: 0; margin-bottom: 1.25rem; border-radius: 8px; overflow: hidden; border: 1px solid #dee2e6; }
 .phase-step {
-  flex: 1; padding: 0.75rem 1rem; background: #f0f3f7;
-  border-right: 1px solid #dde3ea; cursor: pointer; transition: background 0.2s;
+  flex: 1; padding: 0.75rem 1rem; background: #f8f9fa;
+  border-right: 1px solid #dee2e6; cursor: pointer; transition: background 0.2s;
 }
 .phase-step:last-child { border-right: none; }
-.phase-step.active { background: #1e2d40; color: #fff; }
-.phase-step.done   { background: #3d5a7a; color: #fff; }
-.phase-step:hover:not(.active):not(.done) { background: #e0e7ef; }
+.phase-step.active { background: #0d6efd; color: #fff; }
+.phase-step.done   { background: #198754; color: #fff; }
+.phase-step:hover:not(.active):not(.done) { background: #e9ecef; }
 .phase-step .phase-label { font-size: 0.82rem; font-weight: 600; }
 .phase-step .phase-date  { font-size: 0.7rem; opacity: 0.65; margin-top: 2px; }
 .phase-step .phase-status {
   font-size: 0.68rem; margin-top: 4px; display: inline-block;
-  padding: 1px 8px; border-radius: 10px; background: rgba(255,255,255,0.18);
+  padding: 1px 8px; border-radius: 10px; background: rgba(255,255,255,0.2);
 }
-.phase-step:not(.active):not(.done) .phase-status { background: rgba(0,0,0,0.06); color: #555; }
+.phase-step:not(.active):not(.done) .phase-status { background: rgba(0,0,0,0.06); color: #6c757d; }
 
 /* 통계 카드 */
 .stat-cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 0.75rem; margin-bottom: 1.25rem; }
 .stat-card {
-  background:#fff; border:1px solid #dde3ea; border-left:4px solid #3d5a7a;
-  border-radius:6px; padding:0.8rem 1rem;
+  background:#fff; border:1px solid #dee2e6; border-left:4px solid #0d6efd;
+  border-radius:8px; padding:0.8rem 1rem; box-shadow:0 1px 3px rgba(0,0,0,.04);
 }
-.stat-card.c1{border-left-color:#2e6da4} .stat-card.c2{border-left-color:#3a7d44}
-.stat-card.c3{border-left-color:#7a5230} .stat-card.c4{border-left-color:#6b4e9e}
-.stat-card .label { font-size:0.72rem;color:#6c757d;font-weight:600;text-transform:uppercase;letter-spacing:0.04em; }
-.stat-card .value { font-size:1.6rem;font-weight:700;color:#1e2d40;line-height:1;margin:4px 0 2px; }
-.stat-card .sub   { font-size:0.71rem;color:#8a9ab0; }
-.mini-prog { height:4px;border-radius:2px;background:#e0e7ef;margin-top:4px;overflow:hidden; }
-.mini-prog-fill { height:100%;background:#3d5a7a;border-radius:2px;transition:width 0.4s; }
+.stat-card.c1{border-left-color:#0d6efd} .stat-card.c2{border-left-color:#198754}
+.stat-card.c3{border-left-color:#fd7e14} .stat-card.c4{border-left-color:#6f42c1}
+.stat-card .label { font-size:0.72rem;color:#6c757d;font-weight:600; }
+.stat-card .value { font-size:1.6rem;font-weight:700;color:#212529;line-height:1;margin:4px 0 2px; }
+.stat-card .sub   { font-size:0.71rem;color:#adb5bd; }
+.mini-prog { height:4px;border-radius:2px;background:#e9ecef;margin-top:4px;overflow:hidden; }
+.mini-prog-fill { height:100%;background:#0d6efd;border-radius:2px;transition:width 0.4s; }
 
 /* 탭 */
-.audit-tabs { border-bottom: 2px solid #dde3ea; }
+.audit-tabs { border-bottom: 2px solid #dee2e6; }
 .audit-tabs .nav-link {
-  color:#5a6a7a; border:none; border-bottom:3px solid transparent;
+  color:#6c757d; border:none; border-bottom:3px solid transparent;
   padding:0.55rem 1.1rem; font-size:0.83rem; font-weight:500;
   margin-bottom:-2px; border-radius:0; white-space:nowrap;
 }
-.audit-tabs .nav-link:hover { color:#1e2d40; }
-.audit-tabs .nav-link.active { color:#1e2d40; border-bottom-color:#1e2d40; font-weight:700; background:transparent; }
+.audit-tabs .nav-link:hover { color:#212529; }
+.audit-tabs .nav-link.active { color:#0d6efd; border-bottom-color:#0d6efd; font-weight:700; background:transparent; }
 .audit-tabs .nav-link i { margin-right:5px; }
 .tab-panel { padding:1rem 0 0; }
 
@@ -56,10 +56,10 @@
 .filter-bar { display:flex; gap:0.5rem; align-items:center; margin-bottom:0.9rem; flex-wrap:wrap; }
 .btn-phase {
   font-size:0.75rem; padding:4px 14px; border-radius:16px;
-  border:1px solid #c5cfd8; background:#f7f9fb; color:#3a4a5a;
+  border:1px solid #dee2e6; background:#f8f9fa; color:#495057;
   font-weight:500; cursor:pointer; transition:all 0.15s;
 }
-.btn-phase:hover, .btn-phase.active { background:#1e2d40; color:#fff; border-color:#1e2d40; }
+.btn-phase:hover, .btn-phase.active { background:#0d6efd; color:#fff; border-color:#0d6efd; }
 
 /* 테이블 — table-layout:fixed + 고정 열 폭 */
 .audit-table {
@@ -67,26 +67,24 @@
   width:100%; table-layout:fixed;
 }
 .audit-table thead th {
-  background:#2c3e55; color:#c8d8e8; font-weight:600; font-size:0.72rem;
-  letter-spacing:0.03em; padding:8px 10px; border:none;
+  background:#f0f4f8; color:#495057; font-weight:600; font-size:0.72rem;
+  letter-spacing:0.03em; padding:8px 10px; border-bottom:2px solid #dee2e6;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   position:sticky; top:0; z-index:10;
 }
-.audit-table thead th:first-child{border-radius:6px 0 0 0}
-.audit-table thead th:last-child {border-radius:0 6px 0 0}
 .audit-table tbody tr:hover td { background:#f0f5fa; }
 .audit-table tbody td {
-  padding:7px 10px; border-bottom:1px solid #ecf0f4;
-  vertical-align:middle; color:#2e3d4d; background:#fff;
+  padding:7px 10px; border-bottom:1px solid #f1f5f9;
+  vertical-align:middle; color:#212529; background:#fff;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .audit-table tbody td.wrap { white-space:normal; word-break:keep-all; }
 .audit-table tbody tr.srow td {
-  background:#f0f4f8 !important; font-weight:600;
-  font-size:0.75rem; color:#2c3e55; padding:5px 10px; white-space:nowrap;
+  background:#f8f9fa !important; font-weight:600;
+  font-size:0.75rem; color:#212529; padding:5px 10px; white-space:nowrap;
 }
 .audit-table tbody tr.catrow td {
-  background:#1e2d40 !important; color:#94a8bf !important;
+  background:#e9ecef !important; color:#495057 !important;
   font-size:0.72rem !important; font-weight:700 !important;
   letter-spacing:0.05em; padding:5px 10px !important; white-space:nowrap !important;
 }
@@ -125,22 +123,23 @@
   border:2px dashed #c5cfd8; border-radius:6px; padding:1.2rem 1rem;
   text-align:center; background:#fafbfc; cursor:pointer; transition:border-color .2s;
 }
-.drop-zone:hover { border-color:#3d5a7a; }
+.drop-zone:hover { border-color:#0d6efd; }
 .drop-zone .dz-icon { font-size:2rem; color:#94a8bf; }
 .drop-zone p { font-size:0.78rem; color:#6a7a8a; margin:4px 0 0; }
 
 /* 모달 */
-.modal-header { background:#2c3e55; color:#fff; }
-.modal-header .btn-close { filter:invert(1); }
-.modal-footer { background:#f8f9fb; }
+.audit-wrap .modal-header { background:#fff; color:#212529; border-bottom:1px solid #dee2e6; }
+.audit-wrap .modal-header .btn-close { filter:none; }
+.audit-wrap .modal-footer { background:#f8f9fa; }
 
 /* 산출물 보관함 트리 */
 .vault-phase { border:1px solid #dde3ea; border-radius:6px; margin-bottom:8px; overflow:hidden; }
 .vault-phase-hd {
-  background:#1e2d40; color:#fff; padding:8px 14px; cursor:pointer;
+  background:#495057; color:#fff; padding:8px 14px; cursor:pointer;
   display:flex; align-items:center; gap:8px; user-select:none;
+  border-radius:4px;
 }
-.vault-phase-hd:hover { background:#2c3e55; }
+.vault-phase-hd:hover { background:#6c757d; }
 .vault-phase-hd .ph-label { font-size:.84rem; font-weight:700; flex:1; }
 .vault-phase-hd .ph-cnt  { font-size:.7rem; background:rgba(255,255,255,.15); padding:2px 8px; border-radius:10px; }
 .vault-phase-hd .ph-toggle { font-size:.8rem; transition:transform .2s; }
@@ -151,7 +150,7 @@
 .vault-cat-hd {
   background:#f0f5fa; border-radius:4px; padding:5px 10px; cursor:pointer;
   display:flex; align-items:center; gap:6px; font-size:.78rem; font-weight:600;
-  color:#2c3e55; user-select:none; border:1px solid #e0e7ef;
+  color:#212529; user-select:none; border:1px solid #dee2e6;
 }
 .vault-cat-hd:hover { background:#e4ecf5; }
 .vault-cat-hd .cat-toggle { font-size:.72rem; transition:transform .2s; }
