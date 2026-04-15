@@ -198,6 +198,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.nas.tasks.purge_old_trash',
         'schedule': crontab(hour=4, minute=0),
     },
+    # WBS 진척 스냅샷 (매주 월요일 새벽 1시)
+    'wbs-progress-snapshot': {
+        'task': 'apps.wbs.tasks.snapshot_wbs_progress',
+        'schedule': crontab(hour=1, minute=0, day_of_week=1),
+    },
 }
 
 # ─────────────────────────────────────────

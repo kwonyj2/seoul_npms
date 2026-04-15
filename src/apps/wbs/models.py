@@ -97,3 +97,23 @@ class WBSItem(models.Model):
         weighted = sum(float(k.weight) * k.progress for k in kids)
         self.progress = round(weighted / total_weight)
         self.save(update_fields=['progress', 'updated_at'])
+
+
+class WBSProgressHistory(models.Model):
+    """WBS 진척 이력 — 주차별 진척률 변화 자동 기록"""
+    item       = models.ForeignKey(WBSItem, on_delete=models.CASCADE,
+                                   related_name='history', verbose_name='WBS 항목')
+    week_date  = models.DateField('기준일 (주 시작일)')
+    progress   = models.PositiveSmallIntegerField('진척률(%)')
+    planned_progress = models.DecimalField('계획진척률(%)', max_digits=5, decimal_places=1, default=0)
+    note       = models.TextField('비고', blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'wbs_progress_history'
+        verbose_name = 'WBS 진척 이력'
+        unique_together = [['item', 'week_date']]
+        ordering = ['-week_date']
+
+    def __str__(self):
+        return f'{self.item.code} {self.week_date} {self.progress}%'

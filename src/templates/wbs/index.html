@@ -142,6 +142,15 @@
 .gantt-bar-plan   { position: absolute; height: 10px; top: 1px; background: #93c5fd; border-radius: 2px; }
 .gantt-bar-actual { position: absolute; height: 10px; top: 11px; background: #34d399; border-radius: 2px; }
 .gantt-milestone  { position: absolute; top: 3px; font-size: 12px; color: #f59e0b; }
+
+/* EVM 카드 */
+.evm-card { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:10px 14px; text-align:center; }
+.evm-card .evm-label { font-size:.7rem; color:#64748b; }
+.evm-card .evm-value { font-size:1.5rem; font-weight:700; }
+.evm-card .evm-sub { font-size:.7rem; color:#94a3b8; }
+.evm-good { border-left:4px solid #16a34a; }
+.evm-warning { border-left:4px solid #f59e0b; }
+.evm-danger { border-left:4px solid #dc2626; }
 </style>
 {% endblock %}
 
@@ -153,6 +162,9 @@
   <div class="compliance-cards" id="complianceCards">
     <div class="cc-card"><div class="label">로딩 중...</div></div>
   </div>
+
+  <!-- EVM 카드 -->
+  <div class="row g-2 mb-2" id="evmCards" style="display:none"></div>
 
   <!-- S-Curve + 준수율 게이지 (접기/펼치기) -->
   <div class="mb-2">
@@ -397,7 +409,7 @@ loadProjects();
 
 async function loadWbs() {
   if (!WBS_PID) return;
-  await Promise.all([loadSummary(), loadItems(), loadSCurve(), loadDelayed()]);
+  await Promise.all([loadSummary(), loadItems(), loadSCurve(), loadDelayed(), loadEVM()]);
 }
 
 // ── 공정준수율 ────────────────────────────────────────
@@ -423,6 +435,44 @@ function renderSummary(rows) {
       <div class="cc-bar-plan" style="width:${r.planned_progress}%"></div>
     </div>`).join('');
   renderGaugeChart(rows);
+}
+
+// ── EVM 지표 ─────────────────────────────────────────
+async function loadEVM() {
+  try {
+    const res = await fetch(`${API_WBS}evm/?project=${WBS_PID}`, {credentials:'same-origin'});
+    if (!res.ok) return;
+    const d = await res.json();
+    renderEVM(d);
+  } catch(e) { console.error('loadEVM:', e); }
+}
+function renderEVM(d) {
+  const el = document.getElementById('evmCards');
+  if (!d.pv && !d.ev) { el.style.display='none'; return; }
+  el.style.display='';
+  const spiClass = d.spi_status==='good'?'evm-good':d.spi_status==='warning'?'evm-warning':'evm-danger';
+  const spiColor = d.spi_status==='good'?'#16a34a':d.spi_status==='warning'?'#f59e0b':'#dc2626';
+  el.innerHTML = `
+    <div class="col-6 col-md-3"><div class="evm-card">
+      <div class="evm-label">PV (계획가치)</div>
+      <div class="evm-value" style="color:#3b82f6">${d.pv}%</div>
+      <div class="evm-sub">오늘까지 완료 예정</div>
+    </div></div>
+    <div class="col-6 col-md-3"><div class="evm-card">
+      <div class="evm-label">EV (획득가치)</div>
+      <div class="evm-value" style="color:#10b981">${d.ev}%</div>
+      <div class="evm-sub">실제 완료 실적</div>
+    </div></div>
+    <div class="col-6 col-md-3"><div class="evm-card ${spiClass}">
+      <div class="evm-label">SPI (일정성과지수)</div>
+      <div class="evm-value" style="color:${spiColor}">${d.spi}</div>
+      <div class="evm-sub">${d.spi_label}</div>
+    </div></div>
+    <div class="col-6 col-md-3"><div class="evm-card ${d.sv>=0?'evm-good':'evm-danger'}">
+      <div class="evm-label">SV (일정편차)</div>
+      <div class="evm-value" style="color:${d.sv>=0?'#16a34a':'#dc2626'}">${d.sv>0?'+':''}${d.sv}%</div>
+      <div class="evm-sub">${d.sv>=0?'선행':'지연'} (기준: ${d.as_of})</div>
+    </div></div>`;
 }
 
 // ── S-Curve 차트 ─────────────────────────────────────

@@ -145,6 +145,145 @@ class WBSItemViewSet(viewsets.ModelViewSet):
 
         return Response(result)
 
+    @action(detail=False, methods=['get'], url_path='evm')
+    def evm(self, request):
+        """EVM(Earned Value Management) 지표 계산
+        PV: 계획가치(Planned Value) — 오늘까지 완료 예정인 작업의 가중 비용
+        EV: 획득가치(Earned Value) — 실제 완료된 작업의 가중 비용
+        SPI: 일정성과지수(Schedule Performance Index) = EV / PV
+        CPI: 원가성과지수(Cost Performance Index) = EV / AC (AC=EV 가정)
+        """
+        project_id = request.query_params.get('project')
+        if not project_id:
+            return Response({'error': 'project 파라미터 필요'}, status=400)
+
+        today = date.today()
+        items = list(WBSItem.objects.filter(
+            project_id=project_id
+        ).exclude(progress_source='children'))
+
+        if not items:
+            return Response({'pv': 0, 'ev': 0, 'spi': 0, 'phases': []})
+
+        # 총 예산 = 가중치 합계 (정규화 기준 = 100%)
+        bac = sum(float(i.weight) for i in items) or 1
+
+        # PV: 오늘 기준 계획진척률 × 가중치
+        pv = 0.0
+        ev = 0.0
+        for i in items:
+            w = float(i.weight)
+            # PV 계산
+            if i.planned_end and i.planned_end <= today:
+                pv += w
+            elif i.planned_start and i.planned_start <= today and i.planned_end:
+                elapsed = (today - i.planned_start).days
+                total = (i.planned_end - i.planned_start).days or 1
+                pv += w * min(elapsed / total, 1.0)
+            # EV 계산
+            ev += w * (i.progress / 100)
+
+        pv_pct = round(pv / bac * 100, 1)
+        ev_pct = round(ev / bac * 100, 1)
+        spi = round(ev / pv, 3) if pv > 0 else 0
+        sv = round(ev_pct - pv_pct, 1)  # Schedule Variance
+
+        # 단계별 EVM
+        phase_labels = {'plan': '계획', 'execute': '수행', 'close': '종료'}
+        phases = []
+        for pk, pl in phase_labels.items():
+            pi = [i for i in items if i.phase == pk]
+            if not pi:
+                continue
+            p_bac = sum(float(i.weight) for i in pi) or 1
+            p_pv = 0.0
+            p_ev = 0.0
+            for i in pi:
+                w = float(i.weight)
+                if i.planned_end and i.planned_end <= today:
+                    p_pv += w
+                elif i.planned_start and i.planned_start <= today and i.planned_end:
+                    elapsed = (today - i.planned_start).days
+                    total = (i.planned_end - i.planned_start).days or 1
+                    p_pv += w * min(elapsed / total, 1.0)
+                p_ev += w * (i.progress / 100)
+            p_spi = round(p_ev / p_pv, 3) if p_pv > 0 else 0
+            phases.append({
+                'phase': pk, 'label': pl,
+                'pv': round(p_pv / p_bac * 100, 1),
+                'ev': round(p_ev / p_bac * 100, 1),
+                'spi': p_spi,
+            })
+
+        # SPI 판정
+        if pv == 0:
+            spi_status = 'good'
+            spi_label = '사업 시작 전'
+        elif spi >= 1.0:
+            spi_status = 'good'
+            spi_label = '정상 (일정 준수)'
+        elif spi >= 0.9:
+            spi_status = 'warning'
+            spi_label = '주의 (소폭 지연)'
+        else:
+            spi_status = 'danger'
+            spi_label = '위험 (일정 지연)'
+
+        return Response({
+            'bac': round(bac, 4),
+            'pv': pv_pct,
+            'ev': ev_pct,
+            'sv': sv,
+            'spi': spi,
+            'spi_status': spi_status,
+            'spi_label': spi_label,
+            'phases': phases,
+            'as_of': today.strftime('%Y-%m-%d'),
+        })
+
+    @action(detail=False, methods=['get'], url_path='history')
+    def progress_history(self, request):
+        """진척 이력 조회 — 주차별 진척 추이"""
+        from .models import WBSProgressHistory
+        project_id = request.query_params.get('project')
+        if not project_id:
+            return Response({'error': 'project 파라미터 필요'}, status=400)
+
+        # 주차별 전체 평균 진척
+        histories = WBSProgressHistory.objects.filter(
+            item__project_id=project_id
+        ).order_by('week_date')
+
+        week_data = {}
+        for h in histories:
+            wd = h.week_date.strftime('%Y-%m-%d')
+            if wd not in week_data:
+                week_data[wd] = {'planned': [], 'actual': []}
+            week_data[wd]['planned'].append(float(h.planned_progress))
+            week_data[wd]['actual'].append(h.progress)
+
+        labels = sorted(week_data.keys())
+        planned = []
+        actual = []
+        for wd in labels:
+            d = week_data[wd]
+            planned.append(round(sum(d['planned']) / len(d['planned']), 1) if d['planned'] else 0)
+            actual.append(round(sum(d['actual']) / len(d['actual']), 1) if d['actual'] else 0)
+
+        return Response({
+            'labels': [l[5:] for l in labels],  # MM-DD 형식
+            'planned': planned,
+            'actual': actual,
+            'total_snapshots': histories.count(),
+        })
+
+    @action(detail=False, methods=['post'], url_path='snapshot')
+    def take_snapshot(self, request):
+        """진척 스냅샷 수동 생성 (관리자용)"""
+        from .tasks import snapshot_wbs_progress
+        result = snapshot_wbs_progress()
+        return Response(result)
+
     @action(detail=False, methods=['get'], url_path='s-curve')
     def s_curve(self, request):
         """S-Curve 데이터 — 주간 단위 계획 vs 실적 진척 추이"""
