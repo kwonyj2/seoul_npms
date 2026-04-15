@@ -242,17 +242,17 @@
     <button class="btn-phase" onclick="filterArt('closing',this)">종료감리</button>
     <button class="btn-phase" onclick="filterArt('occurrence',this)">발생 시</button>
     <div class="ms-auto d-flex gap-2">
-      <button class="btn btn-sm" style="background:#3d5a7a;color:#fff;font-size:.74rem;" onclick="dlSelected()"><i class="bi bi-download me-1"></i>선택 다운로드</button>
-      <button class="btn btn-sm btn-outline-secondary" style="font-size:.74rem;" onclick="window.print()"><i class="bi bi-printer me-1"></i>인쇄</button>
+      <button class="btn btn-sm btn-outline-success" style="font-size:.74rem;" onclick="dlAuditExcel('artifacts')"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+      <button class="btn btn-sm btn-primary" style="font-size:.74rem;" onclick="dlSelected()"><i class="bi bi-download me-1"></i>선택 다운로드</button>
     </div>
   </div>
   <div class="table-responsive" style="max-height:calc(100vh - 200px);overflow-y:auto;">
   <table class="audit-table" style="min-width:900px;">
     <colgroup>
-      <col style="width:36px"><col style="width:26px"><col style="width:144px">
-      <col><!-- 산출물명 가변 -->
-      <col style="width:74px"><col style="width:104px"><col style="width:86px">
-      <col style="width:74px"><col style="width:68px"><col style="width:96px">
+      <col style="width:32px"><col style="width:26px"><col style="width:110px">
+      <col style="width:160px"><!-- 산출물명 -->
+      <col style="width:70px"><col style="width:80px"><col style="width:90px">
+      <col style="width:72px"><col style="width:68px"><col style="width:80px">
     </colgroup>
     <thead><tr>
       <th>No.</th><th><input type="checkbox" id="chk-all" onchange="chkAll(this)"></th>
@@ -356,8 +356,8 @@
   <div class="table-responsive" style="max-height:calc(100vh - 200px);overflow-y:auto;">
   <table class="audit-table" style="min-width:840px;">
     <colgroup>
-      <col style="width:86px"><col style="width:64px"><col>
-      <col style="width:186px"><col style="width:74px"><col style="width:160px"><col style="width:74px">
+      <col style="width:90px"><col style="width:64px"><col style="width:180px">
+      <col style="width:150px"><col style="width:74px"><col style="width:150px"><col style="width:70px">
     </colgroup>
     <thead><tr>
       <th>요구사항번호</th><th>분류</th><th>요구사항명</th>
@@ -375,16 +375,17 @@
     <button class="btn-phase" data-cp="initiation" onclick="filterChk('initiation',this)">착수감리</button>
     <button class="btn-phase" data-cp="midterm" onclick="filterChk('midterm',this)">중간감리</button>
     <button class="btn-phase" data-cp="closing" onclick="filterChk('closing',this)">종료감리</button>
-    <div class="ms-auto text-muted" style="font-size:.75rem;">
-      적합 <strong id="chk-p">0</strong> / 부적합 <strong id="chk-f">0</strong> / 미점검 <strong id="chk-n">0</strong>
+    <div class="ms-auto d-flex align-items-center gap-2">
+      <span class="text-muted" style="font-size:.75rem;">적합 <strong id="chk-p">0</strong> / 부적합 <strong id="chk-f">0</strong> / 미점검 <strong id="chk-n">0</strong></span>
+      <button class="btn btn-sm btn-outline-success" style="font-size:.74rem;" onclick="dlAuditExcel('checklist')"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
     </div>
   </div>
   <div class="table-responsive" style="max-height:calc(100vh - 200px);overflow-y:auto;">
   <table class="audit-table" style="min-width:920px;">
     <colgroup>
-      <col style="width:36px"><col style="width:98px"><col style="width:86px">
-      <col><!-- 점검항목 가변 -->
-      <col style="width:196px"><col style="width:74px"><col style="width:136px"><col style="width:88px">
+      <col style="width:32px"><col style="width:80px"><col style="width:80px">
+      <col style="width:160px"><!-- 점검항목 -->
+      <col style="width:160px"><col style="width:68px"><col style="width:120px"><col style="width:70px">
     </colgroup>
     <thead><tr>
       <th>No.</th><th>감리영역</th><th>요구사항</th><th>점검항목</th>
@@ -412,15 +413,16 @@
         <option value="open">미조치</option><option value="in_progress">조치중</option>
         <option value="completed">조치완료</option><option value="verified">확인완료</option>
       </select>
+      <button class="btn btn-sm btn-outline-success" style="font-size:.74rem;" onclick="dlAuditExcel('corrective')"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
       <button class="btn btn-sm btn-primary" style="font-size:.74rem;" onclick="openCAModal()"><i class="bi bi-plus-lg me-1"></i>시정조치 등록</button>
     </div>
   </div>
   <div class="table-responsive" style="max-height:calc(100vh - 200px);overflow-y:auto;">
   <table class="audit-table" style="min-width:900px;">
     <colgroup>
-      <col style="width:32px"><col style="width:54px"><col style="width:68px">
-      <col><col style="width:200px"><col style="width:80px">
-      <col style="width:80px"><col style="width:120px">
+      <col style="width:32px"><col style="width:60px"><col style="width:68px">
+      <col style="width:160px"><col style="width:150px"><col style="width:74px">
+      <col style="width:74px"><col style="width:110px">
     </colgroup>
     <thead><tr>
       <th>No.</th><th>유형</th><th>감리단계</th><th>지적사항</th>
@@ -561,6 +563,28 @@
       <div class="label">시정조치</div>
       <div class="value" id="sc-ca">-</div>
       <div class="sub">미조치 <span id="sc-ca-open">0</span> / 확인완료 <span id="sc-ca-done">0</span></div>
+    </div>
+  </div>
+
+  <!-- B4: 대시보드 차트 -->
+  <div class="row g-3 mt-1">
+    <div class="col-12 col-lg-4">
+      <div style="background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:14px">
+        <strong style="font-size:.82rem"><i class="bi bi-pie-chart me-1 text-primary"></i>산출물 제출 현황</strong>
+        <div style="position:relative;height:180px"><canvas id="auditArtChart"></canvas></div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-4">
+      <div style="background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:14px">
+        <strong style="font-size:.82rem"><i class="bi bi-bar-chart me-1 text-success"></i>요구사항 충족률</strong>
+        <div style="position:relative;height:180px"><canvas id="auditReqChart"></canvas></div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-4">
+      <div style="background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:14px">
+        <strong style="font-size:.82rem"><i class="bi bi-exclamation-circle me-1 text-warning"></i>시정조치 현황</strong>
+        <div style="position:relative;height:180px"><canvas id="auditCAChart"></canvas></div>
+      </div>
     </div>
   </div>
 
@@ -766,6 +790,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 const API = '/npms/api/audit';
 let PID=null, AWARDED=false;
@@ -811,7 +836,50 @@ async function loadSummary(){
         if(p.status==='completed') step.classList.add('done');
         if(p.status==='in_progress') step.classList.add('active');}
     });
+    // B4: 대시보드 차트
+    renderAuditCharts(d);
   }catch(e){}
+}
+
+let _artChart,_reqChart,_caChart;
+function renderAuditCharts(d){
+  const a=d.artifacts||{};
+  // 산출물 도넛
+  const ctx1=document.getElementById('auditArtChart');
+  if(ctx1){
+    if(_artChart)_artChart.destroy();
+    _artChart=new Chart(ctx1,{type:'doughnut',data:{
+      labels:['제출','미제출'],
+      datasets:[{data:[a.submitted||0,(a.template_total||0)-(a.submitted||0)],backgroundColor:['#0d6efd','#e9ecef']}]
+    },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}}});
+  }
+  // 요구사항 막대
+  const r=d.requirements||{};
+  const ctx2=document.getElementById('auditReqChart');
+  if(ctx2){
+    if(_reqChart)_reqChart.destroy();
+    _reqChart=new Chart(ctx2,{type:'bar',data:{
+      labels:['완료','진행중','미착수','제외'],
+      datasets:[{data:[r.completed||0,r.in_progress||0,r.not_started||0,r.excluded||0],
+        backgroundColor:['#198754','#0d6efd','#adb5bd','#6c757d']}]
+    },options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},
+      scales:{x:{ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
+  }
+  // 시정조치 도넛
+  const c=d.corrective_actions||{};
+  const ctx3=document.getElementById('auditCAChart');
+  if(ctx3){
+    if(_caChart)_caChart.destroy();
+    const vals=[c.open||0,c.in_progress||0,c.completed||0,c.verified||0];
+    if(vals.some(v=>v>0)){
+      _caChart=new Chart(ctx3,{type:'doughnut',data:{
+        labels:['미조치','조치중','완료','검증'],
+        datasets:[{data:vals,backgroundColor:['#dc3545','#fd7e14','#198754','#0d6efd']}]
+      },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}}});
+    } else {
+      ctx3.parentElement.innerHTML='<div class="text-center text-muted py-5" style="font-size:.85rem"><i class="bi bi-check-circle text-success" style="font-size:2rem"></i><br>시정조치 없음</div>';
+    }
+  }
 }
 
 async function loadTmpl(){
@@ -997,7 +1065,10 @@ function renderArt(pf){
           ${art.location_note?`<div class="text-truncate" style="font-size:.65rem;color:#8a9ab0;max-width:90px;" title="${art.location_note}">${art.location_note}</div>`:''}`
         :`<span style="color:#ccc;font-size:.72rem;">없음</span>`}
       </td>
-      <td><button class="btn btn-sm" style="background:#e8edf5;color:#2c3e55;font-size:.7rem;padding:2px 9px;border-radius:4px;" onclick="openArtModal(${t.id})"><i class="bi bi-upload me-1"></i>업로드</button></td>
+      <td class="btn-row">
+        <button class="btn btn-outline-primary" onclick="openArtModal(${t.id})"><i class="bi bi-upload"></i></button>
+        ${st==='submitted'?`<button class="btn btn-success" onclick="approveArt(${art.id})" title="승인"><i class="bi bi-check-lg"></i></button><button class="btn btn-danger" onclick="rejectArt(${art.id})" title="반려"><i class="bi bi-x-lg"></i></button>`:''}
+      </td>
     </tr>`;
   }
   tb.innerHTML=html;
@@ -1126,7 +1197,19 @@ function renderCA(){
       <td><span class="bp ${c.audit_phase==='착수감리'?'bp-init':c.audit_phase==='중간감리'?'bp-mid':'bp-end'}" style="font-size:.62rem;">${c.audit_phase||'-'}</span></td>
       <td class="wrap" style="font-size:.78rem;">${c.issue_description}</td>
       <td class="wrap" style="font-size:.75rem;color:#4a5a6a;">${c.action_description||'<span style="color:#bbb;font-style:italic;">미입력</span>'}</td>
-      <td style="font-size:.73rem;${c.due_date&&new Date(c.due_date)<new Date()&&c.status!=='verified'?'color:#c0392b;font-weight:600;':''}">${c.due_date||'-'}</td>
+      <td style="font-size:.73rem;${(()=>{
+        if(!c.due_date||c.status==='verified'||c.status==='completed') return '';
+        const diff=Math.floor((new Date(c.due_date)-new Date())/(86400000));
+        if(diff<0) return 'color:#dc3545;font-weight:700;';
+        if(diff<=3) return 'color:#fd7e14;font-weight:600;';
+        return '';
+      })()}">${c.due_date||'-'}${(()=>{
+        if(!c.due_date||c.status==='verified'||c.status==='completed') return '';
+        const diff=Math.floor((new Date(c.due_date)-new Date())/(86400000));
+        if(diff<0) return `<div style="font-size:.6rem;color:#dc3545">D+${Math.abs(diff)} 초과</div>`;
+        if(diff<=3) return `<div style="font-size:.6rem;color:#fd7e14">D-${diff}</div>`;
+        return '';
+      })()}</td>
       <td><span class="bs ${CAB[c.status]||'bs-open'}">${c.status_display}</span>
           ${c.completed_by_name?`<div style="font-size:.63rem;color:#888;margin-top:2px;">${c.completed_by_name}</div>`:''}
       </td>
@@ -1364,8 +1447,22 @@ function toast(msg){
   setTimeout(()=>{d.style.opacity='0';setTimeout(()=>d.remove(),300);},2200);
 }
 function exportRTM(){
-  const url = `/npms/api/audit/export/rtm/${PID ? '?project='+PID : ''}`;
-  window.location.href = url;
+  window.location.href = `/npms/api/audit/export/rtm/${PID ? '?project='+PID : ''}`;
+}
+function dlAuditExcel(type){
+  window.location.href = `/npms/api/audit/export/${type}/${PID ? '?project='+PID : ''}`;
+}
+
+// B1: 산출물 승인/반려
+async function approveArt(id){
+  if(!confirm('이 산출물을 승인하시겠습니까?')) return;
+  await fetch(`${API}/artifacts/${id}/approve/`,{method:'POST',headers:{'X-CSRFToken':csrf()},credentials:'same-origin'});
+  loadTmpl();loadReqs();loadSummary();toast('승인 완료');
+}
+async function rejectArt(id){
+  if(!confirm('이 산출물을 반려하시겠습니까?')) return;
+  await fetch(`${API}/artifacts/${id}/reject/`,{method:'POST',headers:{'X-CSRFToken':csrf()},credentials:'same-origin'});
+  loadTmpl();toast('반려 처리');
 }
 
 /* ══════════════════════════════════════════════════

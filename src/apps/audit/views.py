@@ -354,6 +354,28 @@ class ArtifactViewSet(viewsets.ModelViewSet):
             raise Http404('파일을 찾을 수 없습니다')
 
 
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """B1: 산출물 승인"""
+        artifact = self.get_object()
+        artifact.status = 'approved'
+        artifact.save()
+        # B3: 연결된 요구사항 자동 갱신
+        for req in artifact.requirements.all():
+            if req.status != 'completed':
+                req.status = 'completed'
+                req.save(update_fields=['status'])
+        return Response(ArtifactSerializer(artifact).data)
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """B1: 산출물 반려"""
+        artifact = self.get_object()
+        artifact.status = 'rejected'
+        artifact.save()
+        return Response(ArtifactSerializer(artifact).data)
+
+
 class AuditPlanViewSet(viewsets.ModelViewSet):
     queryset           = AuditPlan.objects.select_related('project').prefetch_related('checklist_items').all()
     serializer_class   = AuditPlanSerializer
@@ -396,6 +418,18 @@ class ChecklistItemViewSet(viewsets.ModelViewSet):
         item.evidence = evidence
         item.finding  = finding
         item.save()
+
+        # B2: 부적합 시 시정조치 자동 생성
+        if result == 'fail' and finding:
+            existing = CorrectiveAction.objects.filter(checklist_item=item).first()
+            if not existing:
+                CorrectiveAction.objects.create(
+                    checklist_item=item,
+                    action_type='mandatory',
+                    issue_description=finding,
+                    status='open',
+                )
+
         return Response(ChecklistItemSerializer(item).data)
 
 
@@ -739,3 +773,82 @@ def export_rtm_excel(request):
     )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+@login_required
+def export_audit_data(request, data_type):
+    """감리 데이터 Excel 내보내기 (산출물/체크리스트/시정조치)"""
+    import openpyxl, urllib.parse
+    from io import BytesIO
+    from openpyxl.styles import Font as F2, PatternFill as P2
+
+    project_id = request.GET.get('project')
+    project = AuditProject.objects.filter(id=project_id).first() if project_id else AuditProject.objects.filter(is_active=True).first()
+    if not project:
+        return HttpResponse('프로젝트 없음', status=404)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    hf = P2('solid', fgColor='1F497D')
+    hfont = F2(bold=True, color='FFFFFF', size=10)
+
+    SK = {'pending':'대기','draft':'작성중','submitted':'제출','approved':'승인','rejected':'반려',
+          'not_started':'미착수','in_progress':'진행중','completed':'완료','excluded':'점검제외',
+          'not_checked':'미점검','pass':'적합','fail':'부적합',
+          'open':'미조치','verified':'검증완료'}
+
+    if data_type == 'artifacts':
+        ws.title = '산출물 현황'
+        headers = ['코드','산출물명','감리단계','제출시점','연관요구사항','상태','제출일','제출자']
+        ws.append(headers)
+        for t in ArtifactTemplate.objects.filter(project=project).order_by('seq'):
+            art = Artifact.objects.filter(template=t).first()
+            req_codes = ', '.join(t.requirement.values_list('code', flat=True)) if hasattr(t,'requirement') else ''
+            ws.append([
+                t.code, t.name, t.get_audit_phase_display(), t.get_submit_timing_display(),
+                req_codes, SK.get(art.status, art.status) if art else '대기',
+                str(art.submitted_at) if art and art.submitted_at else '',
+                art.submitted_by.name if art and art.submitted_by else '',
+            ])
+        fname = '산출물현황.xlsx'
+
+    elif data_type == 'checklist':
+        ws.title = '감리 체크리스트'
+        headers = ['No.','감리영역','감리단계','요구사항','점검항목','확인포인트','결과','확인내용','지적사항']
+        ws.append(headers)
+        for i, c in enumerate(ChecklistItem.objects.filter(audit_plan__project=project).select_related('audit_plan','requirement').order_by('audit_plan__phase','area','seq'), 1):
+            ws.append([
+                i, c.get_area_display(), c.get_phase_display(),
+                c.requirement.code if c.requirement else '',
+                c.description, c.check_point,
+                SK.get(c.result, c.result), c.evidence or '', c.finding or '',
+            ])
+        fname = '감리체크리스트.xlsx'
+
+    elif data_type == 'corrective':
+        ws.title = '시정조치'
+        headers = ['No.','유형','감리단계','지적사항','조치내용','기한','상태','완료자','검증자']
+        ws.append(headers)
+        for i, c in enumerate(CorrectiveAction.objects.filter(checklist_item__audit_plan__project=project).select_related('checklist_item__audit_plan','completed_by','verified_by').order_by('-id'), 1):
+            ws.append([
+                i, c.get_action_type_display(),
+                c.checklist_item.audit_plan.get_phase_display() if c.checklist_item and c.checklist_item.audit_plan else '',
+                c.issue_description[:80], c.action_description[:80],
+                str(c.due_date) if c.due_date else '',
+                SK.get(c.status, c.status),
+                c.completed_by.name if c.completed_by else '',
+                c.verified_by.name if c.verified_by else '',
+            ])
+        fname = '시정조치.xlsx'
+    else:
+        return HttpResponse('알 수 없는 유형', status=400)
+
+    for cell in ws[1]:
+        cell.font = hfont; cell.fill = hf
+
+    buf = BytesIO()
+    wb.save(buf); buf.seek(0)
+    encoded = urllib.parse.quote(fname)
+    resp = HttpResponse(buf.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
+    return resp
