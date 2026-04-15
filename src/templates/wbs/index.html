@@ -250,33 +250,35 @@
     <!-- EVM 카드 -->
     <div class="row g-3 mb-3" id="evmCards"></div>
 
-    <!-- S-Curve + 준수율 게이지 + 단계별 EVM -->
-    <div class="row g-3 mb-3">
-      <div class="col-12 col-lg-5">
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
-          <strong style="font-size:.8rem"><i class="bi bi-graph-up me-1 text-primary"></i>S-Curve (계획 vs 실적)</strong>
-          <div style="position:relative;height:200px"><canvas id="sCurveChart"></canvas></div>
-        </div>
+    <!-- S-Curve (전폭) -->
+    <div class="mb-3">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px">
+        <strong style="font-size:.85rem"><i class="bi bi-graph-up me-1 text-primary"></i>S-Curve (계획 vs 실적)</strong>
+        <div style="position:relative;height:200px"><canvas id="sCurveChart"></canvas></div>
       </div>
-      <div class="col-12 col-lg-3">
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;height:100%">
-          <strong style="font-size:.8rem"><i class="bi bi-speedometer2 me-1 text-success"></i>단계별 준수율</strong>
-          <div style="position:relative;height:200px"><canvas id="gaugeChart"></canvas></div>
+    </div>
+
+    <!-- 준수율 게이지 + 단계별 EVM 테이블 + 지연 경고 -->
+    <div class="row g-3">
+      <div class="col-12 col-lg-4">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px;height:100%">
+          <strong style="font-size:.85rem"><i class="bi bi-speedometer2 me-1 text-success"></i>단계별 준수율</strong>
+          <div style="position:relative;height:180px"><canvas id="gaugeChart"></canvas></div>
         </div>
       </div>
       <div class="col-12 col-lg-4">
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px;height:100%">
           <strong style="font-size:.85rem"><i class="bi bi-table me-1 text-info"></i>단계별 EVM 상세</strong>
           <table class="table table-sm table-hover mt-2 mb-0" style="font-size:.82rem">
-            <thead class="table-light"><tr><th>단계</th><th class="text-center">PV (계획)</th><th class="text-center">EV (실적)</th><th class="text-center">SPI</th><th class="text-center">판정</th></tr></thead>
+            <thead class="table-light"><tr><th>단계</th><th class="text-center">PV</th><th class="text-center">EV</th><th class="text-center">SPI</th><th class="text-center">판정</th></tr></thead>
             <tbody id="evmPhaseTable"><tr><td colspan="5" class="text-center text-muted py-3">로딩 중…</td></tr></tbody>
           </table>
         </div>
       </div>
+      <div class="col-12 col-lg-4">
+        <div id="delayAlert"></div>
+      </div>
     </div>
-
-    <!-- 지연 경고 -->
-    <div id="delayAlert"></div>
   </div>
 
 </div>
@@ -609,22 +611,31 @@ async function loadDelayed() {
     if (!res.ok) return;
     const items = await res.json();
     const el = document.getElementById('delayAlert');
-    if (!items.length) { el.style.display = 'none'; return; }
-    el.style.display = '';
+    if (!items.length) {
+      el.innerHTML = `
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px;height:100%">
+          <strong style="font-size:.85rem"><i class="bi bi-shield-check me-1 text-success"></i>지연 현황</strong>
+          <div class="text-center text-muted py-4" style="font-size:.85rem">
+            <i class="bi bi-check-circle text-success" style="font-size:2rem"></i><br>
+            지연 항목 없음
+          </div>
+        </div>`;
+      return;
+    }
     el.innerHTML = `
-      <div class="alert alert-danger py-2 px-3 mb-0" style="font-size:.82rem">
-        <strong><i class="bi bi-exclamation-triangle me-1"></i>지연 항목 ${items.length}건</strong>
-        <table class="table table-sm table-borderless mb-0 mt-1" style="font-size:.78rem">
-          <thead><tr class="text-muted"><th>코드</th><th>작업명</th><th>계획종료</th><th>지연일수</th><th>진척률</th><th>담당</th></tr></thead>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #dc2626;border-radius:8px;padding:14px;height:100%">
+        <strong style="font-size:.85rem"><i class="bi bi-exclamation-triangle me-1 text-danger"></i>지연 항목 <span class="badge bg-danger">${items.length}건</span></strong>
+        <div style="max-height:160px;overflow-y:auto;margin-top:8px">
+        <table class="table table-sm table-borderless mb-0" style="font-size:.78rem">
+          <thead><tr class="text-muted"><th>코드</th><th>작업명</th><th>지연</th><th>진척</th></tr></thead>
           <tbody>${items.map(i => `<tr>
             <td><span class="wbs-code">${i.code}</span></td>
-            <td>${i.name}</td>
-            <td>${i.planned_end}</td>
+            <td title="${i.name}" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.name}</td>
             <td><strong class="text-danger">${i.delay_days}일</strong></td>
             <td>${i.progress}%</td>
-            <td>${i.assignee}</td>
           </tr>`).join('')}</tbody>
         </table>
+        </div>
       </div>`;
   } catch(e) { console.error('loadDelayed:', e); }
 }
