@@ -933,6 +933,90 @@ def import_audit_data(request, data_type):
                 updated += 1
             except Exception as e:
                 errors.append({'row': ri, 'error': str(e)})
+    elif data_type == 'artifacts':
+        # 코드 기준 매칭: 상태 업데이트
+        ST_MAP = {'대기': 'pending', '작성중': 'draft', '제출': 'submitted', '승인': 'approved', '반려': 'rejected'}
+        existing = {t.code: t for t in ArtifactTemplate.objects.filter(project=project)}
+        for ri, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+            if not row or not row[0]:
+                continue
+            code = str(row[0]).strip()
+            tmpl = existing.get(code)
+            if not tmpl:
+                continue
+            try:
+                art, created = Artifact.objects.get_or_create(
+                    template=tmpl, project=project,
+                    defaults={'code': tmpl.code, 'name': tmpl.name, 'audit_phase': tmpl.audit_phase}
+                )
+                if len(row) > 5 and row[5]:
+                    st = str(row[5]).strip()
+                    art.status = ST_MAP.get(st, st)
+                if len(row) > 6 and row[6]:
+                    art.submitted_at = row[6] if hasattr(row[6], 'date') else str(row[6]).strip()
+                art.save()
+                updated += 1
+            except Exception as e:
+                errors.append({'row': ri, 'code': code, 'error': str(e)})
+
+    elif data_type == 'corrective':
+        # 시정조치 일괄 등록 (신규 생성)
+        ST_MAP = {'미조치': 'open', '조치중': 'in_progress', '완료': 'completed', '검증완료': 'verified'}
+        TYPE_MAP = {'필수': 'mandatory', '권고': 'recommended'}
+        plans = {p.get_phase_display(): p for p in AuditPlan.objects.filter(project=project)}
+        chk_items = list(ChecklistItem.objects.filter(audit_plan__project=project))
+        for ri, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+            if not row or not row[0]:
+                continue
+            try:
+                action_type = TYPE_MAP.get(str(row[1] or '').strip(), 'mandatory') if len(row) > 1 else 'mandatory'
+                issue = str(row[3] or '').strip() if len(row) > 3 else ''
+                action_desc = str(row[4] or '').strip() if len(row) > 4 else ''
+                due = row[5] if len(row) > 5 and row[5] else None
+                ca_status = ST_MAP.get(str(row[6] or '').strip(), 'open') if len(row) > 6 else 'open'
+                if not issue:
+                    continue
+                CorrectiveAction.objects.create(
+                    checklist_item=chk_items[0] if chk_items else None,
+                    action_type=action_type,
+                    issue_description=issue,
+                    action_description=action_desc,
+                    due_date=due.date() if hasattr(due, 'date') else due,
+                    status=ca_status,
+                )
+                updated += 1
+            except Exception as e:
+                errors.append({'row': ri, 'error': str(e)})
+
+    elif data_type == 'additional':
+        # 추가제안/기술협상 일괄 등록
+        ST_MAP = {'미착수': 'not_started', '진행중': 'in_progress', '완료': 'completed', '점검제외': 'excluded'}
+        existing_codes = set(Requirement.objects.filter(project=project, category='ADD').values_list('code', flat=True))
+        next_num = len(existing_codes) + 1
+        for ri, row in enumerate(ws.iter_rows(min_row=2, values_only=True), 2):
+            if not row:
+                continue
+            try:
+                name = str(row[1] or '').strip() if len(row) > 1 else ''
+                if not name:
+                    continue
+                code = f'ADD-{str(next_num).zfill(3)}'
+                while code in existing_codes:
+                    next_num += 1
+                    code = f'ADD-{str(next_num).zfill(3)}'
+                desc = str(row[2] or '').strip() if len(row) > 2 else ''
+                sla = str(row[3] or '').strip() if len(row) > 3 else ''
+                st = ST_MAP.get(str(row[4] or '').strip(), 'not_started') if len(row) > 4 else 'not_started'
+                Requirement.objects.create(
+                    project=project, code=code, category='ADD',
+                    name=name, description=desc, sla_target=sla,
+                    status=st, is_additional=True,
+                )
+                existing_codes.add(code)
+                next_num += 1
+                updated += 1
+            except Exception as e:
+                errors.append({'row': ri, 'error': str(e)})
     else:
         return JsonResponse({'error': '알 수 없는 유형'}, status=400)
 

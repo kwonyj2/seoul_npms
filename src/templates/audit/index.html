@@ -243,7 +243,8 @@
     <button class="btn-phase" onclick="filterArt('closing',this)">종료감리</button>
     <button class="btn-phase" onclick="filterArt('occurrence',this)">발생 시</button>
     <div class="ms-auto d-flex gap-2">
-      <button class="btn btn-sm btn-outline-success" style="font-size:.74rem;" onclick="dlAuditExcel('artifacts')"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+      <button class="btn btn-sm btn-outline-success" style="font-size:.74rem;" onclick="dlAuditExcel('artifacts')"><i class="bi bi-download me-1"></i>Excel</button>
+      <label class="btn btn-sm btn-outline-primary mb-0" style="font-size:.74rem;cursor:pointer"><i class="bi bi-upload me-1"></i>업로드<input type="file" accept=".xlsx" hidden onchange="importAudit('artifacts',this)"></label>
       <button class="btn btn-sm btn-primary" style="font-size:.74rem;" onclick="dlSelected()"><i class="bi bi-download me-1"></i>선택 다운로드</button>
     </div>
   </div>
@@ -418,7 +419,8 @@
         <option value="open">미조치</option><option value="in_progress">조치중</option>
         <option value="completed">조치완료</option><option value="verified">확인완료</option>
       </select>
-      <button class="btn btn-sm btn-outline-success" style="font-size:.74rem;" onclick="dlAuditExcel('corrective')"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+      <button class="btn btn-sm btn-outline-success" style="font-size:.74rem;" onclick="dlAuditExcel('corrective')"><i class="bi bi-download me-1"></i>Excel</button>
+      <label class="btn btn-sm btn-outline-primary mb-0" style="font-size:.74rem;cursor:pointer"><i class="bi bi-upload me-1"></i>업로드<input type="file" accept=".xlsx" hidden onchange="importAudit('corrective',this)"></label>
       <button class="btn btn-sm btn-primary" style="font-size:.74rem;" onclick="openCAModal()"><i class="bi bi-plus-lg me-1"></i>시정조치 등록</button>
     </div>
   </div>
@@ -452,8 +454,9 @@
   <div id="add-cont" style="display:none;">
     <div class="filter-bar">
       <button class="btn btn-sm btn-primary" style="font-size:.74rem;" onclick="showAddModal('추가제안')"><i class="bi bi-plus me-1"></i>추가제안 등록</button>
-      <button class="btn btn-sm btn-outline-primary ms-2" style="font-size:.74rem;" onclick="showAddModal('기술협상')"><i class="bi bi-plus me-1"></i>기술협상 결과 등록</button>
-      <span class="ms-3 text-muted" style="font-size:.72rem;"><i class="bi bi-info-circle me-1"></i>기술협상은 오프라인 협의 후 확정된 결과를 여기에 등록합니다</span>
+      <button class="btn btn-sm btn-outline-primary ms-1" style="font-size:.74rem;" onclick="showAddModal('기술협상')"><i class="bi bi-plus me-1"></i>기술협상 등록</button>
+      <label class="btn btn-sm btn-outline-primary mb-0 ms-1" style="font-size:.74rem;cursor:pointer"><i class="bi bi-upload me-1"></i>일괄 업로드<input type="file" accept=".xlsx" hidden onchange="importAudit('additional',this)"></label>
+      <span class="ms-2 text-muted" style="font-size:.72rem;"><i class="bi bi-info-circle me-1"></i>Excel 양식: 구분 | 항목명 | 내용 | 이행기준 | 상태</span>
     </div>
     <div class="table-responsive" style="max-height:calc(100vh - 200px);overflow-y:auto;">
     <table class="audit-table" style="min-width:760px;">
@@ -1540,6 +1543,9 @@ async function importAudit(type, input){
   input.value='';
   if(type==='requirements') loadReqs();
   else if(type==='checklist'){loadChkl();loadCA2();}
+  else if(type==='artifacts'){loadTmpl();loadSummary();}
+  else if(type==='corrective') loadCA2();
+  else if(type==='additional') loadReqs();
 }
 function dlAuditExcel(type){
   window.location.href = `/npms/api/audit/export/${type}/${PID ? '?project='+PID : ''}`;
