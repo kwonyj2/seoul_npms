@@ -103,7 +103,6 @@ def api_course_detail(request, course_id):
     })
 
 
-@csrf_exempt
 @login_required
 @require_http_methods(['POST'])
 def api_save_progress(request, content_id):
@@ -147,7 +146,6 @@ def api_save_progress(request, content_id):
     })
 
 
-@csrf_exempt
 @login_required
 @require_http_methods(['POST'])
 def api_complete_course(request, course_id):
@@ -348,7 +346,6 @@ def _generate_certificate_pdf(completion):
 
 # ── 관리자 API ────────────────────────────────────────────────────────────────
 
-@csrf_exempt
 @login_required
 def api_admin_courses(request):
     """관리자: 교육 과정 목록/생성"""
@@ -389,7 +386,6 @@ def api_admin_courses(request):
     return JsonResponse({'error': '허용되지 않는 메서드'}, status=405)
 
 
-@csrf_exempt
 @login_required
 def api_admin_course_detail(request, course_id):
     """관리자: 교육 과정 수정/삭제"""
@@ -416,7 +412,6 @@ def api_admin_course_detail(request, course_id):
     return JsonResponse({'error': '허용되지 않는 메서드'}, status=405)
 
 
-@csrf_exempt
 @login_required
 def api_upload_content(request, course_id):
     """관리자: 콘텐츠(동영상/자료) 업로드"""
@@ -445,7 +440,6 @@ def api_upload_content(request, course_id):
     return JsonResponse({'error': '허용되지 않는 메서드'}, status=405)
 
 
-@csrf_exempt
 @login_required
 def api_delete_content(request, content_id):
     """관리자: 콘텐츠 삭제(DELETE) / 영상 길이 수정(PATCH)"""

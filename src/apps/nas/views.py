@@ -346,6 +346,23 @@ class FileViewSet(viewsets.ModelViewSet):
 
         return Response({'new': new_count, 'removed': removed_count})
 
+    # 허용 확장자 화이트리스트
+    ALLOWED_EXTENSIONS = {
+        # 문서
+        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+        '.hwp', '.hwpx', '.odt', '.ods', '.odp', '.rtf', '.txt', '.csv',
+        # 이미지
+        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif', '.svg', '.webp',
+        # 압축
+        '.zip', '.7z', '.tar', '.gz', '.rar',
+        # 도면/설계
+        '.dwg', '.dxf', '.vsdx', '.vsd',
+        # 영상/음성
+        '.mp4', '.avi', '.mov', '.wmv', '.mp3', '.wav',
+        # 데이터
+        '.json', '.xml', '.yaml', '.yml', '.log',
+    }
+
     def create(self, request, *args, **kwargs):
         """파일 업로드"""
         from rest_framework.exceptions import PermissionDenied
@@ -357,6 +374,14 @@ class FileViewSet(viewsets.ModelViewSet):
             return Response(upload_ser.errors, status=status.HTTP_400_BAD_REQUEST)
         data = upload_ser.validated_data
         uploaded_file = data['file']
+
+        # 확장자 화이트리스트 검증
+        _, ext = os.path.splitext(uploaded_file.name)
+        if ext.lower() not in self.ALLOWED_EXTENSIONS:
+            return Response(
+                {'error': f'허용되지 않는 파일 형식입니다: {ext}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             folder = Folder.objects.get(id=data['folder'])

@@ -500,6 +500,7 @@ def nas_role_perms(request):
 
 
 @login_required
+@_admin_required
 def celery_status(request):
     """Celery 워커 상태 + 스케줄 + 태스크 이력"""
     from django.conf import settings
@@ -726,6 +727,7 @@ def trigger_task(request):
 
 
 @login_required
+@_admin_required
 def backup_status(request):
     """백업 파일 목록 및 상태 조회"""
     import glob

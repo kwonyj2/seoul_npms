@@ -111,7 +111,10 @@ class LoginView(View):
             session_key=request.session.session_key,
             defaults={'user': user, 'ip_address': ip, 'user_agent': ua, 'is_active': True}
         )
-        next_url = request.POST.get('next') or request.GET.get('next') or '/npms/'
+        from django.utils.http import url_has_allowed_host_and_scheme
+        next_url = request.POST.get('next') or request.GET.get('next') or ''
+        if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=False):
+            next_url = '/npms/'
         return redirect(next_url)
 
 

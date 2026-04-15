@@ -3,7 +3,10 @@
 """
 from .base import *
 
-DEBUG = env.bool('DEBUG', default=False)
+DEBUG = False  # 운영 환경에서는 절대 True 금지
+
+# SECRET_KEY — 환경변수 필수, 기본값 없음 (미설정 시 기동 실패)
+SECRET_KEY = env('SECRET_KEY')
 
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['112.187.158.4', 'localhost'])
 
@@ -13,7 +16,9 @@ USE_X_FORWARDED_HOST = True
 
 # 보안
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SESSION_COOKIE_SECURE = False  # HTTP 운영 시 False
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = False  # HTTP 운영 시 False (HTTPS 전환 시 True)
 CSRF_COOKIE_SECURE = False
 
 # CSRF 신뢰 도메인

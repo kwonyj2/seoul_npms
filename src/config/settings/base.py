@@ -87,6 +87,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.audit.AuditLogMiddleware',
     'core.middleware.session_tracking.SessionTrackingMiddleware',
+    'core.middleware.security_headers.SecurityHeadersMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
