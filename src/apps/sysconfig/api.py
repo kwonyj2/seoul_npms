@@ -103,6 +103,14 @@ def system_info(request):
     except Exception:
         pass
 
+    # ── 사용 안내 커버리지 ────────────────────────
+    guide_coverage = {}
+    try:
+        from core.guide import get_guide_coverage
+        guide_coverage = get_guide_coverage()
+    except Exception:
+        pass
+
     return JsonResponse({
         'server': {
             'python':  platform.python_version(),
@@ -112,6 +120,7 @@ def system_info(request):
             'pg':      pg_version,
         },
         'counts': counts,
+        'guide_coverage': guide_coverage,
     })
 
 

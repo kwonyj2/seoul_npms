@@ -813,8 +813,9 @@ GUIDE_CONTENT = {
     'system': {
         'summary': (
             '시스템 전체 설정을 관리하는 관리자 전용 모듈입니다. '
-            '마스터 데이터 CSV 일괄 등록, 계정 생성·권한 매트릭스 설정, '
-            '데이터 내보내기, NAS 권한, 접속이력 조회, 시스템 정보 확인 6가지 기능을 제공합니다. '
+            '마스터 데이터 CSV 일괄 등록, 계정 생성·권한 매트릭스, '
+            '데이터 내보내기, NAS 권한, 접속이력·보안 탐지, 작업 모니터링, '
+            '산출물 통합 조회, DB 관리, 시스템 정보 등 9가지 기능을 제공합니다. '
             '권한 매트릭스 변경은 즉시 적용되어 사이드바 메뉴와 URL 접근이 함께 제어됩니다.'
         ),
         'tabs': [
@@ -841,11 +842,34 @@ GUIDE_CONTENT = {
                      '폴더별 최소 접근 역할(공개/관리자/슈퍼관리자)도 설정 가능합니다. '
                      '변경 즉시 NAS 파일 모듈에 반영됩니다.'},
             {'name': '접속이력',
-             'desc': '3가지 접속 정보를 조회합니다. '
+             'desc': '4가지 접속 정보를 조회합니다. '
                      '[로그인 이력] 로그인 성공·실패 기록(IP·브라우저·실패 사유·시도일시)을 확인합니다. '
                      '[활동 로그] 생성·수정·삭제·다운로드 등 사용자 행위 이력을 조회합니다. '
                      '[현재 접속자] 최근 30분 이내 활성 세션 목록과 현재 접속 화면을 실시간 확인합니다. '
-                     '이름·아이디·IP로 검색하고 날짜 범위 필터로 기간을 지정할 수 있습니다.'},
+                     '[보안 탐지] IP별 로그인 실패 횟수 집계, 위험도 자동 판정(심각/높음/주의/낮음), '
+                     '미등록 계정 시도 탐지, 계정 잠금 이력을 표시합니다. '
+                     '실제 클라이언트 IP가 기록되어 외부 해킹 시도를 식별할 수 있습니다.'},
+            {'name': '작업 모니터링',
+             'desc': 'Celery 백그라운드 작업의 실행 상태를 실시간으로 확인합니다. '
+                     '워커 상태(활성 여부·현재 실행 태스크 수), '
+                     '정기 스케줄(NAS 동기화 1분, OCR 1시간, VSDX 5분, PMS 동기화 새벽 2시, DB 백업 새벽 3시), '
+                     '태스크 실행 이력(성공/실패/실행중 상태 필터링, 완료 시각, 오류 내용)을 확인합니다. '
+                     '요약 카드로 총 실행·성공·실패 건수를 한눈에 파악할 수 있습니다.'},
+            {'name': '산출물 조회',
+             'desc': 'NPMS에서 생성되는 모든 서류(20종)를 한 곳에서 조회하고 Excel로 다운로드합니다. '
+                     '좌측 카테고리 트리(업무보고서/장애관리/장비관리/자재관리/현장사진/인력관리/진척관리/교육관리/학교정보)에서 '
+                     '서류를 선택하면 우측에 상세 데이터가 표 형태로 표시됩니다. '
+                     'Report.data의 JSON 배열(devices, cables 등)은 행 단위로 자동 펼쳐지며, '
+                     '학교 FK는 교육지원청/학제/학교명 3컬럼으로 자동 분리됩니다. '
+                     'Excel 다운로드 시 파일명은 "장애처리보고서.xlsx" 등 서류명으로 저장됩니다. '
+                     '새 ReportTemplate 추가 시 코드 수정 없이 자동 인식됩니다.'},
+            {'name': 'DB 관리',
+             'desc': 'NPMS 전체 데이터베이스(20개 앱, 115개 모델)를 직접 조회·수정·삭제할 수 있는 '
+                     'Django Admin 대체 기능입니다. (슈퍼관리자 전용) '
+                     '좌측 앱/모델 트리에서 모델을 선택하면 우측에 데이터 테이블이 표시됩니다. '
+                     '행 클릭 시 편집 모달에서 필드 타입별 자동 폼(텍스트/드롭다운/체크박스/날짜)이 생성됩니다. '
+                     '검색·정렬·페이지네이션·Excel 다운로드를 지원하며, '
+                     '신규 모델 추가 시 코드 수정 없이 자동 인식됩니다.'},
             {'name': '시스템 정보',
              'desc': 'DB 현황(PostgreSQL 버전·테이블별 레코드 수·DB 용량), '
                      'Python·Django 버전, 운영체제 정보를 확인합니다. '
@@ -857,8 +881,14 @@ GUIDE_CONTENT = {
             '역할별 모듈 권한 매트릭스: 체크 변경 즉시 적용 → 사이드바 메뉴 + URL 접근 동시 제어',
             '모듈 추가 시 권한 매트릭스에 자동 반영 (MODULE_REGISTRY 연동)',
             'NAS 역할별 행위 권한(업로드/삭제/폴더생성) 개별 On/Off',
-            '접속이력 3종: 로그인 이력 / 활동 로그 / 현재 접속자 (50건 페이지네이션)',
+            '접속이력 4종: 로그인 이력 / 활동 로그 / 현재 접속자 / 보안 탐지',
+            '보안 탐지: 외부 IP 실제 기록, IP별 실패 집계, 위험도 자동 판정, 미등록 계정 탐지',
             '5회 로그인 실패 시 30분 잠금 — 로그인 이력에 실패 사유 자동 기록',
+            '작업 모니터링: Celery 워커·스케줄·태스크 이력 실시간 확인 (Flower 대체)',
+            '산출물 조회: 20종 서류 자동 탐지, JSON 자동 펼침, 상세 컬럼 Excel 다운로드',
+            'DB 관리: 115개 모델 범용 CRUD, 자동 폼 생성, 슈퍼관리자 전용',
+            '보안: DEBUG=False 강제, SECRET_KEY 환경변수 필수, 오픈 리다이렉트 차단, '
+            'nginx 보안 헤더 5종, Admin/API문서 IP 제한, 파일 업로드 확장자 화이트리스트',
         ],
     },
 
@@ -874,6 +904,7 @@ def get_guide_modules():
     modules = []
     for key, mod in MODULE_REGISTRY.items():
         content = GUIDE_CONTENT.get(key, {})
+        has_content = key in GUIDE_CONTENT
         modules.append({
             'key':      key,
             'label':    mod['label'],
@@ -883,6 +914,26 @@ def get_guide_modules():
             'summary':  content.get('summary', f'{mod["label"]} 모듈입니다.'),
             'tabs':     content.get('tabs', []),
             'features': content.get('features', []),
+            'tips':     content.get('tips', []),
             'image':    f'img/guide/{key}.png',
+            'has_guide': has_content,
         })
     return modules
+
+
+def get_guide_coverage():
+    """사용 안내 커버리지 현황 — 누락 모듈 자동 감지"""
+    total = len(MODULE_REGISTRY)
+    covered = sum(1 for k in MODULE_REGISTRY if k in GUIDE_CONTENT)
+    missing = [
+        {'key': k, 'label': v['label']}
+        for k, v in MODULE_REGISTRY.items()
+        if k not in GUIDE_CONTENT
+    ]
+    return {
+        'total': total,
+        'covered': covered,
+        'missing_count': len(missing),
+        'missing': missing,
+        'coverage_pct': round(covered / total * 100) if total else 0,
+    }
