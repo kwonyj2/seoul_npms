@@ -193,8 +193,12 @@
     <li class="nav-item ms-auto d-flex align-items-center gap-2 pe-1">
       <span class="text-muted" style="font-size:0.75rem"><i class="bi bi-info-circle me-1"></i>셀 클릭 → 인라인 편집</span>
       <button class="btn btn-sm btn-outline-success" onclick="wbsExportExcel()">
-        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        <i class="bi bi-download me-1"></i>Excel
       </button>
+      <label class="btn btn-sm btn-outline-primary mb-0" style="cursor:pointer">
+        <i class="bi bi-upload me-1"></i>Excel 업로드
+        <input type="file" accept=".xlsx,.xls" hidden onchange="wbsImportExcel(this)">
+      </label>
       <button class="btn btn-sm btn-success" onclick="openItemModal(null)">
         <i class="bi bi-plus-lg me-1"></i>항목 추가
       </button>
@@ -548,6 +552,28 @@ async function loadDelayed() {
 function wbsExportExcel() {
   if (!WBS_PID) return;
   window.location.href = `${API_WBS}export/?project=${WBS_PID}`;
+}
+
+// ── Excel 업로드 ─────────────────────────────────────
+async function wbsImportExcel(input) {
+  if (!WBS_PID || !input.files[0]) return;
+  const fd = new FormData();
+  fd.append('file', input.files[0]);
+  fd.append('project', WBS_PID);
+  try {
+    const res = await fetch(`${API_WBS}import/?project=${WBS_PID}`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': getCsrf()},
+      body: fd,
+      credentials: 'same-origin',
+    });
+    const d = await res.json();
+    if (d.error) { alert('업로드 실패: ' + d.error); return; }
+    const errMsg = d.errors && d.errors.length ? `\n오류 ${d.errors.length}건: ${d.errors.map(e=>e.code+' '+e.error).join(', ')}` : '';
+    alert(`완료: 신규 ${d.created}건, 수정 ${d.updated}건${errMsg}`);
+    input.value = '';
+    loadWbs();
+  } catch(e) { alert('업로드 실패: ' + e.message); }
 }
 
 // ── 트리 테이블 ───────────────────────────────────────

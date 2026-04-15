@@ -301,6 +301,140 @@ class WBSItemViewSet(viewsets.ModelViewSet):
         resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
         return resp
 
+    @action(detail=False, methods=['post'], url_path='import')
+    def import_excel(self, request):
+        """WBS Excel 일괄 업로드 — 코드 기준 매칭(업데이트), 없으면 신규 생성"""
+        import openpyxl
+        from rest_framework.parsers import MultiPartParser
+        from apps.audit.models import AuditProject
+
+        project_id = request.query_params.get('project') or request.data.get('project')
+        if not project_id:
+            return Response({'error': 'project 파라미터 필요'}, status=400)
+        try:
+            project = AuditProject.objects.get(id=project_id)
+        except AuditProject.DoesNotExist:
+            return Response({'error': '프로젝트 없음'}, status=404)
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'error': '파일을 첨부하세요'}, status=400)
+
+        try:
+            wb = openpyxl.load_workbook(file, read_only=True)
+            ws = wb.active
+        except Exception as e:
+            return Response({'error': f'Excel 파일 오류: {e}'}, status=400)
+
+        # 헤더 매핑 (한글 → 필드명)
+        HEADER_MAP = {
+            '코드': 'code', '작업명': 'name', '단계': 'phase', '깊이': 'depth',
+            '가중치': 'weight', '계획시작': 'planned_start', '계획종료': 'planned_end',
+            '실적시작': 'actual_start', '실적종료': 'actual_end',
+            '진척률(%)': 'progress', '진척률': 'progress',
+            '소스': 'progress_source', '금주계획': 'this_week_plan',
+            '금주실적': 'this_week_actual', '차주계획': 'next_week_plan', '비고': 'notes',
+        }
+        PHASE_MAP = {'계획': 'plan', '수행': 'execute', '종료': 'close'}
+        SRC_MAP = {'수동': 'manual', '산출물': 'artifact', '점검': 'inspection',
+                   '장애': 'incident', '하위합산': 'children'}
+
+        # 헤더 읽기
+        headers = []
+        for cell in ws[1]:
+            val = str(cell.value or '').strip()
+            headers.append(HEADER_MAP.get(val, val))
+
+        if 'code' not in headers:
+            return Response({'error': '코드 컬럼이 필요합니다'}, status=400)
+
+        created = 0
+        updated = 0
+        errors = []
+
+        # 기존 항목 캐시
+        existing = {i.code: i for i in WBSItem.objects.filter(project=project)}
+
+        for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            row_dict = {}
+            for ci, val in enumerate(row):
+                if ci < len(headers):
+                    row_dict[headers[ci]] = val
+
+            code = str(row_dict.get('code', '')).strip()
+            if not code:
+                continue
+
+            try:
+                item = existing.get(code)
+                is_new = item is None
+                if is_new:
+                    item = WBSItem(project=project, code=code)
+
+                # 필드 업데이트
+                if 'name' in row_dict and row_dict['name']:
+                    item.name = str(row_dict['name']).strip()
+                if 'phase' in row_dict and row_dict['phase']:
+                    phase_val = str(row_dict['phase']).strip()
+                    item.phase = PHASE_MAP.get(phase_val, phase_val)
+                if 'depth' in row_dict and row_dict['depth']:
+                    item.depth = int(row_dict['depth'])
+                if 'weight' in row_dict and row_dict['weight'] is not None:
+                    item.weight = float(row_dict['weight'])
+                if 'progress' in row_dict and row_dict['progress'] is not None:
+                    item.progress = int(row_dict['progress'])
+                if 'progress_source' in row_dict and row_dict['progress_source']:
+                    src_val = str(row_dict['progress_source']).strip()
+                    item.progress_source = SRC_MAP.get(src_val, src_val)
+
+                # 날짜 필드
+                for f in ['planned_start', 'planned_end', 'actual_start', 'actual_end']:
+                    if f in row_dict and row_dict[f]:
+                        val = row_dict[f]
+                        if hasattr(val, 'date'):
+                            setattr(item, f, val.date() if hasattr(val, 'date') else val)
+                        elif isinstance(val, str) and val.strip():
+                            from datetime import datetime as dt
+                            try:
+                                setattr(item, f, dt.strptime(val.strip(), '%Y-%m-%d').date())
+                            except ValueError:
+                                pass
+                        elif val is None or val == '':
+                            setattr(item, f, None)
+
+                # 텍스트 필드
+                for f in ['this_week_plan', 'this_week_actual', 'next_week_plan', 'notes']:
+                    if f in row_dict:
+                        setattr(item, f, str(row_dict[f] or '').strip())
+
+                # 부모 자동 매칭 (코드 기반: 1.2.3 → 부모 1.2)
+                if '.' in code:
+                    parent_code = code.rsplit('.', 1)[0]
+                    parent = existing.get(parent_code) or WBSItem.objects.filter(
+                        project=project, code=parent_code).first()
+                    if parent:
+                        item.parent = parent
+
+                item.save()
+                existing[code] = item
+
+                if is_new:
+                    created += 1
+                else:
+                    updated += 1
+            except Exception as e:
+                errors.append({'row': row_idx, 'code': code, 'error': str(e)})
+
+        # 부모 진척률 재계산
+        for item in WBSItem.objects.filter(project=project, progress_source='children'):
+            item.recalculate_from_children()
+
+        return Response({
+            'created': created,
+            'updated': updated,
+            'errors': errors,
+        })
+
     @action(detail=True, methods=['patch'], url_path='progress')
     def update_progress(self, request, pk=None):
         """진척률 수동 업데이트 (manual 소스 항목만)"""
