@@ -298,6 +298,88 @@ def db_crud(request, app_label, model_name, pk=None):
     return JsonResponse({'error': '허용되지 않는 메서드'}, status=405)
 
 
+@login_required
+@_superadmin_required
+def db_export(request, app_label, model_name):
+    """모델 데이터 Excel 다운로드"""
+    import openpyxl
+    from io import BytesIO
+    from django.http import HttpResponse
+
+    try:
+        model = apps.get_model(app_label, model_name)
+    except LookupError:
+        return JsonResponse({'error': '모델을 찾을 수 없습니다.'}, status=404)
+    if app_label not in ALLOWED_APPS:
+        return JsonResponse({'error': '접근 불가 앱'}, status=403)
+
+    # 내보낼 필드 수집
+    fields = []
+    for field in model._meta.get_fields():
+        if isinstance(field, ManyToManyField):
+            continue
+        if not hasattr(field, 'column') and not isinstance(field, (ForeignKey, OneToOneField)):
+            continue
+        fields.append(field)
+
+    # Excel 생성
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = str(model._meta.verbose_name)[:31]
+
+    # 헤더
+    headers = []
+    for f in fields:
+        label = str(f.verbose_name) if hasattr(f, 'verbose_name') else f.name
+        headers.append(label)
+    ws.append(headers)
+
+    # 헤더 스타일
+    from openpyxl.styles import Font, PatternFill
+    for cell in ws[1]:
+        cell.font = Font(bold=True, size=10)
+        cell.fill = PatternFill(start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')
+
+    # 데이터 (최대 10000행)
+    q = request.GET.get('q', '').strip()
+    qs = model.objects.all()
+    if q:
+        q_filter = Q()
+        for field in fields:
+            if isinstance(field, (CharField, TextField)):
+                q_filter |= Q(**{f'{field.name}__icontains': q})
+        if q_filter:
+            qs = qs.filter(q_filter)
+    qs = qs.order_by('pk')[:10000]
+
+    for obj in qs:
+        row_data = []
+        for field in fields:
+            val = _serialize_value(obj, field)
+            if isinstance(val, dict):
+                val = val.get('label', val.get('id', ''))
+            row_data.append(val)
+        ws.append(row_data)
+
+    # 컬럼 너비 자동 조정
+    for col_idx, field in enumerate(fields, 1):
+        max_len = len(headers[col_idx - 1])
+        for row in ws.iter_rows(min_row=2, min_col=col_idx, max_col=col_idx):
+            for cell in row:
+                if cell.value:
+                    max_len = max(max_len, len(str(cell.value)[:30]))
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = min(max_len + 3, 40)
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    filename = f'{app_label}_{model_name}.xlsx'
+    response = HttpResponse(buf.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
 def _clean_data(model, body):
     """프론트 JSON → 모델 필드에 맞게 정제"""
     cleaned = {}

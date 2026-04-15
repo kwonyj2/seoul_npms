@@ -45,7 +45,7 @@ from apps.sysconfig.api import (
     system_health, storage_usage, trigger_task,
 )
 from apps.sysconfig.exports import export_view
-from apps.sysconfig.db_admin import db_schema, db_model_schema, db_crud
+from apps.sysconfig.db_admin import db_schema, db_model_schema, db_crud, db_export
 from core.permissions.roles import module_required
 
 # ─────────────────────────────────────────
@@ -194,6 +194,7 @@ urlpatterns = [
     # DB 관리 (범용 CRUD)
     path('api/sysconfig/db/schema/',                              db_schema,        name='db-schema'),
     path('api/sysconfig/db/<str:app_label>/<str:model_name>/schema/', db_model_schema, name='db-model-schema'),
+    path('api/sysconfig/db/<str:app_label>/<str:model_name>/export/', db_export,    name='db-export'),
     path('api/sysconfig/db/<str:app_label>/<str:model_name>/',    db_crud,          name='db-crud-list'),
     path('api/sysconfig/db/<str:app_label>/<str:model_name>/<int:pk>/', db_crud,    name='db-crud-detail'),
 
