@@ -501,14 +501,14 @@ def nas_role_perms(request):
 
 @login_required
 def celery_status(request):
-    """Celery 워커 상태 및 Flower URL 반환"""
+    """Celery 워커 상태 + 스케줄 + 태스크 이력"""
     from django.conf import settings
     from config.celery import app as celery_app
 
     flower_url = getattr(settings, 'FLOWER_URL', '/npms/flower/')
     broker = settings.CELERY_BROKER_URL
 
-    # 워커 ping (타임아웃 1초 — 실패해도 정상 응답)
+    # ── 워커 상태 ────────────────────────────
     try:
         inspector = celery_app.control.inspect(timeout=1.0)
         active = inspector.active() or {}
@@ -519,11 +519,107 @@ def celery_status(request):
     except Exception:
         workers = []
 
+    # ── Beat 스케줄 ──────────────────────────
+    TASK_LABELS = {
+        'apps.nas.tasks.sync_nas_filesystem': 'NAS 파일 동기화',
+        'apps.nas.tasks.bulk_ocr_extract':    'OCR 일괄 추출',
+        'apps.schools.tasks.scan_vsdx_folder':'VSDX 구성도 파싱',
+        'apps.schools.tasks.sync_pms_contacts':'PMS 담당자 동기화',
+        'core.tasks.backup_database':          'DB 백업',
+        'apps.nas.tasks.purge_old_trash':      '휴지통 정리',
+    }
+    beat_schedule = getattr(settings, 'CELERY_BEAT_SCHEDULE', {})
+    schedules = []
+    for name, conf in beat_schedule.items():
+        task_path = conf.get('task', '')
+        sched = conf.get('schedule')
+        if isinstance(sched, (int, float)):
+            secs = int(sched)
+            if secs >= 3600:
+                interval = f'{secs // 3600}시간마다'
+            elif secs >= 60:
+                interval = f'{secs // 60}분마다'
+            else:
+                interval = f'{secs}초마다'
+        elif hasattr(sched, 'run_every'):
+            secs = int(sched.run_every.total_seconds())
+            if secs >= 3600:
+                interval = f'{secs // 3600}시간마다'
+            elif secs >= 60:
+                interval = f'{secs // 60}분마다'
+            else:
+                interval = f'{secs}초마다'
+        elif hasattr(sched, 'minute'):
+            m = ','.join(str(x) for x in sorted(sched.minute)) if sched.minute != {0} else '0'
+            h = ','.join(str(x) for x in sorted(sched.hour)) if sched.hour else '*'
+            interval = f'매일 {h}:{m.zfill(2)}'
+        else:
+            interval = str(sched)
+        schedules.append({
+            'name': name,
+            'task': task_path,
+            'label': TASK_LABELS.get(task_path, task_path.split('.')[-1]),
+            'interval': interval,
+        })
+
+    # ── 태스크 실행 이력 (django-celery-results) ──
+    page = max(1, int(request.GET.get('page', 1)))
+    page_size = 30
+    offset = (page - 1) * page_size
+    task_filter = request.GET.get('task', '')
+    status_filter = request.GET.get('status', '')
+
+    task_rows = []
+    task_total = 0
+    task_summary = {}
+    try:
+        from django_celery_results.models import TaskResult
+        from django.db.models import Count
+        qs = TaskResult.objects.order_by('-date_done')
+        if task_filter:
+            qs = qs.filter(task_name__icontains=task_filter)
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        task_total = qs.count()
+
+        for r in qs[offset:offset + page_size]:
+            task_rows.append({
+                'id':        r.id,
+                'task':      TASK_LABELS.get(r.task_name, r.task_name.split('.')[-1] if r.task_name else '-'),
+                'task_name': r.task_name or '-',
+                'status':    r.status,
+                'date_done': r.date_done.strftime('%Y-%m-%d %H:%M:%S') if r.date_done else '-',
+                'runtime':   f'{r.result[:60]}' if r.result and r.status == 'FAILURE' else (
+                             f'{float(r.result):.1f}초' if r.result and r.result.replace('.','',1).isdigit() else '-'),
+                'worker':    r.worker or '-',
+            })
+
+        # 상태별 집계
+        status_counts = dict(TaskResult.objects.values_list('status').annotate(cnt=Count('id')))
+        task_summary = {
+            'total':   TaskResult.objects.count(),
+            'success': status_counts.get('SUCCESS', 0),
+            'failure': status_counts.get('FAILURE', 0),
+            'pending': status_counts.get('PENDING', 0),
+            'started': status_counts.get('STARTED', 0),
+        }
+    except Exception:
+        pass
+
     return JsonResponse({
         'broker': broker.split('@')[-1] if '@' in broker else broker,
         'flower_url': flower_url,
         'workers': workers,
         'worker_count': len(workers),
+        'schedules': schedules,
+        'tasks': {
+            'rows': task_rows,
+            'total': task_total,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (task_total + page_size - 1) // page_size,
+        },
+        'task_summary': task_summary,
     })
 
 

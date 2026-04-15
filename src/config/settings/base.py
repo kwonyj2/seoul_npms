@@ -155,7 +155,8 @@ SESSION_SAVE_EVERY_REQUEST = True   # 활동 시마다 만료 연장
 # Celery
 # ─────────────────────────────────────────
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://localhost:6379/1')
-CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default='redis://localhost:6379/2')
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_RESULT_EXTENDED = True
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

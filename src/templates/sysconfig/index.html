@@ -79,6 +79,7 @@
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('export',this);return false;"><i class="bi bi-box-arrow-up me-1"></i>데이터 내보내기</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('nas',this);return false;"><i class="bi bi-folder me-1"></i>NAS 권한 설정</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('accesslog',this);return false;"><i class="bi bi-journal-text me-1"></i>접속이력</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('celery',this);return false;"><i class="bi bi-gear-wide-connected me-1"></i>작업 모니터링</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('info',this);return false;"><i class="bi bi-info-circle me-1"></i>시스템 정보</a></li>
   </ul>
 
@@ -559,7 +560,76 @@
 
 
   <!-- ══════════════════════════════════════════
-       탭6: 시스템 정보
+       탭: 작업 모니터링 (Celery)
+  ══════════════════════════════════════════ -->
+  <div id="tab-celery" class="sys-tab-content">
+
+    <!-- 요약 카드 -->
+    <div class="row g-3 mb-3" id="cel-cards">
+      <div class="col-12 text-center py-4 text-muted">로딩 중…</div>
+    </div>
+
+    <!-- 정기 스케줄 -->
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-xl-6">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+            <i class="bi bi-clock-history text-primary"></i>
+            <span class="fw-semibold">정기 스케줄</span>
+          </div>
+          <div class="card-body p-0">
+            <table class="table table-sm table-hover mb-0" style="font-size:.8rem">
+              <thead class="table-light"><tr><th class="ps-3">작업명</th><th>태스크</th><th>주기</th></tr></thead>
+              <tbody id="cel-sched-tbody"><tr><td colspan="3" class="text-center py-3 text-muted">로딩 중…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-xl-6">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+            <i class="bi bi-cpu text-success"></i>
+            <span class="fw-semibold">워커 상태</span>
+            <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="loadCelery()"><i class="bi bi-arrow-clockwise"></i></button>
+          </div>
+          <div class="card-body" id="cel-worker-body"><div class="text-center text-muted py-3">로딩 중…</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 태스크 실행 이력 -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+        <i class="bi bi-list-check text-warning"></i>
+        <span class="fw-semibold">태스크 실행 이력</span>
+        <div class="ms-auto d-flex gap-2">
+          <select id="cel-status-filter" class="form-select form-select-sm" style="width:auto;font-size:.75rem" onchange="celLoadTasks(1)">
+            <option value="">전체 상태</option>
+            <option value="SUCCESS">성공</option>
+            <option value="FAILURE">실패</option>
+            <option value="STARTED">실행중</option>
+            <option value="PENDING">대기</option>
+          </select>
+          <button class="btn btn-sm btn-outline-secondary" onclick="celLoadTasks(1)"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.8rem">
+          <thead class="table-light"><tr>
+            <th class="ps-3">작업명</th><th>상태</th><th>완료 시각</th><th>결과/오류</th><th>워커</th>
+          </tr></thead>
+          <tbody id="cel-task-tbody"><tr><td colspan="5" class="text-center text-muted py-4">로딩 중…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center">
+        <small class="text-muted" id="cel-page-info"></small>
+        <ul class="pagination pagination-sm mb-0" id="cel-pager"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       탭: 시스템 정보
   ══════════════════════════════════════════ -->
   <div id="tab-info" class="sys-tab-content">
     <div class="row g-3 mb-3" id="si-cards">
@@ -597,7 +667,7 @@
 {% block extra_js %}
 <script>
 const SYSCONF_API = API_BASE.replace('/api','') + '/api/sysconfig';
-const SYS_TABS   = ['db','users','export','nas','accesslog','info'];
+const SYS_TABS   = ['db','users','export','nas','accesslog','celery','info'];
 
 // ══ 탭 전환 ═══════════════════════════════════════════
 function switchTab(name, el) {
@@ -608,6 +678,7 @@ function switchTab(name, el) {
   if (name==='export' && !window._exLoaded) { loadPhotoTypes(); window._exLoaded=true; }
   if (name==='nas'    && !window._nLoaded)  { loadNasFolders(); loadNasRolePerms(); window._nLoaded=true; }
   if (name==='accesslog') { /* 수동 조회 */ }
+  if (name==='celery') { loadCelery(); }
   if (name==='info'   && !window._iLoaded)  { loadSysInfo(); window._iLoaded=true; }
 }
 
@@ -1083,7 +1154,75 @@ function alLoadPage(page) {
   });
 }
 
-// ══ 탭6: 시스템 정보 ══════════════════════════════════
+// ══ 작업 모니터링 (Celery) ════════════════════════════
+let _celPage = 1;
+function loadCelery() {
+  const statusFilter = document.getElementById('cel-status-filter')?.value || '';
+  const url = `${SYSCONF_API}/celery-status/?page=${_celPage}&status=${statusFilter}`;
+  fetch(url).then(r=>r.json()).then(d=>{
+    // 요약 카드
+    const s = d.task_summary || {};
+    const wc = d.worker_count || 0;
+    document.getElementById('cel-cards').innerHTML = [
+      {lbl:'워커', val:wc, icon:'bi-cpu', col: wc>0?'text-success':'text-danger', bg: wc>0?'bg-success':'bg-danger'},
+      {lbl:'총 실행', val:(s.total||0).toLocaleString(), icon:'bi-lightning', col:'text-primary', bg:'bg-primary'},
+      {lbl:'성공', val:(s.success||0).toLocaleString(), icon:'bi-check-circle', col:'text-success', bg:'bg-success'},
+      {lbl:'실패', val:(s.failure||0).toLocaleString(), icon:'bi-x-circle', col:s.failure>0?'text-danger':'text-muted', bg:s.failure>0?'bg-danger':'bg-secondary'},
+    ].map(c=>`<div class="col-6 col-md-3"><div class="si-card"><div class="si-icon ${c.col}"><i class="bi ${c.icon}"></i></div><div class="si-lbl">${c.lbl}</div><div class="si-val">${c.val}</div></div></div>`).join('');
+
+    // 스케줄 테이블
+    const sched = d.schedules || [];
+    document.getElementById('cel-sched-tbody').innerHTML = sched.length
+      ? sched.map(s=>{
+          return `<tr><td class="ps-3"><strong>${escH(s.label)}</strong></td><td class="text-muted" style="font-size:.7rem">${escH(s.task)}</td><td><span class="badge bg-info-subtle text-info">${escH(s.interval)}</span></td></tr>`;
+        }).join('')
+      : '<tr><td colspan="3" class="text-center text-muted py-3">스케줄 없음</td></tr>';
+
+    // 워커 상태
+    const ws = d.workers || [];
+    document.getElementById('cel-worker-body').innerHTML = ws.length
+      ? `<div class="d-flex flex-wrap gap-2">${ws.map(w=>`<div class="border rounded px-3 py-2"><i class="bi bi-circle-fill text-success me-1" style="font-size:.5rem"></i><strong>${escH(w.name.split('@')[1]||w.name)}</strong><br><small class="text-muted">활성 태스크: ${w.tasks}</small></div>`).join('')}</div>`
+      : '<div class="text-center text-danger py-3"><i class="bi bi-exclamation-triangle me-1"></i>워커 없음 — Celery가 중지되었을 수 있습니다</div>';
+
+    // 브로커 정보
+    document.getElementById('cel-worker-body').innerHTML += `<div class="mt-2 text-muted" style="font-size:.7rem"><i class="bi bi-hdd-network me-1"></i>브로커: ${escH(d.broker||'-')}</div>`;
+
+    // 태스크 이력 테이블
+    const tasks = d.tasks || {rows:[], total:0, page:1, total_pages:0};
+    const STATUS_BADGE = {
+      SUCCESS:'<span class="badge bg-success">성공</span>',
+      FAILURE:'<span class="badge bg-danger">실패</span>',
+      STARTED:'<span class="badge bg-warning text-dark">실행중</span>',
+      PENDING:'<span class="badge bg-secondary">대기</span>',
+      RETRY:'<span class="badge bg-info">재시도</span>',
+    };
+    document.getElementById('cel-task-tbody').innerHTML = tasks.rows.length
+      ? tasks.rows.map(r=>`<tr>
+          <td class="ps-3"><strong>${escH(r.task)}</strong><br><small class="text-muted">${escH(r.task_name)}</small></td>
+          <td>${STATUS_BADGE[r.status]||r.status}</td>
+          <td>${escH(r.date_done)}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escH(r.runtime)}">${r.status==='FAILURE'?'<span class="text-danger">'+escH(r.runtime)+'</span>':escH(r.runtime)}</td>
+          <td>${escH(r.worker.split('@').pop())}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="5" class="text-center text-muted py-4">태스크 이력이 아직 없습니다. 잠시 후 자동으로 쌓입니다.</td></tr>';
+
+    // 페이저
+    document.getElementById('cel-page-info').textContent = tasks.total ? `${tasks.page} / ${tasks.total_pages} 페이지 (총 ${tasks.total}건)` : '';
+    const tp = tasks.total_pages, cp = tasks.page;
+    if(tp<=1){ document.getElementById('cel-pager').innerHTML=''; return; }
+    const range=[];
+    for(let i=Math.max(1,cp-2);i<=Math.min(tp,cp+2);i++) range.push(i);
+    let ph=`<li class="page-item ${cp===1?'disabled':''}"><a class="page-link" href="#" onclick="celLoadTasks(${cp-1});return false;">‹</a></li>`;
+    range.forEach(i=>{ph+=`<li class="page-item ${i===cp?'active':''}"><a class="page-link" href="#" onclick="celLoadTasks(${i});return false;">${i}</a></li>`;});
+    ph+=`<li class="page-item ${cp===tp?'disabled':''}"><a class="page-link" href="#" onclick="celLoadTasks(${cp+1});return false;">›</a></li>`;
+    document.getElementById('cel-pager').innerHTML=ph;
+  }).catch(()=>{
+    document.getElementById('cel-cards').innerHTML='<div class="col-12 text-center text-danger py-3">로드 실패</div>';
+  });
+}
+function celLoadTasks(page){ _celPage=page; loadCelery(); }
+
+// ══ 시스템 정보 ══════════════════════════════════════
 const COUNT_LBL={schools:'학교 수',buildings:'건물 수',contacts:'교직원(담당자)',incidents:'장애 건수',inc_cats:'장애 분류',sla_rules:'SLA 규칙',assets:'장비 수',materials:'자재 종류',inventory:'창고 재고 항목',users:'전체 사용자',workers:'현장기사 수',worker_profiles:'인력 프로필',nas_folders:'NAS 폴더',nas_files:'NAS 파일',photos:'사진 수'};
 function loadSysInfo(){
   document.getElementById('si-cards').innerHTML='<div class="col-12 text-center py-4 text-muted">로딩 중…</div>';
