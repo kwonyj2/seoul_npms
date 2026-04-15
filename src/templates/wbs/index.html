@@ -250,25 +250,21 @@
     <!-- EVM 카드 -->
     <div class="row g-3 mb-3" id="evmCards"></div>
 
-    <!-- S-Curve + 준수율 게이지 -->
+    <!-- S-Curve + 준수율 게이지 + 단계별 EVM -->
     <div class="row g-3 mb-3">
-      <div class="col-12 col-lg-7">
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px">
-          <strong style="font-size:.85rem"><i class="bi bi-graph-up me-1 text-primary"></i>S-Curve (계획 vs 실적)</strong>
-          <div style="position:relative;height:calc(100vh - 480px);min-height:280px"><canvas id="sCurveChart"></canvas></div>
-        </div>
-      </div>
       <div class="col-12 col-lg-5">
-        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;height:100%">
-          <strong style="font-size:.85rem"><i class="bi bi-speedometer2 me-1 text-success"></i>단계별 준수율</strong>
-          <div style="position:relative;height:calc(100vh - 500px);min-height:250px"><canvas id="gaugeChart"></canvas></div>
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
+          <strong style="font-size:.8rem"><i class="bi bi-graph-up me-1 text-primary"></i>S-Curve (계획 vs 실적)</strong>
+          <div style="position:relative;height:200px"><canvas id="sCurveChart"></canvas></div>
         </div>
       </div>
-    </div>
-
-    <!-- 단계별 EVM 테이블 -->
-    <div class="row g-3 mb-3">
-      <div class="col-12 col-lg-7">
+      <div class="col-12 col-lg-3">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;height:100%">
+          <strong style="font-size:.8rem"><i class="bi bi-speedometer2 me-1 text-success"></i>단계별 준수율</strong>
+          <div style="position:relative;height:200px"><canvas id="gaugeChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
         <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px">
           <strong style="font-size:.85rem"><i class="bi bi-table me-1 text-info"></i>단계별 EVM 상세</strong>
           <table class="table table-sm table-hover mt-2 mb-0" style="font-size:.82rem">
@@ -277,11 +273,10 @@
           </table>
         </div>
       </div>
-      <div class="col-12 col-lg-5">
-        <!-- 지연 경고 -->
-        <div id="delayAlert"></div>
-      </div>
     </div>
+
+    <!-- 지연 경고 -->
+    <div id="delayAlert"></div>
   </div>
 
 </div>
