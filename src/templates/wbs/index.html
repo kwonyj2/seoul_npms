@@ -163,33 +163,6 @@
     <div class="cc-card"><div class="label">로딩 중...</div></div>
   </div>
 
-  <!-- EVM 카드 -->
-  <div class="row g-2 mb-2" id="evmCards" style="display:none"></div>
-
-  <!-- S-Curve + 준수율 게이지 (접기/펼치기) -->
-  <div class="mb-2">
-    <a href="#" class="text-decoration-none text-muted" style="font-size:.8rem" onclick="document.getElementById('chartArea').style.display=document.getElementById('chartArea').style.display==='none'?'':'none';this.querySelector('i').classList.toggle('bi-chevron-down');this.querySelector('i').classList.toggle('bi-chevron-right');return false;">
-      <i class="bi bi-chevron-down me-1"></i>진척 차트
-    </a>
-  </div>
-  <div id="chartArea" class="row g-2 mb-3">
-    <div class="col-12 col-lg-8">
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;height:220px">
-        <strong style="font-size:.78rem"><i class="bi bi-graph-up me-1 text-primary"></i>S-Curve</strong>
-        <div style="position:relative;height:185px"><canvas id="sCurveChart"></canvas></div>
-      </div>
-    </div>
-    <div class="col-12 col-lg-4">
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;height:220px">
-        <strong style="font-size:.78rem"><i class="bi bi-speedometer2 me-1 text-success"></i>단계별 준수율</strong>
-        <div style="position:relative;height:185px"><canvas id="gaugeChart"></canvas></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 지연 경고 -->
-  <div id="delayAlert" style="display:none" class="mb-2"></div>
-
   <!-- 탭 네비게이션 -->
   <ul class="nav nav-tabs mb-3" id="wbs-tabs">
     <li class="nav-item">
@@ -200,6 +173,11 @@
     <li class="nav-item">
       <a class="nav-link" href="#" onclick="switchView('gantt',this);return false;">
         <i class="bi bi-bar-chart-steps me-1"></i>간트 차트
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" onclick="switchView('evm',this);return false;">
+        <i class="bi bi-graph-up-arrow me-1"></i>EVM/진척 분석
       </a>
     </li>
     <li class="nav-item ms-auto d-flex align-items-center gap-2 pe-1">
@@ -264,6 +242,45 @@
   <div id="viewGantt" style="display:none">
     <div id="ganttContainer">
       <p class="text-center text-muted py-5">간트 차트 로딩 중...</p>
+    </div>
+  </div>
+
+  <!-- EVM/진척 분석 뷰 -->
+  <div id="viewEvm" style="display:none">
+    <!-- EVM 카드 -->
+    <div class="row g-3 mb-3" id="evmCards"></div>
+
+    <!-- S-Curve + 준수율 게이지 -->
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-lg-7">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px">
+          <strong style="font-size:.85rem"><i class="bi bi-graph-up me-1 text-primary"></i>S-Curve (계획 vs 실적)</strong>
+          <div style="position:relative;height:calc(100vh - 480px);min-height:280px"><canvas id="sCurveChart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-5">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;height:100%">
+          <strong style="font-size:.85rem"><i class="bi bi-speedometer2 me-1 text-success"></i>단계별 준수율</strong>
+          <div style="position:relative;height:calc(100vh - 500px);min-height:250px"><canvas id="gaugeChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 단계별 EVM 테이블 -->
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-lg-7">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px">
+          <strong style="font-size:.85rem"><i class="bi bi-table me-1 text-info"></i>단계별 EVM 상세</strong>
+          <table class="table table-sm table-hover mt-2 mb-0" style="font-size:.82rem">
+            <thead class="table-light"><tr><th>단계</th><th class="text-center">PV (계획)</th><th class="text-center">EV (실적)</th><th class="text-center">SPI</th><th class="text-center">판정</th></tr></thead>
+            <tbody id="evmPhaseTable"><tr><td colspan="5" class="text-center text-muted py-3">로딩 중…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="col-12 col-lg-5">
+        <!-- 지연 경고 -->
+        <div id="delayAlert"></div>
+      </div>
     </div>
   </div>
 
@@ -409,7 +426,7 @@ loadProjects();
 
 async function loadWbs() {
   if (!WBS_PID) return;
-  await Promise.all([loadSummary(), loadItems(), loadSCurve(), loadDelayed(), loadEVM()]);
+  await Promise.all([loadSummary(), loadItems()]);
 }
 
 // ── 공정준수율 ────────────────────────────────────────
@@ -473,6 +490,25 @@ function renderEVM(d) {
       <div class="evm-value" style="color:${d.sv>=0?'#16a34a':'#dc2626'}">${d.sv>0?'+':''}${d.sv}%</div>
       <div class="evm-sub">${d.sv>=0?'선행':'지연'} (기준: ${d.as_of})</div>
     </div></div>`;
+
+  // 단계별 EVM 테이블
+  const tb = document.getElementById('evmPhaseTable');
+  if (tb && d.phases) {
+    tb.innerHTML = d.phases.map(p => {
+      const spiC = p.spi>=1?'text-success':p.spi>=0.9?'text-warning':'text-danger';
+      const spiL = p.spi>=1?'정상':p.spi>=0.9?'주의':p.pv===0?'-':'지연';
+      return `<tr>
+        <td><strong>${p.label}</strong></td>
+        <td class="text-center">${p.pv}%</td>
+        <td class="text-center">${p.ev}%</td>
+        <td class="text-center ${spiC}"><strong>${p.spi}</strong></td>
+        <td class="text-center"><span class="badge ${p.spi>=1?'bg-success':p.spi>=0.9?'bg-warning text-dark':p.pv===0?'bg-secondary':'bg-danger'}">${spiL}</span></td>
+      </tr>`;
+    }).join('') + `<tr class="table-dark"><td><strong>전체</strong></td>
+      <td class="text-center">${d.pv}%</td><td class="text-center">${d.ev}%</td>
+      <td class="text-center"><strong>${d.spi}</strong></td>
+      <td class="text-center"><span class="badge ${d.spi_status==='good'?'bg-success':d.spi_status==='warning'?'bg-warning text-dark':'bg-danger'}">${d.spi_label}</span></td></tr>`;
+  }
 }
 
 // ── S-Curve 차트 ─────────────────────────────────────
@@ -1063,9 +1099,11 @@ function renderGantt(items) {
 function switchView(view, el) {
   document.getElementById('viewTree').style.display  = view==='tree'  ? '' : 'none';
   document.getElementById('viewGantt').style.display = view==='gantt' ? '' : 'none';
+  document.getElementById('viewEvm').style.display   = view==='evm'   ? '' : 'none';
   document.querySelectorAll('#wbs-tabs .nav-link').forEach(a => a.classList.remove('active'));
   if (el) el.classList.add('active');
   if (view==='gantt' && WBS_PID) loadGantt();
+  if (view==='evm' && WBS_PID) { loadEVM(); loadSCurve(); loadDelayed(); }
 }
 
 // ── CSRF ─────────────────────────────────────────────
