@@ -135,6 +135,8 @@ NETWORK_NAME_DEVICE_PAT = re.compile(
 POE_DEVICE_PAT = re.compile(r'^\s*POE\s*#\s*([A-Z0-9]+)\s+(.+)$', re.UNICODE)
 # 백본 단축 (예: "BB# DSW2728XG 본관 4 층 방송실내 서버실")
 BB_DEVICE_PAT = re.compile(r'^\s*BB\s*#\s+(.+)$', re.UNICODE)
+# L3 단독 표기 (예: "L3 C3100-24TL 본관 4층 전산실") — 스쿨넷 라벨과 연결
+L3_DEVICE_PAT = re.compile(r'^\s*L3\s+([A-Z][A-Za-z0-9\-]+)\s*(.*)$', re.UNICODE)
 
 # 범례용 텍스트 제외 (K#M~K#n, M#M~M#n P#n (POE) 등)
 LEGEND_NOISE_PAT = re.compile(r'[KHGMPi]#[A-Z0-9]+\s*[~～]\s*[KHGMPi]#')
@@ -216,6 +218,17 @@ def _parse_device_text(text: str) -> Optional[Device]:
             code='M#BB', prefix='M', suffix='BB',
             name='M#BB', model=model, location=location,
             device_type='l3_switch', network_type='무선망', raw_text=text,
+        )
+
+    # 패턴 5: L3 스위치 단독 (예: "L3 C3100-24TL 본관 4층 전산실" / 스쿨넷 L3 등)
+    m = L3_DEVICE_PAT.match(text)
+    if m:
+        model = m.group(1)
+        location = m.group(2).strip()
+        return Device(
+            code='L3', prefix='L', suffix='3',
+            name='L3', model=model, location=location,
+            device_type='l3_switch', network_type='스쿨넷', raw_text=text,
         )
 
     return None
