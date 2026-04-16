@@ -293,68 +293,145 @@ def _import_pptx_topology(school, data: dict, pptx_path: str = '') -> tuple:
     return created_devices, created_links
 
 
+def _extract_school_name_from_filename(filename: str) -> str:
+    """파일명에서 학교명 추출
+    예: '2025년 테크센터-네트워크 구성도_가락고등학교.pptx' → '가락고등학교'
+    예: '2025년 테크센터-유치원 네트워크 구성도_새솔유치원.pptx' → '새솔유치원'
+    예: '서울새솔유치원.pptx' → '서울새솔유치원'
+    """
+    import re
+    name = os.path.splitext(filename)[0]
+    # "_학교명" 패턴이 있으면 그 뒤만 추출
+    if '_' in name:
+        name = name.rsplit('_', 1)[-1]
+    # 공백 제거·정리
+    return name.strip()
+
+
+def _find_school_by_name(name: str, school_map: dict):
+    """학교명에서 School 객체 찾기 (유연한 매칭)"""
+    n = name.strip()
+    # 정확 일치
+    if n in school_map:
+        return school_map[n]
+    # 접두어 "서울" 추가/제거 시도
+    for variant in (n, '서울' + n, n.replace('서울', '', 1)):
+        if variant in school_map:
+            return school_map[variant]
+    # 부분 일치 (가락고 → 가락고등학교)
+    for sname, school in school_map.items():
+        if n in sname or sname in n:
+            if len(n) >= 3:  # 너무 짧은 매칭 방지
+                return school
+    return None
+
+
 @celery_app.task
 def scan_network_pptx(school_id: int = None):
-    """특정 학교 또는 전체 학교의 NAS PPTX 파일을 스캔하여 토폴로지 생성
-    경로: /app/nas/media/npms/산출물/{school_id}/구성도/*.pptx
+    """NAS PPTX 파일을 스캔하여 토폴로지 생성
+
+    지원 경로:
+    1. /app/nas/media/npms/산출물/{school_id}/구성도/*.pptx (학교ID 기반)
+    2. /app/nas/media/npms/산출물/2025년 테크센터/2025년 테크센터-네트워크 구성도/*.pptx
+       (파일명 뒤 '_학교명.pptx' 기반 자동 매칭)
     """
     from apps.schools.models import School
     from .pptx_parser import parse_pptx_topology
     import os
 
     base_dir = os.environ.get('NAS_ARTIFACT_ROOT', '/app/nas/media/npms/산출물')
+    stats = {'total': 0, 'ok': 0, 'skip': 0, 'fail': 0, 'results': []}
+
+    # 학교명 → School 매핑
+    school_map = {s.name: s for s in School.objects.all()}
 
     if school_id:
         schools = School.objects.filter(id=school_id)
     else:
         schools = School.objects.all()
 
-    stats = {'total': 0, 'ok': 0, 'skip': 0, 'fail': 0, 'results': []}
+    # ── 방식 1: 학교ID 기반 폴더 ──
+    handled_schools = set()
     for school in schools:
-        stats['total'] += 1
-        result = {'school_id': school.id, 'school_name': school.name}
         pptx_dir = os.path.join(base_dir, str(school.id), '구성도')
-        if not os.path.isdir(pptx_dir):
-            result['status'] = 'skip'
-            result['note'] = '구성도 폴더 없음'
-            stats['skip'] += 1
-            stats['results'].append(result)
-            continue
+        if os.path.isdir(pptx_dir):
+            pptx_files = sorted([
+                f for f in os.listdir(pptx_dir)
+                if f.lower().endswith('.pptx') and not f.startswith('.') and not f.startswith('~')
+            ], key=lambda f: os.path.getmtime(os.path.join(pptx_dir, f)), reverse=True)
+            if pptx_files:
+                pptx_path = os.path.join(pptx_dir, pptx_files[0])
+                _process_one(school, pptx_path, pptx_files[0], stats)
+                handled_schools.add(school.id)
 
-        pptx_files = sorted([
-            f for f in os.listdir(pptx_dir)
-            if f.lower().endswith('.pptx') and not f.startswith('.') and not f.startswith('~')
-        ], key=lambda f: os.path.getmtime(os.path.join(pptx_dir, f)), reverse=True)
+    # ── 방식 2: 테크센터 구성도 폴더 일괄 스캔 (파일명 매칭) ──
+    if not school_id:  # 전체 스캔일 때만 자동 매칭
+        tech_dirs = []
+        for root, dirs, files in os.walk(base_dir):
+            if '네트워크 구성도' in os.path.basename(root) or '네트워크구성도' in os.path.basename(root):
+                tech_dirs.append(root)
 
-        if not pptx_files:
-            result['status'] = 'skip'
-            result['note'] = 'PPTX 파일 없음'
-            stats['skip'] += 1
-            stats['results'].append(result)
-            continue
+        for tech_dir in tech_dirs:
+            for fname in sorted(os.listdir(tech_dir)):
+                if not fname.lower().endswith('.pptx') or fname.startswith('.') or fname.startswith('~'):
+                    continue
+                school_name = _extract_school_name_from_filename(fname)
+                school = _find_school_by_name(school_name, school_map)
+                if not school:
+                    stats['total'] += 1
+                    stats['skip'] += 1
+                    stats['results'].append({
+                        'school_id': None, 'school_name': school_name,
+                        'status': 'skip', 'note': f'DB 학교 매칭 실패: {fname}',
+                        'pptx': fname,
+                    })
+                    continue
+                if school.id in handled_schools:
+                    continue
+                pptx_path = os.path.join(tech_dir, fname)
+                _process_one(school, pptx_path, fname, stats)
+                handled_schools.add(school.id)
 
-        pptx_path = os.path.join(pptx_dir, pptx_files[0])
-        try:
-            data = parse_pptx_topology(pptx_path)
-            devices, links = _import_pptx_topology(school, data, pptx_path)
-            result.update({
-                'status': 'ok',
-                'pptx': pptx_files[0],
-                'devices': devices,
-                'links': links,
-                'slides': data.get('stats', {}).get('slides', 0),
-            })
-            stats['ok'] += 1
-            logger.info(f'[{school.name}] PPTX 파싱 완료: 장비 {devices}, 링크 {links}')
-        except Exception as e:
-            result['status'] = 'fail'
-            result['note'] = str(e)[:200]
-            stats['fail'] += 1
-            logger.error(f'[{school.name}] PPTX 파싱 실패: {e}')
+    # ── 3. 처리 안된 학교들은 skip ──
+    if not school_id:
+        for school in schools:
+            if school.id not in handled_schools:
+                stats['total'] += 1
+                stats['skip'] += 1
+                stats['results'].append({
+                    'school_id': school.id, 'school_name': school.name,
+                    'status': 'skip', 'note': 'PPTX 파일 없음',
+                })
 
-        stats['results'].append(result)
+    # 결과 리스트 너무 크면 잘라냄
+    if len(stats['results']) > 500:
+        stats['results'] = stats['results'][:500]
 
     return stats
+
+
+def _process_one(school, pptx_path, fname, stats):
+    """한 학교의 PPTX 파싱 + 저장 + stats 업데이트"""
+    from .pptx_parser import parse_pptx_topology
+    stats['total'] += 1
+    result = {'school_id': school.id, 'school_name': school.name, 'pptx': fname}
+    try:
+        data = parse_pptx_topology(pptx_path)
+        devices, links = _import_pptx_topology(school, data, pptx_path)
+        result.update({
+            'status': 'ok',
+            'devices': devices,
+            'links': links,
+            'slides': data.get('stats', {}).get('slides', 0),
+        })
+        stats['ok'] += 1
+        logger.info(f'[{school.name}] PPTX 파싱 완료: 장비 {devices}, 링크 {links}')
+    except Exception as e:
+        result['status'] = 'fail'
+        result['note'] = str(e)[:200]
+        stats['fail'] += 1
+        logger.error(f'[{school.name}] PPTX 파싱 실패: {e}')
+    stats['results'].append(result)
 
 
 @celery_app.task
