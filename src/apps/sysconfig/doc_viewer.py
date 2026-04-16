@@ -278,7 +278,77 @@ def _get_model_simple(doc_id, q):
         return _get_buildings(q)
     elif doc_id == 'contacts':
         return _get_contacts(q)
+    elif doc_id == 'net_devices':
+        return _get_network_devices(q)
+    elif doc_id == 'net_links':
+        return _get_network_links(q)
+    elif doc_id == 'net_topology':
+        return _get_network_topology(q)
     return [], []
+
+
+def _get_network_devices(q):
+    from apps.network.models import NetworkDevice
+    qs = NetworkDevice.objects.select_related('school').order_by('school__name', 'network_type', 'name')
+    if q:
+        qs = qs.filter(Q(name__icontains=q) | Q(model__icontains=q) | Q(school__name__icontains=q))
+    headers = ['학교명', '장비명', '모델', '설치위치', '망구분', '장비유형', 'IP주소', '상태', '등록일']
+    TYPE_KO = {'switch':'스위치','poe_switch':'PoE스위치','ap':'무선AP','router':'라우터','firewall':'방화벽','server':'서버','l2_switch':'L2스위치','l3_switch':'L3스위치'}
+    STATUS_KO = {'up':'정상','down':'장애','warning':'경고','unknown':'미확인'}
+    rows = []
+    for d in qs[:20000]:
+        rows.append({h: v for h, v in zip(headers, [
+            d.school.name if d.school else '', d.name, d.model or '', d.location or '',
+            d.network_type or '', TYPE_KO.get(d.device_type, d.device_type),
+            d.ip_address or '', STATUS_KO.get(d.status, d.status),
+            _d(d.created_at.date() if d.created_at else ''),
+        ])})
+    return headers, rows
+
+
+def _get_network_links(q):
+    from apps.network.models import NetworkLink
+    qs = NetworkLink.objects.select_related('from_device__school', 'to_device').order_by('from_device__school__name', 'from_device__name')
+    if q:
+        qs = qs.filter(Q(from_device__name__icontains=q) | Q(to_device__name__icontains=q) | Q(from_device__school__name__icontains=q))
+    headers = ['학교명', '출발장비', '도착장비', '망구분', '케이블', '수집방식', '활성', '등록일']
+    CABLE_KO = {'fiber':'광','cat6':'Cat6','cat5e':'Cat5e','cat5':'Cat5','unknown':'미확인'}
+    LINK_KO = {'lldp':'LLDP','cdp':'CDP','arp':'ARP','manual':'수동'}
+    rows = []
+    for l in qs[:20000]:
+        rows.append({h: v for h, v in zip(headers, [
+            l.from_device.school.name if l.from_device and l.from_device.school else '',
+            l.from_device.name if l.from_device else '',
+            l.to_device.name if l.to_device else '',
+            l.network_type or '',
+            CABLE_KO.get(l.cable_type, l.cable_type),
+            LINK_KO.get(l.link_type, l.link_type),
+            '활성' if l.is_active else '비활성',
+            _d(l.discovered_at.date() if l.discovered_at else ''),
+        ])})
+    return headers, rows
+
+
+def _get_network_topology(q):
+    from apps.network.models import NetworkTopology
+    qs = NetworkTopology.objects.select_related('school').order_by('-updated_at')
+    if q:
+        qs = qs.filter(Q(school__name__icontains=q))
+    headers = ['학교명', '장비수', '링크수', '슬라이드', 'PPTX경로', '갱신일시']
+    rows = []
+    for t in qs[:10000]:
+        data = t.topology_data or {}
+        nodes = data.get('nodes', [])
+        edges = data.get('edges', [])
+        slides = data.get('slides', [])
+        slide_names = ', '.join([s.get('title', '') for s in slides]) if slides else '-'
+        rows.append({h: v for h, v in zip(headers, [
+            t.school.name if t.school else '',
+            len(nodes), len(edges), slide_names,
+            t.pptx_path or '-',
+            t.updated_at.strftime('%Y-%m-%d %H:%M') if t.updated_at else '-',
+        ])})
+    return headers, rows
 
 
 def _get_assets_inbound(q):
