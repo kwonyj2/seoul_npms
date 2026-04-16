@@ -261,8 +261,13 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
 
         devices = NetworkDevice.objects.filter(school=school).order_by('network_type', 'name')
 
+        from datetime import datetime
+        import urllib.parse
+        today = datetime.now().strftime('%Y%m%d')
         response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
-        response['Content-Disposition'] = f'attachment; filename="장비목록_{school.name}.csv"'
+        filename = f'토폴로지_{school.name}_{today}.csv'
+        encoded = urllib.parse.quote(filename)
+        response['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
 
         writer = csv.writer(response)
         writer.writerow(['장비명', '모델', '설치위치', '망구분', '장비유형', 'IP주소', '상태'])
@@ -274,6 +279,13 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
                 TYPE_KO.get(d.device_type, d.device_type),
                 d.ip_address or '', STATUS_KO.get(d.status, d.status),
             ])
+
+        # NAS 자동 저장
+        try:
+            from .services import write_topology_files_to_nas
+            write_topology_files_to_nas(school)
+        except Exception:
+            pass
         return response
 
     @action(detail=False, methods=['get'])
@@ -450,11 +462,23 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         doc.save(buf)
         buf.seek(0)
 
+        from datetime import datetime
+        import urllib.parse
+        today = datetime.now().strftime('%Y%m%d')
         response = HttpResponse(
             buf.read(),
             content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         )
-        response['Content-Disposition'] = f'attachment; filename="SNMP설정가이드_{school.name}.docx"'
+        filename = f'SNMP설정가이드_{school.name}_{today}.docx'
+        encoded = urllib.parse.quote(filename)
+        response['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
+
+        # NAS 자동 저장
+        try:
+            from .services import write_topology_files_to_nas
+            write_topology_files_to_nas(school)
+        except Exception:
+            pass
         return response
 
     @action(detail=False, methods=['post'])

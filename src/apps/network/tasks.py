@@ -290,6 +290,13 @@ def _import_pptx_topology(school, data: dict, pptx_path: str = '') -> tuple:
         }
     )
 
+    # NAS에 토폴로지 CSV + SNMP 가이드 DOCX 자동 생성
+    try:
+        from .services import write_topology_files_to_nas
+        write_topology_files_to_nas(school)
+    except Exception as e:
+        logger.warning(f'[{school.name}] NAS 파일 자동 생성 실패: {e}')
+
     return created_devices, created_links
 
 
