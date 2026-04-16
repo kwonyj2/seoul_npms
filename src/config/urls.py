@@ -46,7 +46,7 @@ from apps.sysconfig.api import (
 )
 from apps.sysconfig.security_api import (
     sec_dashboard, sec_blocked_ips, sec_block_config, sec_block_log,
-    sec_login_analysis, sec_system_logs, sec_settings, sec_report,
+    sec_login_analysis, sec_system_logs, sec_settings, sec_report, sec_export,
 )
 from apps.sysconfig.exports import export_view
 from apps.sysconfig.db_admin import db_schema, db_model_schema, db_crud, db_export
@@ -206,6 +206,7 @@ urlpatterns = [
     path('api/sysconfig/security/system-logs/',    sec_system_logs,    name='sec-system-logs'),
     path('api/sysconfig/security/settings/',       sec_settings,       name='sec-settings'),
     path('api/sysconfig/security/report/',         sec_report,         name='sec-report'),
+    path('api/sysconfig/security/export/',         sec_export,         name='sec-export'),
     # DB 관리 (범용 CRUD)
     path('api/sysconfig/db/schema/',                              db_schema,        name='db-schema'),
     path('api/sysconfig/db/<str:app_label>/<str:model_name>/schema/', db_model_schema, name='db-model-schema'),

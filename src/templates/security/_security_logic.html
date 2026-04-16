@@ -1,3 +1,9 @@
+// ═══ Excel 다운로드 공통 ═══════════════════
+function secExport(kindWithParams) {
+  // kindWithParams 예: 'top_ips' 또는 'abnormal&days=14'
+  window.location.href = SEC_API + '/export/?kind=' + kindWithParams;
+}
+
 // ═══ 패널1: 위협 현황 ═══════════════════
 let _secIpPage = 1;
 let _secEvPage = 1;

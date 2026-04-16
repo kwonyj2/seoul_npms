@@ -845,3 +845,322 @@ def sec_report(request):
         'trend': {'current': login_fail, 'previous': prev_fail, 'change_pct': trend_pct},
         'daily_trend': daily_trend,
     })
+
+
+# ═══════════════════════════════════════════════════════
+# Excel 다운로드 통합 API
+# ═══════════════════════════════════════════════════════
+
+@_admin_required
+def sec_export(request):
+    """
+    보안관제 리스트 Excel 다운로드
+    GET /api/sysconfig/security/export/?kind=<리스트종류>
+
+    지원 kind:
+      top_ips, events, blocked, whitelist, blocklog,
+      abnormal, locked, ssh, integrity, checks,
+      evtype, trend
+    """
+    import io
+    import urllib.parse
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from django.http import HttpResponse
+
+    kind = request.GET.get('kind', '')
+    now = timezone.now()
+
+    wb = Workbook()
+    ws = wb.active
+
+    # ── 공통 헤더 스타일
+    def _apply_header(sheet, headers):
+        sheet.append(headers)
+        for col_idx, _ in enumerate(headers, 1):
+            c = sheet.cell(row=1, column=col_idx)
+            c.font = Font(bold=True, color='FFFFFF', size=10)
+            c.fill = PatternFill('solid', fgColor='1F497D')
+            c.alignment = Alignment(horizontal='center', vertical='center')
+
+    # ── 종류별 데이터 채우기 ──────────────────────────
+    if kind == 'top_ips':
+        ws.title = 'Top위협IP'
+        _apply_header(ws, ['순위', 'IP 주소', '실패 횟수', '위험도', '차단 상태', '최초 시도', '최근 시도'])
+        h7d = now - datetime.timedelta(days=7)
+        rows = (SystemLogEntry.objects.filter(
+            log_type='ssh_fail', created_at__gte=h7d, ip_address__isnull=False
+        ).values('ip_address').annotate(
+            fail_count=Count('id'),
+            last_attempt=Max('created_at'),
+            first_attempt=Min('created_at'),
+        ).order_by('-fail_count'))
+        blocked_set = set(BlockedIP.objects.values_list('ip_address', flat=True))
+        THREAT = {500: '심각', 100: '높음', 20: '보통'}
+        for i, r in enumerate(rows, 1):
+            fc = r['fail_count']
+            threat = '심각' if fc >= 500 else '높음' if fc >= 100 else '보통' if fc >= 20 else '낮음'
+            ws.append([
+                i, r['ip_address'] or '-', fc, threat,
+                '차단' if r['ip_address'] in blocked_set else '미차단',
+                r['first_attempt'].strftime('%Y-%m-%d %H:%M') if r['first_attempt'] else '-',
+                r['last_attempt'].strftime('%Y-%m-%d %H:%M') if r['last_attempt'] else '-',
+            ])
+        filename = f'보안관제_Top위협IP_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+
+    elif kind == 'events':
+        ws.title = '보안이벤트'
+        _apply_header(ws, ['시각', '유형', '위험도', 'IP', '사용자', '설명', '해결여부'])
+        for ev in SecurityEvent.objects.all()[:10000]:
+            ws.append([
+                ev.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                ev.get_event_type_display(),
+                ev.get_severity_display(),
+                ev.ip_address or '-',
+                ev.username or '-',
+                ev.description,
+                '해결' if ev.resolved else '미해결',
+            ])
+        filename = f'보안관제_보안이벤트_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+
+    elif kind == 'blocked':
+        ws.title = '차단IP목록'
+        _apply_header(ws, ['IP 주소', '사유', '상세설명', '실패 횟수', '차단 유형', '영구차단', '차단 시각', '해제 예정', '차단자'])
+        for b in BlockedIP.objects.all():
+            ws.append([
+                b.ip_address, b.get_reason_display(), b.description, b.fail_count,
+                '자동' if b.auto_blocked else '수동',
+                '영구' if b.is_permanent else '임시',
+                b.blocked_at.strftime('%Y-%m-%d %H:%M'),
+                b.expires_at.strftime('%Y-%m-%d %H:%M') if b.expires_at else '영구',
+                b.blocked_by.name if b.blocked_by else '시스템',
+            ])
+        filename = f'보안관제_차단IP목록_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+
+    elif kind == 'whitelist':
+        ws.title = '화이트리스트'
+        _apply_header(ws, ['IP 주소', '설명', '등록자', '등록일시'])
+        for w in WhitelistedIP.objects.all():
+            ws.append([
+                w.ip_address, w.description,
+                w.created_by.name if w.created_by else '-',
+                w.created_at.strftime('%Y-%m-%d %H:%M'),
+            ])
+        filename = f'보안관제_화이트리스트_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+
+    elif kind == 'blocklog':
+        ws.title = '차단해제이력'
+        _apply_header(ws, ['처리일시', 'IP 주소', '행위', '사유', '처리자'])
+        for r in BlockLog.objects.select_related('actor').all()[:10000]:
+            ws.append([
+                r.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                r.ip_address, r.get_action_display(), r.reason,
+                r.actor.name if r.actor else '시스템',
+            ])
+        filename = f'보안관제_차단해제이력_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+
+    elif kind == 'abnormal':
+        ws.title = '비정상로그인'
+        _apply_header(ws, ['유형', '사용자ID', '이름', 'IP', '시각', '상세'])
+        days = int(request.GET.get('days', 14))
+        since = now - datetime.timedelta(days=days)
+        night = (LoginHistory.objects.filter(success=True, created_at__gte=since)
+                 .annotate(hr=ExtractHour('created_at'))
+                 .filter(Q(hr__gte=22) | Q(hr__lt=6)).select_related('user'))
+        for r in night:
+            ws.append(['야간 접속',
+                       r.user.username if r.user else r.attempted_username,
+                       r.user.name if r.user else '-',
+                       r.ip_address or '-',
+                       r.created_at.strftime('%Y-%m-%d %H:%M'),
+                       f'{r.created_at.strftime("%H:%M")} 접속'])
+        multi = (LoginHistory.objects.filter(success=False, created_at__gte=since)
+                 .values('ip_address').annotate(
+                    user_cnt=Count('attempted_username', distinct=True),
+                    total=Count('id'),
+                 ).filter(user_cnt__gte=3).order_by('-total'))
+        for row in multi:
+            ws.append(['다중 계정 시도', '-', '-',
+                       row['ip_address'] or '-', '-',
+                       f'{row["user_cnt"]}개 계정, {row["total"]}회 시도'])
+        filename = f'보안관제_비정상로그인_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+
+    elif kind == 'locked':
+        ws.title = '계정잠금'
+        _apply_header(ws, ['사용자ID', '이름', '실패 횟수', '등록 여부'])
+        lock_window = now - datetime.timedelta(minutes=30)
+        rows = (LoginHistory.objects.filter(
+            success=False, created_at__gte=lock_window
+        ).values('attempted_username').annotate(cnt=Count('id')).filter(cnt__gte=5).order_by('-cnt'))
+        for r in rows:
+            uname = r['attempted_username']
+            u = User.objects.filter(username=uname).first()
+            ws.append([uname, u.name if u else '(미등록)', r['cnt'], '등록' if u else '미등록'])
+        filename = f'보안관제_계정잠금_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+
+    elif kind == 'ssh':
+        ws.title = 'SSH접근로그'
+        _apply_header(ws, ['시각', '유형', 'IP', '사용자', '원본 로그'])
+        qs = SystemLogEntry.objects.filter(log_type__in=['ssh_fail', 'ssh_success', 'auth_other'])
+        for r in qs[:20000]:
+            t = '성공' if r.log_type == 'ssh_success' else '실패'
+            ws.append([
+                r.log_time.strftime('%Y-%m-%d %H:%M:%S') if r.log_time else '-',
+                t, r.ip_address or '-', r.username or '-', r.raw_line,
+            ])
+        filename = f'보안관제_SSH접근로그_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+
+    elif kind == 'integrity':
+        ws.title = '파일무결성'
+        _apply_header(ws, ['파일 경로', 'SHA256 해시', '크기(bytes)', '상태', '점검일시'])
+        for f in FileIntegritySnapshot.objects.all().order_by('-is_changed', 'file_path'):
+            ws.append([
+                f.file_path, f.sha256_hash, f.file_size,
+                '변경' if f.is_changed else '정상',
+                f.checked_at.strftime('%Y-%m-%d %H:%M:%S'),
+            ])
+        filename = f'보안관제_파일무결성_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+
+    elif kind == 'checks':
+        ws.title = '보안자가진단'
+        _apply_header(ws, ['점검 항목', '상태', '상세'])
+        # 재활용: sec_settings 로직 그대로
+        from django.conf import settings as _settings
+        checks = []
+        checks.append(('DEBUG 모드', 'pass' if not _settings.DEBUG else 'fail',
+                       'OFF' if not _settings.DEBUG else '⚠ ON'))
+        checks.append(('HTTPS(SSL/TLS)',
+                       'pass' if getattr(_settings, 'SESSION_COOKIE_SECURE', False) else 'fail',
+                       'TLS 1.2/1.3 적용' if getattr(_settings, 'SESSION_COOKIE_SECURE', False) else '⚠ 미적용'))
+        checks.append(('CSRF 보호', 'pass', f'CSRF_COOKIE_HTTPONLY={_settings.CSRF_COOKIE_HTTPONLY}'))
+        checks.append(('IP 자동 차단',
+                       'pass' if SecurityConfig.get_bool('auto_block_enabled') else 'warn',
+                       f'임계값 {SecurityConfig.get_int("block_threshold", 10)}회'))
+        for item, st, detail in checks:
+            ws.append([item, st, detail])
+        filename = f'보안관제_보안자가진단_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+
+    elif kind == 'evtype':
+        ws.title = '이벤트유형통계'
+        _apply_header(ws, ['이벤트 유형', '건수'])
+        period = request.GET.get('period', 'weekly')
+        if period == 'daily':
+            since = now - datetime.timedelta(days=1)
+        elif period == 'monthly':
+            since = now - datetime.timedelta(days=30)
+        else:
+            since = now - datetime.timedelta(weeks=1)
+        stats = (SecurityEvent.objects.filter(created_at__gte=since)
+                 .values('event_type').annotate(cnt=Count('id')).order_by('-cnt'))
+        EVT_LBL = dict(SecurityEvent.EVENT_TYPE_CHOICES)
+        for s in stats:
+            ws.append([EVT_LBL.get(s['event_type'], s['event_type']), s['cnt']])
+        filename = f'보안관제_이벤트유형통계_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+
+    elif kind == 'trend':
+        ws.title = '일별추이'
+        _apply_header(ws, ['날짜', '공격 시도 건수'])
+        period = request.GET.get('period', 'weekly')
+        if period == 'daily':
+            since = now - datetime.timedelta(days=1)
+        elif period == 'monthly':
+            since = now - datetime.timedelta(days=30)
+        else:
+            since = now - datetime.timedelta(weeks=1)
+        daily = (LoginHistory.objects.filter(success=False, created_at__gte=since)
+                 .annotate(d=TruncDate('created_at'))
+                 .values('d').annotate(cnt=Count('id')).order_by('d'))
+        for r in daily:
+            ws.append([r['d'].strftime('%Y-%m-%d'), r['cnt']])
+        filename = f'보안관제_공격추이_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+
+    # ── 접속이력 4종 (로그인/활동/세션/보안탐지) ──────
+    elif kind in ('al_login', 'al_activity', 'al_session', 'al_security'):
+        al_kind = kind.replace('al_', '')
+        from apps.accounts.models import LoginHistory as LH, UserActivityLog as UA, UserSession as US
+        if al_kind == 'login':
+            ws.title = '로그인이력'
+            _apply_header(ws, ['사용자', '성명', 'IP', '브라우저', '결과', '실패사유', '시도일시'])
+            for r in LH.objects.select_related('user').order_by('-created_at')[:20000]:
+                ws.append([
+                    r.attempted_username or (r.user.username if r.user else '-'),
+                    r.user.name if r.user else '(미등록)',
+                    r.ip_address or '-', r.user_agent[:80] if r.user_agent else '-',
+                    '성공' if r.success else '실패',
+                    r.fail_reason or '',
+                    r.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                ])
+            filename = f'접속이력_로그인_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+        elif al_kind == 'activity':
+            ws.title = '활동로그'
+            _apply_header(ws, ['사용자', '성명', '행위', '대상', '상세', 'IP', '발생일시'])
+            ACTION = {'login':'로그인','logout':'로그아웃','create':'생성','update':'수정','delete':'삭제','view':'조회','download':'다운로드','upload':'업로드'}
+            for r in UA.objects.select_related('user').order_by('-created_at')[:20000]:
+                ws.append([
+                    r.user.username if r.user else '-',
+                    r.user.name if r.user else '-',
+                    ACTION.get(r.action, r.action), r.target or '-', r.detail or '-',
+                    r.ip_address or '-', r.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                ])
+            filename = f'접속이력_활동로그_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+        elif al_kind == 'session':
+            ws.title = '현재접속자'
+            _apply_header(ws, ['사용자', '성명', 'IP', '현재화면', '로그인시각', '마지막활동'])
+            cutoff = now - datetime.timedelta(minutes=30)
+            for r in US.objects.select_related('user').filter(is_active=True, last_active__gte=cutoff).order_by('-last_active'):
+                ws.append([
+                    r.user.username if r.user else '-',
+                    r.user.name if r.user else '-',
+                    r.ip_address or '-', r.current_page or '-',
+                    r.login_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    r.last_active.strftime('%Y-%m-%d %H:%M:%S'),
+                ])
+            filename = f'접속이력_현재접속자_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+        else:  # security
+            ws.title = '보안탐지'
+            _apply_header(ws, ['IP 주소', '실패 횟수', '시도 계정', '성공 이력', '위험도', '최초 시도', '최근 시도'])
+            since = now - datetime.timedelta(days=7)
+            fail_qs = LH.objects.filter(success=False, created_at__gte=since)
+            ip_stats = fail_qs.values('ip_address').annotate(
+                fail_count=Count('id'), last_attempt=Max('created_at'), first_attempt=Min('created_at'),
+            ).order_by('-fail_count')
+            for row in ip_stats:
+                ip = row['ip_address']
+                usernames = sorted(set(fail_qs.filter(ip_address=ip).exclude(attempted_username='').values_list('attempted_username', flat=True)))[:10]
+                has_success = LH.objects.filter(ip_address=ip, success=True, created_at__gte=since).exists()
+                fc = row['fail_count']
+                threat = '심각' if fc >= 20 else '높음' if fc >= 10 else '주의' if fc >= 5 else '낮음'
+                ws.append([
+                    ip or '-', fc, ', '.join(u for u in usernames if u) or '-',
+                    '있음' if has_success else '없음', threat,
+                    row['first_attempt'].strftime('%Y-%m-%d %H:%M'),
+                    row['last_attempt'].strftime('%Y-%m-%d %H:%M'),
+                ])
+            filename = f'접속이력_보안탐지_{now.strftime("%Y%m%d_%H%M")}.xlsx'
+
+    else:
+        return JsonResponse({'error': f'알 수 없는 kind: {kind}'}, status=400)
+
+    # ── 열 너비 자동 조정 ──
+    for col in ws.columns:
+        max_len = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            try:
+                v = str(cell.value) if cell.value is not None else ''
+                max_len = max(max_len, len(v))
+            except Exception:
+                pass
+        ws.column_dimensions[col_letter].width = min(max(max_len + 2, 10), 60)
+
+    # ── 응답 생성 ──
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    resp = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    encoded = urllib.parse.quote(filename)
+    resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
+    return resp
