@@ -64,6 +64,10 @@ def _build_catalog():
         ('schools',        '학교목록',         '학교정보',   'apps.schools.models', 'School', None),
         ('buildings',      '건물정보',         '학교정보',   'apps.schools.models', 'SchoolRoom', None),
         ('contacts',       '학교담당자',       '학교정보',   'apps.schools.models', 'SchoolContact', None),
+        # 네트워크 토폴로지 관련
+        ('net_devices',    '네트워크 장비목록', '네트워크',   'apps.network.models', 'NetworkDevice', None),
+        ('net_links',      '네트워크 링크',    '네트워크',   'apps.network.models', 'NetworkLink', None),
+        ('net_topology',   '토폴로지 스냅샷',  '네트워크',   'apps.network.models', 'NetworkTopology', None),
     ]
     for doc_id, name, cat, mod_path, cls_name, extra_filter in FIXED:
         try:
@@ -82,6 +86,26 @@ def _build_catalog():
             })
         except Exception:
             items.append({'id': doc_id, 'name': name, 'count': 0, 'category': cat})
+
+    # ── 3) NAS 파일 기반 산출물 (토폴로지 CSV, SNMP 가이드 DOCX) ──
+    import os
+    media = os.environ.get('NAS_MEDIA_ROOT', '/app/nas/media/npms')
+    NAS_DOCS = [
+        ('nas_topology_csv', '토폴로지 CSV',      '네트워크', os.path.join(media, '토폴로지', '토폴로지'), '.csv'),
+        ('nas_snmp_guide',   'SNMP 설정 가이드', '네트워크', os.path.join(media, '토폴로지', 'SNMP설정가이드'), '.docx'),
+        ('nas_pptx',         'PPTX 구성도',       '네트워크', os.path.join(media, '산출물', '2025년 테크센터', '2025년 테크센터-네트워크 구성도'), '.pptx'),
+    ]
+    for doc_id, name, cat, dirpath, ext in NAS_DOCS:
+        cnt = 0
+        try:
+            if os.path.isdir(dirpath):
+                cnt = sum(1 for f in os.listdir(dirpath)
+                          if f.lower().endswith(ext) and not f.startswith('.') and not f.startswith('~'))
+        except Exception:
+            pass
+        items.append({
+            'id': doc_id, 'name': name, 'count': cnt, 'category': cat,
+        })
 
     return items
 
@@ -571,8 +595,43 @@ _DOC_NAME = {
 }
 
 
+def _get_nas_files(doc_id, q):
+    """NAS 폴더의 파일 목록을 (name, headers, rows)로 반환"""
+    import os
+    from datetime import datetime
+    media = os.environ.get('NAS_MEDIA_ROOT', '/app/nas/media/npms')
+    NAS_MAP = {
+        'nas_topology_csv': ('토폴로지 CSV', os.path.join(media, '토폴로지', '토폴로지'), '.csv'),
+        'nas_snmp_guide':   ('SNMP 설정 가이드', os.path.join(media, '토폴로지', 'SNMP설정가이드'), '.docx'),
+        'nas_pptx':         ('PPTX 구성도',  os.path.join(media, '산출물', '2025년 테크센터', '2025년 테크센터-네트워크 구성도'), '.pptx'),
+    }
+    name, dirpath, ext = NAS_MAP.get(doc_id, (doc_id, '', ''))
+    headers = ['파일명', '크기(KB)', '수정일시', '경로']
+    rows = []
+    if os.path.isdir(dirpath):
+        for fname in sorted(os.listdir(dirpath)):
+            if fname.startswith('.') or fname.startswith('~'):
+                continue
+            if not fname.lower().endswith(ext):
+                continue
+            if q and q.lower() not in fname.lower():
+                continue
+            fp = os.path.join(dirpath, fname)
+            try:
+                size_kb = round(os.path.getsize(fp) / 1024, 1)
+                mtime = datetime.fromtimestamp(os.path.getmtime(fp)).strftime('%Y-%m-%d %H:%M')
+            except OSError:
+                size_kb = 0
+                mtime = '-'
+            rows.append({'파일명': fname, '크기(KB)': size_kb, '수정일시': mtime, '경로': fp})
+    return name, headers, rows
+
+
 def _get_doc_data(doc_id, q):
     """doc_id에 따라 (name, headers, rows) 반환"""
+    # NAS 파일 기반 목록
+    if doc_id.startswith('nas_'):
+        return _get_nas_files(doc_id, q)
     if doc_id.startswith('report_'):
         tid = int(doc_id.replace('report_', ''))
         from apps.reports.models import ReportTemplate
