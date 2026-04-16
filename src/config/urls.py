@@ -44,6 +44,10 @@ from apps.sysconfig.api import (
     access_log, celery_status, backup_status,
     system_health, storage_usage, trigger_task,
 )
+from apps.sysconfig.security_api import (
+    sec_dashboard, sec_blocked_ips, sec_block_config, sec_block_log,
+    sec_login_analysis, sec_system_logs, sec_settings, sec_report,
+)
 from apps.sysconfig.exports import export_view
 from apps.sysconfig.db_admin import db_schema, db_model_schema, db_crud, db_export
 from apps.sysconfig.doc_viewer import doc_catalog, doc_data, doc_export as doc_excel_export
@@ -192,6 +196,15 @@ urlpatterns = [
     path('api/sysconfig/health/',                     system_health,      name='sysconfig-health'),
     path('api/sysconfig/storage/',                    storage_usage,      name='sysconfig-storage'),
     path('api/sysconfig/trigger-task/',               trigger_task,       name='sysconfig-trigger-task'),
+    # 보안관제 API
+    path('api/sysconfig/security/dashboard/',      sec_dashboard,      name='sec-dashboard'),
+    path('api/sysconfig/security/blocked-ips/',    sec_blocked_ips,    name='sec-blocked-ips'),
+    path('api/sysconfig/security/block-config/',   sec_block_config,   name='sec-block-config'),
+    path('api/sysconfig/security/block-log/',      sec_block_log,      name='sec-block-log'),
+    path('api/sysconfig/security/login-analysis/', sec_login_analysis, name='sec-login-analysis'),
+    path('api/sysconfig/security/system-logs/',    sec_system_logs,    name='sec-system-logs'),
+    path('api/sysconfig/security/settings/',       sec_settings,       name='sec-settings'),
+    path('api/sysconfig/security/report/',         sec_report,         name='sec-report'),
     # DB 관리 (범용 CRUD)
     path('api/sysconfig/db/schema/',                              db_schema,        name='db-schema'),
     path('api/sysconfig/db/<str:app_label>/<str:model_name>/schema/', db_model_schema, name='db-model-schema'),

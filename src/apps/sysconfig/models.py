@@ -1,5 +1,11 @@
 from django.db import models
 
+# 보안관제 모델 re-export (마이그레이션에서 인식)
+from apps.sysconfig.security_models import (  # noqa: F401
+    SecurityEvent, BlockedIP, WhitelistedIP, BlockLog,
+    SecurityConfig, SystemLogEntry, FileIntegritySnapshot,
+)
+
 
 class ModuleConfig(models.Model):
     """모듈별 최소 역할 오버라이드 (MODULE_REGISTRY 기본값 재정의)"""

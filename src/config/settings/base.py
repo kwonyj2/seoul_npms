@@ -85,6 +85,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.ip_block.IPBlockMiddleware',
     'core.middleware.audit.AuditLogMiddleware',
     'core.middleware.session_tracking.SessionTrackingMiddleware',
     'core.middleware.security_headers.SecurityHeadersMiddleware',
@@ -202,6 +203,27 @@ CELERY_BEAT_SCHEDULE = {
     'wbs-progress-snapshot': {
         'task': 'apps.wbs.tasks.snapshot_wbs_progress',
         'schedule': crontab(hour=1, minute=0, day_of_week=1),
+    },
+    # ── 보안관제 ────────────────────────
+    # SSH 로그 수집 (5분마다)
+    'collect-system-logs': {
+        'task': 'sysconfig.collect_system_logs',
+        'schedule': 300,
+    },
+    # 파일 무결성 점검 (1시간마다)
+    'check-file-integrity': {
+        'task': 'sysconfig.check_file_integrity',
+        'schedule': 3600,
+    },
+    # 만료 IP 차단 해제 (5분마다)
+    'cleanup-expired-blocks': {
+        'task': 'sysconfig.cleanup_expired_blocks',
+        'schedule': 300,
+    },
+    # 보안 이벤트 자동 생성 (5분마다)
+    'generate-security-events': {
+        'task': 'sysconfig.generate_security_events',
+        'schedule': 300,
     },
 }
 

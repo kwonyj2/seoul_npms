@@ -83,6 +83,7 @@
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('docs',this);return false;"><i class="bi bi-file-earmark-ruled me-1"></i>산출물 조회</a></li>
     {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('dbadmin',this);return false;"><i class="bi bi-database-gear me-1"></i>DB 관리</a></li>{% endif %}
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('info',this);return false;"><i class="bi bi-info-circle me-1"></i>시스템 정보</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('security',this);return false;" style="color:#dc3545;"><i class="bi bi-shield-lock me-1"></i>보안관제</a></li>
   </ul>
 
 
@@ -723,13 +724,16 @@
     </div>
   </div>
 
+  {% include 'sysconfig/_security_tab.html' %}
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
 const SYSCONF_API = API_BASE.replace('/api','') + '/api/sysconfig';
-const SYS_TABS   = ['db','users','export','nas','accesslog','celery','docs','dbadmin','info'];
+const SYS_TABS   = ['db','users','export','nas','accesslog','celery','docs','dbadmin','info','security'];
 
 // ══ 탭 전환 ═══════════════════════════════════════════
 function switchTab(name, el) {
@@ -744,6 +748,7 @@ function switchTab(name, el) {
   if (name==='docs' && !window._docLoaded) { loadDocCatalog(); window._docLoaded=true; }
   if (name==='dbadmin' && !window._daLoaded) { loadDbTree(); window._daLoaded=true; }
   if (name==='info'   && !window._iLoaded)  { loadSysInfo(); window._iLoaded=true; }
+  if (name==='security' && !window._secLoaded) { loadSecDashboard(); window._secLoaded=true; }
 }
 
 // ══ 업로드 공통 JS ════════════════════════════════════
@@ -1631,4 +1636,5 @@ function loadSysInfo(){
 }
 window.addEventListener('resize', () => { if(window._uLoaded) adjustMatrixRows(); });
 </script>
+{% include 'sysconfig/_security_js.html' %}
 {% endblock %}
