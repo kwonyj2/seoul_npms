@@ -47,9 +47,14 @@ def sec_dashboard(request):
     h7d = now - datetime.timedelta(days=7)
 
     # ── 요약 카드 ─────────────────────────
-    total_attacks_24h = LoginHistory.objects.filter(
+    # NPMS 로그인 실패 + SSH 공격 합산
+    npms_attacks_24h = LoginHistory.objects.filter(
         success=False, created_at__gte=h24
     ).count()
+    ssh_attacks_24h = SystemLogEntry.objects.filter(
+        log_type='ssh_fail', created_at__gte=h24
+    ).count()
+    total_attacks_24h = npms_attacks_24h + ssh_attacks_24h
     blocked_ips = BlockedIP.objects.count()
     active_sessions = UserSession.objects.filter(
         is_active=True,
@@ -73,48 +78,70 @@ def sec_dashboard(request):
         threat_level = 'safe'
         threat_label = '안전'
 
-    # ── 시간대별 공격 시도 (24h) ─────────
-    hourly_raw = (
+    # ── 시간대별 공격 시도 (24h) — SSH + NPMS 합산 ─────────
+    # SSH 공격 (SystemLogEntry)
+    ssh_hourly_raw = (
+        SystemLogEntry.objects.filter(log_type='ssh_fail', created_at__gte=h24)
+        .annotate(hour=TruncHour('created_at'))
+        .values('hour')
+        .annotate(cnt=Count('id'))
+        .order_by('hour')
+    )
+    ssh_hourly = {r['hour'].strftime('%H:00'): r['cnt'] for r in ssh_hourly_raw}
+    # NPMS 로그인 실패
+    npms_hourly_raw = (
         LoginHistory.objects.filter(success=False, created_at__gte=h24)
         .annotate(hour=TruncHour('created_at'))
         .values('hour')
         .annotate(cnt=Count('id'))
         .order_by('hour')
     )
-    hourly = {r['hour'].strftime('%H:00'): r['cnt'] for r in hourly_raw}
+    npms_hourly = {r['hour'].strftime('%H:00'): r['cnt'] for r in npms_hourly_raw}
     hourly_labels = []
     hourly_data = []
     for i in range(24):
         t = (now - datetime.timedelta(hours=23 - i)).strftime('%H:00')
         hourly_labels.append(t)
-        hourly_data.append(hourly.get(t, 0))
+        hourly_data.append(ssh_hourly.get(t, 0) + npms_hourly.get(t, 0))
 
-    # ── 공격 유형별 분류 ─────────────────
+    # ── 공격 유형별 분류 (SSH + NPMS) ─────
+    type_map = {}
+    # SSH 공격 유형
+    ssh_fail_cnt = SystemLogEntry.objects.filter(log_type='ssh_fail', created_at__gte=h7d).count()
+    ssh_auth_cnt = SystemLogEntry.objects.filter(log_type='auth_other', created_at__gte=h7d).count()
+    if ssh_fail_cnt:
+        type_map['SSH 브루트포스'] = ssh_fail_cnt
+    if ssh_auth_cnt:
+        type_map['OS 인증 실패'] = ssh_auth_cnt
+    # NPMS 로그인 실패
     fail_reasons = (
         LoginHistory.objects.filter(success=False, created_at__gte=h7d)
         .values('fail_reason')
         .annotate(cnt=Count('id'))
         .order_by('-cnt')
     )
-    type_map = {}
     for r in fail_reasons:
         reason = r['fail_reason'] or '기타'
         if '잠금' in reason:
-            key = '계정 잠금'
+            key = 'NPMS 계정 잠금'
         elif '비밀번호' in reason:
-            key = '비밀번호 오류'
+            key = 'NPMS 비밀번호 오류'
         elif '미등록' in reason or '없는' in reason:
-            key = '미등록 계정'
+            key = 'NPMS 미등록 계정'
         elif '만료' in reason:
-            key = '서비스 만료'
+            key = 'NPMS 서비스 만료'
         else:
-            key = '기타'
+            key = 'NPMS 기타'
         type_map[key] = type_map.get(key, 0) + r['cnt']
     attack_types = [{'label': k, 'count': v} for k, v in sorted(type_map.items(), key=lambda x: -x[1])]
 
-    # ── Top 10 위협 IP ──────────────────
+    # ── Top 10 위협 IP (SSH 공격 기반) ──────────────────
+    # SSH 로그에서 IP별 실패 집계 (실제 외부 해킹 시도)
     top_ips = (
-        LoginHistory.objects.filter(success=False, created_at__gte=h7d)
+        SystemLogEntry.objects.filter(
+            log_type='ssh_fail', created_at__gte=h7d,
+            ip_address__isnull=False,
+        )
         .values('ip_address')
         .annotate(
             fail_count=Count('id'),
@@ -126,15 +153,13 @@ def sec_dashboard(request):
     top_ip_list = []
     for row in top_ips:
         ip = row['ip_address'] or '-'
-        # 차단 여부
         is_blocked = BlockedIP.objects.filter(ip_address=ip).exists()
-        # 위험도
         fc = row['fail_count']
-        if fc >= 50:
+        if fc >= 500:
             threat = 'critical'
-        elif fc >= 20:
+        elif fc >= 100:
             threat = 'high'
-        elif fc >= 10:
+        elif fc >= 20:
             threat = 'medium'
         else:
             threat = 'low'
