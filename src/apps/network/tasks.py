@@ -364,20 +364,23 @@ def scan_network_pptx(school_id: int = None):
                 _process_one(school, pptx_path, pptx_files[0], stats)
                 handled_schools.add(school.id)
 
-    # ── 방식 2: 테크센터 구성도 폴더 일괄 스캔 (파일명 매칭) ──
-    if not school_id:  # 전체 스캔일 때만 자동 매칭
-        tech_dirs = []
-        for root, dirs, files in os.walk(base_dir):
-            if '네트워크 구성도' in os.path.basename(root) or '네트워크구성도' in os.path.basename(root):
-                tech_dirs.append(root)
+    # ── 방식 2: 테크센터 구성도 폴더 스캔 (파일명 매칭) ──
+    # school_id 지정된 경우에도 해당 학교 PPTX가 있는지 체크
+    tech_dirs = []
+    for root, dirs, files in os.walk(base_dir):
+        if '네트워크 구성도' in os.path.basename(root) or '네트워크구성도' in os.path.basename(root):
+            tech_dirs.append(root)
 
-        for tech_dir in tech_dirs:
-            for fname in sorted(os.listdir(tech_dir)):
-                if not fname.lower().endswith('.pptx') or fname.startswith('.') or fname.startswith('~'):
-                    continue
-                school_name = _extract_school_name_from_filename(fname)
-                school = _find_school_by_name(school_name, school_map)
-                if not school:
+    target_school_ids = {s.id for s in schools}
+
+    for tech_dir in tech_dirs:
+        for fname in sorted(os.listdir(tech_dir)):
+            if not fname.lower().endswith('.pptx') or fname.startswith('.') or fname.startswith('~'):
+                continue
+            school_name = _extract_school_name_from_filename(fname)
+            school = _find_school_by_name(school_name, school_map)
+            if not school:
+                if not school_id:  # 전체 스캔일 때만 skip 기록
                     stats['total'] += 1
                     stats['skip'] += 1
                     stats['results'].append({
@@ -385,12 +388,15 @@ def scan_network_pptx(school_id: int = None):
                         'status': 'skip', 'note': f'DB 학교 매칭 실패: {fname}',
                         'pptx': fname,
                     })
-                    continue
-                if school.id in handled_schools:
-                    continue
-                pptx_path = os.path.join(tech_dir, fname)
-                _process_one(school, pptx_path, fname, stats)
-                handled_schools.add(school.id)
+                continue
+            if school.id in handled_schools:
+                continue
+            # 개별 스캔 시 대상 학교만 처리
+            if school_id and school.id not in target_school_ids:
+                continue
+            pptx_path = os.path.join(tech_dir, fname)
+            _process_one(school, pptx_path, fname, stats)
+            handled_schools.add(school.id)
 
     # ── 3. 처리 안된 학교들은 skip ──
     if not school_id:

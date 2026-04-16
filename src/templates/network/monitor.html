@@ -571,6 +571,7 @@ async function loadTopology() {
   const container = document.getElementById('topo-container');
   container.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>로딩 중...</div>';
   try {
+    // live API (DB 장비/링크)
     const data = await apiGet(`${API_BASE}/network/topology/live/`, { school_id: schoolId });
     _topoFullData = data;
     // PPTX 슬라이드 정보 가져오기
@@ -589,6 +590,14 @@ async function loadTopology() {
     container.innerHTML =
       `<div class="d-flex align-items-center justify-content-center h-100 text-danger">오류: ${e.message || e}</div>`;
   }
+}
+
+// 노드 이름 필드 추출 헬퍼 (live/saved 데이터 구조 차이 대응)
+function _nodeName(n) {
+  return n.name || n.label || n.id || '';
+}
+function _edgeNodes(e) {
+  return [e.from_name || e.from || e.source, e.to_name || e.to || e.target];
 }
 
 function renderSlideTabs() {
@@ -611,17 +620,18 @@ function switchSlide(slideNum) {
   _topoCurrentSlide = slideNum;
   renderSlideTabs();
   if (!_topoFullData) return;
-  // 슬라이드별 필터
   let filtered = _topoFullData;
   if (slideNum > 0) {
     const slide = _topoSlidesInfo.find(s => s.number === slideNum);
     if (slide) {
       const nodeSet = new Set(slide.node_names);
       filtered = {
-        nodes: (_topoFullData.nodes || []).filter(n => nodeSet.has(n.name)),
-        edges: (_topoFullData.edges || []).filter(e =>
-          nodeSet.has(e.from_name || e.from) && nodeSet.has(e.to_name || e.to)
-        ),
+        ...(_topoFullData),
+        nodes: (_topoFullData.nodes || []).filter(n => nodeSet.has(_nodeName(n))),
+        edges: (_topoFullData.edges || []).filter(e => {
+          const [fn, tn] = _edgeNodes(e);
+          return nodeSet.has(fn) && nodeSet.has(tn);
+        }),
       };
     }
   }
