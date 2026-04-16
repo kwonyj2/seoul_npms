@@ -59,8 +59,9 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
-const CSRF_TOKEN = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
-const API_BASE = '/npms/api';
+// CSRF_TOKEN은 base.html에 이미 정의됨
+// API_BASE도 base.html에 있을 수 있으므로 조건부 선언
+if (typeof API_BASE === 'undefined') { window.API_BASE = '/npms/api'; }
 const SYSCONF_API = API_BASE + '/sysconfig';
 const SEC_API = SYSCONF_API + '/security';
 let _secCharts = {};
@@ -80,7 +81,13 @@ function secMainTab(name, el) {
   if (name === 'syslog') loadSysLogs('ssh');
   if (name === 'settings') loadSecSettings();
   if (name === 'report') loadSecReport();
-  if (name === 'accesslog') { if (!window._alLoaded) { alSub('login'); window._alLoaded = true; } }
+  if (name === 'accesslog') {
+    if (!window._alLoaded) {
+      const firstBtn = document.querySelector('#al-subtabs .btn');
+      if (firstBtn) alSwitchKind('login', firstBtn);
+      window._alLoaded = true;
+    }
+  }
 }
 
 // 시스템 감시 내부 서브탭 (SSH/리소스/Docker/무결성)
