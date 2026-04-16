@@ -588,16 +588,34 @@ function onSchoolSearchInput() {
 }
 async function doSchoolSearch(q) {
   try {
-    const data = await apiGet(`${API_BASE}/schools/schools/search/`, { q, limit: 20 });
-    renderSchoolSearch(data.results || []);
+    // search API는 배열 직접 반환
+    const data = await apiGet(`${API_BASE}/schools/schools/search/`, { q });
+    let arr = Array.isArray(data) ? data : (data.results || data.data || []);
+    // 학제 정보 보강 (_topoTree 에서 찾기 — 배열 형식)
+    const typeMap = {};
+    (Array.isArray(_topoTree) ? _topoTree : []).forEach(c =>
+      (c.types || []).forEach(t => (t.schools || []).forEach(s => {
+        typeMap[s.id] = t.name;
+      }))
+    );
+    arr = arr.map(s => ({
+      id: s.id,
+      name: s.name,
+      center: s.support_center_name || '',
+      type: typeMap[s.id] || '',
+    }));
+    renderSchoolSearch(arr);
   } catch(e) {
+    console.error('search error:', e);
     // fallback: 트리에서 필터
     const results = [];
-    (_topoTree?.centers || []).forEach(c => (c.types || []).forEach(t => (t.schools || []).forEach(s => {
-      if (s.name && s.name.includes(q)) {
-        results.push({ id: s.id, name: s.name, center: c.name, type: t.name });
-      }
-    })));
+    (Array.isArray(_topoTree) ? _topoTree : []).forEach(c =>
+      (c.types || []).forEach(t => (t.schools || []).forEach(s => {
+        if (s.name && s.name.includes(q)) {
+          results.push({ id: s.id, name: s.name, center: c.name, type: t.name });
+        }
+      }))
+    );
     renderSchoolSearch(results.slice(0, 20));
   }
 }
@@ -621,23 +639,33 @@ function hideSchoolSearch() {
 }
 async function selectSchoolFromSearch(schoolId, schoolName) {
   // 드롭다운에도 연동: 해당 학교의 지원청/학제 찾아서 선택
-  (_topoTree?.centers || []).forEach(c => (c.types || []).forEach(t => (t.schools || []).forEach(s => {
-    if (s.id === schoolId) {
-      const cSel = document.getElementById('topo-center');
-      const tSel = document.getElementById('topo-type');
-      const sSel = document.getElementById('topo-school');
-      cSel.value = c.id;
-      onTopoCenter();
+  let found = null;
+  (Array.isArray(_topoTree) ? _topoTree : []).forEach(c =>
+    (c.types || []).forEach(t => (t.schools || []).forEach(s => {
+      if (s.id === schoolId) {
+        found = { c, t };
+      }
+    }))
+  );
+  if (found) {
+    const cSel = document.getElementById('topo-center');
+    const tSel = document.getElementById('topo-type');
+    const sSel = document.getElementById('topo-school');
+    cSel.value = found.c.id;
+    onTopoCenter();
+    setTimeout(() => {
+      tSel.value = found.t.id;
+      onTopoType();
       setTimeout(() => {
-        tSel.value = t.id;
-        onTopoType();
-        setTimeout(() => {
-          sSel.value = schoolId;
-          loadTopology();
-        }, 50);
-      }, 50);
-    }
-  })));
+        sSel.value = schoolId;
+        loadTopology();
+      }, 80);
+    }, 80);
+  } else {
+    // 트리 로드 안 된 경우 직접 학교 ID만 설정
+    document.getElementById('topo-school').value = schoolId;
+    loadTopology();
+  }
   document.getElementById('topo-search').value = schoolName;
   hideSchoolSearch();
 }
