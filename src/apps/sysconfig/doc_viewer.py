@@ -296,7 +296,7 @@ def _get_network_devices(q):
     TYPE_KO = {'switch':'스위치','poe_switch':'PoE스위치','ap':'무선AP','router':'라우터','firewall':'방화벽','server':'서버','l2_switch':'L2스위치','l3_switch':'L3스위치'}
     STATUS_KO = {'up':'정상','down':'장애','warning':'경고','unknown':'미확인'}
     rows = []
-    for d in qs[:20000]:
+    for d in qs[:100000]:
         rows.append({h: v for h, v in zip(headers, [
             d.school.name if d.school else '', d.name, d.model or '', d.location or '',
             d.network_type or '', TYPE_KO.get(d.device_type, d.device_type),
@@ -315,7 +315,7 @@ def _get_network_links(q):
     CABLE_KO = {'fiber':'광','cat6':'Cat6','cat5e':'Cat5e','cat5':'Cat5','unknown':'미확인'}
     LINK_KO = {'lldp':'LLDP','cdp':'CDP','arp':'ARP','manual':'수동'}
     rows = []
-    for l in qs[:20000]:
+    for l in qs[:100000]:
         rows.append({h: v for h, v in zip(headers, [
             l.from_device.school.name if l.from_device and l.from_device.school else '',
             l.from_device.name if l.from_device else '',
@@ -768,8 +768,8 @@ def doc_export(request, doc_id):
         cell.font = hdr_font
         cell.fill = hdr_fill
 
-    # 데이터
-    for row in all_rows[:10000]:
+    # 데이터 — Excel 한계 약 1,048,576행 중 실용상 100,000건까지
+    for row in all_rows[:100000]:
         ws.append([row.get(h, '') for h in headers])
 
     # 컬럼 너비
