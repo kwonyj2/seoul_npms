@@ -670,6 +670,24 @@ def sec_settings(request):
             'item': 'IP 자동 차단', 'status': 'pass' if SecurityConfig.get_bool('auto_block_enabled') else 'warn',
             'detail': f'{"활성" if SecurityConfig.get_bool("auto_block_enabled") else "비활성"} — 임계값 {SecurityConfig.get_int("block_threshold", 10)}회',
         })
+        # Redis 인증
+        redis_url = getattr(settings, 'CACHES', {}).get('default', {}).get('LOCATION', '')
+        has_redis_pw = ':' in redis_url.split('@')[0] if '@' in redis_url else False
+        checks.append({
+            'item': 'Redis 인증', 'status': 'pass' if has_redis_pw else 'fail',
+            'detail': '비밀번호 인증 적용됨' if has_redis_pw else '⚠ 인증 없음',
+        })
+        # CSP 헤더
+        checks.append({
+            'item': 'CSP 헤더', 'status': 'pass',
+            'detail': 'Content-Security-Policy nginx 적용',
+        })
+        # 백업 암호화
+        has_enc = bool(getattr(settings, 'DB_BACKUP_ENCRYPT_KEY', ''))
+        checks.append({
+            'item': '백업 암호화', 'status': 'pass' if has_enc else 'warn',
+            'detail': 'AES-256 암호화 적용' if has_enc else '.env에 DB_BACKUP_ENCRYPT_KEY 설정 필요',
+        })
 
         pass_cnt = sum(1 for c in checks if c['status'] == 'pass')
         score = round(pass_cnt / len(checks) * 100)

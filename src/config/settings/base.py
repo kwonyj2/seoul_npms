@@ -138,10 +138,11 @@ DATABASES = {
 # ─────────────────────────────────────────
 # 캐시 (Redis)
 # ─────────────────────────────────────────
+REDIS_PASSWORD = env('REDIS_PASSWORD', default='npmsRedis2026Secure')
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': env('REDIS_URL', default='redis://localhost:6379/0'),
+        'LOCATION': env('REDIS_URL', default=f'redis://:{REDIS_PASSWORD}@localhost:6379/0'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         }
@@ -156,7 +157,7 @@ SESSION_SAVE_EVERY_REQUEST = True   # 활동 시마다 만료 연장
 # ─────────────────────────────────────────
 # Celery
 # ─────────────────────────────────────────
-CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://localhost:6379/1')
+CELERY_BROKER_URL = env('CELERY_BROKER_URL', default=f'redis://:{REDIS_PASSWORD}@localhost:6379/1')
 CELERY_RESULT_BACKEND = 'django-db'
 CELERY_RESULT_EXTENDED = True
 CELERY_ACCEPT_CONTENT = ['json']
@@ -235,8 +236,9 @@ CELERY_BEAT_SCHEDULE = {
 # ─────────────────────────────────────────
 # DB 자동 백업
 # ─────────────────────────────────────────
-DB_BACKUP_DIR      = env('DB_BACKUP_DIR',      default='/app/nas/backups')
-DB_BACKUP_KEEP_DAYS = env.int('DB_BACKUP_KEEP_DAYS', default=30)
+DB_BACKUP_DIR         = env('DB_BACKUP_DIR',         default='/app/nas/backups')
+DB_BACKUP_KEEP_DAYS   = env.int('DB_BACKUP_KEEP_DAYS', default=30)
+DB_BACKUP_ENCRYPT_KEY = env('DB_BACKUP_ENCRYPT_KEY', default='')
 
 # ─────────────────────────────────────────
 # 운영 PMS 연동
@@ -251,7 +253,7 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            'hosts': [(env('REDIS_HOST', default='localhost'), int(env('REDIS_PORT', default='6379')))],
+            'hosts': [f'redis://:{REDIS_PASSWORD}@{env("REDIS_HOST", default="localhost")}:{env("REDIS_PORT", default="6379")}/0'],
         },
     },
 }

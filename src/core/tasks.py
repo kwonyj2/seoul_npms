@@ -51,6 +51,21 @@ def _run_pg_dump(backup_dir: str) -> dict:
         ) as gz:
             gz.communicate(input=dump.stdout)
 
+        # GPG 대칭키 암호화 (비밀번호 기반)
+        enc_pass = getattr(settings, 'DB_BACKUP_ENCRYPT_KEY', '')
+        if enc_pass:
+            enc_file = backup_file + '.enc'
+            enc_result = subprocess.run(
+                ['gpg', '--batch', '--yes', '--symmetric',
+                 '--cipher-algo', 'AES256',
+                 '--passphrase', enc_pass,
+                 '-o', enc_file, backup_file],
+                capture_output=True, timeout=120
+            )
+            if enc_result.returncode == 0:
+                os.remove(backup_file)  # 평문 삭제
+                backup_file = enc_file
+
         size_bytes = os.path.getsize(backup_file)
         size_str = (f'{size_bytes / 1024:.1f} KB' if size_bytes < 1024 * 1024
                     else f'{size_bytes / 1024 / 1024:.1f} MB')
