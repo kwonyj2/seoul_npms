@@ -30,6 +30,20 @@ DEVICE_CODE_PAT = re.compile(
     r'^\s*([KHGMPi])#([A-Z0-9]+)\b',
     re.UNICODE
 )
+# 접두어 없는 버전: #M, #1, #BB 등 (네트워크 분류 라벨로 보완)
+DEVICE_CODE_NOPREFIX_PAT = re.compile(
+    r'^\s*#([A-Z0-9]+)\b',
+    re.UNICODE
+)
+
+# 네트워크 분류 라벨
+NETWORK_LABEL_MAP = {
+    '교사망': ('K', '교사망'),
+    '학생망': ('H', '학생망'),
+    '기타망': ('G', '기타망'),
+    '무선망': ('M', '무선망'),
+    '전화망': ('i', '전화망'),
+}
 
 # 계위 레이블
 PHASE_PAT = re.compile(r'^(\d+)\s*계위\s*$')
@@ -218,6 +232,10 @@ def parse_pptx_topology(file_path: str) -> dict:
             slide_devs_this = set()
             current_phase = 0
 
+            # ── 1차 수집: 네트워크 라벨 좌표, 접두어 없는 장비 후보 ──
+            network_labels = []  # [(x, y, prefix, network_type), ...]
+            noprefix_devices = []  # [(sp, x, y, text), ...]
+
             # 슬라이드 내 모든 텍스트박스 순회
             for sp in root.findall('.//p:sp', NS):
                 text = _get_text(sp)
@@ -233,6 +251,13 @@ def parse_pptx_topology(file_path: str) -> dict:
                     current_phase = int(pm.group(1))
                     continue
 
+                # 네트워크 분류 라벨 수집
+                for lbl, (prefix, net_type) in NETWORK_LABEL_MAP.items():
+                    if text.strip() == lbl:
+                        network_labels.append((x, y, prefix, net_type))
+                        break
+
+                # 표준 장비 코드 (K#M, H#1 등)
                 dev = _parse_device_text(text)
                 if dev:
                     dev.x, dev.y = x, y
@@ -246,6 +271,12 @@ def parse_pptx_topology(file_path: str) -> dict:
                         all_devices[dev.code] = dev
                     continue
 
+                # 접두어 없는 장비 코드 (#M, #1) → 나중에 라벨 매칭
+                np_match = DEVICE_CODE_NOPREFIX_PAT.match(text)
+                if np_match and not _parse_firewall_text(text):
+                    noprefix_devices.append((sp, x, y, text))
+                    continue
+
                 fw = _parse_firewall_text(text)
                 if fw:
                     fw.x, fw.y = x, y
@@ -255,6 +286,37 @@ def parse_pptx_topology(file_path: str) -> dict:
                                 if f.name == fw.name and f.location == fw.location), None)
                     if not dup:
                         all_firewalls.append(fw)
+
+            # ── 2차: 접두어 없는 장비를 네트워크 라벨과 매칭 ──
+            if noprefix_devices and network_labels:
+                for sp, x, y, text in noprefix_devices:
+                    # 가장 가까운 네트워크 라벨 찾기 (주로 위쪽에 위치)
+                    best_label = None
+                    best_dist = float('inf')
+                    for lx, ly, prefix, net_type in network_labels:
+                        # 수평 거리 작고 라벨이 위쪽(y가 작음)일수록 우선
+                        dx = abs(x - lx)
+                        dy = y - ly  # 양수 = 라벨이 위
+                        # 라벨은 장비 위쪽에 있어야 함 (dy > 0)
+                        if dy < 0:
+                            continue
+                        dist = dx + dy * 0.5  # 수평이 더 중요
+                        if dist < best_dist:
+                            best_dist = dist
+                            best_label = (prefix, net_type)
+                    if not best_label:
+                        continue
+                    # 접두어 붙여서 표준 파서로 처리
+                    prefix, net_type = best_label
+                    reconstructed = f'{prefix}{text.strip()}'
+                    dev = _parse_device_text(reconstructed)
+                    if dev:
+                        dev.x, dev.y = x, y
+                        dev.phase = current_phase
+                        dev.raw_text = text
+                        slide_devs_this.add(dev.code)
+                        if dev.code not in all_devices:
+                            all_devices[dev.code] = dev
 
             slide_info.append({
                 'number': idx,
