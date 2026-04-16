@@ -599,9 +599,10 @@ function renderSlideTabs() {
     return;
   }
   wrap.style.display = '';
+  const _escape = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   let html = `<button class="topo-btn ${_topoCurrentSlide===0?'active':''}" onclick="switchSlide(0)">● 통합</button>`;
   _topoSlidesInfo.forEach(s => {
-    html += `<button class="topo-btn ${_topoCurrentSlide===s.number?'active':''}" onclick="switchSlide(${s.number})">${escH(s.title || ('슬라이드 ' + s.number))}</button>`;
+    html += `<button class="topo-btn ${_topoCurrentSlide===s.number?'active':''}" onclick="switchSlide(${s.number})">${_escape(s.title || ('슬라이드 ' + s.number))}</button>`;
   });
   tabs.innerHTML = html;
 }
