@@ -177,13 +177,16 @@ services:
   # Nginx
   # ─────────────────────────────────────────
   nginx:
-    image: nginx:mainline
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nginx
     container_name: npms_nginx
     restart: unless-stopped
     ports:
       - "8081:80"
       - "8443:443"
     volumes:
+      - ./docker/nginx-main.conf:/etc/nginx/nginx.conf:ro
       - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./docker/ssl:/etc/nginx/ssl:ro
       - npms_static:/app/staticfiles:ro

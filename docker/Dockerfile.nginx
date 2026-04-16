@@ -1,0 +1,5 @@
+FROM nginx:mainline
+# GeoIP Legacy Country DB 설치
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends geoip-database \
+    && rm -rf /var/lib/apt/lists/*
