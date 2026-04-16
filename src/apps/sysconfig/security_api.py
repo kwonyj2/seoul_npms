@@ -635,8 +635,9 @@ def sec_settings(request):
             'detail': 'OFF' if not settings.DEBUG else '⚠ ON — 운영환경에서 반드시 OFF',
         })
         checks.append({
-            'item': 'HTTPS(SSL/TLS)', 'status': 'fail',
-            'detail': '⚠ 미적용 — SESSION_COOKIE_SECURE=False',
+            'item': 'HTTPS(SSL/TLS)',
+            'status': 'pass' if getattr(settings, 'SESSION_COOKIE_SECURE', False) else 'fail',
+            'detail': 'TLS 1.2/1.3 적용 (자체서명)' if getattr(settings, 'SESSION_COOKIE_SECURE', False) else '⚠ 미적용',
         })
         checks.append({
             'item': 'CSRF 보호', 'status': 'pass',

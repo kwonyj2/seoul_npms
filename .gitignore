@@ -78,3 +78,6 @@ src/.claude/
 # 임시 파일
 # ─────────────────────────────────────────
 .auto_import_progress.json
+
+# SSL 인증서 (자체서명)
+docker/ssl/

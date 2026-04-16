@@ -18,8 +18,8 @@ USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SECURE = False  # HTTP 운영 시 False (HTTPS 전환 시 True)
-CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 
 # CSRF 신뢰 도메인
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
@@ -27,12 +27,16 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
     'http://127.0.0.1:8081',
     'http://112.187.158.4',
     'http://112.187.158.4:8081',
+    'https://112.187.158.4',
+    'https://112.187.158.4:8443',
 ])
 
 # CORS (운영 서버만 허용)
 CORS_ALLOWED_ORIGINS = [
     'http://112.187.158.4',
     'http://localhost:8081',
+    'https://112.187.158.4',
+    'https://112.187.158.4:8443',
 ]
 CORS_ALLOW_CREDENTIALS = True
 
