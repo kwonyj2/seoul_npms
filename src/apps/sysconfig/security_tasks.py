@@ -34,36 +34,56 @@ def collect_system_logs():
     if not log_file:
         return 'auth.log 파일 없음'
 
-    # 최근 수집 시각 이후만 처리
+    # 최근 수집 시각 이후만 처리 (최초 실행 시 7일 전부터)
     last = SystemLogEntry.objects.order_by('-created_at').first()
-    cutoff = last.created_at if last else timezone.now() - datetime.timedelta(hours=1)
+    cutoff = last.created_at if last else timezone.now() - datetime.timedelta(days=7)
 
     # SSH 실패 패턴
     FAIL_PATTERNS = [
         re.compile(r'Failed password for (?:invalid user )?(\S+) from (\S+) port'),
         re.compile(r'Failed publickey for (\S+) from (\S+) port'),
         re.compile(r'authentication failure.*rhost=(\S+).*user=(\S+)'),
+        re.compile(r'Invalid user (\S+) from (\S+)'),
+        re.compile(r'Connection closed by (?:invalid user )?(\S+)?\s*(\S+) port'),
     ]
     SUCCESS_PATTERN = re.compile(r'Accepted (?:password|publickey) for (\S+) from (\S+) port')
+    # sudo/pam 패턴 (authentication failure, conversation failed, could not identify)
+    AUTH_FAIL_PATTERNS = [
+        re.compile(r'pam_unix\(\S+:auth\):\s+authentication failure.*user=(\S+)'),
+        re.compile(r'pam_unix\(\S+:auth\):\s+(?:conversation failed|auth could not identify)'),
+        re.compile(r'sudo:\s+(\S+)\s*:.*authentication failure'),
+    ]
 
-    # 날짜 파싱 (syslog 형식: Apr 16 08:43:06)
+    # 날짜 파싱 — ISO 8601 (2026-04-12T05:17:01.780+09:00) + syslog (Apr 12 05:17:01)
     MONTHS = {
         'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
         'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
     }
+    ISO_PAT = re.compile(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})')
 
     def parse_syslog_date(line):
+        # ISO 8601 형식
+        m = ISO_PAT.match(line)
+        if m:
+            try:
+                dt = datetime.datetime.fromisoformat(m.group(1))
+                return timezone.make_aware(dt) if timezone.is_naive(dt) else dt
+            except Exception:
+                pass
+        # 전통 syslog 형식
         try:
             parts = line.split()
-            mon = MONTHS.get(parts[0], 1)
-            day = int(parts[1])
-            hms = parts[2].split(':')
-            year = timezone.now().year
-            return timezone.make_aware(
-                datetime.datetime(year, mon, day, int(hms[0]), int(hms[1]), int(hms[2]))
-            )
+            mon = MONTHS.get(parts[0], 0)
+            if mon:
+                day = int(parts[1])
+                hms = parts[2].split(':')
+                year = timezone.now().year
+                return timezone.make_aware(
+                    datetime.datetime(year, mon, day, int(hms[0]), int(hms[1]), int(hms[2]))
+                )
         except Exception:
-            return None
+            pass
+        return None
 
     created = 0
     try:
@@ -112,6 +132,22 @@ def collect_system_logs():
                             log_time=log_time,
                         )
                         created += 1
+
+                # sudo/pam 인증 실패
+                for apat in AUTH_FAIL_PATTERNS:
+                    am = apat.search(line)
+                    if am:
+                        user = am.group(1) if am.lastindex else ''
+                        raw = line.strip()[:500]
+                        if not SystemLogEntry.objects.filter(raw_line=raw, log_type='auth_other').exists():
+                            SystemLogEntry.objects.create(
+                                log_type='auth_other',
+                                username=user,
+                                raw_line=raw,
+                                log_time=log_time,
+                            )
+                            created += 1
+                        break
     except PermissionError:
         return 'auth.log 읽기 권한 없음'
     except Exception as e:

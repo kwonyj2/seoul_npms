@@ -481,7 +481,7 @@ def sec_system_logs(request):
     ps = 50
 
     if kind == 'ssh':
-        qs = SystemLogEntry.objects.filter(log_type__in=['ssh_fail', 'ssh_success'])
+        qs = SystemLogEntry.objects.filter(log_type__in=['ssh_fail', 'ssh_success', 'auth_other'])
         q = request.GET.get('q', '')
         if q:
             qs = qs.filter(Q(ip_address__icontains=q) | Q(username__icontains=q))
