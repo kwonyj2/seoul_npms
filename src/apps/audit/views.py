@@ -95,55 +95,90 @@ class AuditProjectViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='scan_files')
     def scan_files(self, request, pk=None):
-        """NAS 폴더 스캔 → ArtifactFile 자동 등록"""
+        """NAS 폴더 재귀 스캔 → ArtifactFile 자동 등록
+
+        매칭 규칙 (깊이 상관없이):
+        1. 부모 폴더명이 산출물 코드와 일치 → 내부 파일 전부 해당 템플릿으로 등록
+        2. 파일명에 산출물 코드 포함 → 해당 템플릿으로 등록
+        3. 파일명에 산출물명 포함 → 해당 템플릿으로 등록 (코드 없을 때만)
+        """
         from .management.commands.scan_audit_files import parse_filename
         project = self.get_object()
         base_dir = os.path.join(settings.MEDIA_ROOT, '2026감리산출물')
         if not os.path.isdir(base_dir):
             return Response({'error': f'폴더 없음: {base_dir}'}, status=status.HTTP_404_NOT_FOUND)
 
-        tmpl_map = {
-            t.code.upper(): t
-            for t in ArtifactTemplate.objects.filter(project=project)
-        }
+        # 템플릿 매핑: 코드·명 둘 다 키로 저장
+        templates = list(ArtifactTemplate.objects.filter(project=project))
+        code_map = {t.code.upper(): t for t in templates if t.code}
+        # 이름 매칭은 길이 긴 순(더 구체적)으로 먼저 시도
+        name_list = sorted(
+            [(t.name, t) for t in templates if t.name],
+            key=lambda x: -len(x[0])
+        )
+
         new_count = skip_count = err_count = 0
         results = []
 
-        for entry in sorted(os.scandir(base_dir), key=lambda e: e.name):
-            if not entry.is_dir():
-                continue
-            tmpl = tmpl_map.get(entry.name.upper())
-            if not tmpl:
-                continue
-            for fentry in sorted(os.scandir(entry.path), key=lambda e: e.name):
-                if not fentry.is_file() or fentry.name.startswith('.'):
+        def _match_template(fpath, fname):
+            """현재 파일에 맞는 템플릿 찾기"""
+            # 1순위: 부모 폴더명(경로 상에 산출물 코드)
+            rel_parent = os.path.relpath(os.path.dirname(fpath), base_dir)
+            for part in rel_parent.replace('\\', '/').split('/'):
+                tmpl = code_map.get(part.upper())
+                if tmpl:
+                    return tmpl, 'folder_code'
+            # 2순위: 파일명에 코드 포함
+            fname_upper = fname.upper()
+            for code, tmpl in code_map.items():
+                if code in fname_upper:
+                    return tmpl, 'filename_code'
+            # 3순위: 파일명에 산출물명 포함
+            for name, tmpl in name_list:
+                if name in fname:
+                    return tmpl, 'filename_name'
+            return None, None
+
+        # 재귀 탐색
+        for root, dirs, files in os.walk(base_dir):
+            for fname in sorted(files):
+                if fname.startswith('.'):
                     continue
-                fname = fentry.name
-                exists = ArtifactFile.objects.filter(project=project, template=tmpl, file_name=fname).exists()
+                fpath = os.path.join(root, fname)
+                tmpl, match_type = _match_template(fpath, fname)
+                if not tmpl:
+                    continue
+
+                exists = ArtifactFile.objects.filter(
+                    project=project, template=tmpl, file_name=fname
+                ).exists()
                 if exists:
                     skip_count += 1
                     continue
+
                 try:
-                    display_name, occ_date, loc_note = parse_filename(fname, tmpl.code)
-                    rel_path = os.path.relpath(fentry.path, settings.MEDIA_ROOT)
+                    display_name, occ_date, loc_note = parse_filename(fname, tmpl.code or tmpl.name)
+                    rel_path = os.path.relpath(fpath, settings.MEDIA_ROOT)
                     ArtifactFile.objects.create(
                         project=project, template=tmpl,
                         file=rel_path, file_name=fname,
                         display_name=display_name,
-                        file_size=fentry.stat().st_size,
+                        file_size=os.path.getsize(fpath),
                         occurrence_date=occ_date,
                         location_note=loc_note,
                         is_scanned=True,
                     )
                     new_count += 1
-                    results.append({'code': tmpl.code, 'file': fname, 'action': 'new'})
+                    results.append({'code': tmpl.code or tmpl.name, 'file': fname,
+                                    'action': 'new', 'match': match_type})
                 except Exception as e:
                     err_count += 1
-                    results.append({'code': tmpl.code, 'file': fname, 'action': 'error', 'msg': str(e)})
+                    results.append({'code': tmpl.code or tmpl.name, 'file': fname,
+                                    'action': 'error', 'msg': str(e)})
 
         return Response({
             'new': new_count, 'skipped': skip_count, 'errors': err_count,
-            'results': results,
+            'results': results[:1000],  # 응답 크기 제한
         })
 
     @action(detail=True, methods=['get'], url_path='file_tree')
