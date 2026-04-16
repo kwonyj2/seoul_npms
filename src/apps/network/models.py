@@ -121,8 +121,12 @@ class NetworkTopology(models.Model):
     """학교 네트워크 토폴로지 스냅샷"""
     school       = models.ForeignKey('schools.School', on_delete=models.CASCADE, verbose_name='학교', related_name='topologies')
     topology_data= models.JSONField('토폴로지 데이터', default=dict,
-                                     help_text='{"nodes": [...], "edges": [...]}')
+                                     help_text='{"nodes": [...], "edges": [...], "slides": {...}}')
+    pptx_path    = models.CharField('PPTX 경로', max_length=500, blank=True)
+    pptx_mtime   = models.DateTimeField('PPTX 수정시각', null=True, blank=True)
+    slide_titles = models.JSONField('슬라이드 제목', default=list, help_text='["개선 후", "개선 전"]')
     scanned_at   = models.DateTimeField('스캔일시', auto_now_add=True)
+    updated_at   = models.DateTimeField('갱신일시', auto_now=True)
 
     class Meta:
         db_table = 'network_topology'

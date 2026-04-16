@@ -379,47 +379,59 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         return response
 
     @action(detail=False, methods=['post'])
-    def bulk_analyze(self, request):
-        """구성도 이미지 폴더 전체 일괄 분석 시작"""
-        import os
-        from django.core.cache import cache
-        from .tasks import bulk_analyze_diagrams, BULK_DIAGRAM_KEY
+    def scan_pptx(self, request):
+        """PPTX 구성도 스캔 (NAS /산출물/{school_id}/구성도/*.pptx)
 
-        # 이미 진행 중이면 409
-        progress = cache.get(BULK_DIAGRAM_KEY)
-        if progress and progress.get('started') and not progress.get('finished'):
-            return Response({'error': '이미 실행 중입니다.'}, status=status.HTTP_409_CONFLICT)
-
-        api_key = os.environ.get('ANTHROPIC_API_KEY', '')
-        if not api_key:
-            # API 키 없이 Claude Code CLI 스크립트 방식 안내
-            script_path = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
-                'auto_import.py'
-            )
-            return Response({
-                'mode': 'cli',
-                'message': 'ANTHROPIC_API_KEY가 없습니다. Claude Code CLI 방식으로 실행하세요.',
-                'command': f'python3 {script_path}',
-                'options': {
-                    'resume': f'python3 {script_path} --resume',
-                    'single': f'python3 {script_path} --school 학교명',
-                    'pending': f'python3 {script_path} --list-pending',
-                },
-            }, status=status.HTTP_200_OK)
-
-        # 캐시 초기화
-        cache.delete(BULK_DIAGRAM_KEY)
-        bulk_analyze_diagrams.delay()
-        return Response({'message': '일괄 분석 시작됨'}, status=status.HTTP_202_ACCEPTED)
+        body:
+          {"school_id": 123}   개별 학교만 동기 실행
+          {}                    전체 학교 비동기 실행 (Celery)
+        """
+        from .tasks import scan_network_pptx
+        school_id = request.data.get('school_id')
+        try:
+            if school_id:
+                # 개별 학교는 즉시 실행하고 결과 반환
+                result = scan_network_pptx(school_id=int(school_id))
+                return Response(result, status=status.HTTP_200_OK)
+            # 전체는 비동기
+            task = scan_network_pptx.delay(school_id=None)
+            return Response({'status': 'started', 'task_id': str(task.id)},
+                            status=status.HTTP_202_ACCEPTED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['get'])
-    def bulk_progress(self, request):
-        """일괄 분석 진행 현황 조회"""
-        from django.core.cache import cache
-        from .tasks import BULK_DIAGRAM_KEY
-        progress = cache.get(BULK_DIAGRAM_KEY) or {'started': False}
-        return Response(progress)
+    def pptx_status(self, request):
+        """특정 학교의 PPTX 파일/파싱 상태 조회"""
+        import os
+        school_id = request.query_params.get('school_id')
+        if not school_id:
+            return Response({'error': 'school_id 필요'}, status=status.HTTP_400_BAD_REQUEST)
+
+        base_dir = os.environ.get('NAS_ARTIFACT_ROOT', '/app/nas/media/npms/산출물')
+        pptx_dir = os.path.join(base_dir, str(school_id), '구성도')
+        files = []
+        if os.path.isdir(pptx_dir):
+            for f in os.listdir(pptx_dir):
+                if f.lower().endswith('.pptx') and not f.startswith('.'):
+                    fp = os.path.join(pptx_dir, f)
+                    files.append({
+                        'filename': f,
+                        'size': os.path.getsize(fp),
+                        'mtime': os.path.getmtime(fp),
+                    })
+
+        topo = NetworkTopology.objects.filter(school_id=school_id).first()
+        return Response({
+            'school_id': int(school_id),
+            'pptx_dir': pptx_dir,
+            'pptx_files': sorted(files, key=lambda x: -x['mtime']),
+            'topology_exists': topo is not None,
+            'slide_titles': topo.slide_titles if topo else [],
+            'pptx_path': topo.pptx_path if topo else '',
+            'pptx_mtime': topo.pptx_mtime.isoformat() if topo and topo.pptx_mtime else None,
+            'updated_at': topo.updated_at.isoformat() if topo else None,
+        })
 
 
 class NetworkEventViewSet(viewsets.ModelViewSet):

@@ -108,8 +108,11 @@
         <div class="d-flex justify-content-between align-items-center mb-2">
           <span class="fw-semibold"><i class="bi bi-diagram-3 text-primary me-1"></i>네트워크 토폴로지</span>
           <div class="d-flex gap-2 align-items-center flex-wrap">
-            <button class="btn btn-sm btn-warning text-white" onclick="startBulkAnalyze()" id="btn-bulk-analyze">
-              <i class="bi bi-collection me-1"></i>전체 구성도 분석
+            <button class="btn btn-sm btn-warning text-white" onclick="scanOnePptx()" id="btn-scan-one" title="현재 선택 학교의 PPTX만 스캔">
+              <i class="bi bi-file-earmark-slides me-1"></i>이 학교 PPTX 스캔
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="scanAllPptx()" id="btn-scan-all" title="전체 학교 PPTX 일괄 스캔">
+              <i class="bi bi-collection me-1"></i>전체 PPTX 일괄 스캔
             </button>
             <button class="btn btn-sm btn-success" onclick="showJsonImportModal()">
               <i class="bi bi-cloud-download me-1"></i>JSON 가져오기
@@ -159,6 +162,11 @@
           <button class="topo-btn topo-cable-btn" data-cable="cat5e"   onclick="topoFilterCable(this)" style="--tc:#198754;">Cat5e</button>
           <button class="topo-btn topo-cable-btn" data-cable="cat5"    onclick="topoFilterCable(this)" style="--tc:#6c757d;">Cat5</button>
         </div>
+      </div>
+
+      <!-- 슬라이드 탭 (PPTX 파싱 시 자동 생성) -->
+      <div class="px-3 py-2 border-bottom bg-white" id="topo-slide-tabs-wrap" style="display:none;">
+        <div class="d-flex align-items-center gap-1 flex-wrap" id="topo-slide-tabs"></div>
       </div>
 
       <!-- 토폴로지 캔버스 + 범례 오버레이 -->
@@ -489,7 +497,7 @@ function switchTab(name, el) {
   ['monitor','topology','assets'].forEach(t => {
     document.getElementById('tab-' + t).classList.toggle('d-none', t !== name);
   });
-  if (name === 'topology') { if (!topoNetwork) loadTopoSchools(); _checkBulkAnalyzeOnLoad(); }
+  if (name === 'topology') { if (!topoNetwork) loadTopoSchools(); }
   if (name === 'assets') { loadAssetSync(); loadConvertSchools(); }
 }
 
@@ -553,6 +561,10 @@ function onTopoType() {
   schoolSel.disabled = false;
 }
 
+let _topoCurrentSlide = 0;    // 0=통합, 1/2/3 = 슬라이드 번호
+let _topoSlidesInfo = [];     // PPTX 슬라이드 목록
+let _topoFullData = null;     // 전체 토폴로지 원본
+
 async function loadTopology() {
   const schoolId = document.getElementById('topo-school').value;
   if (!schoolId) return;
@@ -560,12 +572,59 @@ async function loadTopology() {
   container.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>로딩 중...</div>';
   try {
     const data = await apiGet(`${API_BASE}/network/topology/live/`, { school_id: schoolId });
+    _topoFullData = data;
+    // PPTX 슬라이드 정보 가져오기
+    try {
+      const topoList = await apiGet(`${API_BASE}/network/topology/`, { school_id: schoolId });
+      const latest = (topoList.results || [])[0];
+      _topoSlidesInfo = latest?.topology_data?.slides || [];
+    } catch (e) {
+      _topoSlidesInfo = [];
+    }
+    renderSlideTabs();
+    _topoCurrentSlide = 0;
     renderTopology(data);
   } catch(e) {
     console.error('loadTopology error:', e);
     container.innerHTML =
       `<div class="d-flex align-items-center justify-content-center h-100 text-danger">오류: ${e.message || e}</div>`;
   }
+}
+
+function renderSlideTabs() {
+  const wrap = document.getElementById('topo-slide-tabs-wrap');
+  const tabs = document.getElementById('topo-slide-tabs');
+  if (!_topoSlidesInfo || _topoSlidesInfo.length < 2) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = '';
+  let html = `<button class="topo-btn ${_topoCurrentSlide===0?'active':''}" onclick="switchSlide(0)">● 통합</button>`;
+  _topoSlidesInfo.forEach(s => {
+    html += `<button class="topo-btn ${_topoCurrentSlide===s.number?'active':''}" onclick="switchSlide(${s.number})">${escH(s.title || ('슬라이드 ' + s.number))}</button>`;
+  });
+  tabs.innerHTML = html;
+}
+
+function switchSlide(slideNum) {
+  _topoCurrentSlide = slideNum;
+  renderSlideTabs();
+  if (!_topoFullData) return;
+  // 슬라이드별 필터
+  let filtered = _topoFullData;
+  if (slideNum > 0) {
+    const slide = _topoSlidesInfo.find(s => s.number === slideNum);
+    if (slide) {
+      const nodeSet = new Set(slide.node_names);
+      filtered = {
+        nodes: (_topoFullData.nodes || []).filter(n => nodeSet.has(n.name)),
+        edges: (_topoFullData.edges || []).filter(e =>
+          nodeSet.has(e.from_name || e.from) && nodeSet.has(e.to_name || e.to)
+        ),
+      };
+    }
+  }
+  renderTopology(filtered);
 }
 
 async function generateTopology() {
@@ -843,34 +902,46 @@ function downloadSnmpGuide() {
 // ── 전체 구성도 일괄 분석 ────────────────────────────────────
 let _bulkAnalyzeTimer = null;
 
-async function startBulkAnalyze() {
-  if (!confirm('구성도 이미지 폴더의 전체 학교를 Claude AI로 분석합니다. 계속하시겠습니까?')) return;
-  const btn = document.getElementById('btn-bulk-analyze');
+async function scanOnePptx() {
+  const schoolId = document.getElementById('topo-school').value;
+  if (!schoolId) { showToast('학교를 선택하세요', 'warning'); return; }
+  const btn = document.getElementById('btn-scan-one');
   btn.disabled = true;
   try {
-    const res = await apiPost(`${API_BASE}/network/topology/bulk_analyze/`, {});
-
-    // CLI 모드: API 키 없이 호스트 스크립트 방식
-    if (res && res.mode === 'cli') {
-      btn.disabled = false;
-      _showCliModal(res);
-      return;
-    }
-
-    showToast('전체 분석 시작됨', 'info');
-    document.getElementById('bulk-analyze-panel').classList.remove('d-none');
-    _startBulkAnalyzePolling();
-  } catch(e) {
-    btn.disabled = false;
-    if (e.status === 409) {
-      showToast('이미 실행 중입니다', 'warning');
-      document.getElementById('bulk-analyze-panel').classList.remove('d-none');
-      _startBulkAnalyzePolling();
+    const res = await apiPost(`${API_BASE}/network/topology/scan_pptx/`, { school_id: schoolId });
+    if (res.results && res.results.length) {
+      const r = res.results[0];
+      if (r.status === 'ok') {
+        showToast(`PPTX 파싱 완료: 장비 ${r.devices}, 링크 ${r.links}, 슬라이드 ${r.slides}`, 'success');
+        // 토폴로지 재로드
+        await loadTopology();
+      } else {
+        showToast(`스캔 결과: ${r.status} — ${r.note || ''}`, 'warning');
+      }
     } else {
-      showToast(e.message || '시작 실패', 'error');
+      showToast('스캔 결과 없음', 'warning');
     }
+  } catch(e) {
+    showToast(e.message || '스캔 실패', 'error');
   }
+  btn.disabled = false;
 }
+
+async function scanAllPptx() {
+  if (!confirm('전체 학교 PPTX를 일괄 스캔합니다. 1,411개 학교는 약 12분 소요됩니다. 계속하시겠습니까?')) return;
+  const btn = document.getElementById('btn-scan-all');
+  btn.disabled = true;
+  try {
+    const res = await apiPost(`${API_BASE}/network/topology/scan_pptx/`, {});
+    showToast(`일괄 스캔 시작됨 (Task ID: ${res.task_id})`, 'info');
+  } catch(e) {
+    showToast(e.message || '스캔 실패', 'error');
+  }
+  btn.disabled = false;
+}
+
+// 호환용 - 기존 코드 참조 제거
+async function startBulkAnalyze() { return scanAllPptx(); }
 
 function _showCliModal(res) {
   // 기존 모달 제거
