@@ -131,8 +131,12 @@
           <textarea id="write-content" class="form-control form-control-sm" rows="10"
                     placeholder="내용을 입력하세요..."></textarea>
         </div>
+        <div id="edit-existing-files" style="display:none;" class="mb-2">
+          <label class="form-label small fw-semibold">기존 첨부파일</label>
+          <div id="edit-file-list"></div>
+        </div>
         <div>
-          <label class="form-label small fw-semibold">파일 첨부</label>
+          <label class="form-label small fw-semibold">파일 추가</label>
           <input type="file" id="write-files" class="form-control form-control-sm" multiple>
           <small class="text-muted">여러 파일 선택 가능</small>
         </div>
@@ -258,8 +262,8 @@ async function openDetail(id) {
         <i class="bi bi-trash"></i>
       </button>`;
 
-    // 첨부파일
-    renderAttachments(p.attachments || [], id);
+    // 첨부파일 (조회 모드: 삭제 버튼 숨김)
+    renderAttachments(p.attachments || [], id, false);
   } catch(e) {
     document.getElementById('detail-content').textContent = '불러오기 실패';
   }
@@ -270,7 +274,7 @@ function closeDetail() {
   currentPostId = null;
 }
 
-function renderAttachments(atts, postId) {
+function renderAttachments(atts, postId, editable) {
   const el = document.getElementById('attachment-list');
   if (!atts.length) { el.innerHTML = '<small class="text-muted">첨부파일 없음</small>'; return; }
   el.innerHTML = atts.map(a => {
@@ -285,22 +289,25 @@ function renderAttachments(atts, postId) {
          class="btn btn-xs btn-outline-secondary py-0 px-2" download>
         <i class="bi bi-download"></i>
       </a>
-      <button class="btn btn-xs btn-outline-danger py-0 px-2" onclick="deleteAttachment(${postId},${a.id})" title="삭제">
-        <i class="bi bi-x-lg"></i>
-      </button>
+      ${editable ? `<button class="btn btn-xs btn-outline-danger py-0 px-2" onclick="deleteAttachment(${postId},${a.id})" title="삭제"><i class="bi bi-x-lg"></i></button>` : ''}
     </div>`;
   }).join('');
 }
 
-async function deleteAttachment(postId, attId) {
+async function deleteAttachmentInModal(postId, attId) {
   if (!confirm('이 첨부파일을 삭제하시겠습니까?')) return;
   try {
     await fetch(`${API}/${postId}/attachments/${attId}/`, {
       method: 'DELETE',
       headers: { 'X-CSRFToken': getCsrfToken() }
     });
+    const row = document.getElementById('ef-' + attId);
+    if (row) row.remove();
+    // 남은 파일 없으면 영역 숨김
+    if (!document.getElementById('edit-file-list').children.length) {
+      document.getElementById('edit-existing-files').style.display = 'none';
+    }
     showToast('첨부파일 삭제 완료', 'success');
-    openDetail(postId);
   } catch(e) { showToast('삭제 실패', 'danger'); }
 }
 
@@ -315,6 +322,8 @@ function openWriteModal() {
   document.getElementById('write-content').value = '';
   document.getElementById('write-pinned').checked = false;
   document.getElementById('write-files').value   = '';
+  document.getElementById('edit-existing-files').style.display = 'none';
+  document.getElementById('edit-file-list').innerHTML = '';
   bootstrap.Modal.getOrCreateInstance(document.getElementById('writeModal')).show();
 }
 
@@ -327,6 +336,23 @@ async function openEditModal(id) {
   document.getElementById('write-content').value    = p.content || '';
   document.getElementById('write-pinned').checked   = p.is_pinned;
   document.getElementById('write-files').value      = '';
+  // 기존 첨부파일 표시 (삭제 가능)
+  const efEl = document.getElementById('edit-existing-files');
+  const efList = document.getElementById('edit-file-list');
+  if (p.attachments && p.attachments.length) {
+    efEl.style.display = '';
+    efList.innerHTML = p.attachments.map(a => {
+      const ext = a.filename.split('.').pop();
+      return `<div class="d-flex align-items-center gap-2 py-1 border-bottom" id="ef-${a.id}">
+        <i class="bi ${FILE_ICON(ext)}"></i>
+        <span class="small flex-fill">${a.filename} <small class="text-muted">(${fmtSize(a.filesize)})</small></span>
+        <button class="btn btn-xs btn-outline-danger py-0 px-2" onclick="deleteAttachmentInModal(${id},${a.id})" title="삭제"><i class="bi bi-x-lg"></i></button>
+      </div>`;
+    }).join('');
+  } else {
+    efEl.style.display = 'none';
+    efList.innerHTML = '';
+  }
   bootstrap.Modal.getOrCreateInstance(document.getElementById('writeModal')).show();
 }
 
