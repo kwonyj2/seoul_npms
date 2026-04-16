@@ -25,14 +25,14 @@ NS = {
 }
 
 # ── 장비 코드 패턴 (교육청 표준) ─────────────────────────────────────────────
-# K#M, H#1, P#12, M#BB, i#M 등
+# K#M, H#1, P#12, M#BB, i#M, K# M (공백 허용), M # M 등
 DEVICE_CODE_PAT = re.compile(
-    r'^\s*([KHGMPi])#([A-Z0-9]+)\b',
+    r'^\s*([KHGMPi])\s*#\s*([A-Z0-9]+)\b',
     re.UNICODE
 )
 # 접두어 없는 버전: #M, #1, #BB 등 (네트워크 분류 라벨로 보완)
 DEVICE_CODE_NOPREFIX_PAT = re.compile(
-    r'^\s*#([A-Z0-9]+)\b',
+    r'^\s*#\s*([A-Z0-9]+)\b',
     re.UNICODE
 )
 
@@ -128,13 +128,13 @@ def _get_line_color(sp):
 
 # 망이름 포함 패턴 (예: "교사망 #M E4020-24TX 본관 4 층 방송실내 서버실")
 NETWORK_NAME_DEVICE_PAT = re.compile(
-    r'^\s*(교사망|학생망|기타망|무선망|전화망)\s*#([A-Z0-9]+)\s+(.+)$',
+    r'^\s*(교사망|학생망|기타망|무선망|전화망)\s*#\s*([A-Z0-9]+)\s+(.+)$',
     re.UNICODE
 )
 # POE 장비 (예: "POE#1 E4020-24PS 본관 4 층 방송실내 서버실")
-POE_DEVICE_PAT = re.compile(r'^\s*POE#([A-Z0-9]+)\s+(.+)$', re.UNICODE)
+POE_DEVICE_PAT = re.compile(r'^\s*POE\s*#\s*([A-Z0-9]+)\s+(.+)$', re.UNICODE)
 # 백본 단축 (예: "BB# DSW2728XG 본관 4 층 방송실내 서버실")
-BB_DEVICE_PAT = re.compile(r'^\s*BB#\s+(.+)$', re.UNICODE)
+BB_DEVICE_PAT = re.compile(r'^\s*BB\s*#\s+(.+)$', re.UNICODE)
 
 # 범례용 텍스트 제외 (K#M~K#n, M#M~M#n P#n (POE) 등)
 LEGEND_NOISE_PAT = re.compile(r'[KHGMPi]#[A-Z0-9]+\s*[~～]\s*[KHGMPi]#')
