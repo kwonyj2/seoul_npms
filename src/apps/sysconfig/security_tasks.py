@@ -120,15 +120,21 @@ def collect_system_logs():
     lines = []
 
     # 1) journalctl 시도 (운용서버 — systemd journal)
+    #    --directory 로 호스트 journal 직접 읽기 (컨테이너 machine-id 불일치 우회)
     try:
         since_str = cutoff.strftime('%Y-%m-%d %H:%M:%S')
-        result = subprocess.run(
-            ['journalctl', '-u', 'ssh', '-u', 'sshd', '--no-pager',
-             '--since', since_str, '-q'],
-            capture_output=True, text=True, timeout=30
-        )
-        if result.stdout.strip():
-            lines = result.stdout.strip().split('\n')
+        journal_dirs = ['/var/log/journal', '/run/log/journal']
+        for jdir in journal_dirs:
+            if os.path.isdir(jdir):
+                result = subprocess.run(
+                    ['journalctl', '--directory', jdir,
+                     '-u', 'ssh', '-u', 'sshd', '--no-pager',
+                     '--since', since_str, '-q'],
+                    capture_output=True, text=True, timeout=30
+                )
+                if result.stdout.strip():
+                    lines = result.stdout.strip().split('\n')
+                    break
     except Exception:
         pass
 
