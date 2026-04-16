@@ -126,35 +126,99 @@ def _get_line_color(sp):
     return ''
 
 
+# 망이름 포함 패턴 (예: "교사망 #M E4020-24TX 본관 4 층 방송실내 서버실")
+NETWORK_NAME_DEVICE_PAT = re.compile(
+    r'^\s*(교사망|학생망|기타망|무선망|전화망)\s*#([A-Z0-9]+)\s+(.+)$',
+    re.UNICODE
+)
+# POE 장비 (예: "POE#1 E4020-24PS 본관 4 층 방송실내 서버실")
+POE_DEVICE_PAT = re.compile(r'^\s*POE#([A-Z0-9]+)\s+(.+)$', re.UNICODE)
+# 백본 단축 (예: "BB# DSW2728XG 본관 4 층 방송실내 서버실")
+BB_DEVICE_PAT = re.compile(r'^\s*BB#\s+(.+)$', re.UNICODE)
+
+# 범례용 텍스트 제외 (K#M~K#n, M#M~M#n P#n (POE) 등)
+LEGEND_NOISE_PAT = re.compile(r'[KHGMPi]#[A-Z0-9]+\s*[~～]\s*[KHGMPi]#')
+
 def _parse_device_text(text: str) -> Optional[Device]:
-    """'K#M E4020-24TX 신관 1층 전산실' → Device"""
-    m = DEVICE_CODE_PAT.match(text)
-    if not m:
+    """장비 텍스트 → Device
+
+    지원 패턴:
+    1. 'K#M E4020-24TX 신관 1층 전산실'         (표준 접두어)
+    2. '교사망 #M E4020-24TX 본관 4 층 서버실'   (망이름 포함)
+    3. 'POE#1 E4020-24PS 본관 4 층 서버실'     (POE 접두어)
+    4. 'BB# DSW2728XG 본관 4 층 서버실'        (백본 단축)
+    """
+    # 범례 텍스트는 제외
+    if LEGEND_NOISE_PAT.search(text):
         return None
 
-    prefix = m.group(1)
-    suffix = m.group(2)
-    code = f'{prefix}#{suffix}'
-    rest = text[m.end():].strip()
+    # 패턴 1: 표준
+    m = DEVICE_CODE_PAT.match(text)
+    if m:
+        prefix = m.group(1)
+        suffix = m.group(2)
+        rest = text[m.end():].strip()
+        parts = rest.split(None, 1)
+        model = parts[0] if parts else ''
+        location = parts[1].strip() if len(parts) > 1 else ''
+        network_type, device_type = PREFIX_MAP.get(prefix, ('', 'l2_switch'))
+        return Device(
+            code=f'{prefix}#{suffix}', prefix=prefix, suffix=suffix,
+            name=f'{prefix}#{suffix}', model=model, location=location,
+            device_type=device_type, network_type=network_type, raw_text=text,
+        )
 
-    # 모델명 (첫 단어, 보통 알파벳+숫자)
-    parts = rest.split(None, 1)
-    model = parts[0] if parts else ''
-    location = parts[1].strip() if len(parts) > 1 else ''
+    # 패턴 2: 망이름 포함 ("교사망 #M E4020-24TX")
+    m = NETWORK_NAME_DEVICE_PAT.match(text)
+    if m:
+        net_label = m.group(1)
+        suffix = m.group(2)
+        rest = m.group(3).strip()
+        parts = rest.split(None, 1)
+        model = parts[0] if parts else ''
+        location = parts[1].strip() if len(parts) > 1 else ''
+        # 망이름 → 접두어 매핑
+        label_to_prefix = {v[1]: k for k, (_, v) in [
+            ('K', ('', '교사망')), ('H', ('', '학생망')),
+            ('G', ('', '기타망')), ('M', ('', '무선망')), ('i', ('', '전화망'))
+        ]}
+        net_prefix_map = {'교사망': 'K', '학생망': 'H', '기타망': 'G', '무선망': 'M', '전화망': 'i'}
+        prefix = net_prefix_map.get(net_label, 'K')
+        network_type, device_type = PREFIX_MAP.get(prefix, ('', 'l2_switch'))
+        return Device(
+            code=f'{prefix}#{suffix}', prefix=prefix, suffix=suffix,
+            name=f'{prefix}#{suffix}', model=model, location=location,
+            device_type=device_type, network_type=network_type, raw_text=text,
+        )
 
-    network_type, device_type = PREFIX_MAP.get(prefix, ('', 'l2_switch'))
+    # 패턴 3: POE 접두어
+    m = POE_DEVICE_PAT.match(text)
+    if m:
+        suffix = m.group(1)
+        rest = m.group(2).strip()
+        parts = rest.split(None, 1)
+        model = parts[0] if parts else ''
+        location = parts[1].strip() if len(parts) > 1 else ''
+        return Device(
+            code=f'P#{suffix}', prefix='P', suffix=suffix,
+            name=f'P#{suffix}', model=model, location=location,
+            device_type='poe_switch', network_type='무선망', raw_text=text,
+        )
 
-    return Device(
-        code=code,
-        prefix=prefix,
-        suffix=suffix,
-        name=code,
-        model=model,
-        location=location,
-        device_type=device_type,
-        network_type=network_type,
-        raw_text=text,
-    )
+    # 패턴 4: 백본 단축 (BB#)
+    m = BB_DEVICE_PAT.match(text)
+    if m:
+        rest = m.group(1).strip()
+        parts = rest.split(None, 1)
+        model = parts[0] if parts else ''
+        location = parts[1].strip() if len(parts) > 1 else ''
+        return Device(
+            code='M#BB', prefix='M', suffix='BB',
+            name='M#BB', model=model, location=location,
+            device_type='l3_switch', network_type='무선망', raw_text=text,
+        )
+
+    return None
 
 
 def _parse_firewall_text(text: str) -> Optional[Device]:
