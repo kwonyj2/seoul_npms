@@ -85,6 +85,7 @@ class Device:
     x: int = 0
     y: int = 0
     raw_text: str = ''
+    slide_title: str = ''
 
 
 @dataclass
@@ -277,6 +278,25 @@ def _extract_slide_title(root) -> str:
     return ''
 
 
+# 슬라이드 제목에서 "개선 전/작업 전/기존/현행" 판별
+PRE_KEYWORDS = ('개선 전', '개선전', '작업 전', '작업전', '기존', '현재', '현행', 'Before', 'before', 'BEFORE', '변경 전', '변경전')
+POST_KEYWORDS = ('개선 후', '개선후', '작업 후', '작업후', '완료', '신규', 'After', 'after', 'AFTER', '변경 후', '변경후')
+
+
+def _is_pre_slide(title: str) -> bool:
+    """슬라이드가 '개선 전/작업 전' 유형인지"""
+    if not title:
+        return False
+    return any(k in title for k in PRE_KEYWORDS)
+
+
+def _is_post_slide(title: str) -> bool:
+    """슬라이드가 '개선 후/작업 후' 유형인지"""
+    if not title:
+        return False
+    return any(k in title for k in POST_KEYWORDS)
+
+
 def parse_pptx_topology(file_path: str) -> dict:
     """
     .pptx → {
@@ -296,16 +316,41 @@ def parse_pptx_topology(file_path: str) -> dict:
     slide_count = 0
     slide_info = []   # 슬라이드별 장비/링크 추적
 
+    # ── 1패스: 슬라이드 제목 먼저 수집해서 어떤 슬라이드가 "개선 후"인지 판단 ──
+    slide_titles_by_idx = {}
     with zipfile.ZipFile(file_path, 'r') as z:
         slide_names = sorted([n for n in z.namelist()
                               if n.startswith('ppt/slides/slide') and n.endswith('.xml')])
+        for idx, sname in enumerate(slide_names, 1):
+            xml_data = z.read(sname)
+            root = ET.fromstring(xml_data)
+            slide_titles_by_idx[idx] = _extract_slide_title(root) or f'슬라이드 {idx}'
+
+    # DB에 통합할 유효 슬라이드 결정
+    #  - 전체가 1장이면: 그대로
+    #  - 여러 장이면: "개선 후/작업 후" 키워드 있는 것만
+    #  - "후" 키워드 없는데 "전" 키워드가 있으면: "전"도 포함 (다른 현행 없으면)
+    total_slides = len(slide_names)
+    valid_for_db = set()
+    if total_slides <= 1:
+        valid_for_db = set(slide_titles_by_idx.keys())
+    else:
+        post_slides = [idx for idx, t in slide_titles_by_idx.items() if _is_post_slide(t)]
+        if post_slides:
+            valid_for_db = set(post_slides)
+        else:
+            # "후" 키워드 없으면 "전"이 아닌 것만 유효 (없으면 첫 번째)
+            non_pre = [idx for idx, t in slide_titles_by_idx.items() if not _is_pre_slide(t)]
+            valid_for_db = set(non_pre) if non_pre else {1}
+
+    with zipfile.ZipFile(file_path, 'r') as z:
         for idx, sname in enumerate(slide_names, 1):
             slide_count += 1
             xml_data = z.read(sname)
             root = ET.fromstring(xml_data)
 
-            # 슬라이드 제목 추출
-            slide_title = _extract_slide_title(root) or f'슬라이드 {idx}'
+            slide_title = slide_titles_by_idx[idx]
+            is_valid_for_db = idx in valid_for_db
             slide_devs_this = set()
             current_phase = 0
 
@@ -339,7 +384,10 @@ def parse_pptx_topology(file_path: str) -> dict:
                 if dev:
                     dev.x, dev.y = x, y
                     dev.phase = current_phase
+                    dev.slide_title = slide_title
                     slide_devs_this.add(dev.code)
+                    if not is_valid_for_db:
+                        continue
                     if dev.code in all_devices:
                         existing = all_devices[dev.code]
                         if len(dev.raw_text) > len(existing.raw_text):
@@ -359,6 +407,9 @@ def parse_pptx_topology(file_path: str) -> dict:
                     fw.x, fw.y = x, y
                     fw.phase = current_phase or 1
                     slide_devs_this.add(fw.name)
+                    # "개선 전" 슬라이드는 DB 통합에서 제외
+                    if not is_valid_for_db:
+                        continue
                     dup = next((f for f in all_firewalls
                                 if f.name == fw.name and f.location == fw.location), None)
                     if not dup:
@@ -488,6 +539,7 @@ def parse_pptx_topology(file_path: str) -> dict:
             'location': d.location,
             'network_type': d.network_type,
             'phase': d.phase,
+            'slide_title': getattr(d, 'slide_title', ''),
         })
 
     warnings = []

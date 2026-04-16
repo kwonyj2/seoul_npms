@@ -36,6 +36,8 @@ class NetworkDevice(models.Model):
     status        = models.CharField('상태', max_length=10, choices=STATUS_CHOICES, default='unknown')
     location      = models.CharField('설치위치', max_length=200, blank=True)
     network_type  = models.CharField('망구분', max_length=20, blank=True)
+    slide_source  = models.CharField('출처 슬라이드', max_length=50, blank=True,
+                                      help_text='PPTX 슬라이드 제목 (예: 개선 후)')
     snmp_enabled  = models.BooleanField('SNMP 활성', default=False)
     ssh_enabled   = models.BooleanField('SSH 활성', default=False)
     last_seen     = models.DateTimeField('마지막 응답', null=True, blank=True)

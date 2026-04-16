@@ -292,7 +292,7 @@ def _get_network_devices(q):
     qs = NetworkDevice.objects.select_related('school').order_by('school__name', 'network_type', 'name')
     if q:
         qs = qs.filter(Q(name__icontains=q) | Q(model__icontains=q) | Q(school__name__icontains=q))
-    headers = ['학교명', '장비명', '모델', '설치위치', '망구분', '장비유형', 'IP주소', '상태', '등록일']
+    headers = ['학교명', '장비명', '모델', '설치위치', '망구분', '장비유형', 'IP주소', '상태', '슬라이드', '등록일']
     TYPE_KO = {'switch':'스위치','poe_switch':'PoE스위치','ap':'무선AP','router':'라우터','firewall':'방화벽','server':'서버','l2_switch':'L2스위치','l3_switch':'L3스위치'}
     STATUS_KO = {'up':'정상','down':'장애','warning':'경고','unknown':'미확인'}
     rows = []
@@ -301,6 +301,7 @@ def _get_network_devices(q):
             d.school.name if d.school else '', d.name, d.model or '', d.location or '',
             d.network_type or '', TYPE_KO.get(d.device_type, d.device_type),
             d.ip_address or '', STATUS_KO.get(d.status, d.status),
+            d.slide_source or '-',
             _d(d.created_at.date() if d.created_at else ''),
         ])})
     return headers, rows

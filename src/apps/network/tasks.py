@@ -249,6 +249,7 @@ def _import_pptx_topology(school, data: dict, pptx_path: str = '') -> tuple:
                 'model': node.get('model', ''),
                 'location': node.get('location', ''),
                 'network_type': node.get('network_type', ''),
+                'slide_source': node.get('slide_title', ''),
                 'status': 'unknown',
             },
         )
