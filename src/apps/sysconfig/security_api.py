@@ -807,6 +807,9 @@ def sec_report(request):
     ssh_fails = SystemLogEntry.objects.filter(
         log_type='ssh_fail', created_at__gte=since
     ).count()
+    ssh_unique_ips = SystemLogEntry.objects.filter(
+        log_type='ssh_fail', created_at__gte=since, ip_address__isnull=False,
+    ).values('ip_address').distinct().count()
 
     # 위협 트렌드 (이번 기간 vs 이전 기간)
     if period == 'daily':
@@ -818,20 +821,47 @@ def sec_report(request):
     prev_fail = LoginHistory.objects.filter(
         created_at__gte=prev_since, created_at__lt=since, success=False
     ).count()
-    trend_pct = round((login_fail - prev_fail) / max(prev_fail, 1) * 100) if prev_fail else 0
+    prev_ssh = SystemLogEntry.objects.filter(
+        log_type='ssh_fail', created_at__gte=prev_since, created_at__lt=since,
+    ).count()
+    # 전체 공격 = NPMS 로그인 실패 + SSH 공격
+    total_current = login_fail + ssh_fails
+    total_prev = prev_fail + prev_ssh
+    trend_pct = round((total_current - total_prev) / max(total_prev, 1) * 100) if total_prev else 0
 
-    # 일별 추이 (리포트 기간)
+    # ── 차단 효과 분석 ─────────────────────────
+    # 차단된 IP의 차단 이후 재시도 건수 (줄었으면 효과 있음)
+    blocked_ips_list = list(BlockedIP.objects.values_list('ip_address', flat=True))
+    blocked_ip_attempts = 0
+    if blocked_ips_list:
+        blocked_ip_attempts = SystemLogEntry.objects.filter(
+            log_type='ssh_fail', created_at__gte=since,
+            ip_address__in=blocked_ips_list,
+        ).count()
+
+    # 일별 추이 (SSH + NPMS 합산)
     daily_trend = []
-    daily_data = (
+    daily_npms = dict(
         LoginHistory.objects.filter(success=False, created_at__gte=since)
         .annotate(d=TruncDate('created_at'))
-        .values('d').annotate(cnt=Count('id')).order_by('d')
+        .values('d').annotate(cnt=Count('id'))
+        .values_list('d', 'cnt')
     )
-    daily_map = {r['d']: r['cnt'] for r in daily_data}
+    daily_ssh = dict(
+        SystemLogEntry.objects.filter(log_type='ssh_fail', created_at__gte=since)
+        .annotate(d=TruncDate('created_at'))
+        .values('d').annotate(cnt=Count('id'))
+        .values_list('d', 'cnt')
+    )
     delta_days = (now - since).days
     for i in range(delta_days + 1):
         d = (since + datetime.timedelta(days=i)).date()
-        daily_trend.append({'date': d.strftime('%m-%d'), 'count': daily_map.get(d, 0)})
+        daily_trend.append({
+            'date': d.strftime('%m-%d'),
+            'npms': daily_npms.get(d, 0),
+            'ssh': daily_ssh.get(d, 0),
+            'count': daily_npms.get(d, 0) + daily_ssh.get(d, 0),
+        })
 
     return JsonResponse({
         'period': period_label,
@@ -841,10 +871,27 @@ def sec_report(request):
             'fail': login_fail,
             'unique_fail_ips': unique_ips,
         },
-        'blocks': {'blocked': blocks_count, 'unblocked': unblocks_count},
+        'ssh': {
+            'fails': ssh_fails,
+            'unique_ips': ssh_unique_ips,
+        },
+        'blocks': {
+            'blocked': blocks_count,
+            'unblocked': unblocks_count,
+            'active_blocked': len(blocked_ips_list),
+            'blocked_ip_attempts': blocked_ip_attempts,
+        },
         'events': {'by_type': event_by_type, 'by_severity': event_by_severity},
         'ssh_fails': ssh_fails,
-        'trend': {'current': login_fail, 'previous': prev_fail, 'change_pct': trend_pct},
+        'trend': {
+            'current': total_current,
+            'previous': total_prev,
+            'change_pct': trend_pct,
+            'npms_current': login_fail,
+            'npms_previous': prev_fail,
+            'ssh_current': ssh_fails,
+            'ssh_previous': prev_ssh,
+        },
         'daily_trend': daily_trend,
     })
 

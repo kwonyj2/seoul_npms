@@ -310,21 +310,27 @@ function loadSecReport() {
   const period = document.getElementById('rpt-period').value;
   fetch(SEC_API + '/report/?period=' + period).then(r=>r.json()).then(d => {
     // 요약 카드
+    const ssh = d.ssh || {};
     document.getElementById('rpt-summary-cards').innerHTML = [
-      { lbl:'로그인 시도', val:d.login.total, ico:'bi-box-arrow-in-right', bg:'#e3f2fd', clr:'#0d6efd' },
-      { lbl:'로그인 성공', val:d.login.success, ico:'bi-check-circle', bg:'#e8f5e9', clr:'#198754' },
-      { lbl:'로그인 실패', val:d.login.fail, ico:'bi-x-circle', bg:'#fdecea', clr:'#dc3545' },
-      { lbl:'고유 공격IP', val:d.login.unique_fail_ips, ico:'bi-globe', bg:'#fff3e0', clr:'#fd7e14' },
-      { lbl:'IP 차단', val:d.blocks.blocked, ico:'bi-ban', bg:'#f3e8fd', clr:'#6f42c1' },
-      { lbl:'SSH 실패', val:d.ssh_fails, ico:'bi-terminal', bg:'#e0f7fa', clr:'#0097a7' },
+      { lbl:'NPMS 로그인 실패', val:d.login.fail, ico:'bi-x-circle', bg:'#fdecea', clr:'#dc3545' },
+      { lbl:'SSH 공격 시도', val:ssh.fails||d.ssh_fails||0, ico:'bi-terminal', bg:'#e0f7fa', clr:'#0097a7' },
+      { lbl:'총 공격 합계', val:d.trend.current, ico:'bi-exclamation-triangle', bg:'#fff3e0', clr:'#fd7e14' },
+      { lbl:'공격 IP (SSH)', val:ssh.unique_ips||0, ico:'bi-globe', bg:'#e3f2fd', clr:'#0d6efd' },
+      { lbl:'활성 차단 IP', val:d.blocks.active_blocked||0, ico:'bi-ban', bg:'#f3e8fd', clr:'#6f42c1' },
+      { lbl:'차단IP 재시도', val:d.blocks.blocked_ip_attempts||0, ico:'bi-shield-x', bg:d.blocks.blocked_ip_attempts>0?'#fdecea':'#e8f5e9', clr:d.blocks.blocked_ip_attempts>0?'#dc3545':'#198754' },
     ].map(c => `<div class="col-6 col-md-2"><div style="background:${c.bg};border-radius:8px;padding:10px 12px;"><div style="font-size:.68rem;color:#6c757d;font-weight:600;">${c.lbl}</div><div style="font-size:1.3rem;font-weight:800;color:${c.clr};">${typeof c.val==='number'?c.val.toLocaleString():c.val}</div></div></div>`).join('');
 
-    // 일별 추이
+    // 일별 추이 (SSH + NPMS 분리 스택)
     if (d.daily_trend.length) {
+      const hasSSH = d.daily_trend.some(r => r.ssh > 0);
+      const datasets = [
+        { label:'NPMS 로그인 실패', data:d.daily_trend.map(r=>r.npms||0), backgroundColor:'rgba(220,53,69,.6)', borderRadius:3, stack:'s' },
+      ];
+      if (hasSSH) datasets.push({ label:'SSH 공격', data:d.daily_trend.map(r=>r.ssh||0), backgroundColor:'rgba(0,151,167,.6)', borderRadius:3, stack:'s' });
       _chart('rpt-daily-chart', {
         type:'bar',
-        data:{ labels:d.daily_trend.map(r=>r.date), datasets:[{ label:'공격 시도', data:d.daily_trend.map(r=>r.count), backgroundColor:'rgba(220,53,69,.6)', borderRadius:3 }] },
-        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} }, scales:{ x:{ticks:{font:{size:9}}}, y:{beginAtZero:true,ticks:{font:{size:10}}} } }
+        data:{ labels:d.daily_trend.map(r=>r.date), datasets },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:hasSSH,labels:{font:{size:10}}} }, scales:{ x:{stacked:true,ticks:{font:{size:9}}}, y:{stacked:true,beginAtZero:true,ticks:{font:{size:10}}} } }
       });
     }
 
@@ -339,10 +345,35 @@ function loadSecReport() {
       });
     }
 
-    // 트렌드
+    // 트렌드 (SSH + NPMS 세부)
     const pct = d.trend.change_pct;
     const arrow = pct > 0 ? '<i class="bi bi-arrow-up-circle-fill text-danger" style="font-size:2rem;"></i>' : pct < 0 ? '<i class="bi bi-arrow-down-circle-fill text-success" style="font-size:2rem;"></i>' : '<i class="bi bi-dash-circle-fill text-secondary" style="font-size:2rem;"></i>';
-    document.getElementById('rpt-trend-body').innerHTML = `${arrow}<div style="font-size:1.5rem;font-weight:800;margin-top:4px;">${pct > 0 ? '+' : ''}${pct}%</div><div style="font-size:.75rem;color:#6c757d;">이전: ${d.trend.previous} → 현재: ${d.trend.current}</div>`;
+    const trendDetail = `<table class="table table-sm mb-0 mt-2" style="font-size:.73rem;"><tbody>`
+      + `<tr><td class="text-start text-muted">전체</td><td class="text-end">${(d.trend.previous||0).toLocaleString()}</td><td class="text-center">→</td><td class="text-end fw-bold">${(d.trend.current||0).toLocaleString()}</td></tr>`
+      + `<tr><td class="text-start text-muted">SSH</td><td class="text-end">${(d.trend.ssh_previous||0).toLocaleString()}</td><td class="text-center">→</td><td class="text-end">${(d.trend.ssh_current||0).toLocaleString()}</td></tr>`
+      + `<tr><td class="text-start text-muted">NPMS</td><td class="text-end">${(d.trend.npms_previous||0).toLocaleString()}</td><td class="text-center">→</td><td class="text-end">${(d.trend.npms_current||0).toLocaleString()}</td></tr>`
+      + `</tbody></table>`;
+    document.getElementById('rpt-trend-body').innerHTML = `${arrow}<div style="font-size:1.5rem;font-weight:800;margin-top:4px;">${pct > 0 ? '+' : ''}${pct}%</div>${trendDetail}`;
+
+    // 차단 효과 분석
+    const bl = d.blocks || {};
+    const effectEl = document.getElementById('rpt-block-effect');
+    if (effectEl) {
+      const blocked = bl.active_blocked || 0;
+      const retries = bl.blocked_ip_attempts || 0;
+      effectEl.innerHTML = `<div style="font-size:.78rem;">
+        <div class="d-flex justify-content-between mb-2"><span class="text-muted">현재 차단 IP</span><span class="fw-bold">${blocked}개</span></div>
+        <div class="d-flex justify-content-between mb-2"><span class="text-muted">기간 내 차��� 처리</span><span class="fw-bold">${bl.blocked||0}건</span></div>
+        <div class="d-flex justify-content-between mb-2"><span class="text-muted">차단 해제</span><span class="fw-bold">${bl.unblocked||0}건</span></div>
+        <hr class="my-2">
+        <div class="d-flex justify-content-between mb-1"><span class="text-muted">차단IP 재시도</span><span class="fw-bold ${retries>0?'text-danger':'text-success'}">${retries}건</span></div>
+        <div class="mt-2 p-2 rounded" style="background:${retries===0&&blocked>0?'#e8f5e9':'#fff3e0'};font-size:.72rem;text-align:center;">
+          ${blocked === 0 ? '<i class="bi bi-info-circle me-1"></i>아직 차단된 IP가 없습니다'
+            : retries === 0 ? '<i class="bi bi-shield-check text-success me-1"></i>차단 IP의 재시도가 없습니다 — 효과적'
+            : `<i class="bi bi-shield-exclamation text-warning me-1"></i>차단 IP가 ${retries}회 재���도 — iptables 적용 확인 필요`}
+        </div>
+      </div>`;
+    }
 
     // 이벤트 유형별
     const EVT_LBL = { brute_force:'브루트포스', login_fail:'로그인 실패', ip_blocked:'IP 차단', ip_unblocked:'IP 해제', ssh_fail:'SSH 실패', unknown_user:'미등록 계정', config_change:'설정 변경', file_integrity:'파일 변경', resource_anomaly:'리소스 이상', abnormal_access:'비정상 접근', manual:'수동 등록' };
