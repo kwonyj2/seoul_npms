@@ -116,35 +116,38 @@
       </div>
     </div>
 
-    <!-- 차단 IP 목록 — 전체 폭 -->
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-white py-2 d-flex align-items-center">
-        <i class="bi bi-ban text-danger me-2"></i><span class="fw-semibold" style="font-size:.85rem;">차단 IP 목록</span>
-        <div class="ms-auto d-flex gap-2">
-          <input type="text" id="block-q" class="form-control form-control-sm" style="width:150px;font-size:.78rem;" placeholder="IP 검색..." onkeyup="if(event.key==='Enter')loadBlocked()">
-          <button class="btn btn-sm btn-danger" style="font-size:.74rem;" onclick="showManualBlock()"><i class="bi bi-plus-lg me-1"></i>수동 차단</button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="loadBlocked()"><i class="bi bi-arrow-clockwise"></i></button>
+    <div class="row g-3">
+      <!-- 좌측: 차단 IP 목록 (2/3) -->
+      <div class="col-12 col-xl-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2 d-flex align-items-center">
+            <i class="bi bi-ban text-danger me-2"></i><span class="fw-semibold" style="font-size:.85rem;">차단 IP 목록</span>
+            <div class="ms-auto d-flex gap-2">
+              <input type="text" id="block-q" class="form-control form-control-sm" style="width:150px;font-size:.78rem;" placeholder="IP 검색..." onkeyup="if(event.key==='Enter')loadBlocked()">
+              <button class="btn btn-sm btn-danger" style="font-size:.74rem;" onclick="showManualBlock()"><i class="bi bi-plus-lg me-1"></i>수동 차단</button>
+              <button class="btn btn-sm btn-outline-secondary" onclick="loadBlocked()"><i class="bi bi-arrow-clockwise"></i></button>
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <table class="table table-sm table-hover mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
+              <thead><tr class="table-light">
+                <th>IP 주소</th><th>사유</th><th>설명</th><th>실패</th><th>유형</th>
+                <th>차단시각</th><th>해제예정</th><th>처리</th>
+              </tr></thead>
+              <tbody id="sec-blocked-tbody"></tbody>
+            </table>
+          </div>
+          <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center">
+            <small class="text-muted" id="blocked-info"></small>
+            <ul class="pagination pagination-sm mb-0" id="blocked-pager"></ul>
+          </div>
         </div>
       </div>
-      <div class="card-body p-0">
-        <table class="table table-sm table-hover mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
-          <thead><tr class="table-light">
-            <th>IP 주소</th><th>사유</th><th>설명</th><th>실패</th><th>유형</th>
-            <th>차단시각</th><th>해제예정</th><th>처리</th>
-          </tr></thead>
-          <tbody id="sec-blocked-tbody"></tbody>
-        </table>
-      </div>
-      <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center">
-        <small class="text-muted" id="blocked-info"></small>
-        <ul class="pagination pagination-sm mb-0" id="blocked-pager"></ul>
-      </div>
-    </div>
 
-    <div class="row g-3">
-      <!-- 화이트리스트 -->
+      <!-- 우측: 화이트리스트 + 차단/해제 이력 (1/3) -->
       <div class="col-12 col-xl-4">
-        <div class="card border-0 shadow-sm">
+        <!-- 화이트리스트 (상) -->
+        <div class="card border-0 shadow-sm mb-3">
           <div class="card-header bg-white py-2 d-flex align-items-center">
             <i class="bi bi-check-circle text-success me-2"></i><span class="fw-semibold" style="font-size:.85rem;">화이트리스트</span>
             <button class="btn btn-sm btn-outline-success ms-auto" style="font-size:.74rem;" onclick="showWlAdd()"><i class="bi bi-plus-lg"></i></button>
@@ -158,13 +161,11 @@
             </div>
           </div>
         </div>
-      </div>
-      <!-- 차단/해제 이력 — 넓게 -->
-      <div class="col-12 col-xl-8">
+        <!-- 차단/해제 이력 (하) -->
         <div class="card border-0 shadow-sm">
           <div class="card-header bg-white py-2"><i class="bi bi-clock-history text-secondary me-2"></i><span class="fw-semibold" style="font-size:.85rem;">차단/해제 이력</span></div>
           <div class="card-body p-0">
-            <table class="table table-sm mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
+            <table class="table table-sm mb-0" style="font-size:.76rem;table-layout:fixed;width:100%;">
               <thead><tr class="table-light"><th>시각</th><th>IP</th><th>행위</th><th>사유</th></tr></thead>
               <tbody id="sec-blocklog-tbody"></tbody>
             </table>
