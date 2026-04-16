@@ -19,50 +19,37 @@ logger = logging.getLogger('security')
 
 @shared_task(name='sysconfig.collect_system_logs')
 def collect_system_logs():
-    """SSH 로그 수집 — /var/log/auth.log 파싱"""
-    from apps.sysconfig.security_models import SystemLogEntry, SecurityConfig, SecurityEvent
+    """SSH 로그 수집 — journalctl 우선, auth.log 폴백"""
+    import subprocess
+    from apps.sysconfig.security_models import SystemLogEntry, SecurityConfig
 
     if not SecurityConfig.get_bool('ssh_monitor_enabled'):
         return 'SSH 모니터링 비활성'
-
-    log_paths = ['/var/log/auth.log', '/var/log/secure']
-    log_file = None
-    for p in log_paths:
-        if os.path.exists(p):
-            log_file = p
-            break
-    if not log_file:
-        return 'auth.log 파일 없음'
-
-    # 최근 수집 시각 이후만 처리 (최초 실행 시 7일 전부터)
-    last = SystemLogEntry.objects.order_by('-created_at').first()
-    cutoff = last.created_at if last else timezone.now() - datetime.timedelta(days=7)
 
     # SSH 실패 패턴
     FAIL_PATTERNS = [
         re.compile(r'Failed password for (?:invalid user )?(\S+) from (\S+) port'),
         re.compile(r'Failed publickey for (\S+) from (\S+) port'),
-        re.compile(r'authentication failure.*rhost=(\S+).*user=(\S+)'),
         re.compile(r'Invalid user (\S+) from (\S+)'),
-        re.compile(r'Connection closed by (?:invalid user )?(\S+)?\s*(\S+) port'),
     ]
     SUCCESS_PATTERN = re.compile(r'Accepted (?:password|publickey) for (\S+) from (\S+) port')
-    # sudo/pam 패턴 (authentication failure, conversation failed, could not identify)
     AUTH_FAIL_PATTERNS = [
+        re.compile(r'pam_unix\(\S+:auth\):\s+authentication failure.*rhost=(\S+)'),
         re.compile(r'pam_unix\(\S+:auth\):\s+authentication failure.*user=(\S+)'),
         re.compile(r'pam_unix\(\S+:auth\):\s+(?:conversation failed|auth could not identify)'),
-        re.compile(r'sudo:\s+(\S+)\s*:.*authentication failure'),
     ]
 
-    # 날짜 파싱 — ISO 8601 (2026-04-12T05:17:01.780+09:00) + syslog (Apr 12 05:17:01)
+    # 날짜 파싱
     MONTHS = {
         'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
         'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
     }
     ISO_PAT = re.compile(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})')
+    # journalctl 형식: " 4월 16 08:58:49" or "Apr 16 08:58:49"
+    JCT_PAT = re.compile(r'^\s*(\d{1,2})월\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})')
 
-    def parse_syslog_date(line):
-        # ISO 8601 형식
+    def parse_date(line):
+        # ISO 8601
         m = ISO_PAT.match(line)
         if m:
             try:
@@ -70,88 +57,116 @@ def collect_system_logs():
                 return timezone.make_aware(dt) if timezone.is_naive(dt) else dt
             except Exception:
                 pass
-        # 전통 syslog 형식
+        # journalctl 한글 형식: " 4월 16 08:58:49"
+        m = JCT_PAT.match(line)
+        if m:
+            try:
+                mon, day, h, mi, s = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5))
+                return timezone.make_aware(
+                    datetime.datetime(timezone.now().year, mon, day, h, mi, s)
+                )
+            except Exception:
+                pass
+        # 전통 syslog: "Apr 16 08:58:49"
         try:
             parts = line.split()
             mon = MONTHS.get(parts[0], 0)
             if mon:
                 day = int(parts[1])
                 hms = parts[2].split(':')
-                year = timezone.now().year
                 return timezone.make_aware(
-                    datetime.datetime(year, mon, day, int(hms[0]), int(hms[1]), int(hms[2]))
+                    datetime.datetime(timezone.now().year, mon, day, int(hms[0]), int(hms[1]), int(hms[2]))
                 )
         except Exception:
             pass
         return None
 
-    created = 0
+    def _process_line(line, cutoff):
+        """한 줄 파싱 → (log_type, username, ip, log_time) or None"""
+        log_time = parse_date(line)
+        if log_time and log_time <= cutoff:
+            return None
+
+        # SSH 실패
+        for pat in FAIL_PATTERNS:
+            m = pat.search(line)
+            if m:
+                groups = m.groups()
+                user = groups[0] if len(groups) >= 1 else ''
+                ip = groups[1] if len(groups) >= 2 else ''
+                return ('ssh_fail', user, ip, log_time)
+
+        # SSH 성공
+        m = SUCCESS_PATTERN.search(line)
+        if m:
+            return ('ssh_success', m.group(1), m.group(2), log_time)
+
+        # pam 인증 실패
+        for apat in AUTH_FAIL_PATTERNS:
+            am = apat.search(line)
+            if am:
+                val = am.group(1) if am.lastindex else ''
+                # rhost=IP 인 경우 IP로, user=이름 인 경우 username으로
+                if re.match(r'\d+\.\d+\.\d+\.\d+', val):
+                    return ('auth_other', '', val, log_time)
+                return ('auth_other', val, '', log_time)
+
+        return None
+
+    # 최근 수집 시각
+    last = SystemLogEntry.objects.order_by('-created_at').first()
+    cutoff = last.created_at if last else timezone.now() - datetime.timedelta(days=7)
+
+    lines = []
+
+    # 1) journalctl 시도 (운용서버 — systemd journal)
     try:
-        with open(log_file, 'r', errors='replace') as f:
-            for line in f:
-                log_time = parse_syslog_date(line)
-                if log_time and log_time <= cutoff:
-                    continue
+        since_str = cutoff.strftime('%Y-%m-%d %H:%M:%S')
+        result = subprocess.run(
+            ['journalctl', '-u', 'ssh', '-u', 'sshd', '--no-pager',
+             '--since', since_str, '-q'],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.stdout.strip():
+            lines = result.stdout.strip().split('\n')
+    except Exception:
+        pass
 
-                # SSH 실패
-                for pat in FAIL_PATTERNS:
-                    m = pat.search(line)
-                    if m:
-                        groups = m.groups()
-                        if len(groups) >= 2:
-                            user, ip = groups[0], groups[1]
-                        else:
-                            user, ip = groups[0] if groups else '', ''
-                        if not SystemLogEntry.objects.filter(
-                            raw_line=line.strip()[:500],
-                            log_type='ssh_fail'
-                        ).exists():
-                            SystemLogEntry.objects.create(
-                                log_type='ssh_fail',
-                                ip_address=ip or None,
-                                username=user,
-                                raw_line=line.strip()[:500],
-                                log_time=log_time,
-                            )
-                            created += 1
-                        break
+    # 2) auth.log 폴백 (journalctl 결과 없으면)
+    if not lines:
+        log_paths = ['/var/log/auth.log', '/var/log/secure']
+        for p in log_paths:
+            if os.path.exists(p):
+                try:
+                    with open(p, 'r', errors='replace') as f:
+                        lines = f.readlines()
+                except PermissionError:
+                    pass
+                break
 
-                # SSH 성공
-                m = SUCCESS_PATTERN.search(line)
-                if m:
-                    user, ip = m.group(1), m.group(2)
-                    if not SystemLogEntry.objects.filter(
-                        raw_line=line.strip()[:500],
-                        log_type='ssh_success'
-                    ).exists():
-                        SystemLogEntry.objects.create(
-                            log_type='ssh_success',
-                            ip_address=ip or None,
-                            username=user,
-                            raw_line=line.strip()[:500],
-                            log_time=log_time,
-                        )
-                        created += 1
+    if not lines:
+        return 'SSH 로그 소스 없음'
 
-                # sudo/pam 인증 실패
-                for apat in AUTH_FAIL_PATTERNS:
-                    am = apat.search(line)
-                    if am:
-                        user = am.group(1) if am.lastindex else ''
-                        raw = line.strip()[:500]
-                        if not SystemLogEntry.objects.filter(raw_line=raw, log_type='auth_other').exists():
-                            SystemLogEntry.objects.create(
-                                log_type='auth_other',
-                                username=user,
-                                raw_line=raw,
-                                log_time=log_time,
-                            )
-                            created += 1
-                        break
-    except PermissionError:
-        return 'auth.log 읽기 권한 없음'
-    except Exception as e:
-        return f'오류: {e}'
+    created = 0
+    for line in lines:
+        line = line.strip()
+        if not line or 'sshd' not in line.lower() and 'pam_unix' not in line:
+            continue
+        parsed = _process_line(line, cutoff)
+        if not parsed:
+            continue
+        log_type, username, ip, log_time = parsed
+        raw = line[:500]
+        if SystemLogEntry.objects.filter(raw_line=raw, log_type=log_type).exists():
+            continue
+        SystemLogEntry.objects.create(
+            log_type=log_type,
+            ip_address=ip or None,
+            username=username,
+            raw_line=raw,
+            log_time=log_time,
+        )
+        created += 1
 
     return f'{created}건 수집'
 

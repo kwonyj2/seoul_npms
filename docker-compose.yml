@@ -66,6 +66,8 @@ services:
       - npms_static:/app/staticfiles
       - ${NAS_MOUNT_PATH:-/mnt/lvm-cache}:/app/nas
       - /var/log/auth.log:/var/log/auth.log:ro
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.production
     command: sh /app/docker-entrypoint.sh
@@ -91,6 +93,8 @@ services:
       - ./src:/app
       - ${NAS_MOUNT_PATH:-/mnt/lvm-cache}:/app/nas
       - /var/log/auth.log:/var/log/auth.log:ro
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.production
     command: celery -A config.celery worker --loglevel=info --concurrency=4
