@@ -148,7 +148,7 @@ def sec_dashboard(request):
             last_attempt=Max('created_at'),
             first_attempt=Min('created_at'),
         )
-        .order_by('-fail_count')[:10]
+        .order_by('-fail_count')[:100]
     )
     top_ip_list = []
     for row in top_ips:
@@ -172,9 +172,9 @@ def sec_dashboard(request):
             'last': row['last_attempt'].strftime('%m-%d %H:%M') if row['last_attempt'] else '-',
         })
 
-    # ── 최근 보안 이벤트 (10건) ───────────
+    # ── 최근 보안 이벤트 (100건, 스크롤) ───────────
     recent_events = []
-    for ev in SecurityEvent.objects.all()[:10]:
+    for ev in SecurityEvent.objects.all()[:100]:
         recent_events.append({
             'id': ev.id,
             'type': ev.get_event_type_display(),
