@@ -536,7 +536,13 @@ def celery_status(request):
         'apps.schools.tasks.scan_vsdx_folder':'VSDX 구성도 파싱',
         'apps.schools.tasks.sync_pms_contacts':'PMS 담당자 동기화',
         'core.tasks.backup_database':          'DB 백업',
+        'apps.wbs.tasks.snapshot_wbs_progress':'WBS 진척 스냅샷',
         'apps.nas.tasks.purge_old_trash':      '휴지통 정리',
+        'sysconfig.collect_system_logs':       '보안관제 SSH 로그 수집',
+        'sysconfig.check_file_integrity':      '보안관제 파일 무결성 점검',
+        'sysconfig.cleanup_expired_blocks':    '보안관제 만료 차단 해제',
+        'sysconfig.generate_security_events':  '보안관제 보안 이벤트 생성',
+        'sysconfig.auto_block_ssh_attackers':  '보안관제 SSH 공격 자동 차단',
     }
     beat_schedule = getattr(settings, 'CELERY_BEAT_SCHEDULE', {})
     schedules = []
