@@ -71,12 +71,22 @@ function quickBlock(ip) {
 }
 
 // ═══ 패널2: 차단 관리 ═══════════════════
+let _blockedPage = 1;
+let _blocklogPage = 1;
+function loadBlockedPage(page) { _blockedPage = Math.max(1, page); loadBlocked(); }
+function loadBlocklogPage(page) { _blocklogPage = Math.max(1, page); loadBlockLog(); }
+
 function loadBlocked() {
   const q = document.getElementById('block-q')?.value || '';
-  fetch(SEC_API + '/blocked-ips/?q=' + encodeURIComponent(q)).then(r=>r.json()).then(d => {
+  fetch(SEC_API + `/blocked-ips/?q=${encodeURIComponent(q)}&page=${_blockedPage}`).then(r=>r.json()).then(d => {
     document.getElementById('sec-blocked-tbody').innerHTML = d.blocked.map(r =>
       `<tr><td><code>${escH(r.ip)}</code></td><td>${escH(r.reason)}</td><td title="${escH(r.description)}">${escH(r.description).substring(0,30)}</td><td class="text-end">${r.fail_count}</td><td>${r.auto?'<span class="badge bg-info text-dark">자동</span>':'<span class="badge bg-secondary">수동</span>'}</td><td>${r.blocked_at}</td><td>${r.expires_at}</td><td><button class="btn btn-sm btn-outline-success" style="font-size:.68rem;padding:1px 6px;" onclick="unblockIP('${r.ip}')">해제</button></td></tr>`
     ).join('') || '<tr><td colspan="8" class="text-center text-muted py-3">차단 IP 없음</td></tr>';
+
+    if (document.getElementById('blocked-info')) {
+      document.getElementById('blocked-info').textContent = `총 ${d.total}개 · ${d.page}/${d.total_pages} 페이지`;
+      document.getElementById('blocked-pager').innerHTML = _pagerHtml(d.page, d.total_pages, 'loadBlockedPage');
+    }
 
     document.getElementById('sec-wl-tbody').innerHTML = d.whitelist.map(r =>
       `<tr><td><code>${escH(r.ip_address)}</code></td><td>${escH(r.description)}</td><td><button class="btn btn-sm btn-outline-danger" style="font-size:.66rem;padding:0 4px;" onclick="removeWl('${r.ip_address}')"><i class="bi bi-x"></i></button></td></tr>`
@@ -109,10 +119,14 @@ function saveBlockCfg() {
 }
 
 function loadBlockLog() {
-  fetch(SEC_API + '/block-log/').then(r=>r.json()).then(d => {
+  fetch(SEC_API + `/block-log/?page=${_blocklogPage}`).then(r=>r.json()).then(d => {
     document.getElementById('sec-blocklog-tbody').innerHTML = d.rows.map(r =>
       `<tr><td>${r.time}</td><td><code>${escH(r.ip)}</code></td><td>${r.action==='차단'?'<span class="text-danger">차단</span>':'<span class="text-success">해제</span>'}</td><td>${escH(r.reason).substring(0,40)}</td></tr>`
     ).join('') || '<tr><td colspan="4" class="text-center text-muted py-2">이력 없음</td></tr>';
+    if (document.getElementById('blocklog-info')) {
+      document.getElementById('blocklog-info').textContent = `총 ${d.total}건 · ${d.page}/${d.total_pages} 페이지`;
+      document.getElementById('blocklog-pager').innerHTML = _pagerHtml(d.page, d.total_pages, 'loadBlocklogPage');
+    }
   });
 }
 
@@ -197,13 +211,20 @@ function loadLoginAnalysis() {
 }
 
 // ═══ 패널4: 시스템 로그 ═══════════════════
+let _sshPage = 1;
+function loadSshPage(page) { _sshPage = Math.max(1, page); loadSysLogs('ssh'); }
+
 function loadSysLogs(kind) {
   if (kind === 'ssh') {
     const q = document.getElementById('ssh-q')?.value || '';
-    fetch(SEC_API + '/system-logs/?kind=ssh&q=' + encodeURIComponent(q)).then(r=>r.json()).then(d => {
+    fetch(SEC_API + `/system-logs/?kind=ssh&page=${_sshPage}&q=` + encodeURIComponent(q)).then(r=>r.json()).then(d => {
       document.getElementById('sec-ssh-tbody').innerHTML = d.rows.map(r =>
         `<tr><td>${r.time}</td><td>${r.type_key==='ssh_success'?'<span class="text-success">성공</span>':'<span class="text-danger">실패</span>'}</td><td><code>${escH(r.ip)}</code></td><td>${escH(r.username)}</td><td style="white-space:normal;word-break:break-all;font-size:.72rem;color:#6c757d;">${escH(r.raw)}</td></tr>`
       ).join('') || '<tr><td colspan="5" class="text-center text-muted py-3">SSH 로그 없음 (Celery가 5분마다 수집)</td></tr>';
+      if (document.getElementById('ssh-info')) {
+        document.getElementById('ssh-info').textContent = `총 ${d.total}건 · ${d.page}/${d.total_pages} 페이지`;
+        document.getElementById('ssh-pager').innerHTML = _pagerHtml(d.page, d.total_pages, 'loadSshPage');
+      }
     });
   } else if (kind === 'resource') {
     fetch(SEC_API + '/system-logs/?kind=resource').then(r=>r.json()).then(d => {

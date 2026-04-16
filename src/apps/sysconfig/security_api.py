@@ -229,8 +229,11 @@ def sec_blocked_ips(request):
         if q:
             qs = qs.filter(Q(ip_address__icontains=q) | Q(description__icontains=q))
 
+        page = max(1, int(request.GET.get('page', 1)))
+        ps = 25
+        total = qs.count()
         rows = []
-        for b in qs[:200]:
+        for b in qs[(page-1)*ps : page*ps]:
             rows.append({
                 'id': b.id,
                 'ip': b.ip_address,
@@ -251,7 +254,11 @@ def sec_blocked_ips(request):
             'id', 'ip_address', 'description',
         ).order_by('ip_address'))
 
-        return JsonResponse({'blocked': rows, 'whitelist': wl})
+        return JsonResponse({
+            'blocked': rows, 'whitelist': wl,
+            'total': total, 'page': page, 'page_size': ps,
+            'total_pages': max(1, (total + ps - 1) // ps),
+        })
 
     elif request.method == 'POST':
         # 수동 차단
@@ -367,7 +374,7 @@ def sec_block_config(request):
 def sec_block_log(request):
     """차단/해제 이력 조회"""
     page = max(1, int(request.GET.get('page', 1)))
-    ps = 50
+    ps = 25
     qs = BlockLog.objects.select_related('actor').all()
     q = request.GET.get('q', '')
     if q:
@@ -516,7 +523,7 @@ def sec_system_logs(request):
     """시스템 로그 — SSH, 리소스, Docker, 파일 무결성"""
     kind = request.GET.get('kind', 'ssh')
     page = max(1, int(request.GET.get('page', 1)))
-    ps = 50
+    ps = 25
 
     if kind == 'ssh':
         qs = SystemLogEntry.objects.filter(log_type__in=['ssh_fail', 'ssh_success', 'auth_other'])

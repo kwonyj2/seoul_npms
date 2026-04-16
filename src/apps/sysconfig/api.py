@@ -278,7 +278,7 @@ def access_log(request):
 
     kind = request.GET.get('kind', 'login')  # login | activity | session
     page = max(1, int(request.GET.get('page', 1)))
-    page_size = 50
+    page_size = 25
     offset = (page - 1) * page_size
 
     # 검색 필터
