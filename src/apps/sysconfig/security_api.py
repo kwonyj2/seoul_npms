@@ -560,27 +560,41 @@ def sec_system_logs(request):
         })
 
     elif kind == 'docker':
-        # Docker 컨테이너 상태
+        # Docker 컨테이너 상태 — Docker Socket HTTP API 직접 호출
         containers = []
         try:
-            result = subprocess.run(
-                ['docker', 'ps', '-a', '--format', '{{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Image}}'],
-                capture_output=True, text=True, timeout=10
-            )
-            for line in result.stdout.strip().split('\n'):
-                if not line.strip():
-                    continue
-                parts = line.split('\t')
-                if len(parts) >= 2:
-                    name = parts[0]
-                    status = parts[1] if len(parts) > 1 else '-'
-                    is_up = 'Up' in status
+            import socket as _socket
+            import http.client
+
+            class UnixSocketConnection(http.client.HTTPConnection):
+                def __init__(self, socket_path):
+                    super().__init__('localhost')
+                    self._socket_path = socket_path
+                def connect(self):
+                    self.sock = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+                    self.sock.settimeout(5)
+                    self.sock.connect(self._socket_path)
+
+            conn = UnixSocketConnection('/var/run/docker.sock')
+            conn.request('GET', '/containers/json?all=true')
+            resp = conn.getresponse()
+            if resp.status == 200:
+                data = json.loads(resp.read())
+                for c in data:
+                    name = c.get('Names', ['-'])[0].lstrip('/')
+                    status = c.get('Status', '-')
+                    state = c.get('State', '-')
                     containers.append({
                         'name': name,
                         'status': status,
-                        'is_up': is_up,
-                        'image': parts[3] if len(parts) > 3 else '-',
+                        'is_up': state == 'running',
+                        'image': c.get('Image', '-'),
                     })
+            else:
+                containers = [{'name': 'error', 'status': f'Docker API {resp.status}', 'is_up': False, 'image': '-'}]
+            conn.close()
+        except FileNotFoundError:
+            containers = [{'name': 'error', 'status': 'Docker 소켓 미연결 (docker.sock 마운트 필요)', 'is_up': False, 'image': '-'}]
         except Exception as e:
             containers = [{'name': 'error', 'status': str(e), 'is_up': False, 'image': '-'}]
         return JsonResponse({'containers': containers})

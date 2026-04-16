@@ -69,6 +69,7 @@ services:
       - /var/log/auth.log:/var/log/auth.log:ro
       - /var/log/journal:/var/log/journal:ro
       - /run/log/journal:/run/log/journal:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.production
     command: sh /app/docker-entrypoint.sh
