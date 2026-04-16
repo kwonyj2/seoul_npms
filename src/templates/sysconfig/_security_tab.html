@@ -115,40 +115,39 @@
       </div>
     </div>
 
-    <div class="row g-3">
-      <!-- 차단 IP 목록 -->
-      <div class="col-12 col-xl-8">
-        <div class="card border-0 shadow-sm">
-          <div class="card-header bg-white py-2 d-flex align-items-center">
-            <i class="bi bi-ban text-danger me-2"></i><span class="fw-semibold" style="font-size:.85rem;">차단 IP 목록</span>
-            <div class="ms-auto d-flex gap-2">
-              <input type="text" id="block-q" class="form-control form-control-sm" style="width:150px;font-size:.78rem;" placeholder="IP 검색..." onkeyup="if(event.key==='Enter')loadBlocked()">
-              <button class="btn btn-sm btn-danger" style="font-size:.74rem;" onclick="showManualBlock()"><i class="bi bi-plus-lg me-1"></i>수동 차단</button>
-              <button class="btn btn-sm btn-outline-secondary" onclick="loadBlocked()"><i class="bi bi-arrow-clockwise"></i></button>
-            </div>
-          </div>
-          <div class="card-body p-0">
-            <div style="max-height:400px;overflow-y:auto;">
-              <table class="table table-sm table-hover mb-0" style="font-size:.78rem;">
-                <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light">
-                  <th style="width:130px;">IP 주소</th><th style="width:80px;">사유</th><th>설명</th><th style="width:48px;">실패</th><th style="width:52px;">유형</th>
-                  <th style="width:100px;">차단시각</th><th style="width:100px;">해제예정</th><th style="width:56px;">처리</th>
-                </tr></thead>
-                <tbody id="sec-blocked-tbody"></tbody>
-              </table>
-            </div>
-          </div>
+    <!-- 차단 IP 목록 — 전체 폭 -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white py-2 d-flex align-items-center">
+        <i class="bi bi-ban text-danger me-2"></i><span class="fw-semibold" style="font-size:.85rem;">차단 IP 목록</span>
+        <div class="ms-auto d-flex gap-2">
+          <input type="text" id="block-q" class="form-control form-control-sm" style="width:150px;font-size:.78rem;" placeholder="IP 검색..." onkeyup="if(event.key==='Enter')loadBlocked()">
+          <button class="btn btn-sm btn-danger" style="font-size:.74rem;" onclick="showManualBlock()"><i class="bi bi-plus-lg me-1"></i>수동 차단</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadBlocked()"><i class="bi bi-arrow-clockwise"></i></button>
         </div>
       </div>
-      <!-- 화이트리스트 + 차단 이력 -->
+      <div class="card-body p-0">
+        <div style="max-height:calc(100vh - 300px);overflow-y:auto;">
+          <table class="table table-sm table-hover mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
+            <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light">
+              <th>IP 주소</th><th>사유</th><th>설명</th><th>실패</th><th>유형</th>
+              <th>차단시각</th><th>해제예정</th><th>처리</th>
+            </tr></thead>
+            <tbody id="sec-blocked-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <!-- 화이트리스트 -->
       <div class="col-12 col-xl-4">
-        <div class="card border-0 shadow-sm mb-3">
+        <div class="card border-0 shadow-sm">
           <div class="card-header bg-white py-2 d-flex align-items-center">
             <i class="bi bi-check-circle text-success me-2"></i><span class="fw-semibold" style="font-size:.85rem;">화이트리스트</span>
             <button class="btn btn-sm btn-outline-success ms-auto" style="font-size:.74rem;" onclick="showWlAdd()"><i class="bi bi-plus-lg"></i></button>
           </div>
           <div class="card-body p-0">
-            <div style="max-height:150px;overflow-y:auto;">
+            <div style="max-height:200px;overflow-y:auto;">
               <table class="table table-sm mb-0" style="font-size:.78rem;">
                 <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light"><th>IP</th><th>설명</th><th style="width:40px;"></th></tr></thead>
                 <tbody id="sec-wl-tbody"></tbody>
@@ -156,12 +155,15 @@
             </div>
           </div>
         </div>
+      </div>
+      <!-- 차단/해제 이력 — 넓게 -->
+      <div class="col-12 col-xl-8">
         <div class="card border-0 shadow-sm">
           <div class="card-header bg-white py-2"><i class="bi bi-clock-history text-secondary me-2"></i><span class="fw-semibold" style="font-size:.85rem;">차단/해제 이력</span></div>
           <div class="card-body p-0">
             <div style="max-height:200px;overflow-y:auto;">
-              <table class="table table-sm mb-0" style="font-size:.76rem;">
-                <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light"><th style="width:100px;">시각</th><th style="width:110px;">IP</th><th style="width:40px;">행위</th><th>사유</th></tr></thead>
+              <table class="table table-sm mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
+                <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light"><th>시각</th><th>IP</th><th>행위</th><th>사유</th></tr></thead>
                 <tbody id="sec-blocklog-tbody"></tbody>
               </table>
             </div>
@@ -200,37 +202,32 @@
       </div>
     </div>
 
-    <div class="row g-3 mt-1">
-      <!-- 비정상 로그인 -->
-      <div class="col-12 col-xl-7">
-        <div class="card border-0 shadow-sm">
-          <div class="card-header bg-white py-2"><i class="bi bi-exclamation-diamond text-warning me-2"></i><span class="fw-semibold" style="font-size:.85rem;">비정상 로그인 탐지</span></div>
-          <div class="card-body p-0">
-            <div style="max-height:250px;overflow-y:auto;">
-              <table class="table table-sm table-hover mb-0" style="font-size:.78rem;">
-                <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light">
-                  <th style="width:90px;">유형</th><th style="width:90px;">사용자</th><th style="width:70px;">이름</th><th style="width:110px;">IP</th><th style="width:110px;">시각</th><th>상세</th>
-                </tr></thead>
-                <tbody id="sec-abnormal-tbody"></tbody>
-              </table>
-            </div>
-          </div>
+    <!-- 비정상 로그인 — 전체 폭 -->
+    <div class="card border-0 shadow-sm mt-3">
+      <div class="card-header bg-white py-2"><i class="bi bi-exclamation-diamond text-warning me-2"></i><span class="fw-semibold" style="font-size:.85rem;">비정상 로그인 탐지</span></div>
+      <div class="card-body p-0">
+        <div style="max-height:calc(100vh - 300px);overflow-y:auto;">
+          <table class="table table-sm table-hover mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
+            <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light">
+              <th>유형</th><th>사용자</th><th>이름</th><th>IP</th><th>시각</th><th>상세</th>
+            </tr></thead>
+            <tbody id="sec-abnormal-tbody"></tbody>
+          </table>
         </div>
       </div>
-      <!-- 잠긴 계정 -->
-      <div class="col-12 col-xl-5">
-        <div class="card border-0 shadow-sm">
-          <div class="card-header bg-white py-2"><i class="bi bi-lock text-danger me-2"></i><span class="fw-semibold" style="font-size:.85rem;">계정 잠금 현황</span></div>
-          <div class="card-body p-0">
-            <div style="max-height:250px;overflow-y:auto;">
-              <table class="table table-sm table-hover mb-0" style="font-size:.78rem;">
-                <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light">
-                  <th>사용자ID</th><th>이름</th><th style="width:60px;">실패수</th><th style="width:65px;">등록여부</th>
-                </tr></thead>
-                <tbody id="sec-locked-tbody"></tbody>
-              </table>
-            </div>
-          </div>
+    </div>
+
+    <!-- 잠긴 계정 — 전체 폭 -->
+    <div class="card border-0 shadow-sm mt-3">
+      <div class="card-header bg-white py-2"><i class="bi bi-lock text-danger me-2"></i><span class="fw-semibold" style="font-size:.85rem;">계정 잠금 현황</span></div>
+      <div class="card-body p-0">
+        <div style="max-height:calc(100vh - 300px);overflow-y:auto;">
+          <table class="table table-sm table-hover mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
+            <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light">
+              <th>사용자ID</th><th>이름</th><th>실패수</th><th>등록여부</th>
+            </tr></thead>
+            <tbody id="sec-locked-tbody"></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -255,10 +252,10 @@
           <input type="text" id="ssh-q" class="form-control form-control-sm ms-auto" style="width:150px;font-size:.78rem;" placeholder="IP/사용자 검색" onkeyup="if(event.key==='Enter')loadSysLogs('ssh')">
         </div>
         <div class="card-body p-0">
-          <div style="max-height:400px;overflow-y:auto;">
-            <table class="table table-sm table-hover mb-0" style="font-size:.78rem;">
+          <div style="max-height:calc(100vh - 260px);overflow-y:auto;">
+            <table class="table table-sm table-hover mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
               <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light">
-                <th style="width:110px;">시각</th><th style="width:70px;">유형</th><th style="width:130px;">IP</th><th style="width:100px;">사용자</th><th>원본 로그</th>
+                <th>시각</th><th>유형</th><th>IP</th><th>사용자</th><th>원본 로그</th>
               </tr></thead>
               <tbody id="sec-ssh-tbody"></tbody>
             </table>

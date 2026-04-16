@@ -66,6 +66,13 @@
 .si-card .si-icon { font-size:1.8rem; margin-bottom:6px; }
 .si-card .si-lbl { font-size:.7rem; color:#6c757d; }
 .si-card .si-val { font-size:1rem; font-weight:600; }
+
+/* ── 보안관제 테이블 ── */
+.sec-panel table[style*="table-layout:fixed"] td,
+.sec-panel table[style*="table-layout:fixed"] th {
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  padding:4px 8px; vertical-align:middle;
+}
 </style>
 {% endblock %}
 
