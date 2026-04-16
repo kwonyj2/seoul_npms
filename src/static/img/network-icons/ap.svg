@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 60" width="80" height="60">
+  <defs>
+    <radialGradient id="apGrad" cx="50%" cy="50%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#cfd8dc"/>
+    </radialGradient>
+  </defs>
+  <!-- WiFi 전파 -->
+  <path d="M20 30 Q40 10 60 30" fill="none" stroke="#1976d2" stroke-width="1.5" opacity="0.4"/>
+  <path d="M25 32 Q40 18 55 32" fill="none" stroke="#1976d2" stroke-width="1.5" opacity="0.6"/>
+  <path d="M30 34 Q40 26 50 34" fill="none" stroke="#1976d2" stroke-width="1.5" opacity="0.8"/>
+  <!-- AP 본체 (원형) -->
+  <ellipse cx="40" cy="40" rx="18" ry="10" fill="url(#apGrad)" stroke="#546e7a" stroke-width="1.2"/>
+  <ellipse cx="40" cy="38" rx="18" ry="10" fill="#eceff1" stroke="#546e7a" stroke-width="1.2"/>
+  <!-- 표시등 -->
+  <circle cx="40" cy="38" r="2" fill="#4caf50"/>
+  <text x="40" y="55" text-anchor="middle" font-size="6" font-weight="bold" fill="#1976d2">ACCESS POINT</text>
+</svg>

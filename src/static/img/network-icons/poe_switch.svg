@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 60" width="80" height="60">
+  <defs>
+    <linearGradient id="poeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00838f"/>
+      <stop offset="100%" stop-color="#006064"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="18" width="72" height="24" rx="2" fill="url(#poeGrad)" stroke="#004d40" stroke-width="1"/>
+  <polygon points="4,18 8,14 78,14 76,18" fill="#00acc1"/>
+  <circle cx="10" cy="24" r="1.2" fill="#4caf50"/>
+  <circle cx="14" cy="24" r="1.2" fill="#ffc107"/>
+  <!-- 포트 -->
+  <g fill="#003039" stroke="#4fc3f7" stroke-width="0.3">
+    <rect x="8" y="30" width="4" height="7"/>
+    <rect x="14" y="30" width="4" height="7"/>
+    <rect x="20" y="30" width="4" height="7"/>
+    <rect x="26" y="30" width="4" height="7"/>
+    <rect x="32" y="30" width="4" height="7"/>
+    <rect x="38" y="30" width="4" height="7"/>
+    <rect x="44" y="30" width="4" height="7"/>
+    <rect x="50" y="30" width="4" height="7"/>
+    <rect x="56" y="30" width="4" height="7"/>
+    <rect x="62" y="30" width="4" height="7"/>
+    <rect x="68" y="30" width="4" height="7"/>
+  </g>
+  <!-- PoE 표시 -->
+  <rect x="55" y="19" width="18" height="8" rx="2" fill="#ff6f00"/>
+  <text x="64" y="25.5" text-anchor="middle" font-size="6.5" font-weight="bold" fill="#fff">PoE+</text>
+  <text x="40" y="54" text-anchor="middle" font-size="6" font-weight="bold" fill="#004d40">POE SWITCH</text>
+</svg>

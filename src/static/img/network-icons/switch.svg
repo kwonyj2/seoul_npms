@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 60" width="80" height="60">
+  <defs>
+    <linearGradient id="swGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#424242"/>
+      <stop offset="100%" stop-color="#212121"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="18" width="72" height="24" rx="2" fill="url(#swGrad)" stroke="#000" stroke-width="1"/>
+  <polygon points="4,18 8,14 78,14 76,18" fill="#616161"/>
+  <!-- LED -->
+  <circle cx="10" cy="24" r="1.2" fill="#4caf50"/>
+  <circle cx="14" cy="24" r="1.2" fill="#4caf50"/>
+  <!-- 포트 -->
+  <g fill="#1a1a1a" stroke="#4fc3f7" stroke-width="0.3">
+    <rect x="8" y="30" width="4" height="7"/>
+    <rect x="14" y="30" width="4" height="7"/>
+    <rect x="20" y="30" width="4" height="7"/>
+    <rect x="26" y="30" width="4" height="7"/>
+    <rect x="32" y="30" width="4" height="7"/>
+    <rect x="38" y="30" width="4" height="7"/>
+    <rect x="44" y="30" width="4" height="7"/>
+    <rect x="50" y="30" width="4" height="7"/>
+    <rect x="56" y="30" width="4" height="7"/>
+    <rect x="62" y="30" width="4" height="7"/>
+    <rect x="68" y="30" width="4" height="7"/>
+  </g>
+  <text x="40" y="54" text-anchor="middle" font-size="6" font-weight="bold" fill="#555">L2 SWITCH</text>
+</svg>

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 60" width="80" height="60">
+  <defs>
+    <linearGradient id="l3Grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1565c0"/>
+      <stop offset="100%" stop-color="#0d47a1"/>
+    </linearGradient>
+  </defs>
+  <!-- 본체 -->
+  <rect x="4" y="15" width="72" height="30" rx="3" fill="url(#l3Grad)" stroke="#002171" stroke-width="1.5"/>
+  <!-- 윗면 (3D 느낌) -->
+  <polygon points="4,15 10,10 78,10 76,15" fill="#1976d2"/>
+  <!-- LED 상태등 -->
+  <circle cx="10" cy="22" r="1.5" fill="#4caf50"/>
+  <circle cx="14" cy="22" r="1.5" fill="#4caf50"/>
+  <circle cx="18" cy="22" r="1.5" fill="#ffc107"/>
+  <!-- 포트 -->
+  <g fill="#263238">
+    <rect x="8" y="30" width="5" height="8"/>
+    <rect x="15" y="30" width="5" height="8"/>
+    <rect x="22" y="30" width="5" height="8"/>
+    <rect x="29" y="30" width="5" height="8"/>
+    <rect x="36" y="30" width="5" height="8"/>
+    <rect x="43" y="30" width="5" height="8"/>
+    <rect x="50" y="30" width="5" height="8"/>
+    <rect x="57" y="30" width="5" height="8"/>
+    <rect x="64" y="30" width="5" height="8"/>
+  </g>
+  <!-- L3 표시 -->
+  <rect x="50" y="16" width="22" height="10" rx="2" fill="#ff6f00"/>
+  <text x="61" y="24" text-anchor="middle" font-size="8" font-weight="bold" fill="#fff">L3</text>
+  <text x="40" y="57" text-anchor="middle" font-size="6" font-weight="bold" fill="#0d47a1">CORE/L3 SWITCH</text>
+</svg>

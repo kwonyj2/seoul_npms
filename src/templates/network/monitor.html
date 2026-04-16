@@ -720,17 +720,33 @@ function switchSlide(slideNum) {
     return nodeSet.has(fn) && nodeSet.has(tn);
   });
 
-  // vis.js 형식으로 변환 (live API 형식과 동일하게)
-  const nodes = pptxNodes.map((n, i) => ({
-    id: 'pptx_' + i + '_' + n.name,
-    label: `${n.name}\n${n.model || ''}`,
-    title: `<b>${n.name}</b><br>모델: ${n.model || '-'}<br>위치: ${n.location || '-'}<br>망: ${n.network_type || '-'}`,
-    color: { background: _NET_COLOR[n.network_type] || '#0d6efd', border: '#333' },
-    shape: 'box',
-    font: { color: '#fff', size: 11 },
-    network_type: n.network_type,
-    device_type: n.device_type,
-  }));
+  // vis.js 형식으로 변환 (이미지 아이콘)
+  const ICON_MAP = {
+    'firewall': '/npms/static/img/network-icons/firewall.svg',
+    'router': '/npms/static/img/network-icons/router.svg',
+    'l3_switch': '/npms/static/img/network-icons/l3_switch.svg',
+    'switch': '/npms/static/img/network-icons/switch.svg',
+    'l2_switch': '/npms/static/img/network-icons/switch.svg',
+    'poe_switch': '/npms/static/img/network-icons/poe_switch.svg',
+    'ap': '/npms/static/img/network-icons/ap.svg',
+    'server': '/npms/static/img/network-icons/server.svg',
+  };
+  const nodes = pptxNodes.map((n, i) => {
+    const labelLines = [n.name];
+    if (n.model) labelLines.push(n.model);
+    if (n.location) labelLines.push(n.location);
+    return {
+      id: 'pptx_' + i + '_' + n.name,
+      label: labelLines.join('\n'),
+      title: `<b>${n.name}</b><br>모델: ${n.model || '-'}<br>위치: ${n.location || '-'}<br>망: ${n.network_type || '-'}`,
+      shape: 'image',
+      image: ICON_MAP[n.device_type] || ICON_MAP['switch'],
+      size: (n.device_type === 'firewall' || n.device_type === 'router') ? 34 : 28,
+      font: { color: '#263238', size: 11, face: 'Malgun Gothic', vadjust: 5 },
+      network_type: n.network_type,
+      device_type: n.device_type,
+    };
+  });
   const nameToId = {};
   nodes.forEach((nd, i) => nameToId[pptxNodes[i].name] = nd.id);
   const edges = pptxEdges.map((e, i) => {

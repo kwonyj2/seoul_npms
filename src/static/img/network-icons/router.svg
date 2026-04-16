@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 60" width="80" height="60">
+  <defs>
+    <linearGradient id="rtGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#6a1b9a"/>
+      <stop offset="100%" stop-color="#4a148c"/>
+    </linearGradient>
+  </defs>
+  <!-- 원통형 본체 -->
+  <ellipse cx="40" cy="20" rx="32" ry="8" fill="#8e24aa" stroke="#4a148c" stroke-width="1.2"/>
+  <rect x="8" y="20" width="64" height="22" fill="url(#rtGrad)" stroke="#4a148c" stroke-width="1.2"/>
+  <ellipse cx="40" cy="42" rx="32" ry="8" fill="#6a1b9a" stroke="#4a148c" stroke-width="1.2"/>
+  <!-- 화살표 (라우팅 상징) -->
+  <path d="M20 30 L35 30 L35 26 L45 32 L35 38 L35 34 L20 34 Z" fill="#ffeb3b"/>
+  <path d="M60 34 L45 34 L45 38 L35 32 L45 26 L45 30 L60 30 Z" fill="#ffeb3b"/>
+  <text x="40" y="57" text-anchor="middle" font-size="6" font-weight="bold" fill="#4a148c">ROUTER</text>
+</svg>

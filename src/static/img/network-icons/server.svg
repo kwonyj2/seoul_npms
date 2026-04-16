@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 60" width="80" height="60">
+  <defs>
+    <linearGradient id="srvGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#37474f"/>
+      <stop offset="100%" stop-color="#263238"/>
+    </linearGradient>
+  </defs>
+  <!-- 서버 3단 -->
+  <g>
+    <rect x="16" y="8" width="48" height="14" rx="1" fill="url(#srvGrad)" stroke="#000" stroke-width="1"/>
+    <circle cx="22" cy="15" r="1.5" fill="#4caf50"/>
+    <circle cx="27" cy="15" r="1.5" fill="#ff9800"/>
+    <rect x="34" y="12" width="26" height="6" fill="#1a1a1a" stroke="#424242" stroke-width="0.5"/>
+  </g>
+  <g>
+    <rect x="16" y="24" width="48" height="14" rx="1" fill="url(#srvGrad)" stroke="#000" stroke-width="1"/>
+    <circle cx="22" cy="31" r="1.5" fill="#4caf50"/>
+    <circle cx="27" cy="31" r="1.5" fill="#4caf50"/>
+    <rect x="34" y="28" width="26" height="6" fill="#1a1a1a" stroke="#424242" stroke-width="0.5"/>
+  </g>
+  <g>
+    <rect x="16" y="40" width="48" height="14" rx="1" fill="url(#srvGrad)" stroke="#000" stroke-width="1"/>
+    <circle cx="22" cy="47" r="1.5" fill="#4caf50"/>
+    <circle cx="27" cy="47" r="1.5" fill="#f44336"/>
+    <rect x="34" y="44" width="26" height="6" fill="#1a1a1a" stroke="#424242" stroke-width="0.5"/>
+  </g>
+</svg>

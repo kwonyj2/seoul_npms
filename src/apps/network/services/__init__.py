@@ -83,16 +83,34 @@ def build_topology_data(school_id: int) -> dict:
 
     node_levels = _compute_levels(devices, links)
 
+    # 장비 유형별 아이콘 경로
+    ICON_MAP = {
+        'firewall':   '/npms/static/img/network-icons/firewall.svg',
+        'router':     '/npms/static/img/network-icons/router.svg',
+        'l3_switch':  '/npms/static/img/network-icons/l3_switch.svg',
+        'switch':     '/npms/static/img/network-icons/switch.svg',
+        'l2_switch':  '/npms/static/img/network-icons/switch.svg',
+        'poe_switch': '/npms/static/img/network-icons/poe_switch.svg',
+        'ap':         '/npms/static/img/network-icons/ap.svg',
+        'server':     '/npms/static/img/network-icons/server.svg',
+    }
+
     nodes = []
     for d in devices:
         net    = d.network_type or ''
         color  = _NET_COLOR.get(net) or _TYPE_COLOR.get(d.device_type, '#0d6efd')
-        border = '#dc3545' if d.status == 'down' else color
         is_root = d.device_type in ('firewall', 'router')
         level   = node_levels.get(d.id, _TYPE_LEVEL.get(d.device_type, 2))
+        icon   = ICON_MAP.get(d.device_type, ICON_MAP['switch'])
+        # 아이콘 아래 표시 라벨 (장비명 / 모델 / 위치)
+        label_lines = [d.name]
+        if d.model: label_lines.append(d.model)
+        if d.location: label_lines.append(d.location)
+        label = '\n'.join(label_lines)
+
         nodes.append({
             'id':          d.id,
-            'label':       f'{d.name}\n{d.model or ""}',
+            'label':       label,
             'title': (
                 f'<b>{d.name}</b><br>'
                 f'모델: {d.model or "-"}<br>'
@@ -101,23 +119,25 @@ def build_topology_data(school_id: int) -> dict:
                 f'IP: {d.ip_address or "미등록"}<br>'
                 f'상태: {d.get_status_display()}'
             ),
-            'color': {
-                'background': color,
-                'border':     border,
-                'highlight':  {'background': color, 'border': '#000'},
+            'shape': 'image',
+            'image': icon,
+            'size':  34 if is_root else 28,
+            'font': {
+                'size': 11,
+                'color': '#263238',
+                'face': 'Malgun Gothic, 맑은 고딕, sans-serif',
+                'vadjust': 5,        # 아이콘과 라벨 간격
+                'multi': 'html',
+                'bold': {'color': color, 'size': 12, 'face': 'Malgun Gothic'},
             },
-            'borderWidth': 3 if d.status == 'down' else (2 if is_root else 1),
-            'font':  {'color': '#ffffff', 'size': 11},
-            'size':  28 if is_root else 22,
-            'shape': 'box',
             'level': level,
-            # 필터·팝업용 메타
             'network_type': net,
             'device_type':  d.device_type,
             'ip_address':   d.ip_address or '',
             'status':       d.status,
             'model':        d.model or '',
             'location':     d.location or '',
+            'color':        {'border': color, 'background': color},
         })
 
     edges = []
