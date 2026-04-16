@@ -43,6 +43,7 @@ def _admin_required(view_func):
 def sec_dashboard(request):
     """위협 현황 대시보드 — 요약 카드 + 시간대별 차트 + 유형별 분류 + Top10 IP"""
     now = timezone.now()
+    local_now = timezone.localtime(now)          # KST 변환
     h24 = now - datetime.timedelta(hours=24)
     h7d = now - datetime.timedelta(days=7)
 
@@ -87,7 +88,7 @@ def sec_dashboard(request):
         .annotate(cnt=Count('id'))
         .order_by('hour')
     )
-    ssh_hourly = {r['hour'].strftime('%H:00'): r['cnt'] for r in ssh_hourly_raw}
+    ssh_hourly = {timezone.localtime(r['hour']).strftime('%H:00'): r['cnt'] for r in ssh_hourly_raw}
     # NPMS 로그인 실패
     npms_hourly_raw = (
         LoginHistory.objects.filter(success=False, created_at__gte=h24)
@@ -96,11 +97,11 @@ def sec_dashboard(request):
         .annotate(cnt=Count('id'))
         .order_by('hour')
     )
-    npms_hourly = {r['hour'].strftime('%H:00'): r['cnt'] for r in npms_hourly_raw}
+    npms_hourly = {timezone.localtime(r['hour']).strftime('%H:00'): r['cnt'] for r in npms_hourly_raw}
     hourly_labels = []
     hourly_data = []
     for i in range(24):
-        t = (now - datetime.timedelta(hours=23 - i)).strftime('%H:00')
+        t = (local_now - datetime.timedelta(hours=23 - i)).strftime('%H:00')
         hourly_labels.append(t)
         hourly_data.append(ssh_hourly.get(t, 0) + npms_hourly.get(t, 0))
 
@@ -171,8 +172,8 @@ def sec_dashboard(request):
             'fail_count': fc,
             'threat': threat,
             'is_blocked': is_blocked,
-            'first': row['first_attempt'].strftime('%m-%d %H:%M') if row['first_attempt'] else '-',
-            'last': row['last_attempt'].strftime('%m-%d %H:%M') if row['last_attempt'] else '-',
+            'first': timezone.localtime(row['first_attempt']).strftime('%m-%d %H:%M') if row['first_attempt'] else '-',
+            'last': timezone.localtime(row['last_attempt']).strftime('%m-%d %H:%M') if row['last_attempt'] else '-',
         })
 
     # ── 최근 보안 이벤트 (페이지네이션) ───────────
@@ -191,7 +192,7 @@ def sec_dashboard(request):
             'username': ev.username or '-',
             'desc': ev.description[:120],
             'resolved': ev.resolved,
-            'time': ev.created_at.strftime('%m-%d %H:%M:%S'),
+            'time': timezone.localtime(ev.created_at).strftime('%m-%d %H:%M:%S'),
         })
 
     return JsonResponse({
@@ -244,8 +245,8 @@ def sec_blocked_ips(request):
                 'auto': b.auto_blocked,
                 'permanent': b.is_permanent,
                 'is_active': b.is_active,
-                'blocked_at': b.blocked_at.strftime('%Y-%m-%d %H:%M'),
-                'expires_at': b.expires_at.strftime('%Y-%m-%d %H:%M') if b.expires_at else '영구',
+                'blocked_at': timezone.localtime(b.blocked_at).strftime('%Y-%m-%d %H:%M'),
+                'expires_at': timezone.localtime(b.expires_at).strftime('%Y-%m-%d %H:%M') if b.expires_at else '영구',
                 'blocked_by': b.blocked_by.name if b.blocked_by else '시스템',
             })
 
@@ -387,7 +388,7 @@ def sec_block_log(request):
             'action': r.get_action_display(),
             'reason': r.reason,
             'actor': r.actor.name if r.actor else '시스템',
-            'time': r.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'time': timezone.localtime(r.created_at).strftime('%Y-%m-%d %H:%M:%S'),
         })
     return JsonResponse({
         'rows': rows, 'total': total,
@@ -446,8 +447,8 @@ def sec_login_analysis(request):
             'username': r.user.username if r.user else r.attempted_username,
             'name': r.user.name if r.user else '-',
             'ip': r.ip_address or '-',
-            'time': r.created_at.strftime('%Y-%m-%d %H:%M'),
-            'detail': f'{r.created_at.strftime("%H:%M")} 접속',
+            'time': timezone.localtime(r.created_at).strftime('%Y-%m-%d %H:%M'),
+            'detail': f'{timezone.localtime(r.created_at).strftime("%H:%M")} 접속',
         })
 
     # 동일 IP 다중 계정 시도 (브루트포스)
@@ -539,7 +540,7 @@ def sec_system_logs(request):
                 'ip': r.ip_address or '-',
                 'username': r.username or '-',
                 'raw': r.raw_line[:200],
-                'time': r.log_time.strftime('%Y-%m-%d %H:%M:%S') if r.log_time else '-',
+                'time': timezone.localtime(r.log_time).strftime('%Y-%m-%d %H:%M:%S') if r.log_time else '-',
             })
         # SSH 실패 IP Top5
         ssh_top = (
@@ -629,7 +630,7 @@ def sec_system_logs(request):
                 'size': f.file_size,
                 'changed': f.is_changed,
                 'prev_hash': (f.prev_hash[:16] + '...') if f.prev_hash else '-',
-                'checked_at': f.checked_at.strftime('%Y-%m-%d %H:%M'),
+                'checked_at': timezone.localtime(f.checked_at).strftime('%Y-%m-%d %H:%M'),
             })
         return JsonResponse({'files': rows})
 
@@ -763,17 +764,18 @@ def sec_settings(request):
 def sec_report(request):
     """보안 리포트 — 기간별 통계"""
     now = timezone.now()
+    local_now = timezone.localtime(now)
     period = request.GET.get('period', 'daily')  # daily / weekly / monthly
 
     if period == 'daily':
         since = now - datetime.timedelta(days=1)
-        period_label = f'{since.strftime("%Y-%m-%d")} (일간)'
+        period_label = f'{timezone.localtime(since).strftime("%Y-%m-%d")} (일간)'
     elif period == 'weekly':
         since = now - datetime.timedelta(weeks=1)
-        period_label = f'{since.strftime("%Y-%m-%d")} ~ {now.strftime("%Y-%m-%d")} (주간)'
+        period_label = f'{timezone.localtime(since).strftime("%Y-%m-%d")} ~ {local_now.strftime("%Y-%m-%d")} (주간)'
     else:
         since = now - datetime.timedelta(days=30)
-        period_label = f'{since.strftime("%Y-%m-%d")} ~ {now.strftime("%Y-%m-%d")} (월간)'
+        period_label = f'{timezone.localtime(since).strftime("%Y-%m-%d")} ~ {local_now.strftime("%Y-%m-%d")} (월간)'
 
     # 로그인 통계
     login_total = LoginHistory.objects.filter(created_at__gte=since).count()
@@ -869,7 +871,7 @@ def sec_export(request):
     from django.http import HttpResponse
 
     kind = request.GET.get('kind', '')
-    now = timezone.now()
+    now = timezone.localtime(timezone.now())
 
     wb = Workbook()
     ws = wb.active
@@ -903,8 +905,8 @@ def sec_export(request):
             ws.append([
                 i, r['ip_address'] or '-', fc, threat,
                 '차단' if r['ip_address'] in blocked_set else '미차단',
-                r['first_attempt'].strftime('%Y-%m-%d %H:%M') if r['first_attempt'] else '-',
-                r['last_attempt'].strftime('%Y-%m-%d %H:%M') if r['last_attempt'] else '-',
+                timezone.localtime(r['first_attempt']).strftime('%Y-%m-%d %H:%M') if r['first_attempt'] else '-',
+                timezone.localtime(r['last_attempt']).strftime('%Y-%m-%d %H:%M') if r['last_attempt'] else '-',
             ])
         filename = f'보안관제_Top위협IP_{now.strftime("%Y%m%d_%H%M")}.xlsx'
 
@@ -913,7 +915,7 @@ def sec_export(request):
         _apply_header(ws, ['시각', '유형', '위험도', 'IP', '사용자', '설명', '해결여부'])
         for ev in SecurityEvent.objects.all()[:10000]:
             ws.append([
-                ev.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                timezone.localtime(ev.created_at).strftime('%Y-%m-%d %H:%M:%S'),
                 ev.get_event_type_display(),
                 ev.get_severity_display(),
                 ev.ip_address or '-',
@@ -931,8 +933,8 @@ def sec_export(request):
                 b.ip_address, b.get_reason_display(), b.description, b.fail_count,
                 '자동' if b.auto_blocked else '수동',
                 '영구' if b.is_permanent else '임시',
-                b.blocked_at.strftime('%Y-%m-%d %H:%M'),
-                b.expires_at.strftime('%Y-%m-%d %H:%M') if b.expires_at else '영구',
+                timezone.localtime(b.blocked_at).strftime('%Y-%m-%d %H:%M'),
+                timezone.localtime(b.expires_at).strftime('%Y-%m-%d %H:%M') if b.expires_at else '영구',
                 b.blocked_by.name if b.blocked_by else '시스템',
             ])
         filename = f'보안관제_차단IP목록_{now.strftime("%Y%m%d_%H%M")}.xlsx'
@@ -944,7 +946,7 @@ def sec_export(request):
             ws.append([
                 w.ip_address, w.description,
                 w.created_by.name if w.created_by else '-',
-                w.created_at.strftime('%Y-%m-%d %H:%M'),
+                timezone.localtime(w.created_at).strftime('%Y-%m-%d %H:%M'),
             ])
         filename = f'보안관제_화이트리스트_{now.strftime("%Y%m%d_%H%M")}.xlsx'
 
@@ -953,7 +955,7 @@ def sec_export(request):
         _apply_header(ws, ['처리일시', 'IP 주소', '행위', '사유', '처리자'])
         for r in BlockLog.objects.select_related('actor').all()[:10000]:
             ws.append([
-                r.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                timezone.localtime(r.created_at).strftime('%Y-%m-%d %H:%M:%S'),
                 r.ip_address, r.get_action_display(), r.reason,
                 r.actor.name if r.actor else '시스템',
             ])
@@ -972,8 +974,8 @@ def sec_export(request):
                        r.user.username if r.user else r.attempted_username,
                        r.user.name if r.user else '-',
                        r.ip_address or '-',
-                       r.created_at.strftime('%Y-%m-%d %H:%M'),
-                       f'{r.created_at.strftime("%H:%M")} 접속'])
+                       timezone.localtime(r.created_at).strftime('%Y-%m-%d %H:%M'),
+                       f'{timezone.localtime(r.created_at).strftime("%H:%M")} 접속'])
         multi = (LoginHistory.objects.filter(success=False, created_at__gte=since)
                  .values('ip_address').annotate(
                     user_cnt=Count('attempted_username', distinct=True),
@@ -1005,7 +1007,7 @@ def sec_export(request):
         for r in qs[:20000]:
             t = '성공' if r.log_type == 'ssh_success' else '실패'
             ws.append([
-                r.log_time.strftime('%Y-%m-%d %H:%M:%S') if r.log_time else '-',
+                timezone.localtime(r.log_time).strftime('%Y-%m-%d %H:%M:%S') if r.log_time else '-',
                 t, r.ip_address or '-', r.username or '-', r.raw_line,
             ])
         filename = f'보안관제_SSH접근로그_{now.strftime("%Y%m%d_%H%M")}.xlsx'
@@ -1017,7 +1019,7 @@ def sec_export(request):
             ws.append([
                 f.file_path, f.sha256_hash, f.file_size,
                 '변경' if f.is_changed else '정상',
-                f.checked_at.strftime('%Y-%m-%d %H:%M:%S'),
+                timezone.localtime(f.checked_at).strftime('%Y-%m-%d %H:%M:%S'),
             ])
         filename = f'보안관제_파일무결성_{now.strftime("%Y%m%d_%H%M")}.xlsx'
 
@@ -1088,7 +1090,7 @@ def sec_export(request):
                     r.ip_address or '-', r.user_agent[:80] if r.user_agent else '-',
                     '성공' if r.success else '실패',
                     r.fail_reason or '',
-                    r.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    timezone.localtime(r.created_at).strftime('%Y-%m-%d %H:%M:%S'),
                 ])
             filename = f'접속이력_로그인_{now.strftime("%Y%m%d_%H%M")}.xlsx'
         elif al_kind == 'activity':
@@ -1100,7 +1102,7 @@ def sec_export(request):
                     r.user.username if r.user else '-',
                     r.user.name if r.user else '-',
                     ACTION.get(r.action, r.action), r.target or '-', r.detail or '-',
-                    r.ip_address or '-', r.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    r.ip_address or '-', timezone.localtime(r.created_at).strftime('%Y-%m-%d %H:%M:%S'),
                 ])
             filename = f'접속이력_활동로그_{now.strftime("%Y%m%d_%H%M")}.xlsx'
         elif al_kind == 'session':
@@ -1112,8 +1114,8 @@ def sec_export(request):
                     r.user.username if r.user else '-',
                     r.user.name if r.user else '-',
                     r.ip_address or '-', r.current_page or '-',
-                    r.login_at.strftime('%Y-%m-%d %H:%M:%S'),
-                    r.last_active.strftime('%Y-%m-%d %H:%M:%S'),
+                    timezone.localtime(r.login_at).strftime('%Y-%m-%d %H:%M:%S'),
+                    timezone.localtime(r.last_active).strftime('%Y-%m-%d %H:%M:%S'),
                 ])
             filename = f'접속이력_현재접속자_{now.strftime("%Y%m%d_%H%M")}.xlsx'
         else:  # security
@@ -1133,8 +1135,8 @@ def sec_export(request):
                 ws.append([
                     ip or '-', fc, ', '.join(u for u in usernames if u) or '-',
                     '있음' if has_success else '없음', threat,
-                    row['first_attempt'].strftime('%Y-%m-%d %H:%M'),
-                    row['last_attempt'].strftime('%Y-%m-%d %H:%M'),
+                    timezone.localtime(row['first_attempt']).strftime('%Y-%m-%d %H:%M'),
+                    timezone.localtime(row['last_attempt']).strftime('%Y-%m-%d %H:%M'),
                 ])
             filename = f'접속이력_보안탐지_{now.strftime("%Y%m%d_%H%M")}.xlsx'
 
