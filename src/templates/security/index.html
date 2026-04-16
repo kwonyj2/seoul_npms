@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}보안관제{% endblock %}
+{% block page_title %}<i class="bi bi-shield-lock me-2 text-danger"></i>보안관제{% endblock %}
+
+{% block extra_css %}
+<style>
+/* 보안관제 탭 */
+.sec-wrap { padding: 0.75rem 1rem; }
+.sec-tabs { border-bottom: 2px solid #dee2e6; margin-bottom: 1rem; }
+.sec-tabs .nav-link {
+  color:#6c757d; border:none; border-bottom:3px solid transparent;
+  padding:0.55rem 1.1rem; font-size:0.83rem; font-weight:500;
+  margin-bottom:-2px; border-radius:0; white-space:nowrap;
+}
+.sec-tabs .nav-link:hover { color:#212529; }
+.sec-tabs .nav-link.active { color:#dc3545; border-bottom-color:#dc3545; font-weight:700; background:transparent; }
+.sec-tabs .nav-link i { margin-right:5px; }
+
+.sec-tab-content { display:none; }
+.sec-tab-content.active { display:block; }
+
+/* 테이블 fixed 오버플로우 */
+.sec-tab-content table[style*="table-layout:fixed"] td,
+.sec-tab-content table[style*="table-layout:fixed"] th {
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  padding:4px 8px; vertical-align:middle;
+}
+
+/* 접속이력 서브탭 버튼 */
+#al-subtabs .btn { font-size:.78rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sec-wrap">
+
+  <!-- 상단 탭 메뉴 -->
+  <ul class="nav sec-tabs" id="sec-main-tabs">
+    <li class="nav-item"><a class="nav-link active" href="#" onclick="secMainTab('dashboard',this);return false;"><i class="bi bi-shield-check"></i>위협 현황</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="secMainTab('block',this);return false;"><i class="bi bi-ban"></i>자동 차단</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="secMainTab('login',this);return false;"><i class="bi bi-key"></i>로그인 분석</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="secMainTab('syslog',this);return false;"><i class="bi bi-terminal"></i>시스템 감시</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="secMainTab('settings',this);return false;"><i class="bi bi-gear"></i>보안 설정</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="secMainTab('report',this);return false;"><i class="bi bi-file-earmark-bar-graph"></i>보안 리포트</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="secMainTab('accesslog',this);return false;"><i class="bi bi-journal-text"></i>접속이력</a></li>
+  </ul>
+
+  <!-- 기존 보안 탭 내용 (서브탭 → 메인탭으로 전환된 상태) -->
+  {% include 'security/_panels.html' %}
+
+</div>
+
+<!-- CSRF 토큰 -->
+{% csrf_token %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+const CSRF_TOKEN = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+const API_BASE = '/npms/api';
+const SYSCONF_API = API_BASE + '/sysconfig';
+const SEC_API = SYSCONF_API + '/security';
+let _secCharts = {};
+
+function escH(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// 메인 탭 전환
+function secMainTab(name, el) {
+  document.querySelectorAll('#sec-main-tabs .nav-link').forEach(a => a.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.sec-tab-content').forEach(p => p.classList.remove('active'));
+  document.getElementById('sec-p-' + name).classList.add('active');
+
+  if (name === 'dashboard') loadSecDashboard();
+  if (name === 'block') { loadBlocked(); loadBlockCfg(); loadBlockLog(); }
+  if (name === 'login') loadLoginAnalysis();
+  if (name === 'syslog') loadSysLogs('ssh');
+  if (name === 'settings') loadSecSettings();
+  if (name === 'report') loadSecReport();
+  if (name === 'accesslog') { if (!window._alLoaded) { alSub('login'); window._alLoaded = true; } }
+}
+
+// 시스템 감시 내부 서브탭 (SSH/리소스/Docker/무결성)
+function syslogSub(name, el) {
+  document.querySelectorAll('#syslog-subtabs .btn').forEach(b => { b.classList.remove('active'); b.classList.add('btn-outline-dark'); b.classList.remove('btn-dark'); });
+  el.classList.add('active'); el.classList.remove('btn-outline-dark'); el.classList.add('btn-dark');
+  document.querySelectorAll('.syslog-panel').forEach(p => p.style.display = 'none');
+  document.getElementById('syslog-' + name).style.display = '';
+  loadSysLogs(name);
+}
+
+// ── 차트 헬퍼 ──
+function _chart(id, cfg) {
+  if (_secCharts[id]) _secCharts[id].destroy();
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  _secCharts[id] = new Chart(ctx, cfg);
+}
+
+const SEV_CLR = { critical:'#dc3545', high:'#fd7e14', medium:'#ffc107', low:'#0dcaf0', info:'#6c757d' };
+const SEV_LBL = { critical:'심각', high:'높음', medium:'보통', low:'낮음', info:'정보' };
+const THREAT_BADGE = {
+  critical:'<span class="badge bg-danger">심각</span>',
+  high:'<span class="badge bg-warning text-dark">높음</span>',
+  medium:'<span class="badge" style="background:#ffc107;color:#000;">보통</span>',
+  low:'<span class="badge bg-info text-dark">낮음</span>',
+};
+
+// ── 보안관제 기능 JS (기존 _security_js.html 로직 포함) ──
+{% include 'security/_security_logic.html' %}
+
+// ── 접속이력 JS (기존 sysconfig의 접속이력 로직) ──
+{% include 'security/_accesslog_logic.html' %}
+
+// 초기 로드
+loadSecDashboard();
+</script>
+{% endblock %}

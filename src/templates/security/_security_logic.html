@@ -1,0 +1,307 @@
+// ═══ 패널1: 위협 현황 ═══════════════════
+function loadSecDashboard() {
+  fetch(SEC_API + '/dashboard/').then(r=>r.json()).then(d => {
+    // 요약 카드
+    const lvlClr = { safe:'#198754', caution:'#ffc107', warning:'#fd7e14', danger:'#dc3545' };
+    const lvlIco = { safe:'bi-shield-check', caution:'bi-shield-exclamation', warning:'bi-exclamation-triangle', danger:'bi-radioactive' };
+    document.getElementById('sec-summary-cards').innerHTML = [
+      { lbl:'24h 공격 시도', val:d.summary.attacks_24h, ico:'bi-crosshair', clr:'#dc3545', bg:'#fdecea' },
+      { lbl:'차단 IP', val:d.summary.blocked_ips, ico:'bi-ban', clr:'#fd7e14', bg:'#fff3e0' },
+      { lbl:'활성 세션', val:d.summary.active_sessions, ico:'bi-people', clr:'#0d6efd', bg:'#e3f2fd' },
+      { lbl:'보안 이벤트(24h)', val:d.summary.events_24h, ico:'bi-lightning', clr:'#6f42c1', bg:'#f3e8fd' },
+      { lbl:'위협 등급', val:d.summary.threat_label, ico:lvlIco[d.summary.threat_level], clr:lvlClr[d.summary.threat_level], bg: d.summary.threat_level==='safe'?'#e8f5e9':'#fdecea' },
+    ].map(c => `<div class="col"><div style="background:${c.bg};border-radius:10px;padding:14px 16px;"><div style="font-size:.7rem;color:#6c757d;font-weight:600;">${c.lbl}</div><div style="font-size:1.5rem;font-weight:800;color:${c.clr};line-height:1.1;margin-top:2px;">${typeof c.val==='number'?c.val.toLocaleString():c.val}</div><i class="bi ${c.ico}" style="font-size:1.6rem;color:${c.clr};opacity:.25;float:right;margin-top:-30px;"></i></div></div>`).join('');
+
+    // 시간대별 차트
+    _chart('sec-hourly-chart', {
+      type:'line',
+      data:{ labels:d.hourly.labels, datasets:[{ label:'공격 시도', data:d.hourly.data, borderColor:'#dc3545', backgroundColor:'rgba(220,53,69,.1)', fill:true, tension:.3, pointRadius:2 }] },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} }, scales:{ x:{ticks:{font:{size:10}}}, y:{beginAtZero:true, ticks:{font:{size:10}}} } }
+    });
+
+    // 유형별 도넛
+    if (d.attack_types.length) {
+      const colors = ['#dc3545','#fd7e14','#ffc107','#0dcaf0','#6c757d','#198754','#6f42c1'];
+      _chart('sec-type-chart', {
+        type:'doughnut',
+        data:{ labels:d.attack_types.map(t=>t.label), datasets:[{ data:d.attack_types.map(t=>t.count), backgroundColor:colors.slice(0,d.attack_types.length) }] },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'right', labels:{font:{size:10}} } } }
+      });
+    }
+
+    // Top 10 IP
+    document.getElementById('sec-topip-tbody').innerHTML = d.top_ips.map((r,i) =>
+      `<tr><td>${i+1}</td><td><code>${escH(r.ip)}</code></td><td class="text-end fw-bold">${r.fail_count}</td><td>${THREAT_BADGE[r.threat]||r.threat}</td><td>${r.is_blocked?'<span class="badge bg-danger">차단</span>':'<span class="badge bg-secondary">미차단</span>'}</td><td>${r.last}</td><td>${r.is_blocked?'':'<button class="btn btn-sm btn-outline-danger" style="font-size:.68rem;padding:1px 6px;" onclick="quickBlock(\''+r.ip+'\')">차단</button>'}</td></tr>`
+    ).join('') || '<tr><td colspan="7" class="text-center text-muted py-3">위협 IP 없음</td></tr>';
+
+    // 이벤트 피드
+    document.getElementById('sec-events-tbody').innerHTML = d.recent_events.map(e =>
+      `<tr><td>${e.time}</td><td>${escH(e.type)}</td><td>${THREAT_BADGE[e.severity]||e.severity}</td><td><code>${escH(e.ip)}</code></td><td>${escH(e.desc)}</td></tr>`
+    ).join('') || '<tr><td colspan="5" class="text-center text-muted py-3">이벤트 없음</td></tr>';
+  });
+}
+
+function quickBlock(ip) {
+  if (!confirm(ip + '을(를) 60분간 차단하시겠습니까?')) return;
+  fetch(SEC_API + '/blocked-ips/', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+    body:JSON.stringify({ action:'block', ip, reason:'manual', description:'대시보드 즉시 차단', duration:60 })
+  }).then(r=>r.json()).then(d => { if(d.ok) { alert('차단 완료'); loadSecDashboard(); } else alert(d.error); });
+}
+
+// ═══ 패널2: 차단 관리 ═══════════════════
+function loadBlocked() {
+  const q = document.getElementById('block-q')?.value || '';
+  fetch(SEC_API + '/blocked-ips/?q=' + encodeURIComponent(q)).then(r=>r.json()).then(d => {
+    document.getElementById('sec-blocked-tbody').innerHTML = d.blocked.map(r =>
+      `<tr><td><code>${escH(r.ip)}</code></td><td>${escH(r.reason)}</td><td title="${escH(r.description)}">${escH(r.description).substring(0,30)}</td><td class="text-end">${r.fail_count}</td><td>${r.auto?'<span class="badge bg-info text-dark">자동</span>':'<span class="badge bg-secondary">수동</span>'}</td><td>${r.blocked_at}</td><td>${r.expires_at}</td><td><button class="btn btn-sm btn-outline-success" style="font-size:.68rem;padding:1px 6px;" onclick="unblockIP('${r.ip}')">해제</button></td></tr>`
+    ).join('') || '<tr><td colspan="8" class="text-center text-muted py-3">차단 IP 없음</td></tr>';
+
+    document.getElementById('sec-wl-tbody').innerHTML = d.whitelist.map(r =>
+      `<tr><td><code>${escH(r.ip_address)}</code></td><td>${escH(r.description)}</td><td><button class="btn btn-sm btn-outline-danger" style="font-size:.66rem;padding:0 4px;" onclick="removeWl('${r.ip_address}')"><i class="bi bi-x"></i></button></td></tr>`
+    ).join('') || '<tr><td colspan="3" class="text-center text-muted py-2">없음</td></tr>';
+  });
+}
+
+function loadBlockCfg() {
+  fetch(SEC_API + '/block-config/').then(r=>r.json()).then(d => {
+    const c = d.config;
+    document.getElementById('cfg-auto-block').value = c.auto_block_enabled || 'true';
+    document.getElementById('cfg-threshold').value = c.block_threshold || 10;
+    document.getElementById('cfg-window').value = c.block_window_min || 30;
+    document.getElementById('cfg-duration').value = c.block_duration_min || 60;
+    document.getElementById('cfg-perm').value = c.permanent_threshold || 50;
+  });
+}
+
+function saveBlockCfg() {
+  fetch(SEC_API + '/block-config/', {
+    method:'PATCH', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+    body:JSON.stringify({
+      auto_block_enabled: document.getElementById('cfg-auto-block').value,
+      block_threshold: document.getElementById('cfg-threshold').value,
+      block_window_min: document.getElementById('cfg-window').value,
+      block_duration_min: document.getElementById('cfg-duration').value,
+      permanent_threshold: document.getElementById('cfg-perm').value,
+    })
+  }).then(r=>r.json()).then(d => { if(d.ok) alert('저장 완료'); else alert(d.error); });
+}
+
+function loadBlockLog() {
+  fetch(SEC_API + '/block-log/').then(r=>r.json()).then(d => {
+    document.getElementById('sec-blocklog-tbody').innerHTML = d.rows.map(r =>
+      `<tr><td>${r.time}</td><td><code>${escH(r.ip)}</code></td><td>${r.action==='차단'?'<span class="text-danger">차단</span>':'<span class="text-success">해제</span>'}</td><td>${escH(r.reason).substring(0,40)}</td></tr>`
+    ).join('') || '<tr><td colspan="4" class="text-center text-muted py-2">이력 없음</td></tr>';
+  });
+}
+
+function showManualBlock() {
+  const ip = prompt('차단할 IP 주소:');
+  if (!ip) return;
+  const desc = prompt('차단 사유:', '수동 차단') || '수동 차단';
+  const perm = confirm('영구 차단으로 설정하시겠습니까?\n(취소 = 60분 임시 차단)');
+  fetch(SEC_API + '/blocked-ips/', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+    body:JSON.stringify({ action:'block', ip, reason:'manual', description:desc, permanent:perm, duration:60 })
+  }).then(r=>r.json()).then(d => { if(d.ok) { alert('차단 완료'); loadBlocked(); loadBlockLog(); } else alert(d.error); });
+}
+
+function unblockIP(ip) {
+  if (!confirm(ip + ' 차단을 해제하시겠습니까?')) return;
+  fetch(SEC_API + '/blocked-ips/', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+    body:JSON.stringify({ action:'unblock', ip })
+  }).then(r=>r.json()).then(d => { if(d.ok) { loadBlocked(); loadBlockLog(); } });
+}
+
+function showWlAdd() {
+  const ip = prompt('화이트리스트 IP:');
+  if (!ip) return;
+  const desc = prompt('설명:', '') || '';
+  fetch(SEC_API + '/blocked-ips/', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+    body:JSON.stringify({ action:'whitelist_add', ip, description:desc })
+  }).then(r=>r.json()).then(d => { if(d.ok) loadBlocked(); else alert(d.error); });
+}
+
+function removeWl(ip) {
+  if (!confirm(ip + ' 화이트리스트 제거?')) return;
+  fetch(SEC_API + '/blocked-ips/', {
+    method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+    body:JSON.stringify({ action:'whitelist_remove', ip })
+  }).then(r=>r.json()).then(d => { if(d.ok) loadBlocked(); });
+}
+
+// ═══ 패널3: 로그인 분석 ═══════════════════
+function loadLoginAnalysis() {
+  const days = document.getElementById('login-days').value;
+  fetch(SEC_API + '/login-analysis/?days=' + days).then(r=>r.json()).then(d => {
+    // 추이 차트
+    _chart('sec-login-trend', {
+      type:'bar',
+      data:{
+        labels: d.trend.labels,
+        datasets:[
+          { label:'성공', data:d.trend.success, backgroundColor:'rgba(25,135,84,.6)', borderRadius:3 },
+          { label:'실패', data:d.trend.fail, backgroundColor:'rgba(220,53,69,.6)', borderRadius:3 },
+        ]
+      },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{labels:{font:{size:10}}} }, scales:{ x:{stacked:false,ticks:{font:{size:9}}}, y:{beginAtZero:true,ticks:{font:{size:10}}} } }
+    });
+
+    // 시간대 분포 차트
+    const hrLabels = Array.from({length:24}, (_,i) => i+'시');
+    _chart('sec-heatmap-chart', {
+      type:'bar',
+      data:{
+        labels: hrLabels,
+        datasets:[
+          { label:'성공', data:d.heatmap.success, backgroundColor:'rgba(25,135,84,.5)', borderRadius:2 },
+          { label:'실패', data:d.heatmap.fail, backgroundColor:'rgba(220,53,69,.5)', borderRadius:2 },
+        ]
+      },
+      options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{ legend:{labels:{font:{size:9}}} }, scales:{ x:{stacked:true,ticks:{font:{size:9}}}, y:{stacked:true,ticks:{font:{size:8}}} } }
+    });
+
+    // 비정상 목록
+    document.getElementById('sec-abnormal-tbody').innerHTML = d.abnormal.map(r =>
+      `<tr><td><span class="badge ${r.type==='야간 접속'?'bg-warning text-dark':'bg-danger'}">${escH(r.type)}</span></td><td>${escH(r.username)}</td><td>${escH(r.name)}</td><td><code>${escH(r.ip)}</code></td><td>${escH(r.time)}</td><td>${escH(r.detail)}</td></tr>`
+    ).join('') || '<tr><td colspan="6" class="text-center text-muted py-3">비정상 접근 없음</td></tr>';
+
+    // 잠긴 계정
+    document.getElementById('sec-locked-tbody').innerHTML = d.locked_accounts.map(r =>
+      `<tr><td>${escH(r.username)}</td><td>${escH(r.name)}</td><td class="text-end text-danger fw-bold">${r.fail_count}</td><td>${r.is_registered?'<span class="badge bg-success">등록</span>':'<span class="badge bg-secondary">미등록</span>'}</td></tr>`
+    ).join('') || '<tr><td colspan="4" class="text-center text-muted py-3">잠긴 계정 없음</td></tr>';
+  });
+}
+
+// ═══ 패널4: 시스템 로그 ═══════════════════
+function loadSysLogs(kind) {
+  if (kind === 'ssh') {
+    const q = document.getElementById('ssh-q')?.value || '';
+    fetch(SEC_API + '/system-logs/?kind=ssh&q=' + encodeURIComponent(q)).then(r=>r.json()).then(d => {
+      document.getElementById('sec-ssh-tbody').innerHTML = d.rows.map(r =>
+        `<tr><td>${r.time}</td><td>${r.type_key==='ssh_success'?'<span class="text-success">성공</span>':'<span class="text-danger">실패</span>'}</td><td><code>${escH(r.ip)}</code></td><td>${escH(r.username)}</td><td style="white-space:normal;word-break:break-all;font-size:.72rem;color:#6c757d;">${escH(r.raw)}</td></tr>`
+      ).join('') || '<tr><td colspan="5" class="text-center text-muted py-3">SSH 로그 없음 (Celery가 5분마다 수집)</td></tr>';
+    });
+  } else if (kind === 'resource') {
+    fetch(SEC_API + '/system-logs/?kind=resource').then(r=>r.json()).then(d => {
+      const bar = (pct, clr) => `<div style="height:8px;background:#e9ecef;border-radius:4px;margin-top:4px;"><div style="width:${pct}%;background:${clr};height:100%;border-radius:4px;"></div></div>`;
+      const clr = pct => pct > 90 ? '#dc3545' : pct > 70 ? '#fd7e14' : '#198754';
+      document.getElementById('sec-resource-cards').innerHTML = [
+        { lbl:'CPU', val:d.cpu+'%', pct:d.cpu, ico:'bi-cpu' },
+        { lbl:'메모리', val:`${d.memory.used}/${d.memory.total} GB (${d.memory.percent}%)`, pct:d.memory.percent, ico:'bi-memory' },
+        { lbl:'디스크', val:`${d.disk.used}/${d.disk.total} GB (${d.disk.percent}%)`, pct:d.disk.percent, ico:'bi-hdd' },
+      ].map(c => `<div class="col-12 col-md-4"><div class="card border-0 shadow-sm"><div class="card-body py-3"><div class="d-flex align-items-center"><i class="bi ${c.ico} me-2" style="font-size:1.3rem;color:${clr(c.pct)};"></i><div><div style="font-size:.72rem;color:#6c757d;">${c.lbl}</div><div style="font-size:1rem;font-weight:700;">${c.val}</div></div></div>${bar(c.pct,clr(c.pct))}</div></div></div>`).join('');
+
+      document.getElementById('sec-proc-tbody').innerHTML = d.processes.map(p =>
+        `<tr><td>${p.pid}</td><td>${escH(p.name)}</td><td>${p.cpu}%</td><td>${p.mem}%</td></tr>`
+      ).join('');
+    });
+  } else if (kind === 'docker') {
+    fetch(SEC_API + '/system-logs/?kind=docker').then(r=>r.json()).then(d => {
+      document.getElementById('sec-docker-tbody').innerHTML = d.containers.map(c =>
+        `<tr><td><strong>${escH(c.name)}</strong></td><td style="font-size:.72rem;">${escH(c.image)}</td><td style="font-size:.72rem;">${escH(c.status)}</td><td>${c.is_up?'<i class="bi bi-check-circle-fill text-success"></i>':'<i class="bi bi-x-circle-fill text-danger"></i>'}</td></tr>`
+      ).join('') || '<tr><td colspan="4" class="text-center text-muted py-3">Docker 정보 없음</td></tr>';
+    });
+  } else if (kind === 'integrity') {
+    fetch(SEC_API + '/system-logs/?kind=integrity').then(r=>r.json()).then(d => {
+      document.getElementById('sec-integrity-tbody').innerHTML = d.files.map(f =>
+        `<tr><td title="${escH(f.path)}">${escH(f.path)}</td><td title="${escH(f.hash||'')}"><code style="font-size:.72rem;">${escH(f.hash_short||f.hash||'')}</code></td><td>${(f.size/1024).toFixed(1)} KB</td><td>${f.changed?'<span class="badge bg-danger">변경</span>':'<span class="badge bg-success">정상</span>'}</td><td>${f.checked_at}</td></tr>`
+      ).join('') || '<tr><td colspan="5" class="text-center text-muted py-3">무결성 스냅샷 없음 (Celery가 1시간마다 점검)</td></tr>';
+    });
+  }
+}
+
+// ═══ 패널5: 보안 설정 ═══════════════════
+function loadSecSettings() {
+  fetch(SEC_API + '/settings/').then(r=>r.json()).then(d => {
+    // 보안 점수
+    const scoreEl = document.getElementById('sec-score');
+    const score = d.score;
+    scoreEl.style.color = score >= 80 ? '#198754' : score >= 60 ? '#fd7e14' : '#dc3545';
+    scoreEl.textContent = score + '점';
+
+    // 체크리스트
+    const stIcon = { pass:'<i class="bi bi-check-circle-fill text-success"></i>', fail:'<i class="bi bi-x-circle-fill text-danger"></i>', warn:'<i class="bi bi-exclamation-triangle-fill text-warning"></i>' };
+    document.getElementById('sec-checks-tbody').innerHTML = d.checks.map(c =>
+      `<tr><td>${escH(c.item)}</td><td>${stIcon[c.status]}</td><td style="font-size:.74rem;">${escH(c.detail)}</td></tr>`
+    ).join('');
+
+    // Django 설정
+    const DS_LBL = { debug:'DEBUG 모드', session_cookie_age:'세션 만료(초)', session_cookie_secure:'세션 쿠키 보안', csrf_cookie_secure:'CSRF 쿠키 보안', csrf_cookie_httponly:'CSRF HttpOnly', max_concurrent_sessions:'최대 동시접속', password_min_length:'최소 비밀번호', throttle_anon:'비인증 제한', throttle_user:'인증 제한' };
+    document.getElementById('sec-django-tbody').innerHTML = Object.entries(d.django_settings).map(([k,v]) =>
+      `<tr><td>${DS_LBL[k]||k}</td><td><code>${v}</code></td></tr>`
+    ).join('');
+
+    // 모듈 설정
+    const cfg = d.config;
+    document.getElementById('scfg-ssh').checked = cfg.ssh_monitor_enabled === 'true';
+    document.getElementById('scfg-file').checked = cfg.file_integrity_enabled === 'true';
+    document.getElementById('scfg-resource').checked = cfg.resource_monitor_enabled === 'true';
+    document.getElementById('scfg-alert').checked = cfg.alert_enabled === 'true';
+    document.getElementById('scfg-report').checked = cfg.report_auto_enabled === 'true';
+  });
+}
+
+function saveSecModuleCfg() {
+  fetch(SEC_API + '/settings/', {
+    method:'PATCH', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+    body:JSON.stringify({
+      ssh_monitor_enabled: document.getElementById('scfg-ssh').checked ? 'true' : 'false',
+      file_integrity_enabled: document.getElementById('scfg-file').checked ? 'true' : 'false',
+      resource_monitor_enabled: document.getElementById('scfg-resource').checked ? 'true' : 'false',
+      alert_enabled: document.getElementById('scfg-alert').checked ? 'true' : 'false',
+      report_auto_enabled: document.getElementById('scfg-report').checked ? 'true' : 'false',
+    })
+  }).then(r=>r.json()).then(d => { if(d.ok) alert('저장 완료'); else alert(d.error); });
+}
+
+// ═══ 패널6: 보안 리포트 ═══════════════════
+function loadSecReport() {
+  const period = document.getElementById('rpt-period').value;
+  fetch(SEC_API + '/report/?period=' + period).then(r=>r.json()).then(d => {
+    // 요약 카드
+    document.getElementById('rpt-summary-cards').innerHTML = [
+      { lbl:'로그인 시도', val:d.login.total, ico:'bi-box-arrow-in-right', bg:'#e3f2fd', clr:'#0d6efd' },
+      { lbl:'로그인 성공', val:d.login.success, ico:'bi-check-circle', bg:'#e8f5e9', clr:'#198754' },
+      { lbl:'로그인 실패', val:d.login.fail, ico:'bi-x-circle', bg:'#fdecea', clr:'#dc3545' },
+      { lbl:'고유 공격IP', val:d.login.unique_fail_ips, ico:'bi-globe', bg:'#fff3e0', clr:'#fd7e14' },
+      { lbl:'IP 차단', val:d.blocks.blocked, ico:'bi-ban', bg:'#f3e8fd', clr:'#6f42c1' },
+      { lbl:'SSH 실패', val:d.ssh_fails, ico:'bi-terminal', bg:'#e0f7fa', clr:'#0097a7' },
+    ].map(c => `<div class="col-6 col-md-2"><div style="background:${c.bg};border-radius:8px;padding:10px 12px;"><div style="font-size:.68rem;color:#6c757d;font-weight:600;">${c.lbl}</div><div style="font-size:1.3rem;font-weight:800;color:${c.clr};">${typeof c.val==='number'?c.val.toLocaleString():c.val}</div></div></div>`).join('');
+
+    // 일별 추이
+    if (d.daily_trend.length) {
+      _chart('rpt-daily-chart', {
+        type:'bar',
+        data:{ labels:d.daily_trend.map(r=>r.date), datasets:[{ label:'공격 시도', data:d.daily_trend.map(r=>r.count), backgroundColor:'rgba(220,53,69,.6)', borderRadius:3 }] },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} }, scales:{ x:{ticks:{font:{size:9}}}, y:{beginAtZero:true,ticks:{font:{size:10}}} } }
+      });
+    }
+
+    // 위험도별 도넛
+    const sevData = d.events.by_severity || {};
+    const sevKeys = Object.keys(sevData);
+    if (sevKeys.length) {
+      _chart('rpt-severity-chart', {
+        type:'doughnut',
+        data:{ labels:sevKeys.map(k=>SEV_LBL[k]||k), datasets:[{ data:sevKeys.map(k=>sevData[k]), backgroundColor:sevKeys.map(k=>SEV_CLR[k]||'#6c757d') }] },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'right',labels:{font:{size:10}}} } }
+      });
+    }
+
+    // 트렌드
+    const pct = d.trend.change_pct;
+    const arrow = pct > 0 ? '<i class="bi bi-arrow-up-circle-fill text-danger" style="font-size:2rem;"></i>' : pct < 0 ? '<i class="bi bi-arrow-down-circle-fill text-success" style="font-size:2rem;"></i>' : '<i class="bi bi-dash-circle-fill text-secondary" style="font-size:2rem;"></i>';
+    document.getElementById('rpt-trend-body').innerHTML = `${arrow}<div style="font-size:1.5rem;font-weight:800;margin-top:4px;">${pct > 0 ? '+' : ''}${pct}%</div><div style="font-size:.75rem;color:#6c757d;">이전: ${d.trend.previous} → 현재: ${d.trend.current}</div>`;
+
+    // 이벤트 유형별
+    const EVT_LBL = { brute_force:'브루트포스', login_fail:'로그인 실패', ip_blocked:'IP 차단', ip_unblocked:'IP 해제', ssh_fail:'SSH 실패', unknown_user:'미등록 계정', config_change:'설정 변경', file_integrity:'파일 변경', resource_anomaly:'리소스 이상', abnormal_access:'비정상 접근', manual:'수동 등록' };
+    const evtTypes = d.events.by_type || {};
+    document.getElementById('rpt-evtype-tbody').innerHTML = Object.entries(evtTypes).sort((a,b)=>b[1]-a[1]).map(([k,v]) =>
+      `<tr><td>${EVT_LBL[k]||k}</td><td class="text-end fw-bold">${v}</td></tr>`
+    ).join('') || '<tr><td colspan="2" class="text-center text-muted py-3">이벤트 없음</td></tr>';
+  });
+}
+

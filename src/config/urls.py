@@ -35,7 +35,7 @@ from apps.reports.views import (reports_view, performance_report_view,
 from apps.nas.views import nas_view, deliverables_view, file_open_view
 from apps.photos.views import photos_view
 from apps.statistics.views import statistics_view, survey_respond
-from apps.sysconfig.views import system_view, guide_view, guide_pptx_view
+from apps.sysconfig.views import system_view, security_view, guide_view, guide_pptx_view
 from apps.education.views import education_view
 from apps.sysconfig.api import (
     system_info, module_matrix, nas_folders,
@@ -177,6 +177,7 @@ urlpatterns = [
 
     # 시스템 설정 (템플릿 뷰)
     path('system/',                system_view,          name='system'),
+    path('security/',              security_view,        name='security'),
     # 사용 안내
     path('guide/',                              guide_view,      name='guide'),
     path('guide/pptx/<str:module_key>/',        guide_pptx_view, name='guide-pptx'),

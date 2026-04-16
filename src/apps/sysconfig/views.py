@@ -17,6 +17,14 @@ def system_view(request):
 
 
 @login_required
+def security_view(request):
+    """보안관제 페이지 (관리자 전용)"""
+    if request.user.role not in ('superadmin', 'admin'):
+        raise Http404
+    return render(request, 'security/index.html', {})
+
+
+@login_required
 def guide_view(request):
     """사용 안내 페이지 — MODULE_REGISTRY 기반 자동 생성"""
     from core.guide import get_guide_modules

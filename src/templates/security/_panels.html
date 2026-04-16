@@ -1,0 +1,463 @@
+<!-- ══════════════════════════════════════════════════════════
+     보안관제 패널 7개 (메인 탭으로 전환됨)
+══════════════════════════════════════════════════════════ -->
+<div id="security-panels">
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       패널1: 위협 현황 대시보드
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="sec-p-dashboard" class="sec-tab-content active">
+    <!-- 요약 카드 -->
+    <div class="row g-2 mb-3" id="sec-summary-cards"></div>
+
+    <div class="row g-3">
+      <!-- 시간대별 공격 차트 -->
+      <div class="col-12 col-xl-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2 d-flex align-items-center">
+            <i class="bi bi-graph-up text-danger me-2"></i>
+            <span class="fw-semibold" style="font-size:.85rem;">24시간 공격 시도 추이</span>
+            <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="loadSecDashboard()"><i class="bi bi-arrow-clockwise"></i></button>
+          </div>
+          <div class="card-body" style="height:220px;"><canvas id="sec-hourly-chart"></canvas></div>
+        </div>
+      </div>
+      <!-- 공격 유형별 분류 -->
+      <div class="col-12 col-xl-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2"><i class="bi bi-pie-chart text-warning me-2"></i><span class="fw-semibold" style="font-size:.85rem;">공격 유형 분류 (7일)</span></div>
+          <div class="card-body" style="height:220px;"><canvas id="sec-type-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+      <!-- Top 10 위협 IP -->
+      <div class="col-12 col-xl-6">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2"><i class="bi bi-exclamation-triangle text-danger me-2"></i><span class="fw-semibold" style="font-size:.85rem;">Top 10 위협 IP</span></div>
+          <div class="card-body p-0">
+            <div style="max-height:280px;overflow-y:auto;">
+              <table class="table table-sm table-hover mb-0" style="font-size:.78rem;">
+                <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light">
+                  <th style="width:36px;">No</th><th>IP 주소</th><th style="width:60px;">실패</th><th style="width:60px;">위험도</th><th style="width:52px;">상태</th><th style="width:80px;">최근시도</th><th style="width:52px;">처리</th>
+                </tr></thead>
+                <tbody id="sec-topip-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 실시간 이벤트 피드 -->
+      <div class="col-12 col-xl-6">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2"><i class="bi bi-lightning text-info me-2"></i><span class="fw-semibold" style="font-size:.85rem;">최근 보안 이벤트</span></div>
+          <div class="card-body p-0">
+            <div style="max-height:280px;overflow-y:auto;">
+              <table class="table table-sm table-hover mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
+                <colgroup>
+                  <col style="width:110px;"><col style="width:100px;"><col style="width:55px;"><col style="width:110px;"><col>
+                </colgroup>
+                <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light">
+                  <th>시각</th><th>유형</th><th>위험도</th><th>IP</th><th>설명</th>
+                </tr></thead>
+                <tbody id="sec-events-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       패널2: 자동 차단 관리
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="sec-p-block" class="sec-tab-content">
+    <!-- 차단 규칙 설정 -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white py-2"><i class="bi bi-sliders text-primary me-2"></i><span class="fw-semibold" style="font-size:.85rem;">자동 차단 규칙</span></div>
+      <div class="card-body py-2">
+        <div class="row g-2 align-items-end" id="sec-block-cfg">
+          <div class="col-auto">
+            <label class="form-label mb-0" style="font-size:.72rem;">자동차단</label>
+            <select id="cfg-auto-block" class="form-select form-select-sm" style="width:80px;font-size:.78rem;">
+              <option value="true">ON</option><option value="false">OFF</option>
+            </select>
+          </div>
+          <div class="col-auto">
+            <label class="form-label mb-0" style="font-size:.72rem;">실패 임계값</label>
+            <input type="number" id="cfg-threshold" class="form-control form-control-sm" style="width:70px;font-size:.78rem;" value="10">
+          </div>
+          <div class="col-auto">
+            <label class="form-label mb-0" style="font-size:.72rem;">감시 윈도우(분)</label>
+            <input type="number" id="cfg-window" class="form-control form-control-sm" style="width:70px;font-size:.78rem;" value="30">
+          </div>
+          <div class="col-auto">
+            <label class="form-label mb-0" style="font-size:.72rem;">차단 시간(분)</label>
+            <input type="number" id="cfg-duration" class="form-control form-control-sm" style="width:70px;font-size:.78rem;" value="60">
+          </div>
+          <div class="col-auto">
+            <label class="form-label mb-0" style="font-size:.72rem;">영구차단 임계</label>
+            <input type="number" id="cfg-perm" class="form-control form-control-sm" style="width:70px;font-size:.78rem;" value="50">
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-sm btn-primary" style="font-size:.78rem;" onclick="saveBlockCfg()"><i class="bi bi-check-lg me-1"></i>저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 차단 IP 목록 — 전체 폭 -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white py-2 d-flex align-items-center">
+        <i class="bi bi-ban text-danger me-2"></i><span class="fw-semibold" style="font-size:.85rem;">차단 IP 목록</span>
+        <div class="ms-auto d-flex gap-2">
+          <input type="text" id="block-q" class="form-control form-control-sm" style="width:150px;font-size:.78rem;" placeholder="IP 검색..." onkeyup="if(event.key==='Enter')loadBlocked()">
+          <button class="btn btn-sm btn-danger" style="font-size:.74rem;" onclick="showManualBlock()"><i class="bi bi-plus-lg me-1"></i>수동 차단</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="loadBlocked()"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div style="max-height:calc(100vh - 300px);overflow-y:auto;">
+          <table class="table table-sm table-hover mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
+            <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light">
+              <th>IP 주소</th><th>사유</th><th>설명</th><th>실패</th><th>유형</th>
+              <th>차단시각</th><th>해제예정</th><th>처리</th>
+            </tr></thead>
+            <tbody id="sec-blocked-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <!-- 화이트리스트 -->
+      <div class="col-12 col-xl-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2 d-flex align-items-center">
+            <i class="bi bi-check-circle text-success me-2"></i><span class="fw-semibold" style="font-size:.85rem;">화이트리스트</span>
+            <button class="btn btn-sm btn-outline-success ms-auto" style="font-size:.74rem;" onclick="showWlAdd()"><i class="bi bi-plus-lg"></i></button>
+          </div>
+          <div class="card-body p-0">
+            <div style="max-height:200px;overflow-y:auto;">
+              <table class="table table-sm mb-0" style="font-size:.78rem;">
+                <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light"><th>IP</th><th>설명</th><th style="width:40px;"></th></tr></thead>
+                <tbody id="sec-wl-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 차단/해제 이력 — 넓게 -->
+      <div class="col-12 col-xl-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2"><i class="bi bi-clock-history text-secondary me-2"></i><span class="fw-semibold" style="font-size:.85rem;">차단/해제 이력</span></div>
+          <div class="card-body p-0">
+            <div style="max-height:200px;overflow-y:auto;">
+              <table class="table table-sm mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
+                <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light"><th>시각</th><th>IP</th><th>행위</th><th>사유</th></tr></thead>
+                <tbody id="sec-blocklog-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       패널3: 로그인 보안 분석
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="sec-p-login" class="sec-tab-content">
+    <div class="d-flex gap-2 mb-3 align-items-center">
+      <span style="font-size:.82rem;font-weight:600;">분석 기간:</span>
+      <select id="login-days" class="form-select form-select-sm" style="width:120px;font-size:.78rem;" onchange="loadLoginAnalysis()">
+        <option value="7">7일</option><option value="14" selected>14일</option><option value="30">30일</option>
+      </select>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadLoginAnalysis()"><i class="bi bi-arrow-clockwise"></i></button>
+    </div>
+
+    <div class="row g-3">
+      <!-- 성공/실패 추이 -->
+      <div class="col-12 col-xl-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2"><i class="bi bi-graph-up-arrow text-primary me-2"></i><span class="fw-semibold" style="font-size:.85rem;">로그인 성공/실패 추이</span></div>
+          <div class="card-body" style="height:240px;"><canvas id="sec-login-trend"></canvas></div>
+        </div>
+      </div>
+      <!-- 시간대별 분포 -->
+      <div class="col-12 col-xl-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2"><i class="bi bi-clock text-info me-2"></i><span class="fw-semibold" style="font-size:.85rem;">시간대별 분포</span></div>
+          <div class="card-body" style="height:240px;"><canvas id="sec-heatmap-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 비정상 로그인 — 전체 폭 -->
+    <div class="card border-0 shadow-sm mt-3">
+      <div class="card-header bg-white py-2"><i class="bi bi-exclamation-diamond text-warning me-2"></i><span class="fw-semibold" style="font-size:.85rem;">비정상 로그인 탐지</span></div>
+      <div class="card-body p-0">
+        <div style="max-height:calc(100vh - 300px);overflow-y:auto;">
+          <table class="table table-sm table-hover mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
+            <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light">
+              <th>유형</th><th>사용자</th><th>이름</th><th>IP</th><th>시각</th><th>상세</th>
+            </tr></thead>
+            <tbody id="sec-abnormal-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 잠긴 계정 — 전체 폭 -->
+    <div class="card border-0 shadow-sm mt-3">
+      <div class="card-header bg-white py-2"><i class="bi bi-lock text-danger me-2"></i><span class="fw-semibold" style="font-size:.85rem;">계정 잠금 현황</span></div>
+      <div class="card-body p-0">
+        <div style="max-height:calc(100vh - 300px);overflow-y:auto;">
+          <table class="table table-sm table-hover mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
+            <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light">
+              <th>사용자ID</th><th>이름</th><th>실패수</th><th>등록여부</th>
+            </tr></thead>
+            <tbody id="sec-locked-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       패널4: 시스템 로그 감시
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="sec-p-syslog" class="sec-tab-content">
+    <div class="d-flex gap-1 mb-3" id="syslog-subtabs">
+      <button class="btn btn-sm btn-outline-dark active" onclick="syslogSub('ssh',this)"><i class="bi bi-terminal me-1"></i>SSH 로그</button>
+      <button class="btn btn-sm btn-outline-dark" onclick="syslogSub('resource',this)"><i class="bi bi-cpu me-1"></i>리소스</button>
+      <button class="btn btn-sm btn-outline-dark" onclick="syslogSub('docker',this)"><i class="bi bi-box me-1"></i>Docker</button>
+      <button class="btn btn-sm btn-outline-dark" onclick="syslogSub('integrity',this)"><i class="bi bi-file-lock me-1"></i>파일 무결성</button>
+    </div>
+
+    <!-- SSH -->
+    <div id="syslog-ssh" class="syslog-panel">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white py-2 d-flex align-items-center">
+          <i class="bi bi-terminal text-dark me-2"></i><span class="fw-semibold" style="font-size:.85rem;">SSH 접근 로그</span>
+          <input type="text" id="ssh-q" class="form-control form-control-sm ms-auto" style="width:150px;font-size:.78rem;" placeholder="IP/사용자 검색" onkeyup="if(event.key==='Enter')loadSysLogs('ssh')">
+        </div>
+        <div class="card-body p-0">
+          <div style="max-height:calc(100vh - 260px);overflow-y:auto;">
+            <table class="table table-sm table-hover mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
+              <colgroup>
+                <col style="width:155px;"><col style="width:50px;"><col style="width:120px;"><col style="width:70px;"><col>
+              </colgroup>
+              <thead style="position:sticky;top:0;z-index:2;"><tr class="table-light">
+                <th>시각</th><th>유형</th><th>IP</th><th>사용자</th><th>원본 로그</th>
+              </tr></thead>
+              <tbody id="sec-ssh-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 리소스 -->
+    <div id="syslog-resource" class="syslog-panel" style="display:none;">
+      <div class="row g-3" id="sec-resource-cards"></div>
+      <div class="card border-0 shadow-sm mt-3">
+        <div class="card-header bg-white py-2"><i class="bi bi-list-task me-2"></i><span class="fw-semibold" style="font-size:.85rem;">프로세스 Top 5 (CPU)</span></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0" style="font-size:.78rem;">
+            <thead><tr class="table-light"><th>PID</th><th>프로세스</th><th>CPU %</th><th>메모리 %</th></tr></thead>
+            <tbody id="sec-proc-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Docker -->
+    <div id="syslog-docker" class="syslog-panel" style="display:none;">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white py-2"><i class="bi bi-box text-info me-2"></i><span class="fw-semibold" style="font-size:.85rem;">Docker 컨테이너 상태</span></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0" style="font-size:.78rem;">
+            <thead><tr class="table-light"><th>컨테이너</th><th>이미지</th><th>상태</th><th style="width:60px;">정상</th></tr></thead>
+            <tbody id="sec-docker-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 파일 무결성 -->
+    <div id="syslog-integrity" class="syslog-panel" style="display:none;">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white py-2"><i class="bi bi-file-lock text-warning me-2"></i><span class="fw-semibold" style="font-size:.85rem;">파일 무결성 점검</span></div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0" style="font-size:.78rem;table-layout:fixed;width:100%;">
+            <colgroup>
+              <col style="width:33%;"><col style="width:30%;"><col style="width:10%;"><col style="width:10%;"><col style="width:17%;">
+            </colgroup>
+            <thead><tr class="table-light"><th>파일 경로</th><th>해시(SHA256)</th><th>크기</th><th>상태</th><th>점검일시</th></tr></thead>
+            <tbody id="sec-integrity-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       패널5: 보안 설정 관리
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="sec-p-settings" class="sec-tab-content">
+    <div class="row g-3">
+      <!-- 보안 점수 + 체크리스트 -->
+      <div class="col-12 col-xl-6">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2"><i class="bi bi-shield-check text-success me-2"></i><span class="fw-semibold" style="font-size:.85rem;">보안 자가진단</span></div>
+          <div class="card-body">
+            <div class="text-center mb-3">
+              <div id="sec-score" style="font-size:3rem;font-weight:800;line-height:1;"></div>
+              <div style="font-size:.72rem;color:#6c757d;">보안 점수</div>
+            </div>
+            <table class="table table-sm mb-0" style="font-size:.78rem;">
+              <thead><tr class="table-light"><th>점검 항목</th><th style="width:60px;">상태</th><th>상세</th></tr></thead>
+              <tbody id="sec-checks-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <!-- Django 보안 설정 현황 -->
+      <div class="col-12 col-xl-6">
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-header bg-white py-2"><i class="bi bi-gear text-secondary me-2"></i><span class="fw-semibold" style="font-size:.85rem;">Django 보안 설정 현황</span></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0" style="font-size:.78rem;">
+              <thead><tr class="table-light"><th>설정</th><th>값</th></tr></thead>
+              <tbody id="sec-django-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2"><i class="bi bi-toggles text-primary me-2"></i><span class="fw-semibold" style="font-size:.85rem;">관제 모듈 설정</span></div>
+          <div class="card-body py-2">
+            <div class="row g-2" id="sec-module-cfg">
+              <div class="col-6"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="scfg-ssh" checked><label class="form-check-label" for="scfg-ssh" style="font-size:.78rem;">SSH 모니터링</label></div></div>
+              <div class="col-6"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="scfg-file" checked><label class="form-check-label" for="scfg-file" style="font-size:.78rem;">파일 무결성 점검</label></div></div>
+              <div class="col-6"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="scfg-resource" checked><label class="form-check-label" for="scfg-resource" style="font-size:.78rem;">리소스 모니터링</label></div></div>
+              <div class="col-6"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="scfg-alert" checked><label class="form-check-label" for="scfg-alert" style="font-size:.78rem;">알림 활성화</label></div></div>
+              <div class="col-6"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="scfg-report" checked><label class="form-check-label" for="scfg-report" style="font-size:.78rem;">자동 리포트</label></div></div>
+              <div class="col-12 text-end mt-1"><button class="btn btn-sm btn-primary" style="font-size:.78rem;" onclick="saveSecModuleCfg()"><i class="bi bi-check-lg me-1"></i>저장</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       패널6: 보안 리포트
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="sec-p-report" class="sec-tab-content">
+    <div class="d-flex gap-2 mb-3 align-items-center">
+      <span style="font-size:.82rem;font-weight:600;">기간:</span>
+      <select id="rpt-period" class="form-select form-select-sm" style="width:120px;font-size:.78rem;" onchange="loadSecReport()">
+        <option value="daily">일간</option><option value="weekly" selected>주간</option><option value="monthly">월간</option>
+      </select>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadSecReport()"><i class="bi bi-arrow-clockwise"></i></button>
+    </div>
+
+    <!-- 요약 카드 -->
+    <div class="row g-2 mb-3" id="rpt-summary-cards"></div>
+
+    <div class="row g-3">
+      <!-- 일별 추이 -->
+      <div class="col-12 col-xl-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2"><i class="bi bi-bar-chart text-primary me-2"></i><span class="fw-semibold" style="font-size:.85rem;">공격 시도 추이</span></div>
+          <div class="card-body" style="height:220px;"><canvas id="rpt-daily-chart"></canvas></div>
+        </div>
+      </div>
+      <!-- 이벤트 통계 -->
+      <div class="col-12 col-xl-4">
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-header bg-white py-2"><i class="bi bi-pie-chart text-warning me-2"></i><span class="fw-semibold" style="font-size:.85rem;">위험도별 이벤트</span></div>
+          <div class="card-body" style="height:220px;"><canvas id="rpt-severity-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+      <!-- 전주 대비 트렌드 -->
+      <div class="col-12 col-xl-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2"><i class="bi bi-arrow-left-right text-info me-2"></i><span class="fw-semibold" style="font-size:.85rem;">전 기간 대비 트렌드</span></div>
+          <div class="card-body text-center" id="rpt-trend-body"></div>
+        </div>
+      </div>
+      <!-- 이벤트 유형별 -->
+      <div class="col-12 col-xl-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-2"><i class="bi bi-list-ul me-2"></i><span class="fw-semibold" style="font-size:.85rem;">이벤트 유형별 통계</span></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0" style="font-size:.78rem;">
+              <thead><tr class="table-light"><th>이벤트 유형</th><th style="width:80px;">건수</th></tr></thead>
+              <tbody id="rpt-evtype-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       패널7: 접속이력 (시스템설정에서 이동)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="sec-p-accesslog" class="sec-tab-content">
+
+    <!-- 서브탭 -->
+    <ul class="nav nav-pills mb-3 gap-1" id="al-subtabs">
+      <li class="nav-item"><button class="btn btn-sm btn-primary" onclick="alSwitchKind('login',this)"><i class="bi bi-box-arrow-in-right me-1"></i>로그인 이력</button></li>
+      <li class="nav-item"><button class="btn btn-sm btn-outline-secondary" onclick="alSwitchKind('activity',this)"><i class="bi bi-activity me-1"></i>활동 로그</button></li>
+      <li class="nav-item"><button class="btn btn-sm btn-outline-secondary" onclick="alSwitchKind('session',this)"><i class="bi bi-person-check me-1"></i>현재 접속자</button></li>
+      <li class="nav-item"><button class="btn btn-sm btn-outline-danger" onclick="alSwitchKind('security',this)"><i class="bi bi-shield-exclamation me-1"></i>보안 탐지</button></li>
+    </ul>
+
+    <!-- 검색 필터 -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body py-2 px-3">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <div class="input-group input-group-sm" style="width:200px">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" id="al-q" class="form-control" placeholder="이름·아이디·IP">
+          </div>
+          <input type="date" id="al-from" class="form-control form-control-sm" style="width:140px">
+          <span class="text-muted small">~</span>
+          <input type="date" id="al-to" class="form-control form-control-sm" style="width:140px">
+          <button class="btn btn-sm btn-primary" onclick="alLoadPage(1)"><i class="bi bi-search me-1"></i>조회</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="alClear()"><i class="bi bi-x me-1"></i>초기화</button>
+          <small class="text-muted ms-auto" id="al-total-info"></small>
+        </div>
+      </div>
+    </div>
+
+    <!-- 테이블 -->
+    <div class="card border-0 shadow-sm">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.8rem;">
+          <thead class="table-light" id="al-thead">
+            <tr>
+              <th>사용자</th><th>성명</th><th>IP</th><th>브라우저</th><th class="text-center">결과</th><th>실패사유</th><th>시도일시</th>
+            </tr>
+          </thead>
+          <tbody id="al-tbody">
+            <tr><td colspan="7" class="text-center text-muted py-4">조회 버튼을 눌러 데이터를 불러오세요</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center">
+        <small class="text-muted" id="al-page-info"></small>
+        <ul class="pagination pagination-sm mb-0" id="al-pager"></ul>
+      </div>
+    </div>
+  </div>
+
+</div>

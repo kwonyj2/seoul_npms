@@ -1,0 +1,137 @@
+// ══ 탭5: 접속이력 ════════════════════════════════════
+let _alKind = 'login';
+let _alPage = 1;
+
+const AL_HEADS = {
+  login:    ['사용자', '성명', 'IP', '브라우저', '결과', '실패사유', '시도일시'],
+  activity: ['사용자', '성명', '행위', '대상', '상세', 'IP', '발생일시'],
+  session:  ['사용자', '성명', 'IP', '현재 화면', '로그인시각', '마지막활동'],
+  security: ['IP 주소', '실패 횟수', '시도 계정', '성공 이력', '위험도', '최초 시도', '최근 시도'],
+};
+const AL_COLS = {
+  login:    ['username','name','ip','user_agent','success','fail_reason','created_at'],
+  activity: ['username','name','action','target','detail','ip','created_at'],
+  session:  ['username','name','ip','current_page','login_at','last_active'],
+  security: ['ip','fail_count','attempted_users','has_success','threat','first_attempt','last_attempt'],
+};
+
+function alSwitchKind(kind, el) {
+  _alKind = kind;
+  _alPage = 1;
+  document.querySelectorAll('#al-subtabs .btn').forEach(b => {
+    b.className = 'btn btn-sm btn-outline-secondary';
+  });
+  el.className = 'btn btn-sm btn-primary';
+  // 헤더 갱신
+  const heads = AL_HEADS[kind] || [];
+  document.getElementById('al-thead').innerHTML =
+    '<tr>' + heads.map(h => `<th>${h}</th>`).join('') + '</tr>';
+  // 날짜 필터 숨기기 (session은 현재 상태라 날짜 무의미)
+  const dateInputs = document.querySelectorAll('#al-from, #al-to');
+  dateInputs.forEach(el => el.style.display = kind === 'session' ? 'none' : '');
+  document.querySelector('span.text-muted.small').style.display = kind === 'session' ? 'none' : '';
+  // 테이블 리셋
+  document.getElementById('al-tbody').innerHTML =
+    `<tr><td colspan="${heads.length}" class="text-center text-muted py-4">조회 버튼을 눌러 데이터를 불러오세요</td></tr>`;
+  document.getElementById('al-total-info').textContent = '';
+  document.getElementById('al-pager').innerHTML = '';
+  document.getElementById('al-page-info').textContent = '';
+}
+
+function alClear() {
+  document.getElementById('al-q').value = '';
+  document.getElementById('al-from').value = '';
+  document.getElementById('al-to').value = '';
+}
+
+function alLoadPage(page) {
+  _alPage = page;
+  const q     = document.getElementById('al-q').value.trim();
+  const from  = document.getElementById('al-from').value;
+  const to    = document.getElementById('al-to').value;
+  let url = `${SYSCONF_API}/access-log/?kind=${_alKind}&page=${page}`;
+  if (q)    url += `&q=${encodeURIComponent(q)}`;
+  if (from) url += `&from=${from}`;
+  if (to)   url += `&to=${to}`;
+
+  const cols = AL_COLS[_alKind] || [];
+  const colCount = cols.length;
+  document.getElementById('al-tbody').innerHTML =
+    `<tr><td colspan="${colCount}" class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-1"></span>로딩 중…</td></tr>`;
+
+  fetch(url).then(r => r.json()).then(d => {
+    if (!d.rows) { document.getElementById('al-tbody').innerHTML = `<tr><td colspan="${colCount}" class="text-center text-danger py-4">오류</td></tr>`; return; }
+    document.getElementById('al-total-info').textContent = `총 ${d.total.toLocaleString()}건`;
+    document.getElementById('al-page-info').textContent = `${d.page} / ${d.total_pages} 페이지`;
+
+    if (!d.rows.length) {
+      document.getElementById('al-tbody').innerHTML = `<tr><td colspan="${colCount}" class="text-center text-muted py-4">데이터 없음</td></tr>`;
+      document.getElementById('al-pager').innerHTML = '';
+      return;
+    }
+
+    // 보안 탐지 요약 카드
+    if (_alKind === 'security' && d.summary) {
+      const s = d.summary;
+      const summaryHtml = `<div class="alert alert-${s.total_fails>50?'danger':s.total_fails>10?'warning':'info'} py-2 px-3 mb-2 d-flex flex-wrap gap-3 align-items-center" style="font-size:.8rem">
+        <span><i class="bi bi-calendar3 me-1"></i>${s.period}</span>
+        <span><strong>실패 ${s.total_fails}건</strong> / 성공 ${s.total_success}건</span>
+        <span>공격 IP <strong>${s.unique_ips}개</strong></span>
+        <span class="text-danger">미등록 계정 시도 <strong>${s.unknown_user_fails}건</strong></span>
+        <span class="text-danger">계정 잠금 <strong>${s.locked_count}건</strong></span>
+      </div>`;
+      const existing = document.getElementById('al-security-summary');
+      if (existing) existing.innerHTML = summaryHtml;
+      else {
+        const div = document.createElement('div');
+        div.id = 'al-security-summary';
+        div.innerHTML = summaryHtml;
+        document.getElementById('al-tbody').closest('.card').before(div);
+      }
+    } else {
+      const existing = document.getElementById('al-security-summary');
+      if (existing) existing.remove();
+    }
+
+    // 테이블 렌더
+    document.getElementById('al-tbody').innerHTML = d.rows.map(row => {
+      const cells = cols.map(c => {
+        let val = row[c] ?? '-';
+        if (c === 'success') {
+          val = row.success
+            ? '<span class="badge bg-success-subtle text-success">성공</span>'
+            : '<span class="badge bg-danger-subtle text-danger">실패</span>';
+        }
+        if (c === 'threat') {
+          const tmap = {critical:'<span class="badge bg-danger">심각</span>',high:'<span class="badge bg-warning text-dark">높음</span>',medium:'<span class="badge bg-info text-dark">주의</span>',low:'<span class="badge bg-secondary">낮음</span>'};
+          val = tmap[row.threat] || row.threat;
+        }
+        if (c === 'has_success') {
+          val = row.has_success ? '<span class="text-success">있음</span>' : '<span class="text-muted">없음</span>';
+        }
+        if (c === 'fail_count') {
+          const n = row.fail_count;
+          val = n >= 20 ? `<strong class="text-danger">${n}</strong>` : n >= 10 ? `<strong class="text-warning">${n}</strong>` : n;
+        }
+        return `<td>${val}</td>`;
+      });
+      return `<tr>${cells.join('')}</tr>`;
+    }).join('');
+
+    // 페이저
+    const tp = d.total_pages;
+    const cp = d.page;
+    if (tp <= 1) { document.getElementById('al-pager').innerHTML = ''; return; }
+    const range = [];
+    for (let i = Math.max(1,cp-2); i <= Math.min(tp,cp+2); i++) range.push(i);
+    let html = `<li class="page-item ${cp===1?'disabled':''}"><a class="page-link" href="#" onclick="alLoadPage(${cp-1});return false;">‹</a></li>`;
+    range.forEach(i => {
+      html += `<li class="page-item ${i===cp?'active':''}"><a class="page-link" href="#" onclick="alLoadPage(${i});return false;">${i}</a></li>`;
+    });
+    html += `<li class="page-item ${cp===tp?'disabled':''}"><a class="page-link" href="#" onclick="alLoadPage(${cp+1});return false;">›</a></li>`;
+    document.getElementById('al-pager').innerHTML = html;
+  }).catch(() => {
+    document.getElementById('al-tbody').innerHTML =
+      `<tr><td colspan="${colCount}" class="text-center text-danger py-4">서버 오류</td></tr>`;
+  });
+}

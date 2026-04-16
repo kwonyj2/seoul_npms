@@ -85,12 +85,10 @@
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('users',this);return false;"><i class="bi bi-people me-1"></i>사용자·권한 관리</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('export',this);return false;"><i class="bi bi-box-arrow-up me-1"></i>데이터 내보내기</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('nas',this);return false;"><i class="bi bi-folder me-1"></i>NAS 권한 설정</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('accesslog',this);return false;"><i class="bi bi-journal-text me-1"></i>접속이력</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('celery',this);return false;"><i class="bi bi-gear-wide-connected me-1"></i>작업 모니터링</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('docs',this);return false;"><i class="bi bi-file-earmark-ruled me-1"></i>산출물 조회</a></li>
     {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('dbadmin',this);return false;"><i class="bi bi-database-gear me-1"></i>DB 관리</a></li>{% endif %}
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('info',this);return false;"><i class="bi bi-info-circle me-1"></i>시스템 정보</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('security',this);return false;" style="color:#dc3545;"><i class="bi bi-shield-lock me-1"></i>보안관제</a></li>
   </ul>
 
 
@@ -517,57 +515,8 @@
 
 
   <!-- ══════════════════════════════════════════
-       탭5: 접속이력
+       탭5: 접속이력 — 보안관제 모듈로 이동됨
   ══════════════════════════════════════════ -->
-  <div id="tab-accesslog" class="sys-tab-content">
-
-    <!-- 서브탭 -->
-    <ul class="nav nav-pills mb-3 gap-1" id="al-subtabs">
-      <li class="nav-item"><button class="btn btn-sm btn-primary" onclick="alSwitchKind('login',this)"><i class="bi bi-box-arrow-in-right me-1"></i>로그인 이력</button></li>
-      <li class="nav-item"><button class="btn btn-sm btn-outline-secondary" onclick="alSwitchKind('activity',this)"><i class="bi bi-activity me-1"></i>활동 로그</button></li>
-      <li class="nav-item"><button class="btn btn-sm btn-outline-secondary" onclick="alSwitchKind('session',this)"><i class="bi bi-person-check me-1"></i>현재 접속자</button></li>
-      <li class="nav-item"><button class="btn btn-sm btn-outline-danger" onclick="alSwitchKind('security',this)"><i class="bi bi-shield-exclamation me-1"></i>보안 탐지</button></li>
-    </ul>
-
-    <!-- 검색 필터 -->
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-body py-2 px-3">
-        <div class="d-flex flex-wrap gap-2 align-items-center">
-          <div class="input-group input-group-sm" style="width:200px">
-            <span class="input-group-text"><i class="bi bi-search"></i></span>
-            <input type="text" id="al-q" class="form-control" placeholder="이름·아이디·IP">
-          </div>
-          <input type="date" id="al-from" class="form-control form-control-sm" style="width:140px">
-          <span class="text-muted small">~</span>
-          <input type="date" id="al-to" class="form-control form-control-sm" style="width:140px">
-          <button class="btn btn-sm btn-primary" onclick="alLoadPage(1)"><i class="bi bi-search me-1"></i>조회</button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="alClear()"><i class="bi bi-x me-1"></i>초기화</button>
-          <small class="text-muted ms-auto" id="al-total-info"></small>
-        </div>
-      </div>
-    </div>
-
-    <!-- 테이블 -->
-    <div class="card border-0 shadow-sm">
-      <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0" style="font-size:.8rem;">
-          <thead class="table-light" id="al-thead">
-            <tr>
-              <th>사용자</th><th>성명</th><th>IP</th><th>브라우저</th><th class="text-center">결과</th><th>실패사유</th><th>시도일시</th>
-            </tr>
-          </thead>
-          <tbody id="al-tbody">
-            <tr><td colspan="7" class="text-center text-muted py-4">조회 버튼을 눌러 데이터를 불러오세요</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="card-footer bg-white py-2 d-flex justify-content-between align-items-center">
-        <small class="text-muted" id="al-page-info"></small>
-        <ul class="pagination pagination-sm mb-0" id="al-pager"></ul>
-      </div>
-    </div>
-  </div>
-
 
   <!-- ══════════════════════════════════════════
        탭: 작업 모니터링 (Celery)
@@ -731,16 +680,14 @@
     </div>
   </div>
 
-  {% include 'sysconfig/_security_tab.html' %}
 
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
 const SYSCONF_API = API_BASE.replace('/api','') + '/api/sysconfig';
-const SYS_TABS   = ['db','users','export','nas','accesslog','celery','docs','dbadmin','info','security'];
+const SYS_TABS   = ['db','users','export','nas','celery','docs','dbadmin','info'];
 
 // ══ 탭 전환 ═══════════════════════════════════════════
 function switchTab(name, el) {
@@ -755,7 +702,6 @@ function switchTab(name, el) {
   if (name==='docs' && !window._docLoaded) { loadDocCatalog(); window._docLoaded=true; }
   if (name==='dbadmin' && !window._daLoaded) { loadDbTree(); window._daLoaded=true; }
   if (name==='info'   && !window._iLoaded)  { loadSysInfo(); window._iLoaded=true; }
-  if (name==='security' && !window._secLoaded) { loadSecDashboard(); window._secLoaded=true; }
 }
 
 // ══ 업로드 공통 JS ════════════════════════════════════
@@ -1643,5 +1589,4 @@ function loadSysInfo(){
 }
 window.addEventListener('resize', () => { if(window._uLoaded) adjustMatrixRows(); });
 </script>
-{% include 'sysconfig/_security_js.html' %}
 {% endblock %}

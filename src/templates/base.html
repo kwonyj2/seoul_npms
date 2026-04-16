@@ -248,6 +248,13 @@
       </a>
     </li>
     {% endif %}
+    {% if user_access.security %}
+    <li class="nav-item">
+      <a href="/npms/security/" class="nav-link {% if request.path == '/npms/security/' %}active{% endif %}">
+        <i class="bi bi-shield-lock"></i><span>보안관제</span>
+      </a>
+    </li>
+    {% endif %}
   </ul>
 
   <!-- 하단 고정 영역 -->

@@ -202,6 +202,14 @@ MODULE_REGISTRY = {
         'min_role': 'admin',
         'color':    'dark',
     },
+    # ── 보안관제 ──────────────────────────────
+    'security': {
+        'label':    '보안관제',
+        'icon':     'bi-shield-lock',
+        'url':      '/npms/security/',
+        'min_role': 'admin',
+        'color':    'danger',
+    },
 }
 
 
