@@ -363,14 +363,14 @@ function loadSecReport() {
       const retries = bl.blocked_ip_attempts || 0;
       effectEl.innerHTML = `<div style="font-size:.78rem;">
         <div class="d-flex justify-content-between mb-2"><span class="text-muted">현재 차단 IP</span><span class="fw-bold">${blocked}개</span></div>
-        <div class="d-flex justify-content-between mb-2"><span class="text-muted">기간 내 차��� 처리</span><span class="fw-bold">${bl.blocked||0}건</span></div>
+        <div class="d-flex justify-content-between mb-2"><span class="text-muted">기간 내 차단 처리</span><span class="fw-bold">${bl.blocked||0}건</span></div>
         <div class="d-flex justify-content-between mb-2"><span class="text-muted">차단 해제</span><span class="fw-bold">${bl.unblocked||0}건</span></div>
         <hr class="my-2">
-        <div class="d-flex justify-content-between mb-1"><span class="text-muted">차단IP 재시도</span><span class="fw-bold ${retries>0?'text-danger':'text-success'}">${retries}건</span></div>
+        <div class="d-flex justify-content-between mb-1"><span class="text-muted">차단IP 재시도</span><span class="fw-bold ${retries>0?'text-danger':'text-success'}">${retries.toLocaleString()}건</span></div>
         <div class="mt-2 p-2 rounded" style="background:${retries===0&&blocked>0?'#e8f5e9':'#fff3e0'};font-size:.72rem;text-align:center;">
           ${blocked === 0 ? '<i class="bi bi-info-circle me-1"></i>아직 차단된 IP가 없습니다'
-            : retries === 0 ? '<i class="bi bi-shield-check text-success me-1"></i>차단 IP의 재시도가 없습니다 — 효과적'
-            : `<i class="bi bi-shield-exclamation text-warning me-1"></i>차단 IP가 ${retries}회 재���도 — iptables 적용 확인 필요`}
+            : retries === 0 ? '<i class="bi bi-shield-check text-success me-1"></i>차단 IP의 재시도 없음 - 차단 효과적'
+            : `<i class="bi bi-shield-exclamation text-warning me-1"></i>차단 IP가 ${retries.toLocaleString()}회 재시도 - iptables 적용 확인 필요`}
         </div>
       </div>`;
     }
