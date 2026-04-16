@@ -225,7 +225,7 @@ function loadSysLogs(kind) {
     const q = document.getElementById('ssh-q')?.value || '';
     fetch(SEC_API + '/system-logs/?kind=ssh&q=' + encodeURIComponent(q)).then(r=>r.json()).then(d => {
       document.getElementById('sec-ssh-tbody').innerHTML = d.rows.map(r =>
-        `<tr><td>${r.time}</td><td>${r.type_key==='ssh_fail'?'<span class="text-danger">실패</span>':'<span class="text-success">성공</span>'}</td><td><code>${escH(r.ip)}</code></td><td>${escH(r.username)}</td><td style="white-space:normal;word-break:break-all;font-size:.72rem;color:#6c757d;">${escH(r.raw)}</td></tr>`
+        `<tr><td>${r.time}</td><td>${r.type_key==='ssh_success'?'<span class="text-success">성공</span>':'<span class="text-danger">실패</span>'}</td><td><code>${escH(r.ip)}</code></td><td>${escH(r.username)}</td><td style="white-space:normal;word-break:break-all;font-size:.72rem;color:#6c757d;">${escH(r.raw)}</td></tr>`
       ).join('') || '<tr><td colspan="5" class="text-center text-muted py-3">SSH 로그 없음 (Celery가 5분마다 수집)</td></tr>';
     });
   } else if (kind === 'resource') {
