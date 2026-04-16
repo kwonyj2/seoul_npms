@@ -144,6 +144,7 @@ RELATED_SITES = [
     ('동작관악교육지원청','https://dgedu.sen.go.kr'),
     ('성동광진교육지원청','https://sdgjedu.sen.go.kr'),
     ('성북강북교육지원청','https://sbgbedu.sen.go.kr'),
+    ('나이스',            'https://open.neis.go.kr/'),
 ]
 
 
