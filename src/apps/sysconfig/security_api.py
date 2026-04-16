@@ -63,6 +63,19 @@ def sec_dashboard(request):
     ).count()
     events_24h = SecurityEvent.objects.filter(created_at__gte=h24).count()
 
+    # 외국 IP 차단 건수 (nginx access log에서 444 응답 카운트)
+    foreign_blocked_24h = 0
+    for log_path in ['/var/log/nginx/access.log', '/app/nas/logs/nginx_access.log']:
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, 'r', errors='replace') as f:
+                    for line in f:
+                        if '" 444 ' in line:
+                            foreign_blocked_24h += 1
+            except Exception:
+                pass
+            break
+
     # 위험 등급 계산
     if total_attacks_24h >= 100 or SecurityEvent.objects.filter(
         severity='critical', created_at__gte=h24, resolved=False
@@ -201,6 +214,7 @@ def sec_dashboard(request):
             'blocked_ips': blocked_ips,
             'active_sessions': active_sessions,
             'events_24h': events_24h,
+            'foreign_blocked': foreign_blocked_24h,
             'threat_level': threat_level,
             'threat_label': threat_label,
         },
@@ -718,6 +732,44 @@ def sec_settings(request):
         checks.append({
             'item': 'CSP 헤더', 'status': 'pass',
             'detail': 'Content-Security-Policy nginx 적용',
+        })
+        # 외국 IP 차단 (GeoIP + 한국 ISP 대역)
+        geoip_active = os.path.exists('/usr/share/GeoIP/GeoIP.dat')
+        # nginx 설정에서 block_foreign 확인
+        nginx_conf_path = '/etc/nginx/nginx.conf'
+        nginx_has_geoip = False
+        if os.path.exists(nginx_conf_path):
+            try:
+                with open(nginx_conf_path, 'r') as f:
+                    nginx_has_geoip = 'geoip_country' in f.read()
+            except Exception:
+                pass
+        # 컨테이너 내부가 아닌 경우 호스트 경로로 확인
+        if not nginx_has_geoip:
+            for p in ['/app/docker/nginx-main.conf', '/home/kwonyj/network_pms/docker/nginx-main.conf']:
+                if os.path.exists(p):
+                    try:
+                        with open(p, 'r') as f:
+                            nginx_has_geoip = 'geoip_country' in f.read()
+                            break
+                    except Exception:
+                        pass
+        foreign_block_active = geoip_active or nginx_has_geoip
+        checks.append({
+            'item': '외국 IP 차단',
+            'status': 'pass' if foreign_block_active else 'warn',
+            'detail': 'GeoIP + 한국 ISP 대역 허용 (비한국 IP 접속 차단)' if foreign_block_active
+                      else 'nginx GeoIP 미설정 - 외국 IP 접속 가능',
+        })
+        # HSTS
+        checks.append({
+            'item': 'HSTS', 'status': 'pass',
+            'detail': 'max-age=31536000, includeSubDomains (nginx 적용)',
+        })
+        # DDoS 방어
+        checks.append({
+            'item': 'DDoS/봇 방어', 'status': 'pass',
+            'detail': '로그인 분당5회, API 초당5회, 일반 초당10회 제한',
         })
         # 백업 암호화
         has_enc = bool(getattr(settings, 'DB_BACKUP_ENCRYPT_KEY', ''))

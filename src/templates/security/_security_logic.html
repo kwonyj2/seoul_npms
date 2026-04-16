@@ -29,6 +29,7 @@ function loadSecDashboard() {
     document.getElementById('sec-summary-cards').innerHTML = [
       { lbl:'24h 공격 시도', val:d.summary.attacks_24h, ico:'bi-crosshair', clr:'#dc3545', bg:'#fdecea' },
       { lbl:'차단 IP', val:d.summary.blocked_ips, ico:'bi-ban', clr:'#fd7e14', bg:'#fff3e0' },
+      { lbl:'외국IP 차단', val:d.summary.foreign_blocked||0, ico:'bi-globe2', clr:'#0097a7', bg:'#e0f7fa' },
       { lbl:'활성 세션', val:d.summary.active_sessions, ico:'bi-people', clr:'#0d6efd', bg:'#e3f2fd' },
       { lbl:'보안 이벤트(24h)', val:d.summary.events_24h, ico:'bi-lightning', clr:'#6f42c1', bg:'#f3e8fd' },
       { lbl:'위협 등급', val:d.summary.threat_label, ico:lvlIco[d.summary.threat_level], clr:lvlClr[d.summary.threat_level], bg: d.summary.threat_level==='safe'?'#e8f5e9':'#fdecea' },
