@@ -8,7 +8,7 @@
 #   */5 * * * * /home/pms/seoul_npms/scripts/apply_firewall.sh >> /var/log/npms_firewall.log 2>&1
 # ═══════════════════════════════════════════════════
 
-BLOCK_FILE="/mnt/lvm-cache/firewall/blocked_ips.txt"
+BLOCK_FILE="${NAS_MOUNT_PATH:-/mnt/lvm-cache/nas}/firewall/blocked_ips.txt"
 CHAIN="NPMS_BLOCK"
 LOG_PREFIX="[NPMS_BLOCK] "
 
