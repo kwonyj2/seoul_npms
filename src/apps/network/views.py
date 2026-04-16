@@ -297,66 +297,145 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
             from docx import Document
             from docx.shared import Pt, RGBColor, Cm
             from docx.enum.text import WD_ALIGN_PARAGRAPH
+            from docx.oxml.ns import qn
         except ImportError:
             return Response({'error': 'python-docx가 설치되지 않았습니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         devices = NetworkDevice.objects.filter(school=school).order_by('network_type', 'name')
         doc = Document()
 
+        # ── 한글 폰트 전역 설정 (맑은 고딕) ─────────────────────
+        KOREAN_FONT = '맑은 고딕'
+        style = doc.styles['Normal']
+        style.font.name = KOREAN_FONT
+        style.font.size = Pt(10)
+        rPr = style.element.get_or_add_rPr()
+        rFonts = rPr.find(qn('w:rFonts'))
+        if rFonts is None:
+            from docx.oxml import OxmlElement
+            rFonts = OxmlElement('w:rFonts')
+            rPr.append(rFonts)
+        rFonts.set(qn('w:ascii'), KOREAN_FONT)
+        rFonts.set(qn('w:hAnsi'), KOREAN_FONT)
+        rFonts.set(qn('w:eastAsia'), KOREAN_FONT)
+        rFonts.set(qn('w:cs'), KOREAN_FONT)
+        # 제목 스타일도 한글 폰트 적용
+        for heading in ('Heading 1', 'Heading 2', 'Heading 3', 'Title'):
+            try:
+                h_style = doc.styles[heading]
+                h_style.font.name = KOREAN_FONT
+                h_rPr = h_style.element.get_or_add_rPr()
+                h_rFonts = h_rPr.find(qn('w:rFonts'))
+                if h_rFonts is None:
+                    from docx.oxml import OxmlElement
+                    h_rFonts = OxmlElement('w:rFonts')
+                    h_rPr.append(h_rFonts)
+                h_rFonts.set(qn('w:ascii'), KOREAN_FONT)
+                h_rFonts.set(qn('w:hAnsi'), KOREAN_FONT)
+                h_rFonts.set(qn('w:eastAsia'), KOREAN_FONT)
+                h_rFonts.set(qn('w:cs'), KOREAN_FONT)
+            except KeyError:
+                pass
+
+        def _apply_korean_font(run):
+            """개별 run에 한글 폰트 명시"""
+            run.font.name = KOREAN_FONT
+            rPr = run._element.get_or_add_rPr()
+            rFonts = rPr.find(qn('w:rFonts'))
+            if rFonts is None:
+                from docx.oxml import OxmlElement
+                rFonts = OxmlElement('w:rFonts')
+                rPr.append(rFonts)
+            rFonts.set(qn('w:ascii'), KOREAN_FONT)
+            rFonts.set(qn('w:hAnsi'), KOREAN_FONT)
+            rFonts.set(qn('w:eastAsia'), KOREAN_FONT)
+            rFonts.set(qn('w:cs'), KOREAN_FONT)
+
         # 제목
         title = doc.add_heading(f'{school.name} SNMP 설정 가이드', 0)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for run in title.runs:
+            _apply_korean_font(run)
 
-        doc.add_paragraph(f'작성일: {timezone.now().strftime("%Y년 %m월 %d일")}')
+        date_p = doc.add_paragraph(f'작성일: {timezone.now().strftime("%Y년 %m월 %d일")}')
+        for run in date_p.runs:
+            _apply_korean_font(run)
         doc.add_paragraph()
 
+        def _add_para(text, style=None, bold=False):
+            """한글 폰트 자동 적용 paragraph 생성"""
+            if style:
+                p = doc.add_paragraph(style=style)
+                run = p.add_run(text)
+            else:
+                p = doc.add_paragraph()
+                run = p.add_run(text)
+            _apply_korean_font(run)
+            if bold:
+                run.bold = True
+            return p
+
+        def _add_heading(text, level):
+            h = doc.add_heading(text, level=level)
+            for run in h.runs:
+                _apply_korean_font(run)
+            return h
+
         # 1. 개요
-        doc.add_heading('1. SNMP 개요', level=1)
-        doc.add_paragraph(
+        _add_heading('1. SNMP 개요', 1)
+        _add_para(
             'SNMP(Simple Network Management Protocol)는 네트워크 장비의 상태를 모니터링하기 위한 표준 프로토콜입니다. '
             '본 시스템에서는 SNMPv2c를 사용하여 장비의 가동 상태, 트래픽, 포트 상태를 수집합니다.'
         )
 
         # 2. 설정 방법
-        doc.add_heading('2. 장비별 SNMP 설정 방법', level=1)
-
-        doc.add_heading('2-1. CBS/C3100/C3500 시리즈 (코어/분배 스위치)', level=2)
+        _add_heading('2. 장비별 SNMP 설정 방법', 1)
+        _add_heading('2-1. CBS/C3100/C3500 시리즈 (코어/분배 스위치)', 2)
         for cmd in [
             'snmp-server community public RO',
             'snmp-server community private RW',
             'snmp-server enable traps',
-            f'snmp-server host [NMS서버IP] traps public',
+            'snmp-server host [NMS서버IP] traps public',
         ]:
             p = doc.add_paragraph(style='List Bullet')
-            p.add_run(cmd).font.name = 'Courier New'
+            run = p.add_run(cmd)
+            run.font.name = 'Courier New'
 
-        doc.add_heading('2-2. GS724T / SG300 시리즈 (접속 스위치)', level=2)
-        doc.add_paragraph('웹 관리 인터페이스 접속 → Security → SNMP → Communities 메뉴에서 설정')
+        _add_heading('2-2. GS724T / SG300 시리즈 (접속 스위치)', 2)
+        _add_para('웹 관리 인터페이스 접속 → Security → SNMP → Communities 메뉴에서 설정')
         for step in ['Community String: public (Read Only)', 'Trap Host: [NMS서버IP]', 'SNMP Version: v2c']:
-            doc.add_paragraph(step, style='List Bullet')
+            _add_para(step, style='List Bullet')
 
         # 3. 장비 목록
-        doc.add_heading('3. 장비 목록 및 설정 현황', level=1)
+        _add_heading('3. 장비 목록 및 설정 현황', 1)
 
         table = doc.add_table(rows=1, cols=6)
         table.style = 'Table Grid'
         hdr = table.rows[0].cells
         for i, h in enumerate(['장비명', '모델', '설치위치', '망구분', 'IP주소', 'SNMP']):
             hdr[i].text = h
-            hdr[i].paragraphs[0].runs[0].font.bold = True
+            for run in hdr[i].paragraphs[0].runs:
+                _apply_korean_font(run)
+                run.font.bold = True
 
         TYPE_KO = {'switch':'스위치','poe_switch':'PoE스위치','ap':'AP','router':'라우터','firewall':'방화벽','server':'서버'}
         for d in devices:
             row = table.add_row().cells
-            row[0].text = d.name
-            row[1].text = d.model or '-'
-            row[2].text = d.location or '-'
-            row[3].text = d.network_type or '-'
-            row[4].text = d.ip_address or '미등록'
-            row[5].text = '설정완료' if d.snmp_enabled else '미설정'
+            values = [
+                d.name,
+                d.model or '-',
+                d.location or '-',
+                d.network_type or '-',
+                d.ip_address or '미등록',
+                '설정완료' if d.snmp_enabled else '미설정',
+            ]
+            for i, v in enumerate(values):
+                row[i].text = v
+                for run in row[i].paragraphs[0].runs:
+                    _apply_korean_font(run)
 
         # 4. NMS 연동 절차
-        doc.add_heading('4. NMS 연동 절차', level=1)
+        _add_heading('4. NMS 연동 절차', 1)
         steps = [
             '장비에 SNMP Community String 설정 (public/private)',
             '장비 IP 주소를 NMS 시스템에 등록',
@@ -365,7 +444,7 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
             '장애 발생 시 이벤트 알림 자동 수신',
         ]
         for i, s in enumerate(steps, 1):
-            doc.add_paragraph(f'{i}. {s}')
+            _add_para(f'{i}. {s}')
 
         buf = io.BytesIO()
         doc.save(buf)
