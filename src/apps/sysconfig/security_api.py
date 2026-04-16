@@ -734,27 +734,21 @@ def sec_settings(request):
             'detail': 'Content-Security-Policy nginx 적용',
         })
         # 외국 IP 차단 (GeoIP + 한국 ISP 대역)
-        geoip_active = os.path.exists('/usr/share/GeoIP/GeoIP.dat')
-        # nginx 설정에서 block_foreign 확인
-        nginx_conf_path = '/etc/nginx/nginx.conf'
-        nginx_has_geoip = False
-        if os.path.exists(nginx_conf_path):
-            try:
-                with open(nginx_conf_path, 'r') as f:
-                    nginx_has_geoip = 'geoip_country' in f.read()
-            except Exception:
-                pass
-        # 컨테이너 내부가 아닌 경우 호스트 경로로 확인
-        if not nginx_has_geoip:
-            for p in ['/app/docker/nginx-main.conf', '/home/kwonyj/network_pms/docker/nginx-main.conf']:
-                if os.path.exists(p):
-                    try:
-                        with open(p, 'r') as f:
-                            nginx_has_geoip = 'geoip_country' in f.read()
+        # web 컨테이너에 마운트된 nginx 설정 확인
+        foreign_block_active = False
+        for p in ['/app/nginx-geoip.conf', '/usr/share/GeoIP/GeoIP.dat',
+                  '/home/kwonyj/network_pms/docker/nginx-main.conf']:
+            if os.path.exists(p):
+                try:
+                    with open(p, 'r') as f:
+                        if 'geoip_country' in f.read():
+                            foreign_block_active = True
                             break
-                    except Exception:
-                        pass
-        foreign_block_active = geoip_active or nginx_has_geoip
+                except Exception:
+                    pass
+                if p.endswith('.dat'):
+                    foreign_block_active = True
+                    break
         checks.append({
             'item': '외국 IP 차단',
             'status': 'pass' if foreign_block_active else 'warn',
