@@ -348,3 +348,98 @@ def generate_security_events():
         created += 1
 
     return f'{created}건 이벤트 생성'
+
+
+@shared_task(name='sysconfig.auto_block_ssh_attackers')
+def auto_block_ssh_attackers():
+    """SSH 공격 IP 자동 차단 — SystemLogEntry 기반 + iptables 차단 파일 출력"""
+    from apps.sysconfig.security_models import (
+        SecurityConfig, BlockedIP, WhitelistedIP, BlockLog, SecurityEvent, SystemLogEntry,
+    )
+    from django.db.models import Count, Max
+
+    if not SecurityConfig.get_bool('auto_block_enabled'):
+        return '자동 차단 비활성'
+
+    threshold = SecurityConfig.get_int('block_threshold', 10)
+    duration_min = SecurityConfig.get_int('block_duration_min', 60)
+    perm_threshold = SecurityConfig.get_int('permanent_threshold', 50)
+    window_min = SecurityConfig.get_int('block_window_min', 30)
+    now = timezone.now()
+    since = now - datetime.timedelta(minutes=window_min)
+
+    # SSH 실패 IP 집계 (최근 윈도우)
+    ip_fails = (
+        SystemLogEntry.objects.filter(
+            log_type='ssh_fail',
+            created_at__gte=since,
+            ip_address__isnull=False,
+        )
+        .values('ip_address')
+        .annotate(cnt=Count('id'), last=Max('created_at'))
+        .filter(cnt__gte=threshold)
+    )
+
+    whitelist = set(WhitelistedIP.objects.values_list('ip_address', flat=True))
+    already_blocked = set(BlockedIP.objects.values_list('ip_address', flat=True))
+
+    blocked = 0
+    for row in ip_fails:
+        ip = row['ip_address']
+        if ip in whitelist or ip in already_blocked:
+            continue
+        # 사설 IP 제외
+        if ip.startswith('10.') or ip.startswith('172.') or ip.startswith('192.168.'):
+            continue
+
+        fc = row['cnt']
+        is_perm = fc >= perm_threshold
+        BlockedIP.objects.update_or_create(
+            ip_address=ip,
+            defaults={
+                'reason': 'ssh_attack',
+                'description': f'SSH 브루트포스: {window_min}분 내 {fc}회 실패',
+                'is_permanent': is_perm,
+                'auto_blocked': True,
+                'fail_count': fc,
+                'blocked_at': now,
+                'expires_at': None if is_perm else now + datetime.timedelta(minutes=duration_min),
+            }
+        )
+        BlockLog.objects.create(
+            ip_address=ip, action='block',
+            reason=f'SSH 자동차단: {fc}회 실패 ({window_min}분)',
+        )
+        SecurityEvent.objects.create(
+            event_type='ip_blocked', severity='high' if is_perm else 'medium',
+            ip_address=ip,
+            description=f'SSH 자동 차단: {fc}회 실패 → {"영구" if is_perm else f"{duration_min}분"} 차단',
+        )
+        blocked += 1
+
+    # ── iptables 차단 파일 출력 ──────────────
+    # 호스트의 cron 스크립트가 이 파일을 읽어 iptables 적용
+    _write_block_file()
+
+    return f'{blocked}건 SSH IP 차단'
+
+
+def _write_block_file():
+    """활성 차단 IP를 파일로 출력 — 호스트 iptables 적용용"""
+    from apps.sysconfig.security_models import BlockedIP
+    try:
+        block_dir = '/app/nas/firewall'
+        os.makedirs(block_dir, exist_ok=True)
+        active_ips = []
+        for b in BlockedIP.objects.all():
+            if b.is_active:
+                active_ips.append(b.ip_address)
+        filepath = os.path.join(block_dir, 'blocked_ips.txt')
+        with open(filepath, 'w') as f:
+            f.write(f'# NPMS 보안관제 자동 차단 IP 목록\n')
+            f.write(f'# 생성: {timezone.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
+            f.write(f'# 총 {len(active_ips)}개\n')
+            for ip in sorted(active_ips):
+                f.write(ip + '\n')
+    except Exception as e:
+        logger.error(f'차단 파일 출력 오류: {e}')

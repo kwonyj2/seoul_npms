@@ -225,6 +225,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'sysconfig.generate_security_events',
         'schedule': 300,
     },
+    # SSH 공격 IP 자동 차단 (5분마다)
+    'auto-block-ssh-attackers': {
+        'task': 'sysconfig.auto_block_ssh_attackers',
+        'schedule': 300,
+    },
 }
 
 # ─────────────────────────────────────────
