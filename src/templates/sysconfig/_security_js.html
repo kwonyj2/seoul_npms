@@ -251,7 +251,7 @@ function loadSysLogs(kind) {
   } else if (kind === 'integrity') {
     fetch(SEC_API + '/system-logs/?kind=integrity').then(r=>r.json()).then(d => {
       document.getElementById('sec-integrity-tbody').innerHTML = d.files.map(f =>
-        `<tr><td style="word-break:break-all;">${escH(f.path)}</td><td><code>${f.hash}</code></td><td>${(f.size/1024).toFixed(1)} KB</td><td>${f.changed?'<span class="badge bg-danger">변경</span>':'<span class="badge bg-success">정상</span>'}</td><td>${f.checked_at}</td></tr>`
+        `<tr><td title="${escH(f.path)}">${escH(f.path)}</td><td title="${escH(f.hash||'')}"><code style="font-size:.72rem;">${escH(f.hash_short||f.hash||'')}</code></td><td>${(f.size/1024).toFixed(1)} KB</td><td>${f.changed?'<span class="badge bg-danger">변경</span>':'<span class="badge bg-success">정상</span>'}</td><td>${f.checked_at}</td></tr>`
       ).join('') || '<tr><td colspan="5" class="text-center text-muted py-3">무결성 스냅샷 없음 (Celery가 1시간마다 점검)</td></tr>';
     });
   }

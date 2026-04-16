@@ -604,7 +604,8 @@ def sec_system_logs(request):
         for f in FileIntegritySnapshot.objects.all().order_by('-is_changed', 'file_path'):
             rows.append({
                 'path': f.file_path,
-                'hash': f.sha256_hash[:16] + '...',
+                'hash': f.sha256_hash,
+                'hash_short': f.sha256_hash[:16] + '...',
                 'size': f.file_size,
                 'changed': f.is_changed,
                 'prev_hash': (f.prev_hash[:16] + '...') if f.prev_hash else '-',
