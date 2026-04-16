@@ -135,9 +135,10 @@ def sec_dashboard(request):
         type_map[key] = type_map.get(key, 0) + r['cnt']
     attack_types = [{'label': k, 'count': v} for k, v in sorted(type_map.items(), key=lambda x: -x[1])]
 
-    # ── Top 10 위협 IP (SSH 공격 기반) ──────────────────
-    # SSH 로그에서 IP별 실패 집계 (실제 외부 해킹 시도)
-    top_ips = (
+    # ── Top 위협 IP (페이지네이션) ──────────────────
+    ip_page = max(1, int(request.GET.get('ip_page', 1)))
+    ip_ps = 10
+    top_ips_qs = (
         SystemLogEntry.objects.filter(
             log_type='ssh_fail', created_at__gte=h7d,
             ip_address__isnull=False,
@@ -148,8 +149,10 @@ def sec_dashboard(request):
             last_attempt=Max('created_at'),
             first_attempt=Min('created_at'),
         )
-        .order_by('-fail_count')[:100]
+        .order_by('-fail_count')
     )
+    top_ip_total = top_ips_qs.count()
+    top_ips = top_ips_qs[(ip_page-1)*ip_ps : ip_page*ip_ps]
     top_ip_list = []
     for row in top_ips:
         ip = row['ip_address'] or '-'
@@ -172,9 +175,13 @@ def sec_dashboard(request):
             'last': row['last_attempt'].strftime('%m-%d %H:%M') if row['last_attempt'] else '-',
         })
 
-    # ── 최근 보안 이벤트 (100건, 스크롤) ───────────
+    # ── 최근 보안 이벤트 (페이지네이션) ───────────
+    ev_page = max(1, int(request.GET.get('ev_page', 1)))
+    ev_ps = 10
+    events_qs = SecurityEvent.objects.all()
+    ev_total = events_qs.count()
     recent_events = []
-    for ev in SecurityEvent.objects.all()[:100]:
+    for ev in events_qs[(ev_page-1)*ev_ps : ev_page*ev_ps]:
         recent_events.append({
             'id': ev.id,
             'type': ev.get_event_type_display(),
@@ -199,7 +206,13 @@ def sec_dashboard(request):
         'hourly': {'labels': hourly_labels, 'data': hourly_data},
         'attack_types': attack_types,
         'top_ips': top_ip_list,
+        'top_ip_page': ip_page,
+        'top_ip_total': top_ip_total,
+        'top_ip_total_pages': max(1, (top_ip_total + ip_ps - 1) // ip_ps),
         'recent_events': recent_events,
+        'ev_page': ev_page,
+        'ev_total': ev_total,
+        'ev_total_pages': max(1, (ev_total + ev_ps - 1) // ev_ps),
     })
 
 

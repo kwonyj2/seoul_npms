@@ -1,6 +1,22 @@
 // ═══ 패널1: 위협 현황 ═══════════════════
+let _secIpPage = 1;
+let _secEvPage = 1;
+
+function _pagerHtml(cur, total, fn) {
+  if (total <= 1) return '';
+  const range = [];
+  for (let i = Math.max(1, cur-2); i <= Math.min(total, cur+2); i++) range.push(i);
+  let html = `<li class="page-item ${cur===1?'disabled':''}"><a class="page-link" href="#" onclick="${fn}(${cur-1});return false;">‹</a></li>`;
+  range.forEach(i => html += `<li class="page-item ${i===cur?'active':''}"><a class="page-link" href="#" onclick="${fn}(${i});return false;">${i}</a></li>`);
+  html += `<li class="page-item ${cur===total?'disabled':''}"><a class="page-link" href="#" onclick="${fn}(${cur+1});return false;">›</a></li>`;
+  return html;
+}
+
+function loadTopIpPage(page) { _secIpPage = Math.max(1, page); loadSecDashboard(); }
+function loadEvPage(page) { _secEvPage = Math.max(1, page); loadSecDashboard(); }
+
 function loadSecDashboard() {
-  fetch(SEC_API + '/dashboard/').then(r=>r.json()).then(d => {
+  fetch(SEC_API + `/dashboard/?ip_page=${_secIpPage}&ev_page=${_secEvPage}`).then(r=>r.json()).then(d => {
     // 요약 카드
     const lvlClr = { safe:'#198754', caution:'#ffc107', warning:'#fd7e14', danger:'#dc3545' };
     const lvlIco = { safe:'bi-shield-check', caution:'bi-shield-exclamation', warning:'bi-exclamation-triangle', danger:'bi-radioactive' };
@@ -29,15 +45,20 @@ function loadSecDashboard() {
       });
     }
 
-    // Top 10 IP
+    // Top 위협 IP (페이지네이션)
+    const ipOffset = (d.top_ip_page - 1) * 10;
     document.getElementById('sec-topip-tbody').innerHTML = d.top_ips.map((r,i) =>
-      `<tr><td>${i+1}</td><td><code>${escH(r.ip)}</code></td><td class="text-end fw-bold">${r.fail_count}</td><td>${THREAT_BADGE[r.threat]||r.threat}</td><td>${r.is_blocked?'<span class="badge bg-danger">차단</span>':'<span class="badge bg-secondary">미차단</span>'}</td><td>${r.last}</td><td>${r.is_blocked?'':'<button class="btn btn-sm btn-outline-danger" style="font-size:.68rem;padding:1px 6px;" onclick="quickBlock(\''+r.ip+'\')">차단</button>'}</td></tr>`
+      `<tr><td>${ipOffset+i+1}</td><td><code>${escH(r.ip)}</code></td><td class="text-end fw-bold">${r.fail_count}</td><td>${THREAT_BADGE[r.threat]||r.threat}</td><td>${r.is_blocked?'<span class="badge bg-danger">차단</span>':'<span class="badge bg-secondary">미차단</span>'}</td><td>${r.last}</td><td>${r.is_blocked?'':'<button class="btn btn-sm btn-outline-danger" style="font-size:.68rem;padding:1px 6px;" onclick="quickBlock(\''+r.ip+'\')">차단</button>'}</td></tr>`
     ).join('') || '<tr><td colspan="7" class="text-center text-muted py-3">위협 IP 없음</td></tr>';
+    document.getElementById('topip-info').textContent = `총 ${d.top_ip_total}개 · ${d.top_ip_page}/${d.top_ip_total_pages} 페이지`;
+    document.getElementById('topip-pager').innerHTML = _pagerHtml(d.top_ip_page, d.top_ip_total_pages, 'loadTopIpPage');
 
-    // 이벤트 피드
+    // 이벤트 피드 (페이지네이션)
     document.getElementById('sec-events-tbody').innerHTML = d.recent_events.map(e =>
       `<tr><td>${e.time}</td><td>${escH(e.type)}</td><td>${THREAT_BADGE[e.severity]||e.severity}</td><td><code>${escH(e.ip)}</code></td><td>${escH(e.desc)}</td></tr>`
     ).join('') || '<tr><td colspan="5" class="text-center text-muted py-3">이벤트 없음</td></tr>';
+    document.getElementById('evts-info').textContent = `총 ${d.ev_total}건 · ${d.ev_page}/${d.ev_total_pages} 페이지`;
+    document.getElementById('evts-pager').innerHTML = _pagerHtml(d.ev_page, d.ev_total_pages, 'loadEvPage');
   });
 }
 
