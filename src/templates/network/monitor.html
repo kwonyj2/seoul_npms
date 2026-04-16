@@ -141,6 +141,17 @@
           <select id="topo-school" class="form-select form-select-sm" style="width:200px;" onchange="loadTopology()" disabled>
             <option value="">학교 선택</option>
           </select>
+          <span class="text-muted small">|</span>
+          <div class="position-relative" style="width:240px;">
+            <input type="text" id="topo-search" class="form-control form-control-sm"
+                   placeholder="🔍 학교명 검색 (예: 가락고)" autocomplete="off"
+                   oninput="onSchoolSearchInput()" onfocus="onSchoolSearchInput()" onblur="setTimeout(hideSchoolSearch,200)">
+            <div id="topo-search-results"
+                 style="display:none;position:absolute;top:100%;left:0;right:0;
+                        max-height:300px;overflow-y:auto;background:#fff;
+                        border:1px solid #ced4da;border-radius:4px;
+                        box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:100;margin-top:2px;"></div>
+          </div>
         </div>
       </div>
       <!-- 망구분 + 케이블 필터 (버튼형) -->
@@ -564,6 +575,72 @@ function onTopoType() {
 let _topoCurrentSlide = 0;    // 0=통합, 1/2/3 = 슬라이드 번호
 let _topoSlidesInfo = [];     // PPTX 슬라이드 목록
 let _topoFullData = null;     // 전체 토폴로지 원본
+let _topoSlideNodes = {};     // {slideNumber: [node객체,...]}
+let _topoSlideEdges = {};     // {slideNumber: [edge객체,...]}
+
+// ── 학교 검색 (자동완성) ────────────────────────────────
+let _schoolSearchTimer = null;
+function onSchoolSearchInput() {
+  clearTimeout(_schoolSearchTimer);
+  const q = document.getElementById('topo-search').value.trim();
+  if (!q || q.length < 1) { hideSchoolSearch(); return; }
+  _schoolSearchTimer = setTimeout(() => doSchoolSearch(q), 200);
+}
+async function doSchoolSearch(q) {
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/search/`, { q, limit: 20 });
+    renderSchoolSearch(data.results || []);
+  } catch(e) {
+    // fallback: 트리에서 필터
+    const results = [];
+    (_topoTree?.centers || []).forEach(c => (c.types || []).forEach(t => (t.schools || []).forEach(s => {
+      if (s.name && s.name.includes(q)) {
+        results.push({ id: s.id, name: s.name, center: c.name, type: t.name });
+      }
+    })));
+    renderSchoolSearch(results.slice(0, 20));
+  }
+}
+function renderSchoolSearch(results) {
+  const box = document.getElementById('topo-search-results');
+  if (!results.length) {
+    box.innerHTML = '<div class="p-2 text-muted small">검색 결과 없음</div>';
+    box.style.display = 'block';
+    return;
+  }
+  box.innerHTML = results.map(s =>
+    `<div class="p-2 border-bottom small" style="cursor:pointer" onmouseover="this.style.background='#f8f9fa'" onmouseout="this.style.background=''"
+          onclick="selectSchoolFromSearch(${s.id},'${(s.name||'').replace(/'/g,'')}')">
+      <strong>${s.name || ''}</strong>
+      <div class="text-muted" style="font-size:.72rem;">${s.center||''} · ${s.type||''}</div>
+    </div>`).join('');
+  box.style.display = 'block';
+}
+function hideSchoolSearch() {
+  document.getElementById('topo-search-results').style.display = 'none';
+}
+async function selectSchoolFromSearch(schoolId, schoolName) {
+  // 드롭다운에도 연동: 해당 학교의 지원청/학제 찾아서 선택
+  (_topoTree?.centers || []).forEach(c => (c.types || []).forEach(t => (t.schools || []).forEach(s => {
+    if (s.id === schoolId) {
+      const cSel = document.getElementById('topo-center');
+      const tSel = document.getElementById('topo-type');
+      const sSel = document.getElementById('topo-school');
+      cSel.value = c.id;
+      onTopoCenter();
+      setTimeout(() => {
+        tSel.value = t.id;
+        onTopoType();
+        setTimeout(() => {
+          sSel.value = schoolId;
+          loadTopology();
+        }, 50);
+      }, 50);
+    }
+  })));
+  document.getElementById('topo-search').value = schoolName;
+  hideSchoolSearch();
+}
 
 async function loadTopology() {
   const schoolId = document.getElementById('topo-school').value;
@@ -579,8 +656,12 @@ async function loadTopology() {
       const topoList = await apiGet(`${API_BASE}/network/topology/`, { school_id: schoolId });
       const latest = (topoList.results || [])[0];
       _topoSlidesInfo = latest?.topology_data?.slides || [];
+      _topoPptxAllNodes = latest?.topology_data?.nodes || [];
+      _topoPptxAllEdges = latest?.topology_data?.edges || [];
     } catch (e) {
       _topoSlidesInfo = [];
+      _topoPptxAllNodes = [];
+      _topoPptxAllEdges = [];
     }
     renderSlideTabs();
     _topoCurrentSlide = 0;
@@ -620,23 +701,60 @@ function switchSlide(slideNum) {
   _topoCurrentSlide = slideNum;
   renderSlideTabs();
   if (!_topoFullData) return;
-  let filtered = _topoFullData;
-  if (slideNum > 0) {
-    const slide = _topoSlidesInfo.find(s => s.number === slideNum);
-    if (slide) {
-      const nodeSet = new Set(slide.node_names);
-      filtered = {
-        ...(_topoFullData),
-        nodes: (_topoFullData.nodes || []).filter(n => nodeSet.has(_nodeName(n))),
-        edges: (_topoFullData.edges || []).filter(e => {
-          const [fn, tn] = _edgeNodes(e);
-          return nodeSet.has(fn) && nodeSet.has(tn);
-        }),
-      };
-    }
+
+  if (slideNum === 0) {
+    // 통합: live DB 데이터
+    renderTopology(_topoFullData);
+    return;
   }
-  renderTopology(filtered);
+
+  // 특정 슬라이드: 저장된 PPTX JSON 데이터 사용
+  const slide = _topoSlidesInfo.find(s => s.number === slideNum);
+  if (!slide) { renderTopology(_topoFullData); return; }
+
+  // 해당 슬라이드 node_names 기준으로 전체 PPTX 노드/엣지에서 필터
+  const nodeSet = new Set(slide.node_names);
+  const pptxNodes = _topoPptxAllNodes.filter(n => nodeSet.has(_nodeName(n)));
+  const pptxEdges = _topoPptxAllEdges.filter(e => {
+    const [fn, tn] = _edgeNodes(e);
+    return nodeSet.has(fn) && nodeSet.has(tn);
+  });
+
+  // vis.js 형식으로 변환 (live API 형식과 동일하게)
+  const nodes = pptxNodes.map((n, i) => ({
+    id: 'pptx_' + i + '_' + n.name,
+    label: `${n.name}\n${n.model || ''}`,
+    title: `<b>${n.name}</b><br>모델: ${n.model || '-'}<br>위치: ${n.location || '-'}<br>망: ${n.network_type || '-'}`,
+    color: { background: _NET_COLOR[n.network_type] || '#0d6efd', border: '#333' },
+    shape: 'box',
+    font: { color: '#fff', size: 11 },
+    network_type: n.network_type,
+    device_type: n.device_type,
+  }));
+  const nameToId = {};
+  nodes.forEach((nd, i) => nameToId[pptxNodes[i].name] = nd.id);
+  const edges = pptxEdges.map((e, i) => {
+    const fn = e.from_name || e.from;
+    const tn = e.to_name || e.to;
+    return {
+      id: 'pptx_e_' + i,
+      from: nameToId[fn],
+      to: nameToId[tn],
+      color: { color: _NET_COLOR[e.network_type] || '#adb5bd' },
+      width: e.cable_type === 'fiber' ? 3 : 2,
+      network_type: e.network_type,
+      cable_type: e.cable_type,
+    };
+  });
+  renderTopology({ nodes, edges });
 }
+
+const _NET_COLOR = {
+  '교사망': '#0d6efd', '학생망': '#198754', '무선망': '#dc3545',
+  '기타망': '#fd7e14', '전화망': '#6f42c1', '스쿨넷': '#20c997',
+};
+let _topoPptxAllNodes = [];
+let _topoPptxAllEdges = [];
 
 async function generateTopology() {
   const schoolId = document.getElementById('topo-school').value;
