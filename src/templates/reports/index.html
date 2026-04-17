@@ -1486,7 +1486,9 @@ var regularPhotos={};
 function renderRegularInspectForm(){
   var t=new Date();
   var todayStr=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
-  var quarter=Math.floor(t.getMonth()/3)+1;
+  /* 사업 기간: 5~6월=2분기, 7~9월=3분기, 10~12월=4분기 */
+  var month=t.getMonth()+1;
+  var quarter=(month<=6)?2:(month<=9)?3:4;
   var titleText=quarter+'분기 정기점검 보고서';
   regularPhotos={};
 

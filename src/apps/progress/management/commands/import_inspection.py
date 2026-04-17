@@ -16,8 +16,9 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 QUARTER_DATES = {
-    1: (date(2000, 1, 1),  date(2000, 3, 31)),
-    2: (date(2000, 4, 1),  date(2000, 6, 30)),
+    # 사업 기간: 2분기 5/1~6/30, 3분기 7/1~9/30, 4분기 10/1~12/31
+    1: (date(2000, 1, 1),  date(2000, 4, 30)),
+    2: (date(2000, 5, 1),  date(2000, 6, 30)),
     3: (date(2000, 7, 1),  date(2000, 9, 30)),
     4: (date(2000, 10, 1), date(2000, 12, 31)),
 }

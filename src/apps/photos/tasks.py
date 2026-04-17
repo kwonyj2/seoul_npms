@@ -62,10 +62,10 @@ def sync_photo_to_nas(self, photo_id):
         nas_root = getattr(settings, 'NAS_MEDIA_ROOT', settings.MEDIA_ROOT)
         if work_label.startswith('정기점검'):
             # 산출물/정기점검보고서 이미지/N분기/
-            import math
             from django.utils import timezone
             month = timezone.localtime(photo.taken_at or timezone.now()).month
-            quarter = math.ceil(month / 3)
+            # 사업 기간: 5~6월=2분기, 7~9월=3분기, 10~12월=4분기
+            quarter = 2 if month <= 6 else (3 if month <= 9 else 4)
             dest_dir = os.path.join(nas_root, '산출물', '정기점검보고서 이미지', f'{quarter}분기')
         elif work_label.startswith('스위치 설치') or work_label.startswith('스위치설치'):
             # 산출물/스위치설치확인서 이미지/

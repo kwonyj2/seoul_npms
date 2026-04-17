@@ -529,7 +529,13 @@ class ReportViewSet(viewsets.ModelViewSet):
                 if not data.get('quarter'):
                     from django.utils import timezone
                     month = timezone.localtime(timezone.now()).month
-                    data['quarter'] = str((month - 1) // 3 + 1)
+                    # 사업 기간: 5~6월=2분기, 7~9월=3분기, 10~12월=4분기
+                    if month <= 6:
+                        data['quarter'] = '2'
+                    elif month <= 9:
+                        data['quarter'] = '3'
+                    else:
+                        data['quarter'] = '4'
                 # 확인자: 학교 담당자(선생님) DB 우선
                 if not data.get('signature_school') or not data['signature_school'].get('name'):
                     contact = SchoolContact.objects.filter(school=school).first()
@@ -1284,7 +1290,7 @@ def _sync_wbs_regular_inspect(report):
 
     # 차수별 WBS 코드 및 기간 매핑 (분기별)
     PERIODS = [
-        ('2.3.1', date(2026, 4, 1),  date(2026, 6, 30)),   # 2분기
+        ('2.3.1', date(2026, 5, 1),  date(2026, 6, 30)),   # 2분기
         ('2.3.2', date(2026, 7, 1),  date(2026, 9, 30)),   # 3분기
         ('2.3.3', date(2026, 10, 1), date(2026, 12, 31)),  # 4분기
     ]
