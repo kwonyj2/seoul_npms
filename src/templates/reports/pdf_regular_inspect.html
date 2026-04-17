@@ -269,19 +269,35 @@
   </thead>
   <tbody>
     <tr>
-      <td rowspan="3" class="center" style="font-weight:bold;">채널중첩</td>
-      <td rowspan="3" class="center">채널 3중첩<br>이하 유지<br><span class="mb">(WIFI 360)</span></td>
+      <td rowspan="2" class="center" style="font-weight:bold;">채널중첩</td>
+      <td rowspan="2" class="center">채널 3중첩<br>이하 유지<br><span class="mb">(WIFI 360)</span></td>
       <td class="center" style="font-weight:bold;">AP 아래</td>
-      <td class="photo-cell" colspan="2">
-        {% if data.photo_channel_under_b64 %}<img src="{{ data.photo_channel_under_b64 }}" alt="채널 AP아래">
-        {% else %}<div class="no-photo">사진 없음</div>{% endif %}
+      <td class="photo-cell">
+        {% if data.photo_channel_under_1_b64 %}<img src="{{ data.photo_channel_under_1_b64 }}" alt="채널1">
+        {% else %}<div class="no-photo">사진1</div>{% endif %}
+      </td>
+      <td class="photo-cell">
+        {% if data.photo_channel_under_2_b64 %}<img src="{{ data.photo_channel_under_2_b64 }}" alt="채널2">
+        {% else %}<div class="no-photo">사진2</div>{% endif %}
+      </td>
+      <td class="photo-cell">
+        {% if data.photo_channel_under_3_b64 %}<img src="{{ data.photo_channel_under_3_b64 }}" alt="채널3">
+        {% else %}<div class="no-photo">사진3</div>{% endif %}
       </td>
     </tr>
     <tr>
       <td class="center" style="font-weight:bold;">AP에서 먼 곳</td>
-      <td class="photo-cell" colspan="2">
-        {% if data.photo_channel_far_b64 %}<img src="{{ data.photo_channel_far_b64 }}" alt="채널 먼곳">
-        {% else %}<div class="no-photo">사진 없음</div>{% endif %}
+      <td class="photo-cell">
+        {% if data.photo_channel_far_1_b64 %}<img src="{{ data.photo_channel_far_1_b64 }}" alt="먼곳1">
+        {% else %}<div class="no-photo">사진1</div>{% endif %}
+      </td>
+      <td class="photo-cell">
+        {% if data.photo_channel_far_2_b64 %}<img src="{{ data.photo_channel_far_2_b64 }}" alt="먼곳2">
+        {% else %}<div class="no-photo">사진2</div>{% endif %}
+      </td>
+      <td class="photo-cell">
+        {% if data.photo_channel_far_3_b64 %}<img src="{{ data.photo_channel_far_3_b64 }}" alt="먼곳3">
+        {% else %}<div class="no-photo">사진3</div>{% endif %}
       </td>
     </tr>
   </tbody>

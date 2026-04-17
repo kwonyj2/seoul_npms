@@ -112,7 +112,8 @@ def _inject_regular_photos(data):
         'photo_wired_teacher_hub', 'photo_wired_teacher_end',
         'photo_wired_student_hub', 'photo_wired_student_end',
         'photo_wired_wireless_hub',
-        'photo_channel_under', 'photo_channel_far',
+        'photo_channel_under_1', 'photo_channel_under_2', 'photo_channel_under_3',
+        'photo_channel_far_1', 'photo_channel_far_2', 'photo_channel_far_3',
         'photo_wifi_center', 'photo_wifi_edge',
     ]
     id_set = set()

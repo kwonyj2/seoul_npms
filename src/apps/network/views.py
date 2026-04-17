@@ -289,6 +289,20 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         return response
 
     @action(detail=False, methods=['get'])
+    def device_counts(self, request):
+        """학교별 장비 수량 조회 (정기점검 보고서용)"""
+        from apps.network.models import NetworkDevice
+        school_id = request.query_params.get('school_id')
+        if not school_id:
+            return Response({'switch_count': 0, 'poe_count': 0, 'ap_count': 0})
+        devs = NetworkDevice.objects.filter(school_id=school_id)
+        return Response({
+            'switch_count': devs.filter(device_type__in=['switch', 'l2_switch', 'l3_switch']).count(),
+            'poe_count': devs.filter(device_type='poe_switch').count(),
+            'ap_count': devs.filter(device_type='ap').count(),
+        })
+
+    @action(detail=False, methods=['get'])
     def snmp_guide(self, request):
         """SNMP 설정 가이드 Word 문서 다운로드"""
         import io
