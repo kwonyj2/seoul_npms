@@ -1522,27 +1522,42 @@ function renderRegularInspectForm(){
   html+='<div class="col-4"><div class="form-field"><label>무선AP</label><input type="number" id="ri-ap-count" class="form-control form-control-sm" value="0" readonly></div></div>';
   html+='</div></div>';
 
+  /* ── 기타 기록 가능한 select 헬퍼 ── */
+  function _riSel(id, label, defaultVal, otherLabel, colCls){
+    colCls=colCls||'col-12 col-sm-6';
+    var h='<div class="'+colCls+'"><div class="form-field"><label>'+label+'</label>';
+    h+='<select id="'+id+'" class="form-select form-select-sm" onchange="_riToggleEtc(\''+id+'\')">';
+    h+='<option value="'+escH(defaultVal)+'" selected>'+escH(defaultVal)+'</option>';
+    h+='<option value="__etc__">'+(otherLabel||'기타')+'</option></select>';
+    h+='<textarea id="'+id+'-etc" class="form-control form-control-sm mt-1" rows="2" placeholder="내용을 기록하세요" style="display:none;"></textarea>';
+    h+='</div></div>';
+    return h;
+  }
+
   /* 장비 점검결과 */
   html+='<div class="form-section"><div class="form-section-title">장비 점검 결과</div>';
   html+='<div class="row g-2">';
-  var resultOpts='<option value="특이사항 없음" selected>특이사항 없음</option><option value="이상있음">이상있음(기타 기록)</option>';
-  ['스위치','PoE스위치','무선AP'].forEach(function(lbl,idx){
-    var ids=['ri-switch-result','ri-poe-result','ri-ap-result'];
-    html+='<div class="col-12 col-sm-4"><div class="form-field"><label>'+lbl+'</label><select id="'+ids[idx]+'" class="form-select form-select-sm">'+resultOpts+'</select></div></div>';
-  });
+  html+=_riSel('ri-switch-result','스위치','특이사항 없음','기타','col-12 col-sm-4');
+  html+=_riSel('ri-poe-result','PoE스위치','특이사항 없음','기타','col-12 col-sm-4');
+  html+=_riSel('ri-ap-result','무선AP','특이사항 없음','기타','col-12 col-sm-4');
   html+='</div></div>';
 
   /* 유선 속도측정 */
   html+='<div class="form-section"><div class="form-section-title">유선망 속도 측정 (Mbps)</div>';
   html+='<table class="table table-sm table-bordered" style="font-size:.82rem;"><thead>';
   html+='<tr><th>망구분</th><th>집선 Down</th><th>집선 Up</th><th>단말 Down</th><th>단말 Up</th></tr></thead><tbody>';
-  [['교사망','teacher'],['학생망','student'],['무선망','wireless']].forEach(function(r){
+  [['교사망','teacher'],['학생망','student']].forEach(function(r){
     html+='<tr><td class="text-center fw-bold">'+r[0]+'</td>';
     ['hub_down','hub_up','end_down','end_up'].forEach(function(s){
       html+='<td><input type="number" id="ri-wired-'+r[1]+'-'+s+'" class="form-control form-control-sm" placeholder="Mbps" min="0" step="1"></td>';
     });
     html+='</tr>';
   });
+  /* 무선망: 집선만 (단말 없음) */
+  html+='<tr><td class="text-center fw-bold">무선망</td>';
+  html+='<td><input type="number" id="ri-wired-wireless-hub_down" class="form-control form-control-sm" placeholder="Mbps" min="0" step="1"></td>';
+  html+='<td><input type="number" id="ri-wired-wireless-hub_up" class="form-control form-control-sm" placeholder="Mbps" min="0" step="1"></td>';
+  html+='<td colspan="2" class="text-center text-muted" style="background:#f8f8f8;">-</td></tr>';
   html+='</tbody></table></div>';
 
   /* 무선 속도측정 */
@@ -1561,34 +1576,32 @@ function renderRegularInspectForm(){
   /* 무선망 점검 */
   html+='<div class="form-section"><div class="form-section-title">무선망 점검</div>';
   html+='<div class="row g-2">';
-  html+='<div class="col-6"><div class="form-field"><label>AP 배치 일치 여부</label><select id="ri-ap-placement" class="form-select form-select-sm"><option value="일치">일치</option><option value="불일치">불일치(기타 기록)</option></select></div></div>';
-  html+='<div class="col-6"><div class="form-field"><label>신호세기 결과</label><select id="ri-signal" class="form-select form-select-sm"><option value="정상">정상</option><option value="이상있음">이상있음(기타 기록)</option></select></div></div>';
+  html+=_riSel('ri-ap-placement','AP 배치 일치 여부','특이사항 없음','기타');
+  html+=_riSel('ri-signal','신호세기 결과','특이사항 없음','기타');
   html+='</div></div>';
 
   /* 수량 변경 확인 */
   html+='<div class="form-section"><div class="form-section-title">유선망 수량 변경 확인</div>';
   html+='<div class="row g-2">';
-  html+='<div class="col-6"><div class="form-field"><label>스위치 수량변경</label><select id="ri-switch-change" class="form-select form-select-sm"><option value="변경 없음">변경 없음</option><option value="변경있음">변경있음(기타 기록)</option></select></div></div>';
-  html+='<div class="col-6"><div class="form-field"><label>PoE 수량변경</label><select id="ri-poe-change" class="form-select form-select-sm"><option value="변경 없음">변경 없음</option><option value="변경있음">변경있음(기타 기록)</option></select></div></div>';
+  html+=_riSel('ri-switch-change','스위치 수량변경','변경 없음','기타');
+  html+=_riSel('ri-poe-change','PoE 수량변경','변경 없음','기타');
   html+='</div></div>';
 
   /* 정보자료 관리 */
   html+='<div class="form-section"><div class="form-section-title">정보자료 관리 (현행화)</div>';
   html+='<div class="row g-2">';
-  var chkOpts='<option value="확인" selected>확인</option><option value="미확인">미확인</option>';
   [['정보자원 목록','ri-chk-resource'],['네트워크 구성도','ri-chk-diagram'],['무선AP 배치도','ri-chk-ap-layout'],['랙 실장도','ri-chk-rack'],['선번장','ri-chk-cable']].forEach(function(r){
-    html+='<div class="col-6 col-sm-4"><div class="form-field"><label>'+r[0]+'</label><select id="'+r[1]+'" class="form-select form-select-sm">'+chkOpts+'</select></div></div>';
+    html+=_riSel(r[1],r[0],'확인','기타','col-6 col-sm-4');
   });
-  html+='<div class="col-12"><div class="form-field"><label>정보자원 현황변경</label><select id="ri-info-resource" class="form-select form-select-sm"><option value="특이사항 없음">특이사항 없음</option><option value="변경있음">변경있음(기타 기록)</option></select></div></div>';
+  html+=_riSel('ri-info-resource','정보자원 현황변경','특이사항 없음','기타','col-12');
   html+='</div></div>';
 
   /* 기타 */
   html+='<div class="form-section"><div class="form-section-title">스마트기기 / 기타</div>';
   html+='<div class="row g-2">';
-  html+='<div class="col-6"><div class="form-field"><label>전자칠판</label><select id="ri-smartboard" class="form-select form-select-sm"><option value="">해당없음</option><option value="특이사항 없음">특이사항 없음</option><option value="이상있음">이상있음</option></select></div></div>';
-  html+='<div class="col-6"><div class="form-field"><label>디벗</label><select id="ri-devit" class="form-select form-select-sm"><option value="">해당없음</option><option value="특이사항 없음">특이사항 없음</option><option value="이상있음">이상있음</option></select></div></div>';
+  html+=_riSel('ri-smartboard','전자칠판','해당없음','기타');
+  html+=_riSel('ri-devit','디벗','해당없음','기타');
   html+='<div class="col-12"><div class="form-field"><label>기타 요청사항</label><textarea id="ri-etc-request" class="form-control form-control-sm" rows="2" placeholder="기타 내용을 기록하세요"></textarea></div></div>';
-  html+='<div class="col-12"><div class="form-field"><label>기타사항 결과</label><textarea id="ri-etc-result" class="form-control form-control-sm" rows="2" placeholder="기타 점검 결과"></textarea></div></div>';
   html+='</div></div>';
 
   /* ── 사진 업로드 ── */
@@ -1623,6 +1636,24 @@ function renderRegularInspectForm(){
   html+='</div></div>';
 
   document.getElementById('wm-form-area').innerHTML=html;
+}
+
+function _riToggleEtc(id){
+  var sel=document.getElementById(id);
+  var etc=document.getElementById(id+'-etc');
+  if(!sel||!etc) return;
+  etc.style.display=(sel.value==='__etc__')?'block':'none';
+  if(sel.value!=='__etc__') etc.value='';
+}
+
+function _riGetVal(id){
+  var sel=document.getElementById(id);
+  if(!sel) return '';
+  if(sel.value==='__etc__'){
+    var etc=document.getElementById(id+'-etc');
+    return etc?etc.value.trim():'';
+  }
+  return sel.value;
 }
 
 async function _onRegularPhoto(key){
@@ -1660,9 +1691,9 @@ function collectRegularData(){
     switch_count:           parseInt(g('ri-switch-count'))||0,
     poe_count:              parseInt(g('ri-poe-count'))||0,
     ap_count:               parseInt(g('ri-ap-count'))||0,
-    switch_result:          g('ri-switch-result'),
-    poe_result:             g('ri-poe-result'),
-    ap_result:              g('ri-ap-result'),
+    switch_result:          _riGetVal('ri-switch-result'),
+    poe_result:             _riGetVal('ri-poe-result'),
+    ap_result:              _riGetVal('ri-ap-result'),
     /* 유선 속도 */
     wired_teacher_hub_down: g('ri-wired-teacher-hub_down'),
     wired_teacher_hub_up:   g('ri-wired-teacher-hub_up'),
@@ -1674,30 +1705,27 @@ function collectRegularData(){
     wired_student_end_up:   g('ri-wired-student-end_up'),
     wired_wireless_hub_down:g('ri-wired-wireless-hub_down'),
     wired_wireless_hub_up:  g('ri-wired-wireless-hub_up'),
-    wired_wireless_end_down:g('ri-wired-wireless-end_down'),
-    wired_wireless_end_up:  g('ri-wired-wireless-end_up'),
     /* 무선 속도 */
     wifi_center_down:       g('ri-wifi-center-down'),
     wifi_center_up:         g('ri-wifi-center-up'),
     wifi_edge_down:         g('ri-wifi-edge-down'),
     wifi_edge_up:           g('ri-wifi-edge-up'),
     /* 무선 점검 */
-    ap_placement_result:    g('ri-ap-placement'),
-    signal_result:          g('ri-signal'),
-    switch_change_result:   g('ri-switch-change'),
-    poe_change_result:      g('ri-poe-change'),
+    ap_placement_result:    _riGetVal('ri-ap-placement'),
+    signal_result:          _riGetVal('ri-signal'),
+    switch_change_result:   _riGetVal('ri-switch-change'),
+    poe_change_result:      _riGetVal('ri-poe-change'),
     /* 정보자료 */
-    info_resource_result:   g('ri-info-resource'),
-    chk_resource_list:      g('ri-chk-resource'),
-    chk_network_diagram:    g('ri-chk-diagram'),
-    chk_ap_layout:          g('ri-chk-ap-layout'),
-    chk_rack_layout:        g('ri-chk-rack'),
-    chk_cable_schedule:     g('ri-chk-cable'),
+    info_resource_result:   _riGetVal('ri-info-resource'),
+    chk_resource_list:      _riGetVal('ri-chk-resource'),
+    chk_network_diagram:    _riGetVal('ri-chk-diagram'),
+    chk_ap_layout:          _riGetVal('ri-chk-ap-layout'),
+    chk_rack_layout:        _riGetVal('ri-chk-rack'),
+    chk_cable_schedule:     _riGetVal('ri-chk-cable'),
     /* 기타 */
-    smartboard_result:      g('ri-smartboard'),
-    devit_result:           g('ri-devit'),
+    smartboard_result:      _riGetVal('ri-smartboard'),
+    devit_result:           _riGetVal('ri-devit'),
     etc_request:            g('ri-etc-request'),
-    etc_result:             g('ri-etc-result'),
     /* 사진 ID */
     photo_wired_teacher_hub_id:  regularPhotos.wired_teacher_hub||null,
     photo_wired_teacher_end_id:  regularPhotos.wired_teacher_end||null,
