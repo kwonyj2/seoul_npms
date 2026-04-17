@@ -293,16 +293,16 @@
   </tbody>
 </table>
 
-<!-- 채널중첩: AP아래 별도 table -->
+<!-- 채널중첩 AP 아래: 별도 table (3장) -->
 <table>
   <thead>
     <tr><th style="width:12%;">점검 구분</th><th style="width:14%;">점검 기준</th><th colspan="4">점검 결과</th></tr>
   </thead>
   <tbody>
-    <tr style="page-break-inside:avoid;">
-      <td rowspan="2" class="center" style="font-weight:bold;vertical-align:middle;">채널중첩</td>
-      <td rowspan="2" class="center" style="vertical-align:middle;">채널 3중첩<br>이하 유지<br><span class="sub">(WIFI 360)</span></td>
-      <td class="center" style="font-weight:bold;">AP 아래</td>
+    <tr>
+      <td class="center" style="font-weight:bold;vertical-align:middle;">채널중첩</td>
+      <td class="center" style="vertical-align:middle;">채널 3중첩<br>이하 유지<br><span class="sub">(WIFI 360)</span></td>
+      <td class="center" style="font-weight:bold;vertical-align:middle;">AP 아래</td>
       <td class="photo-cell">
         {% if data.photo_channel_under_1_b64 %}<img src="{{ data.photo_channel_under_1_b64 }}">
         {% else %}<div class="no-photo">사진삽입</div>{% endif %}
@@ -316,8 +316,19 @@
         {% else %}<div class="no-photo">사진삽입</div>{% endif %}
       </td>
     </tr>
-    <tr style="page-break-inside:avoid;">
-      <td class="center" style="font-weight:bold;">AP에서 먼 곳</td>
+  </tbody>
+</table>
+
+<!-- 채널중첩 AP에서 먼 곳: 별도 table (3장) -->
+<table>
+  <thead>
+    <tr><th style="width:12%;">점검 구분</th><th style="width:14%;">점검 기준</th><th colspan="4">점검 결과</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="center" style="font-weight:bold;vertical-align:middle;">채널중첩</td>
+      <td class="center" style="vertical-align:middle;">채널 3중첩<br>이하 유지<br><span class="sub">(WIFI 360)</span></td>
+      <td class="center" style="font-weight:bold;vertical-align:middle;">AP에서 먼 곳</td>
       <td class="photo-cell">
         {% if data.photo_channel_far_1_b64 %}<img src="{{ data.photo_channel_far_1_b64 }}">
         {% else %}<div class="no-photo">사진삽입</div>{% endif %}
@@ -334,19 +345,21 @@
   </tbody>
 </table>
 
-<!-- 무선 속도 측정: 별도 table, 좌측 세로 병합, 교실중앙/외곽 50:50 균등 -->
+<!-- 무선 속도 측정: 좌측 세로 병합, 교실중앙/외곽 50:50 균등 -->
 <table>
   <thead>
-    <tr><th style="width:12%;">점검 구분</th><th style="width:14%;">점검 기준</th><th colspan="2">점검 결과</th></tr>
+    <tr>
+      <th style="width:12%;">점검 구분</th>
+      <th colspan="2">점검 결과</th>
+    </tr>
   </thead>
   <tbody>
-    <tr style="page-break-inside:avoid;">
+    <tr>
       <td rowspan="2" class="center" style="font-weight:bold;vertical-align:middle;">속도 측정<br>(iPerf,<br>NIA,<br>스쿨넷)</td>
-      <td rowspan="2" class="center" style="vertical-align:middle;"> </td>
-      <th style="width:37%;">교실 중앙 (AP 아래)</th>
-      <th style="width:37%;">교실 외곽 (AP에서 먼곳)</th>
+      <th style="width:44%;">교실 중앙 (AP 아래)</th>
+      <th style="width:44%;">교실 외곽 (AP에서 먼곳)</th>
     </tr>
-    <tr style="page-break-inside:avoid;">
+    <tr>
       <td class="photo-cell">
         {% if data.photo_wifi_center_b64 %}<img src="{{ data.photo_wifi_center_b64 }}">
         {% else %}<div class="no-photo">사진삽입</div>{% endif %}
