@@ -119,14 +119,7 @@
       </a>
     </li>
     {% endif %}
-    {# AP 신호 측정 — 실측 불가(시각화 도구만)로 메뉴 비활성화. URL 직접 접근은 유지 #}
-    {# {% if user_access.ap_analyzer %}
-    <li class="nav-item">
-      <a href="/npms/ap-analyzer/" class="nav-link {% if request.path == '/npms/ap-analyzer/' %}active{% endif %}">
-        <i class="bi bi-wifi"></i><span>AP 신호 측정</span>
-      </a>
-    </li>
-    {% endif %} #}
+    {% comment %}AP 신호 측정 — 실측 불가(시각화 도구만)로 메뉴 비활성화{% endcomment %}
     {% if user_access.schools %}
     <li class="nav-item">
       <a href="/npms/schools/list/" class="nav-link">
