@@ -788,20 +788,23 @@ async function bulkDelete() {
   if (!confirm(msg)) return;
 
   let ok = 0, fail = 0;
-  for (const f of folders) {
-    try {
-      const r = await fetch(`${API}/nas/folders/${f.id}/`, {
-        method: 'DELETE', headers: { 'X-CSRFToken': getCsrfToken() }
-      });
-      if (r.ok || r.status === 204) ok++; else fail++;
-    } catch(e) { fail++; }
-  }
+  /* 파일 먼저 삭제 → 폴더는 역순(하위→상위)으로 삭제 */
   for (const f of files) {
     try {
       const r = await fetch(`${API}/nas/files/${f.id}/`, {
         method: 'DELETE', headers: { 'X-CSRFToken': getCsrfToken() }
       });
-      if (r.ok || r.status === 204) ok++; else fail++;
+      if (r.ok || r.status === 204 || r.status === 404) ok++; else fail++;
+    } catch(e) { fail++; }
+  }
+  /* 폴더: 역순 삭제 (하위 폴더가 상위보다 뒤에 있으므로 reverse) */
+  for (const f of folders.reverse()) {
+    try {
+      const r = await fetch(`${API}/nas/folders/${f.id}/`, {
+        method: 'DELETE', headers: { 'X-CSRFToken': getCsrfToken() }
+      });
+      /* 404 = 상위 폴더 CASCADE로 이미 삭제됨 → 성공 처리 */
+      if (r.ok || r.status === 204 || r.status === 404) ok++; else fail++;
     } catch(e) { fail++; }
   }
   showToast(`${ok}개 삭제 완료` + (fail > 0 ? `, ${fail}개 실패` : ''), fail > 0 ? 'warning' : 'success');
