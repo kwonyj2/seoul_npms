@@ -2059,7 +2059,43 @@ function _renderRegularInspectConfirm(){
   var photoCount=Object.keys(regularPhotos).filter(k=>regularPhotos[k]).length;
   html+='<tr><td class="text-muted">사진</td><td>'+photoCount+'장 업로드</td></tr>';
   html+='</table>';
+
+  /* ── 전자서명 (스위치 설치확인서와 동일) ── */
+  var contactOpts='<option value="">-- 선택 --</option>';
+  schoolContacts.forEach(function(c){
+    contactOpts+='<option value="'+escH(c.id)+'" data-phone="'+escH(c.phone||'')+'" data-name="'+escH(c.name)+'">'+escH(c.name)+'</option>';
+  });
+  contactOpts+='<option value="__other__">직접 입력 (신규 저장)</option>';
+
+  html+='<div class="border rounded p-2 mb-2" style="background:#f8f9fa;">';
+  html+='<div class="fw-semibold small mb-2"><i class="bi bi-pen me-1 text-primary"></i>전자서명</div>';
+  html+='<div class="row g-2">';
+  /* 점검자 측 */
+  html+='<div class="col-12 col-sm-6"><div class="border rounded p-2 bg-white">';
+  html+='<div class="small fw-semibold text-primary mb-1">점검자 (세종아이티엘)</div>';
+  html+='<div class="mb-1"><small class="text-muted">소속</small><input type="text" id="sig-itl-org" class="form-control form-control-sm" value="세종아이티엘 컨소시엄" readonly></div>';
+  html+='<div class="mb-1"><small class="text-muted">담당자</small><input type="text" id="sig-itl-name" class="form-control form-control-sm" value="'+escH(USER_NAME)+'"></div>';
+  html+='<div class="mb-1"><small class="text-muted">연락처</small><input type="text" id="sig-itl-phone" class="form-control form-control-sm" value="'+escH(USER_PHONE)+'"></div>';
+  html+='<div class="mb-1"><small class="text-muted">서명</small>';
+  html+='<canvas id="sig-itl-canvas" width="220" height="80" class="d-block border rounded" style="background:#fff;touch-action:none;cursor:crosshair;width:100%;"></canvas>';
+  html+='<button type="button" class="btn btn-xs btn-outline-danger mt-1" onclick="_sigClear(\'itl\')" style="font-size:.7rem;padding:1px 6px;">지우기</button></div>';
+  html+='</div></div>';
+  /* 확인자 측 */
+  html+='<div class="col-12 col-sm-6"><div class="border rounded p-2 bg-white">';
+  html+='<div class="small fw-semibold text-success mb-1">확인자 (학교)</div>';
+  html+='<div class="mb-1"><small class="text-muted">소속</small><input type="text" id="sig-sch-org" class="form-control form-control-sm" value="'+escH(selSchool.name)+'" readonly></div>';
+  html+='<div class="mb-1"><small class="text-muted">담당자</small><select id="sig-sch-contact-sel" class="form-select form-select-sm mb-1" onchange="_onSchContactSel()">'+contactOpts+'</select>';
+  html+='<input type="text" id="sig-sch-name" class="form-control form-control-sm d-none" placeholder="이름 직접 입력"></div>';
+  html+='<div class="mb-1"><small class="text-muted">연락처</small><input type="text" id="sig-sch-phone" class="form-control form-control-sm" placeholder="연락처"></div>';
+  html+='<div class="mb-1"><small class="text-muted">서명</small>';
+  html+='<canvas id="sig-sch-canvas" width="220" height="80" class="d-block border rounded" style="background:#fff;touch-action:none;cursor:crosshair;width:100%;"></canvas>';
+  html+='<button type="button" class="btn btn-xs btn-outline-danger mt-1" onclick="_sigClear(\'sch\')" style="font-size:.7rem;padding:1px 6px;">지우기</button></div>';
+  html+='</div></div>';
+  html+='</div></div>';
+
   document.getElementById('wm-confirm-table').innerHTML=html;
+  _initSigCanvas('itl');
+  _initSigCanvas('sch');
 }
 
 function _renderCableInstallConfirm(){
@@ -2285,6 +2321,36 @@ async function wmComplete(){
     data=collectRegularData();
     var q=data.quarter||'';
     title=q+'분기 정기점검 보고서 - '+selSchool.name;
+    /* 전자서명 데이터 */
+    var schContactSel3=document.getElementById('sig-sch-contact-sel');
+    var schName3='';
+    if(schContactSel3&&schContactSel3.value==='__other__'){
+      schName3=((document.getElementById('sig-sch-name')||{}).value||'').trim();
+      if(schName3){
+        var schPhone3=((document.getElementById('sig-sch-phone')||{}).value||'').trim();
+        try{
+          await fetch(API_BASE+'/reports/reports/school_contacts/',{
+            method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
+            body:JSON.stringify({school_id:selSchool.id,name:schName3,phone:schPhone3})
+          });
+        }catch(e){ console.error(e); }
+      }
+    } else if(schContactSel3&&schContactSel3.value){
+      var schOpt3=schContactSel3.options[schContactSel3.selectedIndex];
+      schName3=schOpt3.dataset.name||schOpt3.text||'';
+    }
+    data.signature_itl={
+      org:   ((document.getElementById('sig-itl-org')||{}).value||'').trim(),
+      name:  ((document.getElementById('sig-itl-name')||{}).value||'').trim(),
+      phone: ((document.getElementById('sig-itl-phone')||{}).value||'').trim(),
+      data:  _getSigData('itl')
+    };
+    data.signature_school={
+      org:   ((document.getElementById('sig-sch-org')||{}).value||'').trim(),
+      name:  schName3||((document.getElementById('sig-sch-name')||{}).value||'').trim(),
+      phone: ((document.getElementById('sig-sch-phone')||{}).value||'').trim(),
+      data:  _getSigData('sch')
+    };
   } else {
     var fields=(selTemplate.fields_schema&&selTemplate.fields_schema.fields)||[];
     data={};
