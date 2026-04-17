@@ -252,42 +252,96 @@ def write_snmp_guide_docx(school, file_path: str):
         for a in ('w:ascii', 'w:hAnsi', 'w:eastAsia', 'w:cs'):
             rf.set(qn(a), KF)
 
-    def add_p(t, style=None):
+    # ── 색상 상수 ─────────────────────────────
+    CLR_BLUE = RGBColor(0x1F, 0x5C, 0x99)
+    CLR_BLUE2 = RGBColor(0x2E, 0x75, 0xB6)
+    CLR_BODY = RGBColor(0x33, 0x33, 0x33)
+    CLR_SUB = RGBColor(0x55, 0x55, 0x55)
+    CLR_WARN = RGBColor(0x7A, 0x4F, 0x00)
+    CLR_OK = RGBColor(0x15, 0x57, 0x24)
+    CLR_CODE = RGBColor(0x1A, 0x1A, 0x1A)
+    CLR_WHITE = RGBColor(0xFF, 0xFF, 0xFF)
+    FILL_HDR = '1F5C99'
+    FILL_ROW_ODD = 'F5F9FF'
+    FILL_ROW_EVEN = 'F8F8F8'
+
+    def _set_cell_bg(cell, color_hex):
+        """셀 배경색 설정"""
+        tc = cell._element
+        tcPr = tc.find(qn('w:tcPr'))
+        if tcPr is None:
+            tcPr = OxmlElement('w:tcPr'); tc.insert(0, tcPr)
+        shd = OxmlElement('w:shd')
+        shd.set(qn('w:fill'), color_hex)
+        shd.set(qn('w:val'), 'clear')
+        tcPr.append(shd)
+
+    def add_p(t, style=None, color=None):
         p = doc.add_paragraph(t, style=style) if style else doc.add_paragraph(t)
         for r in p.runs:
             _apply(r)
+            r.font.size = Pt(10)
+            r.font.color.rgb = color or CLR_BODY
         return p
+
+    def add_warn(t):
+        """경고 문단 (갈색)"""
+        return add_p(t, color=CLR_WARN)
+
+    def add_ok(t):
+        """안내 문단 (녹색)"""
+        return add_p(t, color=CLR_OK)
 
     def add_h(t, lvl):
         h = doc.add_heading(t, level=lvl)
         for r in h.runs:
             _apply(r)
+            if lvl == 1:
+                r.font.size = Pt(16); r.font.color.rgb = CLR_BLUE
+            elif lvl == 2:
+                r.font.size = Pt(13); r.font.color.rgb = CLR_BLUE
+            elif lvl == 3:
+                r.font.size = Pt(11); r.font.color.rgb = CLR_BLUE2
         return h
 
+    def add_h3(t):
+        """Heading 3 with ▶ prefix"""
+        return add_h(f'\u25B6 {t}', 3)
+
     def add_code(lines):
-        """코드 블록 (Courier New, 배경 없이 들여쓰기)"""
+        """코드 블록 (Courier New 9pt, 들여쓰기, 진회색)"""
         for line in lines:
             p = doc.add_paragraph()
-            p.paragraph_format.left_indent = Cm(1)
+            p.paragraph_format.left_indent = Cm(1.8)
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after = Pt(1)
             run = p.add_run(line)
             run.font.name = CF
             run.font.size = Pt(9)
+            run.font.color.rgb = CLR_CODE
 
     def add_table(headers, rows_data):
-        """헤더 굵게 + Table Grid 테이블"""
+        """파란 헤더 + 교차 배경색 테이블"""
         t = doc.add_table(rows=1, cols=len(headers))
         t.style = 'Table Grid'
+        # 헤더: 파란 배경 + 흰 글씨
         hdr = t.rows[0].cells
         for i, h in enumerate(headers):
             hdr[i].text = h
+            _set_cell_bg(hdr[i], FILL_HDR)
             for r in hdr[i].paragraphs[0].runs:
                 _apply(r); r.font.bold = True; r.font.size = Pt(9)
-        for row_vals in rows_data:
+                r.font.color.rgb = CLR_WHITE
+        # 데이터 행: 교차 배경색
+        for ri, row_vals in enumerate(rows_data):
             row = t.add_row().cells
+            fill = FILL_ROW_ODD if ri % 2 == 0 else FILL_ROW_EVEN
             for i, v in enumerate(row_vals):
                 row[i].text = str(v)
+                _set_cell_bg(row[i], fill)
                 for r in row[i].paragraphs[0].runs:
                     _apply(r); r.font.size = Pt(9)
+                    r.font.color.rgb = CLR_BODY
         return t
 
     now_str = timezone.localtime(timezone.now()).strftime('%Y년 %m월 %d일')
@@ -301,18 +355,21 @@ def write_snmp_guide_docx(school, file_path: str):
     # 표지
     # ══════════════════════════════════════════════
     doc.add_paragraph()
-    title = doc.add_heading(f'{school.name} 네트워크', 0)
+    doc.add_paragraph()
+    title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    for r in title.runs:
-        _apply(r)
-    sub = doc.add_heading('NMS 개발을 위한 SNMP 설정 가이드', 0)
+    tr = title.add_run(f'{school.name} 네트워크')
+    _apply(tr); tr.font.size = Pt(28); tr.font.bold = True; tr.font.color.rgb = CLR_BLUE
+
+    sub = doc.add_paragraph()
     sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    for r in sub.runs:
-        _apply(r); r.font.size = Pt(16)
-    en = doc.add_paragraph('Network Management System SNMP Integration Manual')
+    sr = sub.add_run('NMS 개발을 위한 SNMP 설정 가이드')
+    _apply(sr); sr.font.size = Pt(22); sr.font.bold = True; sr.font.color.rgb = CLR_BLUE2
+
+    en = doc.add_paragraph()
     en.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    for r in en.runs:
-        _apply(r); r.font.color.rgb = RGBColor(0x6c, 0x75, 0x7d)
+    er = en.add_run('Network Management System SNMP Integration Manual')
+    _apply(er); er.font.size = Pt(12); er.font.color.rgb = RGBColor(0x88, 0x88, 0x88)
 
     doc.add_paragraph()
     info_rows = [
@@ -336,7 +393,7 @@ def write_snmp_guide_docx(school, file_path: str):
           '관리하기 위한 표준 프로토콜입니다. NMS(Network Management System)는 SNMP를 통해 '
           '스위치, 방화벽, AP 등의 실시간 상태 정보를 수집합니다.')
 
-    add_h('SNMP 버전 비교', 3)
+    add_h3('SNMP 버전 비교')
     add_table(
         ['버전', '인증 방식', '보안 수준', '권장 용도'],
         [
@@ -353,8 +410,8 @@ def write_snmp_guide_docx(school, file_path: str):
     add_p('Trap (이벤트 수신): 장비에서 이상 발생 시 즉시 NMS로 알림 전송 (linkDown, coldStart 등)',
           style='List Bullet')
     doc.add_paragraph()
-    add_p('* 이 구성도의 모든 스위치/방화벽은 SNMP Agent 역할을 하며, '
-          'NMS가 Manager 역할을 수행합니다.')
+    add_warn('\u26A0 이 구성도의 모든 스위치/방화벽은 SNMP Agent 역할을 하며, '
+             'NMS가 Manager 역할을 수행합니다.')
 
     # ══════════════════════════════════════════════
     # 2. 구성도 장비 목록 (SNMP 설정 대상)
@@ -386,8 +443,8 @@ def write_snmp_guide_docx(school, file_path: str):
         poe_names = ', '.join(d.name for d in poe_devices[:5])
         if len(poe_devices) > 5:
             poe_names += f' 외 {len(poe_devices)-5}대'
-        add_p(f'* {poe_names}은(는) PoE 스위치입니다. PoE MIB(RFC 3621)를 추가로 활성화하면 '
-              '무선AP 전력 상태도 NMS에서 모니터링할 수 있습니다.')
+        add_ok(f'\u2714 {poe_names}은(는) PoE 스위치입니다. PoE MIB(RFC 3621)를 추가로 활성화하면 '
+               '무선AP 전력 상태도 NMS에서 모니터링할 수 있습니다.')
 
     # ══════════════════════════════════════════════
     # 3. 장비별 SNMP 설정 방법
@@ -395,7 +452,7 @@ def write_snmp_guide_docx(school, file_path: str):
     add_h('3. 장비별 SNMP 설정 방법', 1)
 
     add_h('3.1 Cisco/Allied Telesis 계열 스위치 (CBS220, GS724T, SG300 등)', 2)
-    add_h('SNMPv2c 설정 (CLI)', 3)
+    add_h3('SNMPv2c 설정 (CLI)')
     add_code([
         '! SNMP Community 설정 (읽기 전용)',
         'snmp-server community NMS_READ_ONLY ro',
@@ -412,7 +469,7 @@ def write_snmp_guide_docx(school, file_path: str):
         'snmp-server contact 네트워크관리자',
     ])
 
-    add_h('SNMPv3 설정 (보안 강화, 방화벽 권장)', 3)
+    add_h3('SNMPv3 설정 (보안 강화, 방화벽 권장)')
     add_code([
         '! SNMPv3 그룹 생성',
         'snmp-server group NMS_GROUP v3 priv',
@@ -440,8 +497,8 @@ def write_snmp_guide_docx(school, file_path: str):
             'Trap 이벤트: CPU과부하, 세션초과, linkDown, 정책위반 등 활성화',
         ]:
             add_p(s, style='List Bullet')
-        add_p('* 방화벽은 SNMPv3 사용을 강력 권장합니다. '
-              'Community String 방식은 평문 전송으로 보안에 취약합니다.')
+        add_warn('\u26A0 방화벽은 SNMPv3 사용을 강력 권장합니다. '
+                 'Community String 방식은 평문 전송으로 보안에 취약합니다.')
 
     if poe_devices:
         add_h('3.3 PoE 스위치 추가 설정', 2)
@@ -486,8 +543,8 @@ def write_snmp_guide_docx(school, file_path: str):
     ]
     add_table(['분류', 'OID 이름', 'OID 번호', '설명'], oid_data)
     doc.add_paragraph()
-    add_p('* Gigabit 이상 고속 링크는 ifInOctets/ifOutOctets(32bit) 대신 '
-          'ifHCInOctets/ifHCOutOctets(64bit)를 사용해야 카운터 오버플로우를 방지할 수 있습니다.')
+    add_ok('\u2714 Gigabit 이상 고속 링크는 ifInOctets/ifOutOctets(32bit) 대신 '
+           'ifHCInOctets/ifHCOutOctets(64bit)를 사용해야 카운터 오버플로우를 방지할 수 있습니다.')
 
     # ══════════════════════════════════════════════
     # 5. SNMP Trap 설정 및 수신 구조
@@ -537,7 +594,7 @@ def write_snmp_guide_docx(school, file_path: str):
 
     add_h('6.2 Python pysnmp 예제 코드', 2)
 
-    add_h('장비 상태 폴링 (SNMP GET)', 3)
+    add_h3('장비 상태 폴링 (SNMP GET)')
     add_code([
         'from pysnmp.hlapi import *',
         '',
@@ -559,7 +616,7 @@ def write_snmp_guide_docx(school, file_path: str):
         "uptime   = get_snmp_value('10.0.0.10', 'NMS_READ_ONLY', '1.3.6.1.2.1.1.3.0')",
     ])
 
-    add_h('포트 상태 일괄 수집 (SNMP WALK)', 3)
+    add_h3('포트 상태 일괄 수집 (SNMP WALK)')
     add_code([
         'from pysnmp.hlapi import *',
         '',
@@ -582,7 +639,7 @@ def write_snmp_guide_docx(school, file_path: str):
         '    return results',
     ])
 
-    add_h('Trap 수신 서버 구현', 3)
+    add_h3('Trap 수신 서버 구현')
     add_code([
         'from pysnmp.carrier.asyncore.dispatch import AsyncoreDispatcher',
         'from pysnmp.carrier.asyncore.dgram import udp',
@@ -666,8 +723,8 @@ def write_snmp_guide_docx(school, file_path: str):
 
     if poe_devices:
         doc.add_paragraph()
-        add_p('* 무선망 PoE 스위치의 SNMP 설정 시 관리 VLAN IP와 데이터 VLAN IP를 '
-              '혼동하지 않도록 주의하세요.')
+        add_warn('\u26A0 무선망 PoE 스위치의 SNMP 설정 시 관리 VLAN IP와 데이터 VLAN IP를 '
+                 '혼동하지 않도록 주의하세요.')
 
     # ══════════════════════════════════════════════
     # 9. NMS 구축 체크리스트
