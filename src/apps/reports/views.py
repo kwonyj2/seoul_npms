@@ -517,13 +517,14 @@ class ReportViewSet(viewsets.ModelViewSet):
                     })
         # ── 정기점검 보고서: 장비 수량 자동 + 확인자 정보 자동 ──
         if template and template.report_type == 'regular':
-            from apps.network.models import NetworkDevice
-            from apps.schools.models import SchoolContact
+            from apps.schools.models import SchoolContact, SchoolEquipment
             if school:
-                devs = NetworkDevice.objects.filter(school=school)
-                data['switch_count'] = devs.filter(device_type__in=['switch', 'l2_switch', 'l3_switch']).count()
-                data['poe_count'] = devs.filter(device_type='poe_switch').count()
-                data['ap_count'] = devs.filter(device_type='ap').count()
+                cats = list(SchoolEquipment.objects.filter(
+                    school=school
+                ).values_list('category', flat=True))
+                data['switch_count'] = sum(1 for c in cats if '스위치' in c and 'PoE' not in c)
+                data['poe_count'] = sum(1 for c in cats if 'PoE' in c)
+                data['ap_count'] = sum(1 for c in cats if 'AP' in c or '무선' in c)
                 # 분기 자동 계산
                 if not data.get('quarter'):
                     from django.utils import timezone

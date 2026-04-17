@@ -290,16 +290,18 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['get'])
     def device_counts(self, request):
-        """학교별 장비 수량 조회 (정기점검 보고서용)"""
-        from apps.network.models import NetworkDevice
+        """학교별 장비 수량 조회 (정기점검 보고서용) — SchoolEquipment 기준"""
+        from apps.schools.models import SchoolEquipment
         school_id = request.query_params.get('school_id')
         if not school_id:
             return Response({'switch_count': 0, 'poe_count': 0, 'ap_count': 0})
-        devs = NetworkDevice.objects.filter(school_id=school_id)
+        cats = list(SchoolEquipment.objects.filter(
+            school_id=school_id
+        ).values_list('category', flat=True))
         return Response({
-            'switch_count': devs.filter(device_type__in=['switch', 'l2_switch', 'l3_switch']).count(),
-            'poe_count': devs.filter(device_type='poe_switch').count(),
-            'ap_count': devs.filter(device_type='ap').count(),
+            'switch_count': sum(1 for c in cats if '스위치' in c and 'PoE' not in c),
+            'poe_count': sum(1 for c in cats if 'PoE' in c),
+            'ap_count': sum(1 for c in cats if 'AP' in c or '무선' in c),
         })
 
     @action(detail=False, methods=['get'])
