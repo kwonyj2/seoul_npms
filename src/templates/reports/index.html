@@ -1483,7 +1483,7 @@ function renderRegularInspectForm(){
   var titleText=quarter+'분기 정기점검 보고서';
   regularPhotos={};
 
-  /* 학교 장비 수량 자동 조회 */
+  /* 학교 장비 수량 자동 조회 → 점검결과 드롭다운 업데이트 */
   fetch(API_BASE+'/network/topology/device_counts/?school_id='+selSchool.id)
     .then(r=>r.ok?r.json():{switch_count:0,poe_count:0,ap_count:0})
     .then(counts=>{
@@ -1493,6 +1493,10 @@ function renderRegularInspectForm(){
       if(sc) sc.value=counts.switch_count||0;
       if(pc) pc.value=counts.poe_count||0;
       if(ac) ac.value=counts.ap_count||0;
+      /* 점검결과 드롭다운에 수량 반영 */
+      _riUpdateCountOption('ri-switch-result', counts.switch_count||0, '대 특이사항 없음');
+      _riUpdateCountOption('ri-poe-result', counts.poe_count||0, '대 특이사항 없음');
+      _riUpdateCountOption('ri-ap-result', counts.ap_count||0, '대 특이사항 없음');
     }).catch(()=>{});
 
   var html='';
@@ -1599,9 +1603,9 @@ function renderRegularInspectForm(){
   /* 기타 */
   html+='<div class="form-section"><div class="form-section-title">스마트기기 / 기타</div>';
   html+='<div class="row g-2">';
-  html+=_riSel('ri-smartboard','전자칠판','해당없음','기타');
-  html+=_riSel('ri-devit','디벗','해당없음','기타');
-  html+='<div class="col-12"><div class="form-field"><label>기타 요청사항</label><textarea id="ri-etc-request" class="form-control form-control-sm" rows="2" placeholder="기타 내용을 기록하세요"></textarea></div></div>';
+  html+=_riSel('ri-smartboard','전자칠판','특이사항 없음','기타');
+  html+=_riSel('ri-devit','디벗','특이사항 없음','기타');
+  html+=_riSel('ri-etc-request','기타 요청사항','특이사항 없음','기타','col-12');
   html+='</div></div>';
 
   /* ── 사진 업로드 ── */
@@ -1636,6 +1640,18 @@ function renderRegularInspectForm(){
   html+='</div></div>';
 
   document.getElementById('wm-form-area').innerHTML=html;
+}
+
+function _riUpdateCountOption(id, count, suffix){
+  var sel=document.getElementById(id);
+  if(!sel) return;
+  /* 첫 번째 옵션(기본값)을 수량 포함으로 교체 */
+  if(sel.options.length>0 && count>0){
+    var newText=count+suffix;
+    sel.options[0].value=newText;
+    sel.options[0].text=newText;
+    sel.value=newText;
+  }
 }
 
 function _riToggleEtc(id){
@@ -1725,7 +1741,7 @@ function collectRegularData(){
     /* 기타 */
     smartboard_result:      _riGetVal('ri-smartboard'),
     devit_result:           _riGetVal('ri-devit'),
-    etc_request:            g('ri-etc-request'),
+    etc_request:            _riGetVal('ri-etc-request'),
     /* 사진 ID */
     photo_wired_teacher_hub_id:  regularPhotos.wired_teacher_hub||null,
     photo_wired_teacher_end_id:  regularPhotos.wired_teacher_end||null,
