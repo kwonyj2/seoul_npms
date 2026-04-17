@@ -77,6 +77,10 @@
             <i class="bi bi-arrow-clockwise"></i>
           </button>
           <small class="text-muted ms-auto" id="item-count"></small>
+          <span id="bulk-bar" class="ms-2" style="display:none;">
+            <span class="badge bg-primary me-1" id="bulk-count">0개 선택</span>
+            <button class="btn btn-xs btn-danger" onclick="bulkDelete()"><i class="bi bi-trash me-1"></i>선택 삭제</button>
+          </span>
         </div>
 
         <!-- 목록 뷰 -->
@@ -84,8 +88,9 @@
           <table class="table table-sm table-hover mb-0" style="table-layout:fixed;min-width:640px;">
             <thead class="table-light" style="position:sticky;top:0;z-index:2;">
               <tr>
+                <th style="width:28px;"><input type="checkbox" id="chk-all" onchange="toggleSelectAll(this.checked)" title="전체 선택"></th>
                 <th style="width:32px;"></th>
-                <th style="width:220px;cursor:pointer;user-select:none;" onclick="sortBy('name')" id="th-name">
+                <th style="width:210px;cursor:pointer;user-select:none;" onclick="sortBy('name')" id="th-name">
                   이름 <span id="sort-icon-name" class="text-muted small"></span>
                 </th>
                 <th style="width:70px;cursor:pointer;user-select:none;" onclick="sortBy('type')" id="th-type">
@@ -105,7 +110,7 @@
               </tr>
             </thead>
             <tbody id="item-tbody">
-              <tr><td colspan="8" class="text-center py-4 text-muted small">폴더를 선택하세요</td></tr>
+              <tr><td colspan="9" class="text-center py-4 text-muted small">폴더를 선택하세요</td></tr>
             </tbody>
           </table>
         </div>
@@ -501,7 +506,7 @@ async function loadContents() {
     else                        renderGrid(subFolders, files);
   } catch(e) {
     document.getElementById('item-tbody').innerHTML =
-      '<tr><td colspan="8" class="text-center py-3 text-danger small">로드 실패</td></tr>';
+      '<tr><td colspan="9" class="text-center py-3 text-danger small">로드 실패</td></tr>';
   }
   setLoading(false);
 }
@@ -509,7 +514,7 @@ async function loadContents() {
 function setLoading(on) {
   if (on) {
     document.getElementById('item-tbody').innerHTML =
-      '<tr><td colspan="8" class="text-center py-3 text-muted small">로딩 중...</td></tr>';
+      '<tr><td colspan="9" class="text-center py-3 text-muted small">로딩 중...</td></tr>';
     document.getElementById('item-grid').innerHTML =
       '<div class="col-12 text-center py-4 text-muted small">로딩 중...</div>';
   }
@@ -544,6 +549,7 @@ function renderList(folders, files) {
     rows += `<tr style="cursor:pointer;"
                 ondblclick="navigateTo(${f.id},'${f.name.replace(/'/g,"\\'")}');"
                 oncontextmenu="showCtxMenuById(event,'f${f.id}')">
+      <td class="text-center" onclick="event.stopPropagation()"><input type="checkbox" class="bulk-chk" data-type="folder" data-id="${f.id}" data-name="${f.name.replace(/"/g,'&quot;')}" onchange="updateBulkBar()"></td>
       <td class="text-center"><i class="bi bi-folder-fill text-warning"></i></td>
       <td class="text-truncate"><span class="small fw-semibold">${f.name}</span>${accessBadge}</td>
       <td><small class="text-muted">폴더</small></td>
@@ -565,6 +571,7 @@ function renderList(folders, files) {
     _ctxRowData['fi' + f.id] = { type: 'file', id: f.id, name: f.original_name || f.name, fileObj: f };
     rows += `<tr style="cursor:pointer;" onclick="openPreview(${f.id})"
                 oncontextmenu="showCtxMenuById(event,'fi${f.id}')">
+      <td class="text-center" onclick="event.stopPropagation()"><input type="checkbox" class="bulk-chk" data-type="file" data-id="${f.id}" data-name="${(f.original_name||f.name||'').replace(/"/g,'&quot;')}" onchange="updateBulkBar()"></td>
       <td class="text-center"><i class="bi ${icon.cls}" style="color:${icon.color};"></i></td>
       <td class="text-truncate" title="${f.original_name||f.name}" onclick="event.stopPropagation()">
         <span class="small file-name-label" id="fn-label-${f.id}"
@@ -593,7 +600,7 @@ function renderList(folders, files) {
   });
 
   if (!rows) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted small">비어 있습니다</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted small">비어 있습니다</td></tr>';
     return;
   }
   tbody.innerHTML = rows;
@@ -747,6 +754,60 @@ async function deleteFolder(e, folderId, folderName) {
       showToast(d.detail || d.error || '삭제 실패 (권한 확인)', 'error');
     }
   } catch(e) { showToast('삭제 실패: ' + e.message, 'error'); }
+}
+
+// ── 일괄 선택/삭제 ──────────────────────────────────────────
+function toggleSelectAll(checked) {
+  document.querySelectorAll('.bulk-chk').forEach(c => c.checked = checked);
+  updateBulkBar();
+}
+function updateBulkBar() {
+  const checked = document.querySelectorAll('.bulk-chk:checked');
+  const bar = document.getElementById('bulk-bar');
+  const cnt = document.getElementById('bulk-count');
+  if (checked.length > 0) {
+    bar.style.display = 'inline';
+    cnt.textContent = checked.length + '개 선택';
+  } else {
+    bar.style.display = 'none';
+  }
+  // 전체선택 체크박스 동기화
+  const all = document.querySelectorAll('.bulk-chk');
+  const chkAll = document.getElementById('chk-all');
+  if (chkAll) chkAll.checked = all.length > 0 && checked.length === all.length;
+}
+async function bulkDelete() {
+  const checked = document.querySelectorAll('.bulk-chk:checked');
+  if (checked.length === 0) return;
+  const folders = [], files = [];
+  checked.forEach(c => {
+    if (c.dataset.type === 'folder') folders.push({ id: c.dataset.id, name: c.dataset.name });
+    else files.push({ id: c.dataset.id, name: c.dataset.name });
+  });
+  const msg = `선택한 항목을 삭제하시겠습니까?\n\n폴더 ${folders.length}개, 파일 ${files.length}개\n(휴지통으로 이동됩니다)`;
+  if (!confirm(msg)) return;
+
+  let ok = 0, fail = 0;
+  for (const f of folders) {
+    try {
+      const r = await fetch(`${API}/nas/folders/${f.id}/`, {
+        method: 'DELETE', headers: { 'X-CSRFToken': getCsrfToken() }
+      });
+      if (r.ok || r.status === 204) ok++; else fail++;
+    } catch(e) { fail++; }
+  }
+  for (const f of files) {
+    try {
+      const r = await fetch(`${API}/nas/files/${f.id}/`, {
+        method: 'DELETE', headers: { 'X-CSRFToken': getCsrfToken() }
+      });
+      if (r.ok || r.status === 204) ok++; else fail++;
+    } catch(e) { fail++; }
+  }
+  showToast(`${ok}개 삭제 완료` + (fail > 0 ? `, ${fail}개 실패` : ''), fail > 0 ? 'warning' : 'success');
+  document.getElementById('chk-all').checked = false;
+  if (currentFolderId === null) await loadSideTree(null);
+  loadContents();
 }
 
 // ── 파일 삭제 (휴지통으로 이동) ─────────────────────────────
