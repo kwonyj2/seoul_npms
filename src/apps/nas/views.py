@@ -98,10 +98,31 @@ class FolderViewSet(viewsets.ModelViewSet):
             os.makedirs(fs_path, exist_ok=True)
 
     def perform_destroy(self, instance):
+        import shutil
+        import logging
         from rest_framework.exceptions import PermissionDenied
         from apps.sysconfig.models import NasRoleConfig
+        logger = logging.getLogger(__name__)
+
         if not NasRoleConfig.can_do(self.request.user.role, 'delete'):
             raise PermissionDenied('폴더 삭제 권한이 없습니다.')
+
+        # 물리 폴더 → 휴지통으로 이동 (NAS 동기화가 재등록하지 않도록)
+        if instance.full_path:
+            nas_root = getattr(settings, 'NAS_MEDIA_ROOT', settings.MEDIA_ROOT)
+            fs_path = os.path.join(nas_root, instance.full_path.lstrip('/'))
+            if os.path.isdir(fs_path):
+                trash_root = os.path.join(nas_root, '_trash')
+                os.makedirs(trash_root, exist_ok=True)
+                from datetime import datetime
+                trash_name = f'{instance.name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+                trash_path = os.path.join(trash_root, trash_name)
+                try:
+                    shutil.move(fs_path, trash_path)
+                    logger.info(f'폴더 휴지통 이동: {fs_path} → {trash_path}')
+                except Exception as e:
+                    logger.warning(f'폴더 휴지통 이동 실패: {e}')
+
         instance.delete()
 
     @action(detail=True, methods=['get'])

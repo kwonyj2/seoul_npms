@@ -182,7 +182,7 @@ def sync_nas_filesystem():
 
     # 1단계: Folder 레코드
     for dirpath, dirnames, _ in os.walk(nas_root, topdown=True):
-        dirnames[:] = sorted(d for d in dirnames if not d.startswith('.'))
+        dirnames[:] = sorted(d for d in dirnames if not d.startswith('.') and not d.startswith('_'))
         rel = os.path.relpath(dirpath, nas_root)
         if rel == '.':
             continue
@@ -204,7 +204,7 @@ def sync_nas_filesystem():
 
     # 2단계: File 레코드
     for dirpath, dirnames, filenames in os.walk(nas_root, topdown=True):
-        dirnames[:] = sorted(d for d in dirnames if not d.startswith('.'))
+        dirnames[:] = sorted(d for d in dirnames if not d.startswith('.') and not d.startswith('_'))
         rel = os.path.relpath(dirpath, nas_root)
         if rel == '.':
             continue
