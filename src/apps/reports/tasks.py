@@ -103,6 +103,42 @@ def _inject_cable_photos(cables):
                 c[key] = future.result()
 
 
+def _inject_regular_photos(data):
+    """정기점검 보고서 data 내 photo_*_id → base64 data URI 변환."""
+    import concurrent.futures
+    from apps.photos.models import Photo
+
+    PHOTO_FIELDS = [
+        'photo_wired_teacher_hub', 'photo_wired_teacher_end',
+        'photo_wired_student_hub', 'photo_wired_student_end',
+        'photo_wired_wireless_hub',
+        'photo_channel_under', 'photo_channel_far',
+        'photo_wifi_center', 'photo_wifi_edge',
+    ]
+    id_set = set()
+    for field in PHOTO_FIELDS:
+        pid = data.get(f'{field}_id')
+        if pid:
+            id_set.add(int(pid))
+    if not id_set:
+        return
+    photos = {p.id: p for p in Photo.objects.filter(id__in=id_set)}
+    tasks = []
+    for field in PHOTO_FIELDS:
+        pid = data.get(f'{field}_id')
+        b64_key = f'{field}_b64'
+        if pid and int(pid) in photos:
+            tasks.append((data, b64_key, photos[int(pid)]))
+        else:
+            data[b64_key] = ''
+    if tasks:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {executor.submit(_photo_to_b64, p): (d, key) for d, key, p in tasks}
+            for future in concurrent.futures.as_completed(futures):
+                d, key = futures[future]
+                d[key] = future.result()
+
+
 @celery_app.task(bind=True, max_retries=3, time_limit=300, soft_time_limit=270)
 def generate_report_pdf_task(self, report_id):
     """보고서 PDF 생성"""
@@ -126,6 +162,15 @@ def generate_report_pdf_task(self, report_id):
                 'data':   data,
             })
             base_name = f'소규모 네트워크 포설 확인서_{school_name}'
+        elif report_type == 'regular':
+            # 정기점검 사진 base64 변환
+            _inject_regular_photos(data)
+            html_content = render_to_string('reports/pdf_regular_inspect.html', {
+                'report': report,
+                'data':   data,
+            })
+            quarter = data.get('quarter', '')
+            base_name = f'{quarter}분기 정기점검 보고서_{school_name}'
         else:
             if data.get('devices'):
                 _inject_photos(data['devices'])

@@ -515,6 +515,37 @@ class ReportViewSet(viewsets.ModelViewSet):
                     raise ValidationError({
                         'serial_number': f'장비 관리에 등록되지 않은 제조번호입니다: {serial_number}.'
                     })
+        # ── 정기점검 보고서: 장비 수량 자동 + 확인자 정보 자동 ──
+        if template and template.report_type == 'regular':
+            from apps.network.models import NetworkDevice
+            from apps.schools.models import SchoolContact
+            if school:
+                devs = NetworkDevice.objects.filter(school=school)
+                data['switch_count'] = devs.filter(device_type__in=['switch', 'l2_switch', 'l3_switch']).count()
+                data['poe_count'] = devs.filter(device_type='poe_switch').count()
+                data['ap_count'] = devs.filter(device_type='ap').count()
+                # 분기 자동 계산
+                if not data.get('quarter'):
+                    from django.utils import timezone
+                    month = timezone.localtime(timezone.now()).month
+                    data['quarter'] = str((month - 1) // 3 + 1)
+                # 확인자: 학교 담당자(선생님) DB 우선
+                if not data.get('signature_school') or not data['signature_school'].get('name'):
+                    contact = SchoolContact.objects.filter(school=school).first()
+                    if contact:
+                        data.setdefault('signature_school', {})
+                        data['signature_school']['org'] = school.name
+                        data['signature_school']['name'] = contact.name or ''
+                        data['signature_school']['phone'] = contact.phone or ''
+                # 점검자: 로그인 사용자 정보
+                user = self.request.user
+                if not data.get('signature_itl') or not data['signature_itl'].get('name'):
+                    data.setdefault('signature_itl', {})
+                    data['signature_itl']['org'] = '세종아이티엘 컨소시엄'
+                    data['signature_itl']['name'] = user.name or user.username
+                    data['signature_itl']['phone'] = getattr(user, 'phone', '') or ''
+                validated['data'] = data
+
         serializer.save(created_by=self.request.user)
 
     @action(detail=False, methods=['get'])
