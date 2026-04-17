@@ -58,9 +58,17 @@ def sync_photo_to_nas(self, photo_id):
         import re
         file_name = re.sub(r'[\\/:*?"<>|]', '', file_name)
 
-        # ── 저장 경로: NAS_MEDIA_ROOT/산출물/작업명/ ─────────────────
+        # ── 저장 경로 ─────────────────────────────────────────────
         nas_root = getattr(settings, 'NAS_MEDIA_ROOT', settings.MEDIA_ROOT)
-        dest_dir = os.path.join(nas_root, '산출물', work_label)
+        if work_label.startswith('정기점검'):
+            # 정기점검 사진 → 산출물/정기점검보고서 이미지/N분기/
+            import math
+            from django.utils import timezone
+            month = timezone.localtime(photo.taken_at or timezone.now()).month
+            quarter = math.ceil(month / 3)
+            dest_dir = os.path.join(nas_root, '산출물', '정기점검보고서 이미지', f'{quarter}분기')
+        else:
+            dest_dir = os.path.join(nas_root, '산출물', work_label)
         os.makedirs(dest_dir, exist_ok=True)
         dest_path = os.path.join(dest_dir, file_name)
 

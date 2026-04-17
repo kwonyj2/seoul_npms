@@ -185,11 +185,18 @@ def generate_report_pdf_task(self, report_id):
             else:
                 base_name = f'스위치 설치 확인서_{school_name}'
 
-        # PDF 출력 경로
-        pdf_dir = os.path.join(
-            getattr(settings, 'NAS_OUTPUT_ROOT', '/media/reports'),
-            str(report.school.id)
-        )
+        # PDF 출력 경로 — 보고서 유형별 폴더 정리
+        nas_output = getattr(settings, 'NAS_OUTPUT_ROOT', '/media/reports')
+        if report_type == 'regular':
+            # 산출물/정기점검보고서/N분기/
+            quarter = data.get('quarter', '')
+            pdf_dir = os.path.join(nas_output, '정기점검보고서', f'{quarter}분기')
+        elif report_type == 'switch_install':
+            pdf_dir = os.path.join(nas_output, '스위치설치확인서')
+        elif report_type == 'cable':
+            pdf_dir = os.path.join(nas_output, '소규모네트워크포설')
+        else:
+            pdf_dir = os.path.join(nas_output, str(report.school.id))
         os.makedirs(pdf_dir, exist_ok=True)
 
         pdf_path = os.path.join(pdf_dir, f'{base_name}.pdf')
