@@ -769,9 +769,18 @@ def doc_export(request, doc_id):
         cell.font = hdr_font
         cell.fill = hdr_fill
 
+    # XML 호환 불가 문자 제거 (VSDX 파싱 등에서 섞여 들어온 제어문자)
+    import re
+    _ILLEGAL_XML = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]')
+
+    def _clean(v):
+        if isinstance(v, str):
+            return _ILLEGAL_XML.sub('', v)
+        return v
+
     # 데이터 — Excel 한계 약 1,048,576행 중 실용상 100,000건까지
     for row in all_rows[:100000]:
-        ws.append([row.get(h, '') for h in headers])
+        ws.append([_clean(row.get(h, '')) for h in headers])
 
     # 컬럼 너비
     for ci, h in enumerate(headers, 1):
