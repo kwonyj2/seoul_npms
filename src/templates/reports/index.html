@@ -1601,7 +1601,7 @@ function renderRegularInspectForm(){
   /* 정보자료 관리 */
   html+='<div class="form-section"><div class="form-section-title">정보자료 관리 (현행화)</div>';
   html+='<div class="row g-2">';
-  [['정보자원 목록','ri-chk-resource'],['네트워크 구성도','ri-chk-diagram'],['무선AP 배치도','ri-chk-ap-layout'],['랙 실장도','ri-chk-rack'],['선번장','ri-chk-cable']].forEach(function(r){
+  [['정보자원 목록','ri-chk-resource'],['네트워크구성도','ri-chk-diagram'],['무선AP 배치도','ri-chk-ap-layout'],['랙 실장도','ri-chk-rack'],['선번장','ri-chk-cable']].forEach(function(r){
     html+=_riSel(r[1],r[0],'확인','기타','col-6 col-sm-4');
   });
   html+=_riSel('ri-info-resource','정보자원 현황변경','특이사항 없음','기타','col-12');
