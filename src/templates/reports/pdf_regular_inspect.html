@@ -175,33 +175,34 @@
 </table>
 
 <!-- ═══════════════════════════════════════════════
-     페이지2: 유선망 점검 결과
+     페이지2: 유선망 점검 결과 (하나의 표)
 ═══════════════════════════════════════════════ -->
 <p class="section-title">&#9634; 유선망 점검 결과</p>
 <table>
-  <tr><th style="width:14%;">점검 구분</th><th style="width:14%;">점검 기준</th><th colspan="2">점검 결과</th></tr>
-  <tr>
-    <td class="center" style="font-weight:bold;">스위치</td>
-    <td class="center">수량 변경 확인</td>
-    <td colspan="2">{{ data.switch_change_result|default:"변경 없음" }}</td>
-  </tr>
-  <tr>
-    <td class="center" style="font-weight:bold;">PoE 스위치</td>
-    <td class="center">수량 변경 확인</td>
-    <td colspan="2">{{ data.poe_change_result|default:"변경 없음" }}</td>
-  </tr>
-</table>
-
-<!-- 속도 측정 사진: 하나의 표 -->
-<table>
   <thead>
-    <tr><th colspan="2">속도 측정 (iPerf, NIA, 스쿨넷)</th></tr>
+    <tr>
+      <th style="width:14%;">점검 구분</th>
+      <th style="width:14%;">점검 기준</th>
+      <th colspan="2">점검 결과</th>
+    </tr>
   </thead>
   <tbody>
-    <!-- 교사망 -->
-    <tr><th>집선(전산실)</th><th>단말(교무실)</th></tr>
     <tr>
-      <td class="center" style="font-weight:bold;border-bottom:0;padding:6px 0 2px;" colspan="2">교사망</td>
+      <td class="center" style="font-weight:bold;">스위치</td>
+      <td class="center">수량 변경 확인</td>
+      <td colspan="2">{{ data.switch_change_result|default:"변경 없음" }}</td>
+    </tr>
+    <tr>
+      <td class="center" style="font-weight:bold;">PoE 스위치</td>
+      <td class="center">수량 변경 확인</td>
+      <td colspan="2">{{ data.poe_change_result|default:"변경 없음" }}</td>
+    </tr>
+    <!-- 속도 측정: 좌측 세로 병합 -->
+    <tr>
+      <td rowspan="9" class="center" style="font-weight:bold;writing-mode:horizontal-tb;">속도 측정<br>(iPerf,<br>NIA,<br>스쿨넷)</td>
+      <td rowspan="3" class="center" style="font-weight:bold;">교사망</td>
+      <th>집선(전산실)</th>
+      <th>단말(교무실)</th>
     </tr>
     <tr>
       <td class="photo-cell">
@@ -213,10 +214,12 @@
         {% else %}<div class="no-photo">사진삽입</div>{% endif %}
       </td>
     </tr>
+    <tr><td colspan="2" style="border:none;height:2px;padding:0;"></td></tr>
     <!-- 학생망 -->
-    <tr><th>집선(전산실)</th><th>단말(컴퓨터실)</th></tr>
     <tr>
-      <td class="center" style="font-weight:bold;border-bottom:0;padding:6px 0 2px;" colspan="2">학생망</td>
+      <td rowspan="3" class="center" style="font-weight:bold;">학생망</td>
+      <th>집선(전산실)</th>
+      <th>단말(컴퓨터실)</th>
     </tr>
     <tr>
       <td class="photo-cell">
@@ -228,10 +231,11 @@
         {% else %}<div class="no-photo">사진삽입</div>{% endif %}
       </td>
     </tr>
+    <tr><td colspan="2" style="border:none;height:2px;padding:0;"></td></tr>
     <!-- 무선망 -->
-    <tr><th colspan="2">집선(전산실)</th></tr>
     <tr>
-      <td class="center" style="font-weight:bold;border-bottom:0;padding:6px 0 2px;" colspan="2">무선망</td>
+      <td rowspan="3" class="center" style="font-weight:bold;">무선망</td>
+      <th colspan="2">집선(전산실)</th>
     </tr>
     <tr>
       <td class="photo-cell" colspan="2">
@@ -239,6 +243,7 @@
         {% else %}<div class="no-photo">사진삽입</div>{% endif %}
       </td>
     </tr>
+    <tr><td colspan="2" style="border:none;height:2px;padding:0;"></td></tr>
   </tbody>
 </table>
 
@@ -247,52 +252,54 @@
 ═══════════════════════════════════════════════ -->
 <p class="section-title">&#9634; 무선망 점검 사항</p>
 <table>
-  <tr><th style="width:14%;">점검 구분</th><th style="width:18%;">점검 기준</th><th colspan="3">점검 결과</th></tr>
-  <tr>
-    <td class="center" style="font-weight:bold;">AP 배치</td>
-    <td class="center">AP 설치 현황과<br>일치 여부</td>
-    <td colspan="3">{{ data.ap_placement_result|default:"특이사항 없음" }}</td>
-  </tr>
-  <tr>
-    <td class="center" style="font-weight:bold;">신호 세기</td>
-    <td class="center">신호 세기 50%<br>출력 기준<br><span class="sub">(SWIMS 확인)</span></td>
-    <td colspan="3">{{ data.signal_result|default:"특이사항 없음" }}</td>
-  </tr>
-</table>
-
-<!-- 채널중첩: AP 아래 3장 -->
-<table>
-  <tr><th style="width:14%;">점검 구분</th><th style="width:18%;">점검 기준</th><th colspan="3">점검 결과</th></tr>
-  <tr>
-    <td rowspan="2" class="center" style="font-weight:bold;">채널중첩</td>
-    <td rowspan="2" class="center">채널 3중첩<br>이하 유지<br><span class="sub">(WIFI 360)</span></td>
-    <td class="center" style="font-weight:bold;">AP 아래</td>
-    <td class="photo-cell">
-      {% if data.photo_channel_under_1_b64 %}<img src="{{ data.photo_channel_under_1_b64 }}">
-      {% else %}<div class="no-photo">사진삽입</div>{% endif %}
-    </td>
-    <td class="photo-cell">
-      {% if data.photo_channel_under_2_b64 %}<img src="{{ data.photo_channel_under_2_b64 }}">
-      {% else %}<div class="no-photo">사진삽입</div>{% endif %}
-    </td>
-  </tr>
-  <tr>
-    <td class="center" style="font-weight:bold;">AP에서 먼 곳</td>
-    <td class="photo-cell">
-      {% if data.photo_channel_far_1_b64 %}<img src="{{ data.photo_channel_far_1_b64 }}">
-      {% else %}<div class="no-photo">사진삽입</div>{% endif %}
-    </td>
-    <td class="photo-cell">
-      {% if data.photo_channel_far_2_b64 %}<img src="{{ data.photo_channel_far_2_b64 }}">
-      {% else %}<div class="no-photo">사진삽입</div>{% endif %}
-    </td>
-  </tr>
+  <thead>
+    <tr><th style="width:14%;">점검 구분</th><th style="width:18%;">점검 기준</th><th colspan="3">점검 결과</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="center" style="font-weight:bold;">AP 배치</td>
+      <td class="center">AP 설치 현황과<br>일치 여부</td>
+      <td colspan="3">{{ data.ap_placement_result|default:"특이사항 없음" }}</td>
+    </tr>
+    <tr>
+      <td class="center" style="font-weight:bold;">신호 세기</td>
+      <td class="center">신호 세기 50%<br>출력 기준<br><span class="sub">(SWIMS 확인)</span></td>
+      <td colspan="3">{{ data.signal_result|default:"특이사항 없음" }}</td>
+    </tr>
+    <!-- 채널중첩: 좌측 세로 병합 -->
+    <tr>
+      <td rowspan="2" class="center" style="font-weight:bold;">채널중첩</td>
+      <td rowspan="2" class="center">채널 3중첩<br>이하 유지<br><span class="sub">(WIFI 360)</span></td>
+      <td class="center" style="font-weight:bold;">AP 아래</td>
+      <td class="photo-cell">
+        {% if data.photo_channel_under_1_b64 %}<img src="{{ data.photo_channel_under_1_b64 }}">
+        {% else %}<div class="no-photo">사진삽입</div>{% endif %}
+      </td>
+      <td class="photo-cell">
+        {% if data.photo_channel_under_2_b64 %}<img src="{{ data.photo_channel_under_2_b64 }}">
+        {% else %}<div class="no-photo">사진삽입</div>{% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td class="center" style="font-weight:bold;">AP에서 먼 곳</td>
+      <td class="photo-cell">
+        {% if data.photo_channel_far_1_b64 %}<img src="{{ data.photo_channel_far_1_b64 }}">
+        {% else %}<div class="no-photo">사진삽입</div>{% endif %}
+      </td>
+      <td class="photo-cell">
+        {% if data.photo_channel_far_2_b64 %}<img src="{{ data.photo_channel_far_2_b64 }}">
+        {% else %}<div class="no-photo">사진삽입</div>{% endif %}
+      </td>
+    </tr>
+  </tbody>
 </table>
 
 <!-- 무선 속도 측정 사진 -->
 <table>
-  <tr><th colspan="2">무선 속도 측정 (iPerf)</th></tr>
-  <tr><th>교실 중앙 (AP 아래)</th><th>교실 외곽 (AP에서 먼곳)</th></tr>
+  <thead>
+    <tr><th colspan="2">무선 속도 측정 (iPerf)</th></tr>
+    <tr><th>교실 중앙 (AP 아래)</th><th>교실 외곽 (AP에서 먼곳)</th></tr>
+  </thead>
   <tr>
     <td class="photo-cell">
       {% if data.photo_wifi_center_b64 %}<img src="{{ data.photo_wifi_center_b64 }}">
