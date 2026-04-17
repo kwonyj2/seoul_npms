@@ -733,15 +733,20 @@ async function doCreateFolder() {
 // ── 폴더 삭제 ────────────────────────────────────────────────
 async function deleteFolder(e, folderId, folderName) {
   e.stopPropagation();
-  if (!confirm(`'${folderName}' 폴더를 삭제하시겠습니까?\n(하위 폴더와 파일이 모두 삭제됩니다)`)) return;
+  if (!confirm(`'${folderName}' 폴더를 삭제하시겠습니까?\n(하위 폴더와 파일이 휴지통으로 이동됩니다)`)) return;
   try {
-    await fetch(`${API}/nas/folders/${folderId}/`, {
+    const r = await fetch(`${API}/nas/folders/${folderId}/`, {
       method: 'DELETE', headers: { 'X-CSRFToken': getCsrfToken() }
     });
-    showToast('폴더 삭제됨', 'success');
-    if (currentFolderId === null) await loadSideTree(null);
-    loadContents();
-  } catch(e) { showToast('삭제 실패', 'error'); }
+    if (r.ok || r.status === 204) {
+      showToast('폴더가 휴지통으로 이동됨', 'success');
+      if (currentFolderId === null) await loadSideTree(null);
+      loadContents();
+    } else {
+      const d = await r.json().catch(() => ({}));
+      showToast(d.detail || d.error || '삭제 실패 (권한 확인)', 'error');
+    }
+  } catch(e) { showToast('삭제 실패: ' + e.message, 'error'); }
 }
 
 // ── 파일 삭제 (휴지통으로 이동) ─────────────────────────────
