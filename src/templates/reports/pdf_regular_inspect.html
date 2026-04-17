@@ -290,7 +290,15 @@
       <td class="center">신호 세기 50%<br>출력 기준<br><span class="sub">(SWIMS 확인)</span></td>
       <td colspan="4">{{ data.signal_result|default:"특이사항 없음" }}</td>
     </tr>
-    <!-- 채널중첩: AP아래 3장 + 먼곳 3장 -->
+  </tbody>
+</table>
+
+<!-- 채널중첩: AP아래 별도 table -->
+<table>
+  <thead>
+    <tr><th style="width:12%;">점검 구분</th><th style="width:14%;">점검 기준</th><th colspan="4">점검 결과</th></tr>
+  </thead>
+  <tbody>
     <tr style="page-break-inside:avoid;">
       <td rowspan="2" class="center" style="font-weight:bold;vertical-align:middle;">채널중첩</td>
       <td rowspan="2" class="center" style="vertical-align:middle;">채널 3중첩<br>이하 유지<br><span class="sub">(WIFI 360)</span></td>
@@ -323,19 +331,27 @@
         {% else %}<div class="no-photo">사진삽입</div>{% endif %}
       </td>
     </tr>
-    <!-- 무선 속도 측정: 좌측 세로 병합 (상단 헤더 아님) -->
+  </tbody>
+</table>
+
+<!-- 무선 속도 측정: 별도 table, 좌측 세로 병합, 교실중앙/외곽 50:50 균등 -->
+<table>
+  <thead>
+    <tr><th style="width:12%;">점검 구분</th><th style="width:14%;">점검 기준</th><th colspan="2">점검 결과</th></tr>
+  </thead>
+  <tbody>
     <tr style="page-break-inside:avoid;">
       <td rowspan="2" class="center" style="font-weight:bold;vertical-align:middle;">속도 측정<br>(iPerf,<br>NIA,<br>스쿨넷)</td>
-      <td rowspan="2" class="center" style="font-weight:bold;vertical-align:middle;"> </td>
-      <th colspan="2">교실 중앙 (AP 아래)</th>
-      <th colspan="2">교실 외곽 (AP에서 먼곳)</th>
+      <td rowspan="2" class="center" style="vertical-align:middle;"> </td>
+      <th style="width:37%;">교실 중앙 (AP 아래)</th>
+      <th style="width:37%;">교실 외곽 (AP에서 먼곳)</th>
     </tr>
     <tr style="page-break-inside:avoid;">
-      <td class="photo-cell" colspan="2">
+      <td class="photo-cell">
         {% if data.photo_wifi_center_b64 %}<img src="{{ data.photo_wifi_center_b64 }}">
         {% else %}<div class="no-photo">사진삽입</div>{% endif %}
       </td>
-      <td class="photo-cell" colspan="2">
+      <td class="photo-cell">
         {% if data.photo_wifi_edge_b64 %}<img src="{{ data.photo_wifi_edge_b64 }}">
         {% else %}<div class="no-photo">사진삽입</div>{% endif %}
       </td>

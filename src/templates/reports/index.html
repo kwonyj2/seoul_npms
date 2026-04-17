@@ -639,6 +639,13 @@ async function openWriteModal(tmplId){
       var dcc=await rcc.json();
       schoolContacts=dcc.contacts||[];
     }catch(e){ console.error(e); }
+  } else if(selTemplate.report_type==='regular'){
+    /* 정기점검: 선생님 목록 로드 */
+    try{
+      var rcr=await fetch(API_BASE+'/reports/reports/school_contacts/?school_id='+selSchool.id,{headers:{'X-CSRFToken':CSRF_TOKEN}});
+      var dcr=await rcr.json();
+      schoolContacts=dcr.contacts||[];
+    }catch(e){ console.error(e); }
   }
 
   wmStep=1; wmReportId=null; wmEditMode=false; wmEditReportId=null; wmRestoreSigs=null;
