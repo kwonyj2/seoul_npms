@@ -185,10 +185,10 @@ def generate_report_pdf_task(self, report_id):
             else:
                 base_name = f'스위치 설치 확인서_{school_name}'
 
-        # PDF 출력 경로 — 보고서 유형별 폴더 정리
+        # PDF 출력 경로 — 보고서 유형별 폴더 + 파일명 접두사
         nas_output = getattr(settings, 'NAS_OUTPUT_ROOT', '/media/reports')
+        prefix = '2026년 테크센터-'
         if report_type == 'regular':
-            # 산출물/정기점검보고서/N분기/
             quarter = data.get('quarter', '')
             pdf_dir = os.path.join(nas_output, '정기점검보고서', f'{quarter}분기')
         elif report_type == 'switch_install':
@@ -199,7 +199,7 @@ def generate_report_pdf_task(self, report_id):
             pdf_dir = os.path.join(nas_output, str(report.school.id))
         os.makedirs(pdf_dir, exist_ok=True)
 
-        pdf_path = os.path.join(pdf_dir, f'{base_name}.pdf')
+        pdf_path = os.path.join(pdf_dir, f'{prefix}{base_name}.pdf')
         weasyprint.HTML(string=html_content).write_pdf(pdf_path)
 
         report.pdf_path = pdf_path
