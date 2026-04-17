@@ -743,6 +743,8 @@ class ReportViewSet(viewsets.ModelViewSet):
         # 스위치/AP 설치 확인서 → 학교 선생님 정보 자동 등록
         if report.template.report_type == 'switch_install':
             _auto_register_school_contact(report)
+        # 근태기록부에 업무 자동 기록
+        _record_attendance_work(report)
         return Response(ReportDetailSerializer(report).data)
 
     @action(detail=True, methods=['post'])
@@ -887,6 +889,8 @@ class ReportViewSet(viewsets.ModelViewSet):
             rows = _export_rows_switch_install(qs)
         elif rtype == 'cable':
             rows = _export_rows_cable(qs)
+        elif rtype == 'regular':
+            rows = _export_rows_regular(qs)
         else:
             rows = _export_rows_generic(qs, template)
 
@@ -1069,6 +1073,51 @@ def _export_rows_cable(qs):
     return rows
 
 
+def _export_rows_regular(qs):
+    """정기점검 보고서 전용 Excel export"""
+    rows = []
+    for rpt in qs:
+        data = rpt.data or {}
+        row = _common_cols(rpt)
+        row['분기'] = data.get('quarter', '')
+        row['점검일자'] = data.get('inspect_date', '')
+        row['스위치 수량'] = data.get('switch_count', '')
+        row['PoE 수량'] = data.get('poe_count', '')
+        row['AP 수량'] = data.get('ap_count', '')
+        row['스위치 점검결과'] = data.get('switch_result', '')
+        row['PoE 점검결과'] = data.get('poe_result', '')
+        row['AP 점검결과'] = data.get('ap_result', '')
+        # 유선 속도
+        for net, net_label in [('teacher', '교사망'), ('student', '학생망'), ('wireless', '무선망')]:
+            for pos, pos_label in [('hub', '집선'), ('end', '단말')]:
+                for d in ['down', 'up']:
+                    key = f'wired_{net}_{pos}_{d}'
+                    row[f'{net_label} {pos_label} {d.upper()}'] = data.get(key, '')
+        # 무선 속도
+        row['무선 중앙 Down'] = data.get('wifi_center_down', '')
+        row['무선 중앙 Up'] = data.get('wifi_center_up', '')
+        row['무선 외곽 Down'] = data.get('wifi_edge_down', '')
+        row['무선 외곽 Up'] = data.get('wifi_edge_up', '')
+        # 점검 항목
+        row['AP 배치'] = data.get('ap_placement_result', '')
+        row['신호세기'] = data.get('signal_result', '')
+        row['스위치 수량변경'] = data.get('switch_change_result', '')
+        row['PoE 수량변경'] = data.get('poe_change_result', '')
+        row['정보자원 현황변경'] = data.get('info_resource_result', '')
+        row['정보자원 목록'] = data.get('chk_resource_list', '')
+        row['네트워크구성도'] = data.get('chk_network_diagram', '')
+        row['AP 배치도'] = data.get('chk_ap_layout', '')
+        row['랙 실장도'] = data.get('chk_rack_layout', '')
+        row['선번장'] = data.get('chk_cable_schedule', '')
+        row['전자칠판'] = data.get('smartboard_result', '')
+        row['디벗'] = data.get('devit_result', '')
+        row['기타 요청사항'] = data.get('etc_request', '')
+        # 서명
+        row.update(_sig_cols(data))
+        rows.append(row)
+    return rows
+
+
 def _export_rows_generic(qs, template):
     fields = (template.fields_schema or {}).get('fields', [])
     rows = []
@@ -1147,6 +1196,38 @@ def _sync_school_equipment(report):
                 SchoolEquipment.objects.create(school=report.school, **defaults)
 
 
+def _record_attendance_work(report):
+    """보고서 완료 시 작성자의 근태기록에 업무 내용 자동 기록"""
+    from apps.workforce.models import AttendanceLog
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        user = report.created_by
+        if not user:
+            return
+        work_date = timezone.localdate()
+        rtype_label = {
+            'switch_install': '스위치 설치확인서',
+            'cable': '소규모 네트워크 포설',
+            'regular': '정기점검 보고서',
+        }.get(report.template.report_type, report.template.name)
+        work_note = f'{rtype_label} - {report.school.name}'
+
+        log, created = AttendanceLog.objects.get_or_create(
+            worker=user,
+            work_date=work_date,
+            defaults={'status': 'normal', 'note': work_note}
+        )
+        if not created:
+            # 기존 기록에 업무 추가 (중복 방지)
+            if work_note not in (log.note or ''):
+                log.note = f'{log.note}\n{work_note}'.strip() if log.note else work_note
+                log.save(update_fields=['note'])
+        logger.info(f'근태 업무 기록: {user.name} / {work_date} / {work_note}')
+    except Exception as e:
+        logger.warning(f'근태 업무 기록 실패: {e}')
+
+
 def _auto_register_school_contact(report):
     """스위치/AP 설치 확인서 완료 시 signature_school 정보를 SchoolContact에 자동 등록.
     이름+전화번호가 같은 연락처가 이미 존재하면 건너뜀."""
@@ -1201,11 +1282,11 @@ def _sync_wbs_regular_inspect(report):
     if total_schools == 0:
         return
 
-    # 차수별 WBS 코드 및 기간 매핑
+    # 차수별 WBS 코드 및 기간 매핑 (분기별)
     PERIODS = [
-        ('2.3.1', date(2026, 7, 1),  date(2026, 8, 31)),
-        ('2.3.2', date(2026, 9, 1),  date(2026, 10, 31)),
-        ('2.3.3', date(2026, 11, 1), date(2026, 11, 30)),
+        ('2.3.1', date(2026, 4, 1),  date(2026, 6, 30)),   # 2분기
+        ('2.3.2', date(2026, 7, 1),  date(2026, 9, 30)),   # 3분기
+        ('2.3.3', date(2026, 10, 1), date(2026, 12, 31)),  # 4분기
     ]
 
     # 보고서 점검일 결정 (data.inspect_date → completed_at → today)

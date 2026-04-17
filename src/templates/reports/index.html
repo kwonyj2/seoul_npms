@@ -2791,7 +2791,120 @@ async function loadReportToForm(idOrData){
         wmRestoreSigs={itl:si, sch:ss};
       }, 150);
     }
+    /* ── cable 복원 ── */
+    else if(tmplType==='cable'||tmpl.report_type==='cable'){
+      var wdEl=document.getElementById('f-work_date');
+      if(wdEl&&data.work_date) wdEl.value=data.work_date;
+      var cnEl=document.getElementById('f-cable-notes');
+      if(cnEl&&data.notes) cnEl.value=data.notes;
+      var cables=data.cables||[];
+      var cqEl=document.getElementById('f-cable-qty');
+      if(cqEl&&cables.length){ cqEl.value=cables.length; onCableQtyChange(cables.length); }
+      setTimeout(function(){
+        cables.forEach(function(c,i){
+          function setV(id,val){ var el=document.getElementById(id); if(el&&val!=null) el.value=val; }
+          setV('cable-'+i+'-length', c.cable_length);
+          var ctEl=document.querySelector('input[name="cable-'+i+'-cable-type"][value="'+c.cable_type+'"]');
+          if(ctEl) ctEl.checked=true;
+          (c.work_types||[]).forEach(function(wt){
+            var chk=document.getElementById('cable-'+i+'-wt-'+wt);
+            if(chk) chk.checked=true;
+          });
+          var sp=c.start_point||{}, ep=c.end_point||{};
+          ['model','building','floor','location','network','devid','port'].forEach(function(k){
+            setV('cable-'+i+'-sp-'+k, sp[k==='model'?'model_name':k]);
+            setV('cable-'+i+'-ep-'+k, ep[k==='model'?'model_name':k]);
+          });
+          cablePhotos[i]=cablePhotos[i]||{};
+          ['sp_before','sp_after','ep_before','ep_after'].forEach(function(pk){
+            var pid=c['photo_'+pk+'_id'];
+            if(pid) cablePhotos[i][pk]=pid;
+          });
+        });
+        wmRestoreSigs={itl:data.signature_itl||{}, sch:data.signature_school||{}};
+      }, 150);
+    }
+    /* ── regular 복원 ── */
+    else if(tmplType==='regular'||tmpl.report_type==='regular'){
+      setTimeout(function(){
+        function setV(id,val){ var el=document.getElementById(id); if(el&&val!=null) el.value=val; }
+        function setRiSel(id,val){
+          if(!val) return;
+          var sel=document.getElementById(id);
+          if(!sel) return;
+          /* 기본 옵션과 일치하면 선택, 아니면 기타로 설정 */
+          var found=false;
+          for(var j=0;j<sel.options.length;j++){
+            if(sel.options[j].value===val){ sel.value=val; found=true; break; }
+          }
+          if(!found){
+            sel.value='__etc__';
+            _riToggleEtc(id);
+            var etc=document.getElementById(id+'-etc');
+            if(etc) etc.value=val;
+          }
+        }
+        setV('ri-inspect-date', data.inspect_date);
+        setV('ri-switch-count', data.switch_count);
+        setV('ri-poe-count', data.poe_count);
+        setV('ri-ap-count', data.ap_count);
+        setRiSel('ri-switch-result', data.switch_result);
+        setRiSel('ri-poe-result', data.poe_result);
+        setRiSel('ri-ap-result', data.ap_result);
+        /* 유선 속도 */
+        ['teacher','student','wireless'].forEach(function(net){
+          ['hub_down','hub_up','end_down','end_up'].forEach(function(s){
+            setV('ri-wired-'+net+'-'+s, data['wired_'+net+'_'+s]);
+          });
+        });
+        /* 무선 속도 */
+        setV('ri-wifi-center-down', data.wifi_center_down);
+        setV('ri-wifi-center-up', data.wifi_center_up);
+        setV('ri-wifi-edge-down', data.wifi_edge_down);
+        setV('ri-wifi-edge-up', data.wifi_edge_up);
+        /* 점검 결과 */
+        setRiSel('ri-ap-placement', data.ap_placement_result);
+        setRiSel('ri-signal', data.signal_result);
+        setRiSel('ri-switch-change', data.switch_change_result);
+        setRiSel('ri-poe-change', data.poe_change_result);
+        /* 정보자료 */
+        setRiSel('ri-info-resource', data.info_resource_result);
+        setRiSel('ri-chk-resource', data.chk_resource_list);
+        setRiSel('ri-chk-diagram', data.chk_network_diagram);
+        setRiSel('ri-chk-ap-layout', data.chk_ap_layout);
+        setRiSel('ri-chk-rack', data.chk_rack_layout);
+        setRiSel('ri-chk-cable', data.chk_cable_schedule);
+        /* 기타 */
+        setRiSel('ri-smartboard', data.smartboard_result);
+        setRiSel('ri-devit', data.devit_result);
+        setRiSel('ri-etc-request', data.etc_request);
+        /* 사진 ID 복원 */
+        var photoKeys=['wired_teacher_hub','wired_teacher_end','wired_student_hub','wired_student_end',
+          'wired_wireless_hub','channel_under_1','channel_under_2','channel_under_3',
+          'channel_far_1','channel_far_2','channel_far_3','wifi_center','wifi_edge'];
+        photoKeys.forEach(function(k){
+          var pid=data['photo_'+k+'_id'];
+          if(pid){
+            regularPhotos[k]=pid;
+            _restoreRegularPhotoPreview(k, pid);
+          }
+        });
+        wmRestoreSigs={itl:data.signature_itl||{}, sch:data.signature_school||{}};
+      }, 200);
+    }
   }, 100);
+}
+
+async function _restoreRegularPhotoPreview(key, photoId){
+  try{
+    var res=await fetch(API_BASE+'/photos/photos/'+photoId+'/',{headers:{'X-CSRFToken':CSRF_TOKEN}});
+    if(!res.ok) return;
+    var p=await res.json();
+    var url=p.image_url||p.image||'';
+    try{if(url.startsWith('http'))url=new URL(url).pathname;}catch(e){}
+    var prev=document.getElementById('ri-photo-'+key+'-preview');
+    if(prev&&url) prev.innerHTML='<img src="'+escH(url)+'" style="max-width:90px;max-height:65px;border-radius:4px;">';
+  }catch(e){}
 }
 
 /* ────────────────────────────────────────────────
