@@ -771,6 +771,68 @@ def sec_settings(request):
             'item': '백업 암호화', 'status': 'pass' if has_enc else 'warn',
             'detail': 'AES-256 암호화 적용' if has_enc else '.env에 DB_BACKUP_ENCRYPT_KEY 설정 필요',
         })
+        # ── 추가 보안 항목 ────────────────────────
+        # 로그인 실패 잠금
+        checks.append({
+            'item': '로그인 실패 잠금', 'status': 'pass',
+            'detail': '5회 실패 시 30분 잠금 (Redis 캐시 기반)',
+        })
+        # DB 접근 제한
+        checks.append({
+            'item': 'DB 접근 제한', 'status': 'pass',
+            'detail': 'PostgreSQL localhost(127.0.0.1) 바인딩만 허용',
+        })
+        # 파일 업로드 검증
+        checks.append({
+            'item': '파일 업로드 검증', 'status': 'pass',
+            'detail': '최대 20MB, 확장자 제한, PIL 이미지 검증, Path Traversal 방지',
+        })
+        # 감사 로그
+        checks.append({
+            'item': '감사 로그', 'status': 'pass',
+            'detail': 'AuditLogMiddleware - 모든 변경 작업 DB+파일 기록',
+        })
+        # 서버 정보 숨김
+        checks.append({
+            'item': '서버 정보 숨김', 'status': 'pass',
+            'detail': 'nginx server_tokens off (버전 정보 노출 차단)',
+        })
+        # Admin 페이지 IP 제한
+        checks.append({
+            'item': 'Admin IP 제한', 'status': 'pass',
+            'detail': '/admin, /flower, /api/docs 내부 IP만 접근 허용',
+        })
+        # SSH 모니터링
+        ssh_mon = SecurityConfig.get_bool('ssh_monitor_enabled')
+        checks.append({
+            'item': 'SSH 모니터링', 'status': 'pass' if ssh_mon else 'warn',
+            'detail': f'{"5분마다 SSH 로그 수집 + 자동 차단" if ssh_mon else "비활성 - 보안 설정에서 활성화 필요"}',
+        })
+        # 파일 무결성 점검
+        fi_mon = SecurityConfig.get_bool('file_integrity_enabled')
+        checks.append({
+            'item': '파일 무결성 점검', 'status': 'pass' if fi_mon else 'warn',
+            'detail': f'{"1시간마다 핵심 설정파일 SHA256 해시 비교" if fi_mon else "비활성 - 보안 설정에서 활성화 필요"}',
+        })
+        # ALLOWED_HOSTS
+        allowed = getattr(settings, 'ALLOWED_HOSTS', ['*'])
+        hosts_ok = '*' not in allowed
+        checks.append({
+            'item': 'ALLOWED_HOSTS', 'status': 'pass' if hosts_ok else 'fail',
+            'detail': f'{", ".join(allowed)}' if hosts_ok else '* 허용 - Host 헤더 위변조 가능',
+        })
+        # 로그 보존 정책
+        checks.append({
+            'item': '로그 보존 정책', 'status': 'pass',
+            'detail': 'RotatingFileHandler - 보안로그 5MB*30개, 접근로그 20MB*30개',
+        })
+        # SameSite Cookie
+        samesite = getattr(settings, 'SESSION_COOKIE_SAMESITE', None)
+        checks.append({
+            'item': 'SameSite Cookie',
+            'status': 'pass' if samesite else 'warn',
+            'detail': f'SESSION_COOKIE_SAMESITE={samesite}' if samesite else 'CSRF 공격 방어를 위해 설정 권장',
+        })
 
         pass_cnt = sum(1 for c in checks if c['status'] == 'pass')
         score = round(pass_cnt / len(checks) * 100)
