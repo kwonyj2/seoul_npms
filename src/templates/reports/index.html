@@ -1997,7 +1997,7 @@ function _renderSwitchInstallConfirm(){
   html+='<div class="mb-1"><small class="text-muted">담당자</small>';
   html+='<input type="text" id="sig-itl-name" class="form-control form-control-sm" value="'+escH(USER_NAME)+'"></div>';
   html+='<div class="mb-1"><small class="text-muted">연락처</small>';
-  html+='<input type="text" id="sig-itl-phone" class="form-control form-control-sm" value="'+escH(USER_PHONE)+'"></div>';
+  html+='<input type="text" id="sig-itl-phone" class="form-control form-control-sm" value="'+escH(USER_PHONE)+'" onblur="_formatPhone(this)"></div>';
   html+='<div class="mb-1"><small class="text-muted">서명</small>';
   html+='<canvas id="sig-itl-canvas" width="220" height="80" class="d-block border rounded" style="background:#fff;touch-action:none;cursor:crosshair;width:100%;"></canvas>';
   html+='<button type="button" class="btn btn-xs btn-outline-danger mt-1" onclick="_sigClear(\'itl\')" style="font-size:.7rem;padding:1px 6px;">지우기</button>';
@@ -2014,7 +2014,7 @@ function _renderSwitchInstallConfirm(){
   html+='<select id="sig-sch-contact-sel" class="form-select form-select-sm mb-1" onchange="_onSchContactSel()">'+contactOpts+'</select>';
   html+='<input type="text" id="sig-sch-name" class="form-control form-control-sm d-none" placeholder="이름 직접 입력"></div>';
   html+='<div class="mb-1"><small class="text-muted">연락처</small>';
-  html+='<input type="text" id="sig-sch-phone" class="form-control form-control-sm" placeholder="연락처"></div>';
+  html+='<input type="text" id="sig-sch-phone" class="form-control form-control-sm" placeholder="연락처" onblur="_formatPhone(this)"></div>';
   html+='<div class="mb-1"><small class="text-muted">서명</small>';
   html+='<canvas id="sig-sch-canvas" width="220" height="80" class="d-block border rounded" style="background:#fff;touch-action:none;cursor:crosshair;width:100%;"></canvas>';
   html+='<button type="button" class="btn btn-xs btn-outline-danger mt-1" onclick="_sigClear(\'sch\')" style="font-size:.7rem;padding:1px 6px;">지우기</button>';
@@ -2028,6 +2028,7 @@ function _renderSwitchInstallConfirm(){
   /* 서명 캔버스 초기화 */
   _initSigCanvas('itl');
   _initSigCanvas('sch');
+  _autoSelectSchContact();
 
   /* 수정 모드: 기존 서명 데이터 복원 */
   if(wmRestoreSigs){
@@ -2091,7 +2092,7 @@ function _renderRegularInspectConfirm(){
   html+='<div class="small fw-semibold text-primary mb-1">점검자 (세종아이티엘)</div>';
   html+='<div class="mb-1"><small class="text-muted">소속</small><input type="text" id="sig-itl-org" class="form-control form-control-sm" value="세종아이티엘 컨소시엄" readonly></div>';
   html+='<div class="mb-1"><small class="text-muted">담당자</small><input type="text" id="sig-itl-name" class="form-control form-control-sm" value="'+escH(USER_NAME)+'"></div>';
-  html+='<div class="mb-1"><small class="text-muted">연락처</small><input type="text" id="sig-itl-phone" class="form-control form-control-sm" value="'+escH(USER_PHONE)+'"></div>';
+  html+='<div class="mb-1"><small class="text-muted">연락처</small><input type="text" id="sig-itl-phone" class="form-control form-control-sm" value="'+escH(USER_PHONE)+'" onblur="_formatPhone(this)"></div>';
   html+='<div class="mb-1"><small class="text-muted">서명</small>';
   html+='<canvas id="sig-itl-canvas" width="220" height="80" class="d-block border rounded" style="background:#fff;touch-action:none;cursor:crosshair;width:100%;"></canvas>';
   html+='<button type="button" class="btn btn-xs btn-outline-danger mt-1" onclick="_sigClear(\'itl\')" style="font-size:.7rem;padding:1px 6px;">지우기</button></div>';
@@ -2102,7 +2103,7 @@ function _renderRegularInspectConfirm(){
   html+='<div class="mb-1"><small class="text-muted">소속</small><input type="text" id="sig-sch-org" class="form-control form-control-sm" value="'+escH(selSchool.name)+'" readonly></div>';
   html+='<div class="mb-1"><small class="text-muted">담당자</small><select id="sig-sch-contact-sel" class="form-select form-select-sm mb-1" onchange="_onSchContactSel()">'+contactOpts+'</select>';
   html+='<input type="text" id="sig-sch-name" class="form-control form-control-sm d-none" placeholder="이름 직접 입력"></div>';
-  html+='<div class="mb-1"><small class="text-muted">연락처</small><input type="text" id="sig-sch-phone" class="form-control form-control-sm" placeholder="연락처"></div>';
+  html+='<div class="mb-1"><small class="text-muted">연락처</small><input type="text" id="sig-sch-phone" class="form-control form-control-sm" placeholder="연락처" onblur="_formatPhone(this)"></div>';
   html+='<div class="mb-1"><small class="text-muted">서명</small>';
   html+='<canvas id="sig-sch-canvas" width="220" height="80" class="d-block border rounded" style="background:#fff;touch-action:none;cursor:crosshair;width:100%;"></canvas>';
   html+='<button type="button" class="btn btn-xs btn-outline-danger mt-1" onclick="_sigClear(\'sch\')" style="font-size:.7rem;padding:1px 6px;">지우기</button></div>';
@@ -2154,7 +2155,7 @@ function _renderCableInstallConfirm(){
   html+='<div class="small fw-semibold text-primary mb-1">세종아이티엘 컨소시엄 측</div>';
   html+='<div class="mb-1"><small class="text-muted">소속</small><input type="text" id="sig-itl-org" class="form-control form-control-sm" value="세종아이티엘 컨소시엄" readonly></div>';
   html+='<div class="mb-1"><small class="text-muted">담당자</small><input type="text" id="sig-itl-name" class="form-control form-control-sm" value="'+escH(USER_NAME)+'"></div>';
-  html+='<div class="mb-1"><small class="text-muted">연락처</small><input type="text" id="sig-itl-phone" class="form-control form-control-sm" value="'+escH(USER_PHONE)+'"></div>';
+  html+='<div class="mb-1"><small class="text-muted">연락처</small><input type="text" id="sig-itl-phone" class="form-control form-control-sm" value="'+escH(USER_PHONE)+'" onblur="_formatPhone(this)"></div>';
   html+='<div class="mb-1"><small class="text-muted">서명</small>';
   html+='<canvas id="sig-itl-canvas" width="220" height="80" class="d-block border rounded" style="background:#fff;touch-action:none;cursor:crosshair;width:100%;"></canvas>';
   html+='<button type="button" class="btn btn-xs btn-outline-danger mt-1" onclick="_sigClear(\'itl\')" style="font-size:.7rem;padding:1px 6px;">지우기</button>';
@@ -2165,7 +2166,7 @@ function _renderCableInstallConfirm(){
   html+='<div class="mb-1"><small class="text-muted">담당자</small>';
   html+='<select id="sig-sch-contact-sel" class="form-select form-select-sm mb-1" onchange="_onSchContactSel()">'+contactOpts+'</select>';
   html+='<input type="text" id="sig-sch-name" class="form-control form-control-sm d-none" placeholder="이름 직접 입력"></div>';
-  html+='<div class="mb-1"><small class="text-muted">연락처</small><input type="text" id="sig-sch-phone" class="form-control form-control-sm" placeholder="연락처"></div>';
+  html+='<div class="mb-1"><small class="text-muted">연락처</small><input type="text" id="sig-sch-phone" class="form-control form-control-sm" placeholder="연락처" onblur="_formatPhone(this)"></div>';
   html+='<div class="mb-1"><small class="text-muted">서명</small>';
   html+='<canvas id="sig-sch-canvas" width="220" height="80" class="d-block border rounded" style="background:#fff;touch-action:none;cursor:crosshair;width:100%;"></canvas>';
   html+='<button type="button" class="btn btn-xs btn-outline-danger mt-1" onclick="_sigClear(\'sch\')" style="font-size:.7rem;padding:1px 6px;">지우기</button>';
@@ -2175,6 +2176,24 @@ function _renderCableInstallConfirm(){
   document.getElementById('wm-confirm-table').innerHTML=html;
   _initSigCanvas('itl');
   _initSigCanvas('sch');
+  _autoSelectSchContact();
+}
+
+/* 전화번호 자동 포맷: 01072337643 → 010-7233-7643 */
+function _formatPhone(input){
+  if(!input) return;
+  var v=input.value.replace(/[^0-9]/g,'');
+  if(v.length===11) input.value=v.slice(0,3)+'-'+v.slice(3,7)+'-'+v.slice(7);
+  else if(v.length===10) input.value=v.slice(0,3)+'-'+v.slice(3,6)+'-'+v.slice(6);
+}
+
+/* 확인자 자동 선택: 첫 번째 학교 담당자를 기본 선택 */
+function _autoSelectSchContact(){
+  var sel=document.getElementById('sig-sch-contact-sel'); if(!sel) return;
+  if(schoolContacts.length>0 && sel.value===''){
+    sel.value=schoolContacts[0].id;
+    _onSchContactSel();
+  }
 }
 
 function _onSchContactSel(){

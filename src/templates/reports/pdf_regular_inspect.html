@@ -27,6 +27,9 @@
   .right  { text-align: right; }
   .section-title { font-size: 10pt; font-weight: bold; margin: 14px 0 4px; }
   tbody tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }  /* 페이지 넘김 시 헤더 반복 */
+  tfoot { display: table-footer-group; }
+  table { page-break-inside: auto; }
   td.photo-cell { height: 180px; text-align: center; vertical-align: middle; }
   td.photo-cell img { max-width: 95%; max-height: 170px;
                       display: block; margin: 0 auto; }
@@ -189,49 +192,54 @@
   </tr>
 </table>
 
-<!-- 속도 측정 사진: 교사망 -->
+<!-- 속도 측정 사진: 하나의 표 -->
 <table>
-  <tr><th colspan="2">속도 측정 (iPerf, NIA, 스쿨넷)</th></tr>
-  <tr><th>집선(전산실)</th><th>단말(교무실)</th></tr>
-  <tr><td colspan="2" class="center" style="font-weight:bold;border-bottom:none;">교사망</td></tr>
-  <tr>
-    <td class="photo-cell">
-      {% if data.photo_wired_teacher_hub_b64 %}<img src="{{ data.photo_wired_teacher_hub_b64 }}">
-      {% else %}<div class="no-photo">사진삽입</div>{% endif %}
-    </td>
-    <td class="photo-cell">
-      {% if data.photo_wired_teacher_end_b64 %}<img src="{{ data.photo_wired_teacher_end_b64 }}">
-      {% else %}<div class="no-photo">사진삽입</div>{% endif %}
-    </td>
-  </tr>
-</table>
-
-<!-- 속도 측정 사진: 학생망 -->
-<table>
-  <tr><th>집선(전산실)</th><th>단말(컴퓨터실)</th></tr>
-  <tr><td colspan="2" class="center" style="font-weight:bold;border-bottom:none;">학생망</td></tr>
-  <tr>
-    <td class="photo-cell">
-      {% if data.photo_wired_student_hub_b64 %}<img src="{{ data.photo_wired_student_hub_b64 }}">
-      {% else %}<div class="no-photo">사진삽입</div>{% endif %}
-    </td>
-    <td class="photo-cell">
-      {% if data.photo_wired_student_end_b64 %}<img src="{{ data.photo_wired_student_end_b64 }}">
-      {% else %}<div class="no-photo">사진삽입</div>{% endif %}
-    </td>
-  </tr>
-</table>
-
-<!-- 속도 측정 사진: 무선망 -->
-<table>
-  <tr><th colspan="2">집선(전산실)</th></tr>
-  <tr><td colspan="2" class="center" style="font-weight:bold;border-bottom:none;">무선망</td></tr>
-  <tr>
-    <td class="photo-cell" colspan="2">
-      {% if data.photo_wired_wireless_hub_b64 %}<img src="{{ data.photo_wired_wireless_hub_b64 }}">
-      {% else %}<div class="no-photo">사진삽입</div>{% endif %}
-    </td>
-  </tr>
+  <thead>
+    <tr><th colspan="2">속도 측정 (iPerf, NIA, 스쿨넷)</th></tr>
+  </thead>
+  <tbody>
+    <!-- 교사망 -->
+    <tr><th>집선(전산실)</th><th>단말(교무실)</th></tr>
+    <tr>
+      <td class="center" style="font-weight:bold;border-bottom:0;padding:6px 0 2px;" colspan="2">교사망</td>
+    </tr>
+    <tr>
+      <td class="photo-cell">
+        {% if data.photo_wired_teacher_hub_b64 %}<img src="{{ data.photo_wired_teacher_hub_b64 }}">
+        {% else %}<div class="no-photo">사진삽입</div>{% endif %}
+      </td>
+      <td class="photo-cell">
+        {% if data.photo_wired_teacher_end_b64 %}<img src="{{ data.photo_wired_teacher_end_b64 }}">
+        {% else %}<div class="no-photo">사진삽입</div>{% endif %}
+      </td>
+    </tr>
+    <!-- 학생망 -->
+    <tr><th>집선(전산실)</th><th>단말(컴퓨터실)</th></tr>
+    <tr>
+      <td class="center" style="font-weight:bold;border-bottom:0;padding:6px 0 2px;" colspan="2">학생망</td>
+    </tr>
+    <tr>
+      <td class="photo-cell">
+        {% if data.photo_wired_student_hub_b64 %}<img src="{{ data.photo_wired_student_hub_b64 }}">
+        {% else %}<div class="no-photo">사진삽입</div>{% endif %}
+      </td>
+      <td class="photo-cell">
+        {% if data.photo_wired_student_end_b64 %}<img src="{{ data.photo_wired_student_end_b64 }}">
+        {% else %}<div class="no-photo">사진삽입</div>{% endif %}
+      </td>
+    </tr>
+    <!-- 무선망 -->
+    <tr><th colspan="2">집선(전산실)</th></tr>
+    <tr>
+      <td class="center" style="font-weight:bold;border-bottom:0;padding:6px 0 2px;" colspan="2">무선망</td>
+    </tr>
+    <tr>
+      <td class="photo-cell" colspan="2">
+        {% if data.photo_wired_wireless_hub_b64 %}<img src="{{ data.photo_wired_wireless_hub_b64 }}">
+        {% else %}<div class="no-photo">사진삽입</div>{% endif %}
+      </td>
+    </tr>
+  </tbody>
 </table>
 
 <!-- ═══════════════════════════════════════════════
