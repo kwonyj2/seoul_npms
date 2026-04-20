@@ -61,7 +61,7 @@ class Command(BaseCommand):
             'center':    idx('지원청'),
             'school':    idx('학교명'),
             'building':  idx('건물'),
-            'floor':     idx('층수'),
+            'floor':     idx('층수') or idx('층'),
             'category':  idx('구분'),
             'model':     idx('모델명'),
             'mfr':       idx('제조사'),
@@ -115,12 +115,12 @@ class Command(BaseCommand):
             raw_cat = get_val(row, 'category')
             category = _normalize_category(raw_cat)
 
-            # 도입년도
+            # 도입년도 (2021, 2021-08, '2021년' 등 다양한 형식 허용)
             year = None
             yi = COL.get('year')
             if yi is not None and yi < len(row) and row[yi]:
                 try:
-                    year = int(row[yi])
+                    year = int(str(row[yi]).strip()[:4])
                 except (ValueError, TypeError):
                     year = None
 
