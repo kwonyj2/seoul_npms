@@ -44,12 +44,12 @@
                 </label>
               </div>
               <div class="col-4">
-                <select id="sel-loc-building" class="form-select form-select-sm" onchange="loadLocFloors()">
+                <select id="sel-loc-building" class="form-select form-select-sm" onchange="onBuildingChange()">
                   <option value="">건물 선택</option>
                 </select>
               </div>
               <div class="col-4">
-                <select id="sel-loc-floor" class="form-select form-select-sm" onchange="loadLocRooms()" disabled>
+                <select id="sel-loc-floor" class="form-select form-select-sm" onchange="onFloorChange()" disabled>
                   <option value="">층 선택</option>
                 </select>
               </div>
@@ -113,7 +113,8 @@
               </div>
               <div class="col-6">
                 <label class="form-label small fw-semibold">요청자 연락처 <span class="text-danger">*</span></label>
-                <input type="tel" id="txt-requester-phone" class="form-control form-control-sm" placeholder="010-xxxx-xxxx">
+                <input type="tel" id="txt-requester-phone" class="form-control form-control-sm" placeholder="010-xxxx-xxxx"
+                       oninput="formatPhone(this)">
               </div>
             </div>
 
@@ -248,6 +249,23 @@ document.getElementById('btn-other-contact').addEventListener('click', function(
   document.getElementById('txt-requester').focus();
 });
 
+// ── 전화번호 자동 포맷 (3-4-4) ────────────────────────────────────────────
+function formatPhone(el) {
+  const cursor = el.selectionStart;
+  const before = el.value;
+  const digits = before.replace(/\D/g, '').slice(0, 11);
+  let formatted = digits;
+  if (digits.length > 7) {
+    formatted = digits.slice(0,3) + '-' + digits.slice(3,7) + '-' + digits.slice(7);
+  } else if (digits.length > 3) {
+    formatted = digits.slice(0,3) + '-' + digits.slice(3);
+  }
+  el.value = formatted;
+  // 커서 위치 보정
+  const diff = formatted.length - before.length;
+  el.setSelectionRange(cursor + diff, cursor + diff);
+}
+
 // ── 위치 cascade ───────────────────────────────────────────────────────────
 let _locSchoolId = null;
 
@@ -258,6 +276,7 @@ function resetLocationCascade() {
   document.getElementById('sel-loc-room').innerHTML     = '<option value="">교실 선택</option>';
   document.getElementById('sel-loc-floor').disabled = true;
   document.getElementById('sel-loc-room').disabled  = true;
+  document.getElementById('txt-loc-detail').value = '';
   document.getElementById('location-row').style.display = 'none';
 }
 
@@ -266,11 +285,38 @@ async function loadLocBuildings(schoolId) {
   const sel = document.getElementById('sel-loc-building');
   try {
     const data = await apiGet(`${API_BASE}/schools/schools/${schoolId}/rooms_for_select/`);
-    if (!data || !data.length) return;
-    sel.innerHTML = '<option value="">건물 선택</option>' +
-      data.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+    sel.innerHTML = '<option value="">건물 선택</option>';
+    if (data && data.length) {
+      sel.innerHTML += data.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+    }
+    sel.innerHTML += '<option value="other">기타 (직접 입력)</option>';
     document.getElementById('location-row').style.display = '';
-  } catch(e) {}
+  } catch(e) {
+    // API 실패해도 기타 옵션으로 위치 입력 가능하도록 표시
+    sel.innerHTML = '<option value="">건물 선택</option><option value="other">기타 (직접 입력)</option>';
+    document.getElementById('location-row').style.display = '';
+  }
+}
+
+function onBuildingChange() {
+  const val = document.getElementById('sel-loc-building').value;
+  const floorSel = document.getElementById('sel-loc-floor');
+  const roomSel  = document.getElementById('sel-loc-room');
+  const detailInput = document.getElementById('txt-loc-detail');
+
+  floorSel.innerHTML = '<option value="">층 선택</option>';
+  roomSel.innerHTML  = '<option value="">교실 선택</option>';
+  floorSel.disabled = true;
+  roomSel.disabled  = true;
+
+  if (val === 'other') {
+    // 기타 선택 시 층/교실 비활성, 상세 입력에 포커스
+    detailInput.placeholder = '위치를 직접 입력하세요 (예: 본관 3층 전산실)';
+    detailInput.focus();
+    return;
+  }
+  detailInput.placeholder = '위치 상세 (예: 서버실 2번 랙)';
+  if (val) loadLocFloors();
 }
 
 async function loadLocFloors() {
@@ -281,14 +327,29 @@ async function loadLocFloors() {
   roomSel.innerHTML  = '<option value="">교실 선택</option>';
   floorSel.disabled = true;
   roomSel.disabled  = true;
-  if (!bldId || !_locSchoolId) return;
+  if (!bldId || bldId === 'other' || !_locSchoolId) return;
   try {
     const data = await apiGet(`${API_BASE}/schools/schools/${_locSchoolId}/rooms_for_select/`, {building: bldId});
-    if (!data || !data.length) return;
-    floorSel.innerHTML = '<option value="">층 선택</option>' +
-      data.map(f => `<option value="${f.id}">${f.floor_name}</option>`).join('');
+    floorSel.innerHTML = '<option value="">층 선택</option>';
+    if (data && data.length) {
+      floorSel.innerHTML += data.map(f => `<option value="${f.id}">${f.floor_name}</option>`).join('');
+    }
+    floorSel.innerHTML += '<option value="other">기타</option>';
     floorSel.disabled = false;
   } catch(e) {}
+}
+
+function onFloorChange() {
+  const val = document.getElementById('sel-loc-floor').value;
+  const roomSel = document.getElementById('sel-loc-room');
+  roomSel.innerHTML = '<option value="">교실 선택</option>';
+  roomSel.disabled  = true;
+
+  if (val === 'other') {
+    document.getElementById('txt-loc-detail').focus();
+    return;
+  }
+  if (val) loadLocRooms();
 }
 
 async function loadLocRooms() {
@@ -296,12 +357,14 @@ async function loadLocRooms() {
   const roomSel = document.getElementById('sel-loc-room');
   roomSel.innerHTML = '<option value="">교실 선택</option>';
   roomSel.disabled  = true;
-  if (!floorId || !_locSchoolId) return;
+  if (!floorId || floorId === 'other' || !_locSchoolId) return;
   try {
     const data = await apiGet(`${API_BASE}/schools/schools/${_locSchoolId}/rooms_for_select/`, {floor: floorId});
-    if (!data || !data.length) return;
-    roomSel.innerHTML = '<option value="">교실 선택</option>' +
-      data.map(r => `<option value="${r.id}">${r.room_number ? r.room_number+' '+r.name : r.name}</option>`).join('');
+    roomSel.innerHTML = '<option value="">교실 선택</option>';
+    if (data && data.length) {
+      roomSel.innerHTML += data.map(r => `<option value="${r.id}">${r.room_number ? r.room_number+' '+r.name : r.name}</option>`).join('');
+    }
+    roomSel.innerHTML += '<option value="other">기타</option>';
     roomSel.disabled = false;
   } catch(e) {}
 }
@@ -358,15 +421,15 @@ document.getElementById('create-form').addEventListener('submit', async function
   const subcat = document.getElementById('sel-subcategory').value;
   if (subcat) payload.subcategory = parseInt(subcat);
 
-  // 위치 정보
+  // 위치 정보 (기타 선택 시 FK 전송하지 않음)
   const locBld    = document.getElementById('sel-loc-building').value;
   const locFloor  = document.getElementById('sel-loc-floor').value;
   const locRoom   = document.getElementById('sel-loc-room').value;
   const locDetail = document.getElementById('txt-loc-detail').value.trim();
-  if (locBld)    payload.location_building = parseInt(locBld);
-  if (locFloor)  payload.location_floor    = parseInt(locFloor);
-  if (locRoom)   payload.location_room     = parseInt(locRoom);
-  if (locDetail) payload.location_detail   = locDetail;
+  if (locBld && locBld !== 'other')    payload.location_building = parseInt(locBld);
+  if (locFloor && locFloor !== 'other') payload.location_floor   = parseInt(locFloor);
+  if (locRoom && locRoom !== 'other')   payload.location_room    = parseInt(locRoom);
+  if (locDetail) payload.location_detail = locDetail;
 
   const btn = this.querySelector('[type=submit]');
   btn.disabled = true;

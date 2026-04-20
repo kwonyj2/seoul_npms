@@ -108,7 +108,8 @@
   <div class="card card-field mb-0">
     <div class="card-body p-3">
       <input type="text"  id="f-requester-name"     class="form-control mb-2" placeholder="이름 (필수)" required>
-      <input type="tel"   id="f-requester-phone"    class="form-control mb-2" placeholder="연락처 (필수)" required>
+      <input type="tel"   id="f-requester-phone"    class="form-control mb-2" placeholder="연락처 (필수)" required
+             oninput="formatPhone(this)">
       <input type="text"  id="f-requester-position" class="form-control"      placeholder="직위 (선택)">
     </div>
   </div>
@@ -154,6 +155,22 @@
 
 {% block extra_script %}
 <script>
+/* ── 전화번호 자동 포맷 (3-4-4) ──────────── */
+function formatPhone(el) {
+  const cursor = el.selectionStart;
+  const before = el.value;
+  const digits = before.replace(/\D/g, '').slice(0, 11);
+  let formatted = digits;
+  if (digits.length > 7) {
+    formatted = digits.slice(0,3) + '-' + digits.slice(3,7) + '-' + digits.slice(7);
+  } else if (digits.length > 3) {
+    formatted = digits.slice(0,3) + '-' + digits.slice(3);
+  }
+  el.value = formatted;
+  const diff = formatted.length - before.length;
+  el.setSelectionRange(cursor + diff, cursor + diff);
+}
+
 /* ── 학교 검색 ─────────────────────────────── */
 let _schools = [];
 async function loadSchools(){
