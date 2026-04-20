@@ -642,6 +642,19 @@ class SchoolViewSet(viewsets.ModelViewSet):
         buildings = school.buildings.order_by('order')
         return Response([{'id': b.id, 'name': b.name} for b in buildings])
 
+    @action(detail=True, methods=['get'], url_path='equipment_locations')
+    def equipment_locations(self, request, pk=None):
+        """SchoolEquipment의 install_location 고유값 목록 (건물 데이터 없는 학교용)"""
+        school = self.get_object()
+        locations = (
+            school.equipment_list
+            .exclude(install_location='')
+            .values_list('install_location', flat=True)
+            .distinct()
+            .order_by('install_location')
+        )
+        return Response(list(locations))
+
     @action(detail=True, methods=['post'], url_path='add_building')
     def add_building(self, request, pk=None):
         """건물 신규 추가 (사진/장애 등록 모달에서 직접 입력 시)"""

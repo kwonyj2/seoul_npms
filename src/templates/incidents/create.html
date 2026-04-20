@@ -43,19 +43,30 @@
                   <i class="bi bi-geo-alt me-1 text-secondary"></i>장애 위치 <small class="text-muted fw-normal">(선택)</small>
                 </label>
               </div>
-              <div class="col-4">
-                <select id="sel-loc-building" class="form-select form-select-sm" onchange="onBuildingChange()">
-                  <option value="">건물 선택</option>
-                </select>
+              <!-- 모드A: 건물/층/교실 cascade (SchoolBuilding 데이터 있을 때) -->
+              <div id="loc-mode-building" style="display:none;" class="col-12">
+                <div class="row g-1">
+                  <div class="col-4">
+                    <select id="sel-loc-building" class="form-select form-select-sm" onchange="onBuildingChange()">
+                      <option value="">건물 선택</option>
+                    </select>
+                  </div>
+                  <div class="col-4">
+                    <select id="sel-loc-floor" class="form-select form-select-sm" onchange="onFloorChange()" disabled>
+                      <option value="">층 선택</option>
+                    </select>
+                  </div>
+                  <div class="col-4">
+                    <select id="sel-loc-room" class="form-select form-select-sm" disabled>
+                      <option value="">교실 선택</option>
+                    </select>
+                  </div>
+                </div>
               </div>
-              <div class="col-4">
-                <select id="sel-loc-floor" class="form-select form-select-sm" onchange="onFloorChange()" disabled>
-                  <option value="">층 선택</option>
-                </select>
-              </div>
-              <div class="col-4">
-                <select id="sel-loc-room" class="form-select form-select-sm" disabled>
-                  <option value="">교실 선택</option>
+              <!-- 모드B: 장비 위치 목록 (SchoolEquipment 위치 데이터 기반) -->
+              <div id="loc-mode-equip" style="display:none;" class="col-12">
+                <select id="sel-loc-equip" class="form-select form-select-sm">
+                  <option value="">장비 설치 위치 선택</option>
                 </select>
               </div>
               <div class="col-12 mt-1">
@@ -268,35 +279,78 @@ function formatPhone(el) {
 
 // ── 위치 cascade ───────────────────────────────────────────────────────────
 let _locSchoolId = null;
+let _locMode = null; // 'building' or 'equip'
 
 function resetLocationCascade() {
   _locSchoolId = null;
+  _locMode = null;
   document.getElementById('sel-loc-building').innerHTML = '<option value="">건물 선택</option>';
   document.getElementById('sel-loc-floor').innerHTML    = '<option value="">층 선택</option>';
   document.getElementById('sel-loc-room').innerHTML     = '<option value="">교실 선택</option>';
   document.getElementById('sel-loc-floor').disabled = true;
   document.getElementById('sel-loc-room').disabled  = true;
+  document.getElementById('sel-loc-equip').innerHTML = '<option value="">장비 설치 위치 선택</option>';
   document.getElementById('txt-loc-detail').value = '';
+  document.getElementById('txt-loc-detail').placeholder = '위치 상세 (예: 서버실 2번 랙)';
+  document.getElementById('loc-mode-building').style.display = 'none';
+  document.getElementById('loc-mode-equip').style.display = 'none';
   document.getElementById('location-row').style.display = 'none';
 }
 
 async function loadLocBuildings(schoolId) {
   _locSchoolId = schoolId;
-  const sel = document.getElementById('sel-loc-building');
   try {
     const data = await apiGet(`${API_BASE}/schools/schools/${schoolId}/rooms_for_select/`);
-    sel.innerHTML = '<option value="">건물 선택</option>';
     if (data && data.length) {
-      sel.innerHTML += data.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+      // 건물 데이터 있음 → 모드A: 건물/층/교실 cascade
+      _locMode = 'building';
+      const sel = document.getElementById('sel-loc-building');
+      sel.innerHTML = '<option value="">건물 선택</option>' +
+        data.map(b => `<option value="${b.id}">${b.name}</option>`).join('') +
+        '<option value="other">기타 (직접 입력)</option>';
+      document.getElementById('loc-mode-building').style.display = '';
+      document.getElementById('loc-mode-equip').style.display = 'none';
+      document.getElementById('location-row').style.display = '';
+      return;
     }
-    sel.innerHTML += '<option value="other">기타 (직접 입력)</option>';
-    document.getElementById('location-row').style.display = '';
-  } catch(e) {
-    // API 실패해도 기타 옵션으로 위치 입력 가능하도록 표시
-    sel.innerHTML = '<option value="">건물 선택</option><option value="other">기타 (직접 입력)</option>';
-    document.getElementById('location-row').style.display = '';
-  }
+  } catch(e) {}
+
+  // 건물 데이터 없음 → 장비 위치 목록 시도
+  try {
+    const eqData = await apiGet(`${API_BASE}/schools/schools/${schoolId}/equipment_locations/`);
+    if (eqData && eqData.length) {
+      _locMode = 'equip';
+      const sel = document.getElementById('sel-loc-equip');
+      sel.innerHTML = '<option value="">장비 설치 위치 선택</option>' +
+        eqData.map(loc => `<option value="${loc}">${loc}</option>`).join('') +
+        '<option value="other">기타 (직접 입력)</option>';
+      document.getElementById('loc-mode-building').style.display = 'none';
+      document.getElementById('loc-mode-equip').style.display = '';
+      document.getElementById('location-row').style.display = '';
+      return;
+    }
+  } catch(e) {}
+
+  // 둘 다 없음 → 직접 입력만
+  _locMode = 'manual';
+  document.getElementById('loc-mode-building').style.display = 'none';
+  document.getElementById('loc-mode-equip').style.display = 'none';
+  document.getElementById('txt-loc-detail').placeholder = '위치를 직접 입력하세요 (예: 본관 3층 전산실)';
+  document.getElementById('location-row').style.display = '';
 }
+
+// 장비 위치 선택 시 → location_detail에 자동 입력
+document.getElementById('sel-loc-equip').addEventListener('change', function() {
+  const val = this.value;
+  const detail = document.getElementById('txt-loc-detail');
+  if (val === 'other') {
+    detail.value = '';
+    detail.placeholder = '위치를 직접 입력하세요 (예: 본관 3층 전산실)';
+    detail.focus();
+  } else if (val) {
+    detail.value = val;
+  }
+});
 
 function onBuildingChange() {
   const val = document.getElementById('sel-loc-building').value;
@@ -310,7 +364,6 @@ function onBuildingChange() {
   roomSel.disabled  = true;
 
   if (val === 'other') {
-    // 기타 선택 시 층/교실 비활성, 상세 입력에 포커스
     detailInput.placeholder = '위치를 직접 입력하세요 (예: 본관 3층 전산실)';
     detailInput.focus();
     return;
