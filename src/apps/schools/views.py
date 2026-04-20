@@ -644,16 +644,43 @@ class SchoolViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='equipment_locations')
     def equipment_locations(self, request, pk=None):
-        """SchoolEquipment의 install_location 고유값 목록 (건물 데이터 없는 학교용)"""
+        """SchoolEquipment 기반 건물/층/위치 cascade (건물 데이터 없는 학교용)
+        파라미터 없음 → 건물 목록, ?building=X → 층 목록, ?building=X&floor=Y → 위치 목록"""
         school = self.get_object()
-        locations = (
-            school.equipment_list
-            .exclude(install_location='')
-            .values_list('install_location', flat=True)
+        qs = school.equipment_list
+        building = request.query_params.get('building')
+        floor = request.query_params.get('floor')
+
+        if building and floor:
+            # 위치(교실) 목록
+            locations = (
+                qs.filter(building=building, floor=floor)
+                .exclude(install_location='')
+                .values_list('install_location', flat=True)
+                .distinct()
+                .order_by('install_location')
+            )
+            return Response(list(locations))
+
+        if building:
+            # 층 목록
+            floors = (
+                qs.filter(building=building)
+                .exclude(floor='')
+                .values_list('floor', flat=True)
+                .distinct()
+                .order_by('floor')
+            )
+            return Response(list(floors))
+
+        # 건물 목록
+        buildings = (
+            qs.exclude(building='')
+            .values_list('building', flat=True)
             .distinct()
-            .order_by('install_location')
+            .order_by('building')
         )
-        return Response(list(locations))
+        return Response(list(buildings))
 
     @action(detail=True, methods=['post'], url_path='add_building')
     def add_building(self, request, pk=None):
