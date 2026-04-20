@@ -1080,7 +1080,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
                 i.arrived_at.strftime('%Y-%m-%d %H:%M') if i.arrived_at else '',
                 i.completed_at.strftime('%Y-%m-%d %H:%M') if i.completed_at else '',
                 i.get_elapsed_minutes() or '',
-                i.action_taken or '',
+                i.resolution or '',
             ]
             for ci, v in enumerate(vals, 1):
                 c = ws.cell(row=r, column=ci, value=v)
