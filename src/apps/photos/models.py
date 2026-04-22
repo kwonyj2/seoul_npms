@@ -23,7 +23,7 @@ class PhotoWorkType(models.Model):
 def photo_upload_path(instance, filename):
     """보고서 타입에 따라 저장 경로 분기"""
     if instance.report_type == 'cable':
-        return f'산출물/소규모케이블/{filename}'
+        return f'산출물/소규모케이블 이미지/{filename}'
     elif instance.report_type == 'switch_install':
         return f'산출물/스위치설치/{filename}'
     return f'photos/{filename}'
