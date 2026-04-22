@@ -25,7 +25,7 @@ def photo_upload_path(instance, filename):
     if instance.report_type == 'cable':
         return f'산출물/소규모케이블 이미지/{filename}'
     elif instance.report_type == 'switch_install':
-        return f'산출물/스위치설치/{filename}'
+        return f'산출물/스위치설치 이미지/{filename}'
     return f'photos/{filename}'
 
 
