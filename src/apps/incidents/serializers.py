@@ -71,6 +71,7 @@ class IncidentDetailSerializer(serializers.ModelSerializer):
     received_by_name      = serializers.CharField(source='received_by.name', read_only=True)
     assigned_worker_name  = serializers.SerializerMethodField()
     elapsed_minutes       = serializers.SerializerMethodField()
+    completed_by_name     = serializers.SerializerMethodField()
     location_building_name = serializers.CharField(source='location_building.name', read_only=True, default=None)
     location_floor_name    = serializers.CharField(source='location_floor.floor_name', read_only=True, default=None)
     location_room_name     = serializers.CharField(source='location_room.name', read_only=True, default=None)
@@ -87,6 +88,13 @@ class IncidentDetailSerializer(serializers.ModelSerializer):
 
     def get_elapsed_minutes(self, obj):
         return obj.get_elapsed_minutes()
+
+    def get_completed_by_name(self, obj):
+        """완료/취소 처리자 — 상태이력에서 마지막 완료/취소 변경자 조회"""
+        h = obj.status_history.filter(
+            to_status__in=['completed', 'cancelled']
+        ).order_by('-changed_at').first()
+        return h.changed_by.name if h and h.changed_by else None
 
 
 class IncidentCreateSerializer(serializers.ModelSerializer):

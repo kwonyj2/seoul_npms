@@ -434,10 +434,14 @@ async function loadIncident() {
       <tr><td colspan="2" class="text-wrap" style="white-space:pre-line">${d.description||'-'}</td></tr>
       ${d.status === 'completed' ? `
       <tr><td colspan="2" class="bg-light"><i class="bi bi-wrench me-1 text-success"></i><strong>처리 결과</strong></td></tr>
+      <tr><td class="text-muted fw-semibold">처리자</td><td><strong>${d.completed_by_name||d.assigned_worker_name||'-'}</strong></td></tr>
       <tr><td class="text-muted fw-semibold">처리유형</td><td><span class="badge bg-info">${d.resolution_type||'-'}</span></td></tr>
       <tr><td class="text-muted fw-semibold">완료일시</td><td>${d.completed_at ? formatDateTime(d.completed_at) : '-'}</td></tr>
       <tr><td class="text-muted fw-semibold" colspan="2">처리내용</td></tr>
       <tr><td colspan="2" class="text-wrap" style="white-space:pre-line">${d.resolution||'-'}</td></tr>
+      ` : d.status === 'cancelled' ? `
+      <tr><td colspan="2" class="bg-light"><i class="bi bi-x-circle me-1 text-danger"></i><strong>취소</strong></td></tr>
+      <tr><td class="text-muted fw-semibold">취소처리자</td><td><strong>${d.completed_by_name||'-'}</strong></td></tr>
       ` : ''}
     `;
 
