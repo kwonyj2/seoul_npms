@@ -651,6 +651,38 @@
        탭: 시스템 정보
   ══════════════════════════════════════════ -->
   <div id="tab-info" class="sys-tab-content">
+    <!-- 시스템 만료일 설정 (superadmin only) -->
+    {% if user.role == 'superadmin' %}
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-xl-6">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-2">
+            <i class="bi bi-calendar-check text-danger"></i><span class="fw-semibold">시스템 서비스 기간</span>
+            <span id="expiry-status-badge" class="ms-2"></span>
+          </div>
+          <div class="card-body">
+            <div class="row g-2 align-items-end">
+              <div class="col-auto">
+                <label class="form-label small fw-semibold mb-1">만료일</label>
+                <input type="date" id="expiry-date-input" class="form-control form-control-sm" style="width:160px;">
+              </div>
+              <div class="col">
+                <label class="form-label small fw-semibold mb-1">변경사유</label>
+                <input type="text" id="expiry-note-input" class="form-control form-control-sm" placeholder="사유 입력">
+              </div>
+              <div class="col-auto">
+                <button class="btn btn-sm btn-danger" onclick="updateExpiry()">
+                  <i class="bi bi-check-lg me-1"></i>적용
+                </button>
+              </div>
+            </div>
+            <div id="expiry-info" class="mt-2 small text-muted"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="row g-3 mb-3" id="si-cards">
       <div class="col-12 text-center py-4 text-muted">로딩 중…</div>
     </div>
@@ -701,7 +733,7 @@ function switchTab(name, el) {
   if (name==='celery') { loadCelery(); }
   if (name==='docs' && !window._docLoaded) { loadDocCatalog(); window._docLoaded=true; }
   if (name==='dbadmin' && !window._daLoaded) { loadDbTree(); window._daLoaded=true; }
-  if (name==='info'   && !window._iLoaded)  { loadSysInfo(); window._iLoaded=true; }
+  if (name==='info'   && !window._iLoaded)  { loadSysInfo(); loadExpiry(); window._iLoaded=true; }
 }
 
 // ══ 업로드 공통 JS ════════════════════════════════════
@@ -1569,6 +1601,44 @@ function daDelete() {
     bootstrap.Modal.getInstance(document.getElementById('daEditModal')).hide();
     daLoadData(); loadDbTree();
   }).catch(e=>alert('삭제 실패: '+e.message));
+}
+
+// ══ 시스템 만료일 ══════════════════════════════════════
+function loadExpiry() {
+  fetch(`${SYSCONF_API}/system-expiry/`, {credentials:'same-origin'})
+  .then(r => r.json()).then(d => {
+    const inp = document.getElementById('expiry-date-input');
+    const info = document.getElementById('expiry-info');
+    const badge = document.getElementById('expiry-status-badge');
+    if (!inp) return; // superadmin이 아니면 요소 없음
+    if (d.expiry_date) inp.value = d.expiry_date;
+    badge.innerHTML = d.is_expired
+      ? '<span class="badge bg-danger">만료됨</span>'
+      : '<span class="badge bg-success">정상 가동</span>';
+    let html = '';
+    if (d.expiry_date) html += `만료일: <strong>${d.expiry_date}</strong>`;
+    if (d.updated_by) html += ` · 설정자: ${d.updated_by}`;
+    if (d.note) html += ` · 사유: ${d.note}`;
+    if (d.updated_at) html += ` · ${new Date(d.updated_at).toLocaleString('ko-KR')}`;
+    info.innerHTML = html;
+  }).catch(() => {});
+}
+
+function updateExpiry() {
+  const dt = document.getElementById('expiry-date-input').value;
+  const note = document.getElementById('expiry-note-input').value;
+  if (!dt) { showToast('만료일을 선택하세요', 'warning'); return; }
+  if (!confirm(`시스템 만료일을 ${dt}로 변경하시겠습니까?`)) return;
+  fetch(`${SYSCONF_API}/system-expiry/`, {
+    method: 'POST', credentials: 'same-origin',
+    headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF_TOKEN},
+    body: JSON.stringify({expiry_date: dt, note: note})
+  }).then(r => r.json()).then(d => {
+    if (d.error) { showToast(d.error, 'error'); return; }
+    showToast(d.message, 'success');
+    document.getElementById('expiry-note-input').value = '';
+    loadExpiry();
+  }).catch(e => showToast('변경 실패', 'error'));
 }
 
 // ══ 시스템 정보 ══════════════════════════════════════
