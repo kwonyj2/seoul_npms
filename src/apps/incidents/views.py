@@ -759,7 +759,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = Incident.objects.select_related(
             'school', 'school__support_center', 'school__school_type',
-            'category', 'subcategory', 'received_by'
+            'category', 'subcategory', 'received_by', 'sla'
         ).prefetch_related('assignments__worker').order_by('-received_at')
 
         params = self.request.query_params

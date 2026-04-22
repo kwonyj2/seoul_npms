@@ -50,6 +50,13 @@ class IncidentListSerializer(serializers.ModelSerializer):
         return assign.worker.name if assign else None
 
 
+class IncidentSLASerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IncidentSLA
+        fields = ['arrival_target', 'resolve_target', 'arrival_actual', 'resolve_actual',
+                  'arrival_ok', 'resolve_ok', 'arrival_diff_min', 'resolve_diff_min']
+
+
 class IncidentDetailSerializer(serializers.ModelSerializer):
     school_name           = serializers.CharField(source='school.name', read_only=True)
     school_address        = serializers.CharField(source='school.address', read_only=True)
@@ -66,6 +73,7 @@ class IncidentDetailSerializer(serializers.ModelSerializer):
     location_building_name = serializers.CharField(source='location_building.name', read_only=True, default=None)
     location_floor_name    = serializers.CharField(source='location_floor.floor_name', read_only=True, default=None)
     location_room_name     = serializers.CharField(source='location_room.name', read_only=True, default=None)
+    sla                    = IncidentSLASerializer(read_only=True)
 
     class Meta:
         model = Incident
