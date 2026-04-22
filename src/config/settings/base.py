@@ -231,6 +231,12 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'sysconfig.auto_block_ssh_attackers',
         'schedule': 300,
     },
+    # ── 공휴일 자동 생성 ────────────────────────
+    # 매년 1/1 새벽 0시 30분: 올해+내년 음력 공휴일 + 대체공휴일 자동 등록
+    'generate-yearly-holidays': {
+        'task': 'apps.progress.tasks.generate_yearly_holidays',
+        'schedule': crontab(month_of_year=1, day_of_month=1, hour=0, minute=30),
+    },
 }
 
 # ─────────────────────────────────────────
