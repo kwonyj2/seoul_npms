@@ -143,6 +143,12 @@ class Incident(models.Model):
     )
     location_detail    = models.CharField('위치 상세', max_length=200, blank=True)
 
+    # 고객 협의 방문 약속 (SLA 기준시간 조정)
+    appointment_at     = models.DateTimeField('방문 약속시간', null=True, blank=True,
+                                              help_text='고객 협의로 방문 약속 시 SLA 기준이 이 시각으로 조정됨')
+    customer_call_at   = models.DateTimeField('고객 통화시간', null=True, blank=True)
+    customer_call_note = models.TextField('고객 통화내용', blank=True)
+
     # 재발 장애 연결
     is_recurrence      = models.BooleanField('재발장애여부', default=False)
     original_incident  = models.ForeignKey(
@@ -313,6 +319,8 @@ class IncidentSLA(models.Model):
     resolve_ok     = models.BooleanField('처리 SLA 준수', null=True)
     arrival_diff_min = models.IntegerField('도착 차이(분)', null=True, blank=True)
     resolve_diff_min = models.IntegerField('처리 차이(분)', null=True, blank=True)
+    is_adjusted    = models.BooleanField('고객협의 조정', default=False,
+                                          help_text='고객 협의에 의해 SLA 기준시간이 조정된 경우')
     created_at     = models.DateTimeField('생성일시', auto_now_add=True)
     updated_at     = models.DateTimeField('수정일시', auto_now=True)
 

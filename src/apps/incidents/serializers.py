@@ -54,7 +54,8 @@ class IncidentSLASerializer(serializers.ModelSerializer):
     class Meta:
         model = IncidentSLA
         fields = ['arrival_target', 'resolve_target', 'arrival_actual', 'resolve_actual',
-                  'arrival_ok', 'resolve_ok', 'arrival_diff_min', 'resolve_diff_min']
+                  'arrival_ok', 'resolve_ok', 'arrival_diff_min', 'resolve_diff_min',
+                  'is_adjusted']
 
 
 class IncidentDetailSerializer(serializers.ModelSerializer):

@@ -82,12 +82,20 @@
 
       <!-- SLA -->
       <div class="card border-0 shadow-sm mb-2">
-        <div class="card-header py-2 bg-white border-bottom fw-semibold">
-          <i class="bi bi-shield-check me-1 text-success"></i>SLA 현황
+        <div class="card-header py-2 bg-white border-bottom fw-semibold d-flex align-items-center">
+          <span><i class="bi bi-shield-check me-1 text-success"></i>SLA 현황</span>
+          <span id="sla-adjusted-badge" class="ms-2"></span>
+          {% if user.role in 'superadmin,admin' %}
+          <button class="btn btn-sm btn-outline-warning ms-auto" id="btn-appointment" onclick="openAppointmentModal()">
+            <i class="bi bi-telephone-forward me-1"></i>고객협의
+          </button>
+          {% endif %}
         </div>
         <div class="card-body py-2" id="sla-info">
           <div class="text-center text-muted small py-1">로딩 중...</div>
         </div>
+        <!-- 고객 통화 기록 표시 -->
+        <div class="card-body py-2 border-top" id="customer-call-info" style="display:none;"></div>
       </div>
 
       <!-- 댓글 -->
@@ -228,6 +236,45 @@
         <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
         <button class="btn btn-sm btn-success" onclick="submitComplete()">
           <i class="bi bi-check-lg me-1"></i>완료 처리
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 고객 협의 방문 약속 모달 -->
+<div class="modal fade" id="appointmentModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2 bg-warning">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-telephone-forward me-1"></i>고객 협의 — 방문 약속 (SLA 조정)</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info small py-2 mb-3">
+          <i class="bi bi-info-circle me-1"></i>
+          고객과 방문 일정을 협의한 경우, 약속시간 기준으로 SLA가 재계산됩니다.<br>
+          <strong>도착 SLA</strong>: 약속시간까지 도착 → 준수<br>
+          <strong>처리 SLA</strong>: 약속시간부터 8시간 이내 완료 → 준수
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">고객 통화 일시 <span class="text-danger">*</span></label>
+          <input type="datetime-local" id="appt-call-at" class="form-control form-control-sm">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">방문 약속 일시 <span class="text-danger">*</span></label>
+          <input type="datetime-local" id="appt-appointment-at" class="form-control form-control-sm">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">고객 통화 내용 <span class="text-danger">*</span></label>
+          <textarea id="appt-call-note" class="form-control form-control-sm" rows="4"
+                    placeholder="고객과 협의한 내용을 기록하세요..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-warning" onclick="submitAppointment()">
+          <i class="bi bi-check-lg me-1"></i>SLA 조정 적용
         </button>
       </div>
     </div>
@@ -425,6 +472,14 @@ async function loadIncident() {
           ? `<small class="text-success ms-1">(${label} 여유)</small>`
           : `<small class="text-danger ms-1">(${label} 초과)</small>`;
       };
+      // 고객협의 조정 배지
+      document.getElementById('sla-adjusted-badge').innerHTML = sla.is_adjusted
+        ? '<span class="badge bg-warning text-dark"><i class="bi bi-telephone-forward me-1"></i>고객협의 조정</span>'
+        : '';
+      // 완료/취소 시 고객협의 버튼 숨김
+      const btnAppt = document.getElementById('btn-appointment');
+      if (btnAppt) btnAppt.style.display = ['completed','cancelled'].includes(d.status) ? 'none' : '';
+
       document.getElementById('sla-info').innerHTML = `
         <div class="row g-2" style="font-size:.82rem;">
           <div class="col-6 border-end">
@@ -440,6 +495,22 @@ async function loadIncident() {
         </div>`;
     } else {
       document.getElementById('sla-info').innerHTML = '<div class="text-muted small text-center py-1">SLA 정보 없음</div>';
+      document.getElementById('sla-adjusted-badge').innerHTML = '';
+    }
+
+    // 고객 통화 기록 표시
+    const callInfo = document.getElementById('customer-call-info');
+    if (d.customer_call_at) {
+      callInfo.style.display = '';
+      callInfo.innerHTML = `
+        <div style="font-size:.82rem;">
+          <div class="fw-semibold text-muted small mb-1"><i class="bi bi-telephone me-1"></i>고객 통화 기록</div>
+          <div><span class="text-muted">통화일시:</span> ${formatDateTime(d.customer_call_at)}</div>
+          ${d.appointment_at ? `<div><span class="text-muted">약속일시:</span> <strong class="text-warning">${formatDateTime(d.appointment_at)}</strong></div>` : ''}
+          ${d.customer_call_note ? `<div class="mt-1 p-2 bg-light rounded text-wrap" style="white-space:pre-line">${d.customer_call_note}</div>` : ''}
+        </div>`;
+    } else {
+      callInfo.style.display = 'none';
     }
   } catch(e) {
     console.error(e);
@@ -558,6 +629,45 @@ async function aiAssign() {
     loadIncident();
   } catch(e) {
     showToast('AI 배정 실패', 'error');
+  }
+}
+
+function openAppointmentModal() {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById('appt-call-at').value = now.toISOString().slice(0, 16);
+  // 기존 약속시간이 있으면 채움
+  if (incidentData.appointment_at) {
+    const appt = new Date(incidentData.appointment_at);
+    appt.setMinutes(appt.getMinutes() - appt.getTimezoneOffset());
+    document.getElementById('appt-appointment-at').value = appt.toISOString().slice(0, 16);
+  } else {
+    document.getElementById('appt-appointment-at').value = '';
+  }
+  document.getElementById('appt-call-note').value = incidentData.customer_call_note || '';
+  new bootstrap.Modal(document.getElementById('appointmentModal')).show();
+}
+
+async function submitAppointment() {
+  const callAt   = document.getElementById('appt-call-at').value;
+  const apptAt   = document.getElementById('appt-appointment-at').value;
+  const callNote = document.getElementById('appt-call-note').value.trim();
+
+  if (!callAt)   { showToast('고객 통화 일시를 입력하세요', 'warning'); return; }
+  if (!apptAt)   { showToast('방문 약속 일시를 입력하세요', 'warning'); return; }
+  if (!callNote) { showToast('고객 통화 내용을 입력하세요', 'warning'); return; }
+
+  try {
+    await apiPost(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/set_appointment/`, {
+      appointment_at:    apptAt,
+      customer_call_at:  callAt,
+      customer_call_note: callNote,
+    });
+    bootstrap.Modal.getInstance(document.getElementById('appointmentModal')).hide();
+    showToast('고객 협의에 따라 SLA가 조정되었습��다', 'success');
+    loadIncident();
+  } catch(e) {
+    showToast('SLA 조정 실패: ' + (e?.detail || ''), 'error');
   }
 }
 

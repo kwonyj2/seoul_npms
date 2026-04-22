@@ -11,7 +11,7 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import (
-    IncidentCategory, IncidentSubcategory, Incident,
+    IncidentCategory, IncidentSubcategory, Incident, IncidentSLA,
     IncidentAssignment, IncidentComment, IncidentPhoto, SLARule, SLAMonthly
 )
 from .serializers import (
@@ -853,6 +853,61 @@ class IncidentViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        return Response(IncidentDetailSerializer(incident).data)
+
+    # ── 고객 협의 방문 약속 (SLA 조정) ──────────────────────────
+    @action(detail=True, methods=['post'])
+    def set_appointment(self, request, pk=None):
+        """고객 협의로 방문 약속시간 설정 → SLA 기준시간 조정"""
+        from django.conf import settings as django_settings
+        from core.sla_utils import add_business_hours
+
+        incident = self.get_object()
+        appointment_at   = request.data.get('appointment_at')
+        customer_call_at = request.data.get('customer_call_at')
+        customer_call_note = request.data.get('customer_call_note', '')
+
+        if not appointment_at:
+            return Response({'error': '방��� 약속시간을 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not customer_call_at:
+            return Response({'error': '고객 통���시간을 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Incident 필드 저장
+        incident.appointment_at = appointment_at
+        incident.customer_call_at = customer_call_at
+        incident.customer_call_note = customer_call_note
+        incident.save(update_fields=['appointment_at', 'customer_call_at', 'customer_call_note'])
+
+        # SLA 재계산: 약속시간 기준으로 도착 목표 = 약속시간, 처리 목표 = 약속시간 + 8h
+        sla_resolve = getattr(django_settings, 'SLA_RESOLVE_HOURS', 8)
+        try:
+            sla = incident.sla
+            sla.arrival_target = appointment_at
+            sla.resolve_target = add_business_hours(appointment_at, sla_resolve)
+            sla.is_adjusted = True
+            update_fields = ['arrival_target', 'resolve_target', 'is_adjusted']
+            # 이미 도착/완료 기록이 있으면 재판정
+            if sla.arrival_actual:
+                sla.arrival_ok = sla.arrival_actual <= sla.arrival_target
+                sla.arrival_diff_min = int((sla.arrival_actual - sla.arrival_target).total_seconds() / 60)
+                update_fields += ['arrival_ok', 'arrival_diff_min']
+                incident.sla_arrival_ok = sla.arrival_ok
+                incident.save(update_fields=['sla_arrival_ok'])
+            if sla.resolve_actual:
+                sla.resolve_ok = sla.resolve_actual <= sla.resolve_target
+                sla.resolve_diff_min = int((sla.resolve_actual - sla.resolve_target).total_seconds() / 60)
+                update_fields += ['resolve_ok', 'resolve_diff_min']
+                incident.sla_resolve_ok = sla.resolve_ok
+                incident.save(update_fields=['sla_resolve_ok'])
+            sla.save(update_fields=update_fields)
+        except IncidentSLA.DoesNotExist:
+            IncidentSLA.objects.create(
+                incident=incident,
+                arrival_target=appointment_at,
+                resolve_target=add_business_hours(appointment_at, sla_resolve),
+                is_adjusted=True,
+            )
+
         return Response(IncidentDetailSerializer(incident).data)
 
     # ── 인력 배정 ──────────────────────────
