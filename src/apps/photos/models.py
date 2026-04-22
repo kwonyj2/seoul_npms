@@ -20,6 +20,15 @@ class PhotoWorkType(models.Model):
         return self.name
 
 
+def photo_upload_path(instance, filename):
+    """보고서 타입에 따라 저장 경로 분기"""
+    if instance.report_type == 'cable':
+        return f'산출물/소규모케이블/{filename}'
+    elif instance.report_type == 'switch_install':
+        return f'산출물/스위치설치/{filename}'
+    return f'photos/{filename}'
+
+
 class Photo(models.Model):
     """현장 작업 사진"""
     PHOTO_STAGE_CHOICES = [
@@ -48,8 +57,12 @@ class Photo(models.Model):
     work_type_etc = models.CharField('작업명(기타)', max_length=100, blank=True)
     photo_stage = models.CharField('단계', max_length=10, choices=PHOTO_STAGE_CHOICES, default='other')
 
+    # 보고서 타입 (저장 경로 분기용)
+    report_type = models.CharField('보고서유형', max_length=30, blank=True,
+                                    help_text='cable, switch_install 등 — 저장 경로 결정')
+
     # 파일
-    image       = models.ImageField('이미지', upload_to='photos/')
+    image       = models.ImageField('이미지', upload_to=photo_upload_path)
     nas_path    = models.CharField('NAS 저장경로', max_length=500, blank=True)
     file_name   = models.CharField('파일명', max_length=255, blank=True,
                                     help_text='학교명_건물_층_교실명_작업명_단계_날짜+NO.jpg')

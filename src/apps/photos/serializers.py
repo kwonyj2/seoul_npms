@@ -40,7 +40,7 @@ class PhotoUploadSerializer(serializers.ModelSerializer):
         model = Photo
         fields = ['id', 'school', 'building_name', 'floor_name', 'room_name',
                   'work_type', 'work_type_etc', 'photo_stage',
-                  'image', 'image_url', 'taken_at']
+                  'image', 'image_url', 'taken_at', 'report_type']
         read_only_fields = ['id', 'image_url']
 
     def get_image_url(self, obj):
