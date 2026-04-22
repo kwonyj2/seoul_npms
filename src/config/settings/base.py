@@ -89,6 +89,7 @@ MIDDLEWARE = [
     'core.middleware.audit.AuditLogMiddleware',
     'core.middleware.session_tracking.SessionTrackingMiddleware',
     'core.middleware.security_headers.SecurityHeadersMiddleware',
+    'core.middleware.system_expiry.SystemExpiryMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'

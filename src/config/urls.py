@@ -43,6 +43,7 @@ from apps.sysconfig.api import (
     update_module_min_role, update_module_role_perm, nas_role_perms,
     access_log, celery_status, backup_status,
     system_health, storage_usage, trigger_task,
+    system_expiry_api,
 )
 from apps.sysconfig.security_api import (
     sec_dashboard, sec_blocked_ips, sec_block_config, sec_block_log,
@@ -197,6 +198,7 @@ urlpatterns = [
     path('api/sysconfig/health/',                     system_health,      name='sysconfig-health'),
     path('api/sysconfig/storage/',                    storage_usage,      name='sysconfig-storage'),
     path('api/sysconfig/trigger-task/',               trigger_task,       name='sysconfig-trigger-task'),
+    path('api/sysconfig/system-expiry/',              system_expiry_api,  name='sysconfig-system-expiry'),
     # 보안관제 API
     path('api/sysconfig/security/dashboard/',      sec_dashboard,      name='sec-dashboard'),
     path('api/sysconfig/security/blocked-ips/',    sec_blocked_ips,    name='sec-blocked-ips'),

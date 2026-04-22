@@ -774,3 +774,46 @@ def backup_status(request):
         'total': len(files),
         'backups': backups,
     })
+
+
+# ── 시스템 만료일 관리 ────────────────────────────
+@login_required
+@require_http_methods(['GET', 'POST'])
+def system_expiry_api(request):
+    """시스템 만료일 조회/설정 (superadmin only)"""
+    from apps.sysconfig.models import SystemExpiry
+
+    if request.method == 'GET':
+        expiry = SystemExpiry.get_expiry_date()
+        obj = SystemExpiry.objects.order_by('-id').first()
+        return JsonResponse({
+            'expiry_date': str(expiry) if expiry else None,
+            'is_expired': SystemExpiry.is_expired(),
+            'updated_by': obj.updated_by.name if obj and obj.updated_by else None,
+            'updated_at': obj.updated_at.isoformat() if obj else None,
+            'note': obj.note if obj else '',
+        })
+
+    # POST — superadmin만
+    if getattr(request.user, 'role', '') != 'superadmin':
+        return JsonResponse({'error': '슈퍼관리자만 설정 가능합니다.'}, status=403)
+
+    data = json.loads(request.body)
+    expiry_date = data.get('expiry_date')
+    note = data.get('note', '')
+
+    if not expiry_date:
+        return JsonResponse({'error': '만료일을 입력하세요.'}, status=400)
+
+    obj = SystemExpiry.objects.create(
+        expiry_date=expiry_date,
+        updated_by=request.user,
+        note=note,
+    )
+    return JsonResponse({
+        'expiry_date': str(obj.expiry_date),
+        'is_expired': SystemExpiry.is_expired(),
+        'updated_by': request.user.name,
+        'note': note,
+        'message': f'시스템 만료일이 {obj.expiry_date}로 설정되었습니다.',
+    })

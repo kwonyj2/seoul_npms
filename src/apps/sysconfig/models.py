@@ -7,6 +7,36 @@ from apps.sysconfig.security_models import (  # noqa: F401
 )
 
 
+class SystemExpiry(models.Model):
+    """시스템 전체 만료일 설정 — superadmin만 조정 가능"""
+    expiry_date = models.DateField('시스템 만료일')
+    updated_by  = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, verbose_name='변경자')
+    updated_at  = models.DateTimeField('변경일시', auto_now=True)
+    note        = models.CharField('변경사유', max_length=200, blank=True)
+
+    class Meta:
+        db_table = 'sysconfig_system_expiry'
+        verbose_name = '시스템 만료일'
+
+    def __str__(self):
+        return f'시스템 만료일: {self.expiry_date}'
+
+    @classmethod
+    def get_expiry_date(cls):
+        """현재 시스템 만료일 반환 (없으면 None → 무제한)"""
+        obj = cls.objects.order_by('-id').first()
+        return obj.expiry_date if obj else None
+
+    @classmethod
+    def is_expired(cls):
+        """시스템 만료 여부"""
+        from django.utils import timezone
+        expiry = cls.get_expiry_date()
+        if expiry is None:
+            return False
+        return timezone.localdate() > expiry
+
+
 class ModuleConfig(models.Model):
     """모듈별 최소 역할 오버라이드 (MODULE_REGISTRY 기본값 재정의)"""
     module_key = models.CharField('모듈 키', max_length=50, unique=True)
