@@ -178,13 +178,15 @@
         <div class="mb-3">
           <label class="form-label small fw-semibold">처리 유형 <span class="text-danger">*</span></label>
           <select id="resolution-type" class="form-select form-select-sm">
+            <option value="전화상담">전화상담</option>
+            <option value="원격지원">원격지원</option>
             <option value="현장수리">현장수리</option>
             <option value="부품교체">부품교체</option>
             <option value="설정변경">설정변경</option>
             <option value="재부팅">재부팅</option>
             <option value="케이블교체">케이블교체</option>
             <option value="장비교체">장비교체</option>
-            <option value="원격지원">원격지원</option>
+            <option value="이관">이관</option>
             <option value="기타">기타</option>
           </select>
         </div>
@@ -213,7 +215,7 @@
             </label>
           </div>
         </div>
-        <div class="mb-2">
+        <div class="mb-2" id="arrived-at-group">
           <label class="form-label small fw-semibold">현장 도착 일시 <span class="text-muted">(미입력 시 기존 값 유지)</span></label>
           <input type="datetime-local" id="arrived-at" class="form-control form-control-sm">
         </div>
@@ -383,11 +385,18 @@ async function loadIncident() {
       </td></tr>` : ''}
       <tr><td class="text-muted fw-semibold" colspan="2">증상</td></tr>
       <tr><td colspan="2" class="text-wrap" style="white-space:pre-line">${d.description||'-'}</td></tr>
+      ${d.status === 'completed' ? `
+      <tr><td colspan="2" class="bg-light"><i class="bi bi-wrench me-1 text-success"></i><strong>처리 결과</strong></td></tr>
+      <tr><td class="text-muted fw-semibold">처리유형</td><td><span class="badge bg-info">${d.resolution_type||'-'}</span></td></tr>
+      <tr><td class="text-muted fw-semibold">완료일시</td><td>${d.completed_at ? formatDateTime(d.completed_at) : '-'}</td></tr>
+      <tr><td class="text-muted fw-semibold" colspan="2">처리내용</td></tr>
+      <tr><td colspan="2" class="text-wrap" style="white-space:pre-line">${d.resolution||'-'}</td></tr>
+      ` : ''}
     `;
 
-    // 완료 등록 버튼 — processing 상태일 때만 표시
+    // 완료 등록 버튼 — 완료/취소 외 모든 상태에서 표시 (콜센터 즉시 완료 가능)
     const btnComplete = document.getElementById('btn-complete');
-    if (btnComplete) btnComplete.style.display = (d.status === 'processing') ? '' : 'none';
+    if (btnComplete) btnComplete.style.display = !['completed','cancelled'].includes(d.status) ? '' : 'none';
 
     // 상태 변경 버튼 (완료 제외 — 완료는 모달로 처리)
     const nextActions = (STATUS_NEXT[d.status] || []).filter(a => a.s !== 'completed');
@@ -552,6 +561,12 @@ async function aiAssign() {
   }
 }
 
+function toggleArrivedGroup() {
+  const resType = document.getElementById('resolution-type').value;
+  const noArrival = ['전화상담', '원격지원', '이관'];
+  document.getElementById('arrived-at-group').style.display = noArrival.includes(resType) ? 'none' : '';
+}
+
 function openCompleteModal() {
   // 현재 일시를 기본값으로
   const now = new Date();
@@ -571,6 +586,9 @@ function openCompleteModal() {
   } else {
     document.getElementById('arrived-at').value = '';
   }
+  // 처리유형에 따라 도착일시 필드 토글
+  document.getElementById('resolution-type').addEventListener('change', toggleArrivedGroup);
+  toggleArrivedGroup();
   new bootstrap.Modal(document.getElementById('completeModal')).show();
 }
 
