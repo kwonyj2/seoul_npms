@@ -813,7 +813,6 @@ loadIncident();
 loadComments();
 loadPhotos();
 loadTimeline();
-loadWorkOrders();
 
 // 댓글 입력 엔터키
 document.getElementById('comment-input').addEventListener('keydown', e => {
@@ -823,6 +822,7 @@ document.getElementById('comment-input').addEventListener('keydown', e => {
 // ── 작업지시서 ────────────────────────────────────────
 const WO_API = '/npms/api/incidents/work-orders/';
 let _curWOId = null;
+loadWorkOrders();
 
 const WO_STATUS = {
   issued:      {label:'발행', cls:'badge bg-secondary'},
