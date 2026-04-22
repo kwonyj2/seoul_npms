@@ -23,9 +23,10 @@ class Command(BaseCommand):
 
         qs = IncidentSLA.objects.select_related(
             'incident', 'incident__original_incident'
-        ).all()
+        ).filter(is_adjusted=False)  # 고객 협의 조정 건은 제외
         total = qs.count()
-        self.stdout.write(f'총 {total}건 처리 시작...')
+        skipped = IncidentSLA.objects.filter(is_adjusted=True).count()
+        self.stdout.write(f'총 {total}건 처리 시작... (고객협의 조정 {skipped}건 제외)')
 
         updated = 0
         for sla in qs.iterator(chunk_size=200):
