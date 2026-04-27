@@ -200,12 +200,12 @@ class Command(BaseCommand):
 
                 school_defaults = {
                     'school_type': type_obj,
-                    'code':        cell('code'),
-                    'zip_code':    cell('zip_code'),
+                    'code':        cell('code')[:20],
+                    'zip_code':    cell('zip_code')[:10],
                     'address':     cell('address'),
-                    'phone':       cell('phone'),
-                    'fax':         cell('fax'),
-                    'homepage':    homepage,
+                    'phone':       cell('phone')[:20],
+                    'fax':         cell('fax')[:20],
+                    'homepage':    homepage[:200] if homepage else '',
                     'lat':         lat,
                     'lng':         lng,
                     'is_active':   True,
@@ -219,26 +219,27 @@ class Command(BaseCommand):
                     continue
 
                 try:
-                    existing = School.objects.filter(
-                        support_center=center_obj,
-                        name=school_name,
-                    ).first()
-
-                    if existing:
-                        if do_update:
-                            for k, v in school_defaults.items():
-                                setattr(existing, k, v)
-                            existing.save()
-                            updated_cnt += 1
-                        else:
-                            skipped_cnt += 1
-                    else:
-                        School.objects.create(
+                    with transaction.atomic():
+                        existing = School.objects.filter(
                             support_center=center_obj,
                             name=school_name,
-                            **school_defaults,
-                        )
-                        created_cnt += 1
+                        ).first()
+
+                        if existing:
+                            if do_update:
+                                for k, v in school_defaults.items():
+                                    setattr(existing, k, v)
+                                existing.save()
+                                updated_cnt += 1
+                            else:
+                                skipped_cnt += 1
+                        else:
+                            School.objects.create(
+                                support_center=center_obj,
+                                name=school_name,
+                                **school_defaults,
+                            )
+                            created_cnt += 1
                 except Exception as exc:
                     self.stderr.write(f'  [행 {i}] 오류: {school_name} — {exc}')
                     error_cnt += 1
