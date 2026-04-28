@@ -39,7 +39,7 @@ def performance_report_data_api(request):
     """성과보고서 데이터 API — GET ?type=monthly&year=2026&month=4&center=all 등"""
     import json, calendar
     from django.http import JsonResponse
-    from django.db.models import Count, Avg
+    from django.db.models import Count, Avg, Q
     from django.utils import timezone as tz
     from datetime import date, timedelta
 
@@ -141,9 +141,12 @@ def performance_report_data_api(request):
             'in_progress': sc_inc.exclude(status='completed').count(),
         })
 
+    # 서비스 시작일 필터: NULL이거나 기간 내 시작된 학교만
+    svc_q = Q(service_start_date__isnull=True) | Q(service_start_date__lte=date_to)
+
     # 2) 학제별 × 교육지원청 크로스탭
     school_types = list(
-        SchoolModel.objects.filter(is_active=True)
+        SchoolModel.objects.filter(is_active=True).filter(svc_q)
         .values_list('school_type__name', flat=True).distinct().order_by('school_type__order')
     )
     school_type_cross = []
@@ -220,7 +223,7 @@ def performance_report_data_api(request):
     )
 
     # ── 정기점검 현황 ─────────────────────────────────────
-    total_schools = SchoolModel.objects.filter(is_active=True, **school_filter).count()
+    total_schools = SchoolModel.objects.filter(is_active=True, **school_filter).filter(svc_q).count()
 
     inspect_all = Report.objects.filter(
         template__report_type='regular',
@@ -239,7 +242,7 @@ def performance_report_data_api(request):
     # 4) 정기점검 × 교육지원청 크로스탭
     inspect_cross = []
     for sc in all_centers:
-        sc_schools = SchoolModel.objects.filter(is_active=True, support_center=sc).count()
+        sc_schools = SchoolModel.objects.filter(is_active=True, support_center=sc).filter(svc_q).count()
         sc_done = inspect_all.filter(school__support_center=sc).values('school_id').distinct().count()
         inspect_cross.append({
             'code': sc.code, 'name': sc.name,
@@ -323,7 +326,7 @@ def export_performance_excel(request):
     import io, calendar
     from datetime import date, timedelta
     from django.http import HttpResponse
-    from django.db.models import Count
+    from django.db.models import Count, Q
     from django.utils import timezone as tz
 
     try:
@@ -404,7 +407,8 @@ def export_performance_excel(request):
         sla_qs = sla_qs.filter(
             year=year, month__gte=date_from.month, month__lte=date_to.month)
 
-    total_schools = SchoolModel.objects.filter(is_active=True, **school_filter).count()
+    svc_q = Q(service_start_date__isnull=True) | Q(service_start_date__lte=date_to)
+    total_schools = SchoolModel.objects.filter(is_active=True, **school_filter).filter(svc_q).count()
     inspect_qs    = Report.objects.filter(
         template__report_type='regular', status='completed',
         completed_at__date__gte=date_from, completed_at__date__lte=date_to,

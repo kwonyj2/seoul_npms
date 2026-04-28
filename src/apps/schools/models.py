@@ -79,6 +79,8 @@ class School(models.Model):
     homepage       = models.URLField('홈페이지', blank=True)
     principal_name = models.CharField('교장명', max_length=30, blank=True)
     is_active      = models.BooleanField('활성', default=True)
+    service_start_date = models.DateField('서비스 시작일', null=True, blank=True,
+        help_text='통계 집계 시작일 (미입력 시 항상 집계)')
     nas_folder_created = models.BooleanField('NAS폴더생성', default=False)
     created_at     = models.DateTimeField('등록일시', auto_now_add=True)
     updated_at     = models.DateTimeField('수정일시', auto_now=True)
