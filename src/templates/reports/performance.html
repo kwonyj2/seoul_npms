@@ -365,18 +365,31 @@ function renderReport(d) {
     </tr>`;
   }).join('') || `<tr><td colspan="10" class="text-center text-muted py-3">해당 기간 SLA 데이터 없음</td></tr>`;
 
-  // 장애 유형별 (개별 지원청 선택 시)
+  // 장애 유형별
   const typeRows = inc.by_type.map(t =>
     `<tr><td class="small">${t.fault_type||'미분류'}</td>
          <td class="small text-center fw-semibold">${t.cnt}건</td>
          <td class="small text-end">${inc.total?(t.cnt/inc.total*100).toFixed(1):'0'}%</td></tr>`
   ).join('') || `<tr><td colspan="3" class="text-center text-muted py-2 small">데이터 없음</td></tr>`;
 
+  // 장애 유형 인사이트
+  const topType = inc.by_type.length ? inc.by_type[0] : null;
+  const topTypePct = topType && inc.total ? (topType.cnt/inc.total*100).toFixed(1) : 0;
+  const typeInsight = topType
+    ? `<span class="fw-semibold text-primary">${topType.fault_type||'미분류'}</span> 장애가 <span class="fw-bold">${topTypePct}%</span>(${topType.cnt}건)로 가장 많음`
+    : '해당 기간 장애 데이터 없음';
+
   // 학교별 TOP
   const schoolRows = inc.by_school.map((s,i) =>
     `<tr><td class="small">${i+1}. ${s.school__name||'-'}</td>
          <td class="small text-center fw-semibold">${s.cnt}건</td></tr>`
   ).join('') || `<tr><td colspan="2" class="text-center text-muted py-2 small">데이터 없음</td></tr>`;
+
+  // 학교 TOP 인사이트
+  const topSchool = inc.by_school.length ? inc.by_school[0] : null;
+  const schoolInsight = topSchool
+    ? `<span class="fw-semibold text-danger">${topSchool.school__name}</span>이(가) <span class="fw-bold">${topSchool.cnt}건</span>으로 최다 발생`
+    : '';
 
   // 정기점검 (개별 지원청)
   const inspPct = insp.pct || 0;
@@ -471,48 +484,41 @@ function renderReport(d) {
     <!-- ③ 장애 분류 -->
     ${faultTypeCrossHtml}
 
-    <!-- 개별 지원청 선택 시: 장애 유형별 + 학교 TOP 5 -->
-    ${!isAll ? `
-    <div class="col-12 col-lg-6">
-      <div class="card border-0 shadow-sm h-100">
+    <!-- 장애 유형별 + 장애 다발 학교 TOP 5 (한 카드) -->
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
         <div class="card-body py-3">
-          <div class="section-title"><i class="bi bi-exclamation-triangle me-1 text-warning"></i>장애 유형별 현황</div>
-          <div class="row g-2">
-            <div class="col-6"><canvas id="chart-type-pie" height="160"></canvas></div>
-            <div class="col-6"><table class="table table-sm mb-0"><tbody>${typeRows}</tbody></table></div>
+          <div class="row g-3">
+            <!-- 장애 유형별 -->
+            <div class="col-12 col-lg-5">
+              <div class="section-title"><i class="bi bi-exclamation-triangle me-1 text-warning"></i>장애 유형별 현황</div>
+              <div class="d-flex align-items-start gap-2">
+                <div style="width:110px;min-width:110px;"><canvas id="chart-type-pie" height="110"></canvas></div>
+                <div class="flex-grow-1">
+                  <table class="table table-sm mb-1"><tbody>${typeRows}</tbody></table>
+                </div>
+              </div>
+              <div class="small text-muted mt-1"><i class="bi bi-lightbulb me-1"></i>${typeInsight}</div>
+            </div>
+            <!-- 구분선 -->
+            <div class="col-lg-1 d-none d-lg-flex justify-content-center">
+              <div style="border-left:1px solid #dee2e6;height:100%;"></div>
+            </div>
+            <!-- 장애 다발 학교 -->
+            <div class="col-12 col-lg-6">
+              <div class="section-title"><i class="bi bi-building me-1 text-info"></i>장애 다발 학교 TOP 5</div>
+              <div class="d-flex align-items-start gap-2">
+                <div class="flex-grow-1" style="max-width:280px;"><canvas id="chart-school-bar" height="100"></canvas></div>
+                <div>
+                  <table class="table table-sm mb-1"><tbody>${schoolRows}</tbody></table>
+                </div>
+              </div>
+              ${schoolInsight ? `<div class="small text-muted mt-1"><i class="bi bi-lightbulb me-1"></i>${schoolInsight}</div>` : ''}
+            </div>
           </div>
         </div>
       </div>
     </div>
-    <div class="col-12 col-lg-6">
-      <div class="card border-0 shadow-sm h-100">
-        <div class="card-body py-3">
-          <div class="section-title"><i class="bi bi-building me-1 text-info"></i>장애 다발 학교 TOP 5</div>
-          <canvas id="chart-school-bar" height="160"></canvas>
-          <table class="table table-sm mt-2 mb-0"><tbody>${schoolRows}</tbody></table>
-        </div>
-      </div>
-    </div>` : `
-    <div class="col-12 col-lg-6">
-      <div class="card border-0 shadow-sm h-100">
-        <div class="card-body py-3">
-          <div class="section-title"><i class="bi bi-exclamation-triangle me-1 text-warning"></i>장애 유형별 현황</div>
-          <div class="row g-2">
-            <div class="col-6"><canvas id="chart-type-pie" height="160"></canvas></div>
-            <div class="col-6"><table class="table table-sm mb-0"><tbody>${typeRows}</tbody></table></div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-lg-6">
-      <div class="card border-0 shadow-sm h-100">
-        <div class="card-body py-3">
-          <div class="section-title"><i class="bi bi-building me-1 text-info"></i>장애 다발 학교 TOP 5</div>
-          <canvas id="chart-school-bar" height="160"></canvas>
-          <table class="table table-sm mt-2 mb-0"><tbody>${schoolRows}</tbody></table>
-        </div>
-      </div>
-    </div>`}
 
     <!-- SLA 현황 테이블 -->
     <div class="col-12">
