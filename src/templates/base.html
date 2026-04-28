@@ -539,6 +539,32 @@ async function hdrAttendanceAction() {
 
 {% if user.is_authenticated %}
 <script>
+// 상단바 실시간 뱃지 갱신 (대시보드 제외 — 대시보드는 자체 갱신)
+(function(){
+  const isDashboard = document.querySelector('[data-page="dashboard"]');
+  if (isDashboard) return;
+
+  async function refreshHeaderBadges() {
+    try {
+      const res = await fetch('/npms/api/dashboard/summary/');
+      if (!res.ok) return;
+      const d = await res.json();
+      const el = (id) => document.getElementById(id);
+      if (el('hdr-received'))   el('hdr-received').textContent   = d.incidents?.received ?? 0;
+      if (el('hdr-processing')) el('hdr-processing').textContent = d.incidents?.processing ?? 0;
+      const slaRate = d.incidents?.sla_rate;
+      if (el('hdr-sla'))        el('hdr-sla').textContent        = slaRate != null ? slaRate : '-';
+      if (el('hdr-online'))     el('hdr-online').textContent     = d.online_count ?? 0;
+    } catch(e) {}
+  }
+  refreshHeaderBadges();
+  setInterval(refreshHeaderBadges, 60000);
+})();
+</script>
+{% endif %}
+
+{% if user.is_authenticated %}
+<script>
 /* ══════════════════════════════════════════
    알림센터 (🔔)
 ══════════════════════════════════════════ */
