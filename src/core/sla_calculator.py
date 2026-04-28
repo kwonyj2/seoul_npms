@@ -165,12 +165,15 @@ def calculate_monthly(year: int, month: int, security_count: int = 0,
     total_min = last_day.day * 24 * 60
     # 해당 월 완료된 장애(서비스 중단)의 조치시간 합산
     # completed_at 기준 월 귀속 (협약서 특이사항)
+    # 비장애 카테고리(단순문의/네트워크작업) 제외
+    NON_FAULT_CATEGORIES = ['inquiry', 'network_work']
+
     fault_min = 0
     sla_qs = IncidentSLA.objects.filter(
         resolve_actual__year=year,
         resolve_actual__month=month,
         incident__fault_type='service_stop',
-    )
+    ).exclude(incident__category__code__in=NON_FAULT_CATEGORIES)
     for sla in sla_qs:
         inc = sla.incident
         if inc.received_at and sla.resolve_actual:
@@ -229,7 +232,7 @@ def calculate_monthly(year: int, month: int, security_count: int = 0,
         completed_at__month=month,
         status='completed',
     ).exclude(fault_type__in=['', 'other']
-    ).exclude(category__code__in=['inquiry', 'network_work'])
+    ).exclude(category__code__in=NON_FAULT_CATEGORIES)
 
     fault_count = inc_qs.count()
 
