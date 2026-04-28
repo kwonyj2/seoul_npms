@@ -228,7 +228,8 @@ def calculate_monthly(year: int, month: int, security_count: int = 0,
         completed_at__year=year,
         completed_at__month=month,
         status='completed',
-    ).exclude(fault_type__in=['', 'other'])
+    ).exclude(fault_type__in=['', 'other']
+    ).exclude(category__code__in=['inquiry', 'network_work'])
 
     fault_count = inc_qs.count()
 
