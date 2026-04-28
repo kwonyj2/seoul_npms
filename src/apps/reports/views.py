@@ -145,9 +145,9 @@ def performance_report_data_api(request):
     svc_q = Q(service_start_date__isnull=True) | Q(service_start_date__lte=date_to)
 
     # 2) 학제별 × 교육지원청 크로스탭
+    from apps.schools.models import SchoolType
     school_types = list(
-        SchoolModel.objects.filter(is_active=True).filter(svc_q)
-        .values_list('school_type__name', flat=True).distinct().order_by('school_type__order')
+        SchoolType.objects.filter(is_active=True).order_by('order').values_list('name', flat=True)
     )
     school_type_cross = []
     for st_name in school_types:
@@ -181,8 +181,8 @@ def performance_report_data_api(request):
         specific_q |= q
 
     fault_type_cross = []
-    for label, fq in callcenter_map:
-        row = {'name': label}
+    for fc_label, fq in callcenter_map:
+        row = {'name': fc_label}
         row_total = 0
         for sc in all_centers:
             cnt = inc_all.filter(fq, school__support_center=sc).count()
@@ -204,7 +204,7 @@ def performance_report_data_api(request):
     by_school_type = list(
         inc_qs.values('school__school_type__name')
         .annotate(cnt=Count('id'))
-        .order_by('-cnt')
+        .order_by('school__school_type__order')
     )
 
     # ── SLA 현황 (월간만 저장되므로 기간 내 해당 월들 집계) ──
