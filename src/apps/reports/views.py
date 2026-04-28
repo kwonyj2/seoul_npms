@@ -1416,24 +1416,15 @@ def _auto_register_school_contact(report):
 
 def _sync_wbs_regular_inspect(report):
     """
-    정기점검 보고서 완료 시 WBS 2.3.1 / 2.3.2 / 2.3.3 진척률 자동 계산.
-    완료된 정기점검 보고서의 학교 수 / 전체 활성 학교 수 로 진척률 산정.
+    정기점검 보고서 완료 시:
+    1) 진척관리(SchoolInspection) — 해당 차수 학교 점검 완료 처리
+    2) WBS 2.3.1 / 2.3.2 / 2.3.3 진척률 자동 계산
     """
     from datetime import date
     from apps.wbs.models import WBSItem
     from apps.audit.models import AuditProject
     from apps.schools.models import School
-
-    project = AuditProject.objects.filter(is_active=True).first()
-    if not project:
-        return
-
-    total_schools = School.objects.filter(is_active=True).count()
-    if total_schools == 0:
-        return
-
-    # 차수별 WBS 코드 — WBS 항목 자체의 planned_start/planned_end 기간 사용
-    WBS_CODES = ['2.3.1', '2.3.2', '2.3.3']
+    from apps.progress.models import InspectionPlan, SchoolInspection
 
     # 보고서 점검일 결정 (data.inspect_date → completed_at → today)
     inspect_date_str = (report.data or {}).get('inspect_date', '')
@@ -1444,6 +1435,38 @@ def _sync_wbs_regular_inspect(report):
     if not inspect_date:
         inspect_date = (report.completed_at.date() if report.completed_at
                         else date.today())
+
+    # ── 1) 진척관리 SchoolInspection 자동 완료 ──
+    # 점검일이 포함되는 차수(InspectionPlan)를 찾아서 해당 학교 점검을 완료 처리
+    if report.school_id:
+        matching_plans = InspectionPlan.objects.filter(
+            plan_type='regular',
+            start_date__lte=inspect_date,
+            end_date__gte=inspect_date,
+            status__in=['active', 'draft'],
+        )
+        for plan in matching_plans:
+            si = SchoolInspection.objects.filter(
+                plan=plan, school_id=report.school_id
+            ).first()
+            if si and si.status != 'completed':
+                si.status = 'completed'
+                si.completed_date = inspect_date
+                si.report = report
+                si.save(update_fields=['status', 'completed_date', 'report', 'updated_at'])
+                logger.info('진척관리 자동완료: plan=%s, school=%s, date=%s',
+                            plan.name, report.school_id, inspect_date)
+
+    # ── 2) WBS 진척률 자동 계산 ──
+    project = AuditProject.objects.filter(is_active=True).first()
+    if not project:
+        return
+
+    total_schools = School.objects.filter(is_active=True).count()
+    if total_schools == 0:
+        return
+
+    WBS_CODES = ['2.3.1', '2.3.2', '2.3.3']
 
     for code in WBS_CODES:
         try:
