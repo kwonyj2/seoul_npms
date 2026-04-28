@@ -271,54 +271,15 @@ function renderReport(d) {
     </div>`;
   }
 
-  // ── 3. 장애 분류 (콜센터 보고서 양식) ──
+  // ── 3. 장애 분류 (대분류 8개 × 교육지원청) ──
   let faultTypeCrossHtml = '';
-  if (inc.fault_type_cross && inc.fault_type_cross.length) {
-    const fc = inc.fault_type_cross;
-    // 그룹: 무선(0~2), 유선(3~5), 스마트기기(6~7), 기타(8)
-    const groups = [
-      { label:'무선', items: fc.filter(r => r.name.startsWith('무선-')), colSpan: 3 },
-      { label:'유선', items: fc.filter(r => r.name.startsWith('유선-')), colSpan: 3 },
-      { label:'스마트기기', items: fc.filter(r => r.name.startsWith('스마트기기-')), colSpan: 2 },
-    ];
-    const etcItem = fc.find(r => r.name === '기타');
-
-    // 헤더 1행: 그룹명
-    let hdr1 = '<th rowspan="2" style="width:40px;">구분</th>';
-    groups.forEach(g => { hdr1 += `<th colspan="${g.colSpan}">${g.label}</th>`; });
-    hdr1 += '<th rowspan="2">기타</th>';
-
-    // 헤더 2행: 세부 항목명
-    let hdr2 = '';
-    groups.forEach(g => {
-      g.items.forEach(item => {
-        hdr2 += `<th>${item.name.split('-')[1]}</th>`;
-      });
-    });
-
-    // 데이터 행: 합계행만 (전체 수량)
-    let dataRow = '<td class="row-label">건수</td>';
-    groups.forEach(g => {
-      g.items.forEach(item => { dataRow += `<td>${item.total}</td>`; });
-    });
-    dataRow += `<td>${etcItem ? etcItem.total : 0}</td>`;
-
+  if (isAll && inc.fault_type_cross && inc.fault_type_cross.length) {
     faultTypeCrossHtml = `
     <div class="col-12">
       <div class="card border-0 shadow-sm">
         <div class="card-body py-3">
           <div class="section-title"><i class="bi bi-exclamation-triangle me-1 text-warning"></i>장애 분류</div>
-          <div class="table-responsive">
-            <table class="table table-sm table-bordered mb-0 cross-table">
-              <thead class="table-light">
-                <tr>${hdr1}</tr>
-                <tr>${hdr2}</tr>
-              </thead>
-              <tbody>
-                <tr>${dataRow}</tr>
-              </tbody>
-            </table>
-          </div>
+          ${buildCrossTable(centers, inc.fault_type_cross)}
         </div>
       </div>
     </div>`;
