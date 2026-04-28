@@ -530,7 +530,7 @@ function renderReport(d) {
               <thead class="table-light">
                 <tr>
                   <th>기간</th><th>종합점수</th><th>등급</th><th>가동률</th><th>점검준수율</th>
-                  <th>장애건수</th><th>평균조치</th><th>초과건</th><th>반복장애</th><th>만족도</th>
+                  <th title="SLA 장애건수: 해당 월 완료 기준 (접수 기준과 다를 수 있음)">장애건수 <i class="bi bi-info-circle text-muted" style="font-size:.7rem;"></i></th><th>평균조치</th><th>초과건</th><th>반복장애</th><th>만족도</th>
                 </tr>
               </thead>
               <tbody>${slaRows}</tbody>
