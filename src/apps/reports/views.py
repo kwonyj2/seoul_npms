@@ -160,20 +160,45 @@ def performance_report_data_api(request):
         row['total'] = row_total
         school_type_cross.append(row)
 
-    # 3) 장애유형별 × 교육지원청 크로스탭
-    fault_types = list(
-        inc_all.values_list('fault_type', flat=True).distinct().order_by('fault_type')
-    )
+    # 3) 콜센터 장애분류 × 교육지원청 크로스탭
+    #    무선: AP, PoE, 케이블·전용회선
+    #    유선: 전용회선, 스위치, 케이블
+    #    스마트기기: 디벗, 전자칠판
+    #    기타
+    callcenter_map = [
+        ('무선-AP',         Q(category__code='wireless', subcategory__name='AP불량')),
+        ('무선-PoE',        Q(category__code='wireless', subcategory__name='PoE불량')),
+        ('무선-케이블·전용회선', Q(category__code='wireless', subcategory__name='전용회선장애')),
+        ('유선-전용회선',     Q(category__code='wired', subcategory__name='전용회선장애')),
+        ('유선-스위치',      Q(category__code='wired', subcategory__name__in=['스위치불량', '포트불량', '루핑', '소프트웨어'])),
+        ('유선-케이블',      Q(category__code='cable')),
+        ('스마트기기-디벗',   Q(category__code='devut')),
+        ('스마트기기-전자칠판', Q(category__code='board')),
+    ]
+    # 기타 = 위 조건에 해당하지 않는 나머지
+    specific_q = Q()
+    for _, q in callcenter_map:
+        specific_q |= q
+
     fault_type_cross = []
-    for ft in fault_types:
-        row = {'name': ft or '미분류'}
+    for label, fq in callcenter_map:
+        row = {'name': label}
         row_total = 0
         for sc in all_centers:
-            cnt = inc_all.filter(fault_type=ft, school__support_center=sc).count()
+            cnt = inc_all.filter(fq, school__support_center=sc).count()
             row[sc.code] = cnt
             row_total += cnt
         row['total'] = row_total
         fault_type_cross.append(row)
+    # 기타
+    etc_row = {'name': '기타'}
+    etc_total = 0
+    for sc in all_centers:
+        cnt = inc_all.filter(school__support_center=sc).exclude(specific_q).count()
+        etc_row[sc.code] = cnt
+        etc_total += cnt
+    etc_row['total'] = etc_total
+    fault_type_cross.append(etc_row)
 
     # 학제별 단순 집계 (기존 호환)
     by_school_type = list(
