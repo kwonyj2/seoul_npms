@@ -15,12 +15,11 @@ from datetime import date
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-QUARTER_DATES = {
-    # 사업 기간: 2분기 5/1~6/30, 3분기 7/1~9/30, 4분기 10/1~12/31
-    1: (date(2000, 1, 1),  date(2000, 4, 30)),
-    2: (date(2000, 5, 1),  date(2000, 6, 30)),
-    3: (date(2000, 7, 1),  date(2000, 9, 30)),
-    4: (date(2000, 10, 1), date(2000, 12, 31)),
+# 차수별 기본 기간 (사업 확정 후 변경 가능)
+ROUND_DATES = {
+    1: (date(2000, 7, 1),  date(2000, 8, 31)),
+    2: (date(2000, 9, 1),  date(2000, 10, 31)),
+    3: (date(2000, 11, 1), date(2000, 11, 30)),
 }
 
 
@@ -31,11 +30,12 @@ class Command(BaseCommand):
         parser.add_argument('--file',       default=None)
         parser.add_argument('--plan-name',  default=None, dest='plan_name')
         parser.add_argument('--year',       type=int, default=None)
-        parser.add_argument('--quarter',    type=int, default=None, choices=[1, 2, 3, 4])
+        parser.add_argument('--quarter',    type=int, default=None, choices=[1, 2, 3],
+                            help='차수 (1차/2차/3차)')
         parser.add_argument('--start-date', default=None, dest='start_date',
-                            help='YYYY-MM-DD (기본: 분기 시작일)')
+                            help='YYYY-MM-DD (기본: 차수별 시작일)')
         parser.add_argument('--end-date',   default=None, dest='end_date',
-                            help='YYYY-MM-DD (기본: 분기 종료일)')
+                            help='YYYY-MM-DD (기본: 차수별 종료일)')
         parser.add_argument('--plan-type',  default='regular', dest='plan_type',
                             choices=['regular', 'special', 'quarterly', 'project', 'survey', 'followup'])
         parser.add_argument('--update',     action='store_true')
@@ -56,10 +56,12 @@ class Command(BaseCommand):
             from django.conf import settings
             file_path = os.path.join(settings.BASE_DIR, 'media', 'data', '정기점검.xlsx')
             if not os.path.exists(file_path):
-                # 연도·분기로 자동 탐색
+                # 연도·차수로 자동 탐색
                 year    = options['year']    or date.today().year
-                quarter = options['quarter'] or ((date.today().month - 1) // 3 + 1)
+                quarter = options['quarter'] or 1
                 candidates = [
+                    f'{year}년 {quarter}차 정기점검.xlsx',
+                    f'{year}년_{quarter}차_정기점검.xlsx',
                     f'{year}년 {quarter}분기 정기점검.xlsx',
                     f'{year}년_{quarter}분기_정기점검.xlsx',
                 ]
@@ -77,22 +79,22 @@ class Command(BaseCommand):
         year    = options['year']
         quarter = options['quarter']
 
-        # 파일명에서 연도·분기 추출 시도
+        # 파일명에서 연도·차수 추출 시도
         if not year or not quarter:
             import re
             fname = os.path.basename(file_path)
-            m = re.search(r'(\d{4})년\s*(\d)분기', fname)
+            m = re.search(r'(\d{4})년\s*(\d)(?:차|분기)', fname)
             if m:
                 year    = year    or int(m.group(1))
                 quarter = quarter or int(m.group(2))
 
         year    = year    or date.today().year
-        quarter = quarter or ((date.today().month - 1) // 3 + 1)
+        quarter = quarter or 1
 
-        plan_name = options['plan_name'] or f'{year}년 {quarter}분기 정기점검'
+        plan_name = options['plan_name'] or f'{year}년 {quarter}차 정기점검'
 
         # 날짜 계산
-        q_start, q_end = QUARTER_DATES.get(quarter, (date(year, 1, 1), date(year, 12, 31)))
+        q_start, q_end = ROUND_DATES.get(quarter, (date(year, 1, 1), date(year, 12, 31)))
         start_date = (
             date.fromisoformat(options['start_date']) if options['start_date']
             else q_start.replace(year=year)

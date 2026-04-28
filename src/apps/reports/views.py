@@ -1432,12 +1432,8 @@ def _sync_wbs_regular_inspect(report):
     if total_schools == 0:
         return
 
-    # 차수별 WBS 코드 및 기간 매핑 (분기별)
-    PERIODS = [
-        ('2.3.1', date(2026, 5, 1),  date(2026, 6, 30)),   # 2분기
-        ('2.3.2', date(2026, 7, 1),  date(2026, 9, 30)),   # 3분기
-        ('2.3.3', date(2026, 10, 1), date(2026, 12, 31)),  # 4분기
-    ]
+    # 차수별 WBS 코드 — WBS 항목 자체의 planned_start/planned_end 기간 사용
+    WBS_CODES = ['2.3.1', '2.3.2', '2.3.3']
 
     # 보고서 점검일 결정 (data.inspect_date → completed_at → today)
     inspect_date_str = (report.data or {}).get('inspect_date', '')
@@ -1449,7 +1445,15 @@ def _sync_wbs_regular_inspect(report):
         inspect_date = (report.completed_at.date() if report.completed_at
                         else date.today())
 
-    for code, p_start, p_end in PERIODS:
+    for code in WBS_CODES:
+        try:
+            item = WBSItem.objects.get(project=project, code=code)
+        except WBSItem.DoesNotExist:
+            continue
+        p_start = item.planned_start
+        p_end = item.planned_end
+        if not p_start or not p_end:
+            continue
         if p_start <= inspect_date <= p_end:
             # 해당 기간 내 완료된 정기점검 보고서의 고유 학교 수
             completed_schools = Report.objects.filter(
@@ -1461,20 +1465,15 @@ def _sync_wbs_regular_inspect(report):
 
             progress = min(100, round(completed_schools / total_schools * 100))
 
+            item.progress = progress
+            if item.actual_start is None:
+                item.actual_start = inspect_date
+            if progress >= 100:
+                item.actual_end = inspect_date
+            item.save(update_fields=['progress', 'actual_start', 'actual_end', 'updated_at'])
             try:
-                item = WBSItem.objects.get(project=project, code=code)
-                item.progress = progress
-                if item.actual_start is None:
-                    item.actual_start = inspect_date
-                if progress >= 100:
-                    item.actual_end = inspect_date
-                item.save(update_fields=['progress', 'actual_start', 'actual_end', 'updated_at'])
-                # 부모 진척률 버블업
-                try:
-                    from apps.wbs.signals import _bubble_up
-                    _bubble_up(item)
-                except Exception as e:
-                    logger.warning('WBS 진척 버블업 실패 item=%s: %s', item.pk, e)
-            except WBSItem.DoesNotExist:
-                pass
+                from apps.wbs.signals import _bubble_up
+                _bubble_up(item)
+            except Exception as e:
+                logger.warning('WBS 진척 버블업 실패 item=%s: %s', item.pk, e)
             break

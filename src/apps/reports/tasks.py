@@ -171,7 +171,7 @@ def generate_report_pdf_task(self, report_id):
                 'data':   data,
             })
             quarter = data.get('quarter', '')
-            base_name = f'{quarter}분기 정기점검 보고서_{school_name}'
+            base_name = f'{quarter}차 정기점검 보고서_{school_name}'
         else:
             if data.get('devices'):
                 _inject_photos(data['devices'])
@@ -190,7 +190,7 @@ def generate_report_pdf_task(self, report_id):
         prefix = '2026년 테크센터-'
         if report_type == 'regular':
             quarter = data.get('quarter', '')
-            pdf_dir = os.path.join(nas_output, '정기점검보고서', f'{quarter}분기')
+            pdf_dir = os.path.join(nas_output, '정기점검보고서', f'{quarter}차')
         elif report_type == 'switch_install':
             pdf_dir = os.path.join(nas_output, '스위치설치확인서')
         elif report_type == 'cable':

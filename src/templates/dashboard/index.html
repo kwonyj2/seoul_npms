@@ -304,14 +304,14 @@
     </div><!-- /우측 컬럼 -->
   </div>
 
-  <!-- ② 분기 진척현황 + 오늘의 점검계획 -->
+  <!-- ② 점검 진척현황 + 오늘의 점검계획 -->
   <div class="row g-2 mt-1">
 
-    <!-- 좌측: 분기 진척현황 (탭) -->
+    <!-- 좌측: 점검 진척현황 (탭) -->
     <div class="col-12 col-xl-6">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-header d-flex align-items-center justify-content-between py-2 bg-white border-bottom">
-          <span class="fw-semibold"><i class="bi bi-bar-chart-steps text-success me-1"></i>분기 진척현황</span>
+          <span class="fw-semibold"><i class="bi bi-bar-chart-steps text-success me-1"></i>점검 진척현황</span>
           <a href="/npms/progress/" class="btn btn-xs btn-outline-secondary">전체</a>
         </div>
         <!-- 탭 네비게이션 -->
@@ -1478,7 +1478,7 @@ async function loadSchedule() {
     if (!res.ok) return;
     const d = await res.json();
 
-    // 좌측: 분기 진척현황 탭
+    // 좌측: 점검 진척현황 탭
     renderPlanTabs(d.active_plans);
 
     // 우측: 오늘의 점검계획 (탭)

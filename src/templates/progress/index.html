@@ -18,7 +18,7 @@
               <option value="">전체 유형</option>
               <option value="regular">정기점검</option>
               <option value="special">특별점검</option>
-              <option value="quarterly">분기점검</option>
+              <option value="quarterly">차수점검</option>
               <option value="project">사업점검</option>
               <option value="survey">실태조사</option>
               <option value="followup">사후점검</option>
@@ -183,16 +183,16 @@
     <div class="modal-header py-2"><h6 class="modal-title fw-bold">점검 계획 생성</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <div class="row g-2">
-        <div class="col-8"><label class="form-label small fw-semibold">계획명 <span class="text-danger">*</span></label><input type="text" id="pm-name" class="form-control form-control-sm" placeholder="예: 2026년 1분기 정기점검"></div>
+        <div class="col-8"><label class="form-label small fw-semibold">계획명 <span class="text-danger">*</span></label><input type="text" id="pm-name" class="form-control form-control-sm" placeholder="예: 2026년 1차 정기점검"></div>
         <div class="col-4"><label class="form-label small fw-semibold">유형</label>
           <select id="pm-type" class="form-select form-select-sm">
             <option value="regular">정기점검</option><option value="special">특별점검</option>
-            <option value="quarterly">분기점검</option><option value="project">사업점검</option>
+            <option value="quarterly">차수점검</option><option value="project">사업점검</option>
             <option value="survey">실태조사</option><option value="followup">사후점검</option>
           </select></div>
         <div class="col-4"><label class="form-label small fw-semibold">연도 *</label><input type="number" id="pm-year" class="form-control form-control-sm"></div>
-        <div class="col-4"><label class="form-label small fw-semibold">분기</label>
-          <select id="pm-quarter" class="form-select form-select-sm"><option value="">-</option><option value="1">1분기</option><option value="2">2분기</option><option value="3">3분기</option><option value="4">4분기</option></select></div>
+        <div class="col-4"><label class="form-label small fw-semibold">차수</label>
+          <select id="pm-quarter" class="form-select form-select-sm"><option value="">-</option><option value="1">1차</option><option value="2">2차</option><option value="3">3차</option></select></div>
         <div class="col-4"><label class="form-label small fw-semibold">상태</label>
           <select id="pm-status" class="form-select form-select-sm"><option value="draft">준비중</option><option value="active">진행중</option></select></div>
         <div class="col-6"><label class="form-label small fw-semibold">시작일 *</label><input type="date" id="pm-start" class="form-control form-control-sm"></div>
@@ -215,12 +215,12 @@
         <div class="col-4"><label class="form-label small fw-semibold">유형</label>
           <select id="pe-type" class="form-select form-select-sm">
             <option value="regular">정기점검</option><option value="special">특별점검</option>
-            <option value="quarterly">분기점검</option><option value="project">사업점검</option>
+            <option value="quarterly">차수점검</option><option value="project">사업점검</option>
             <option value="survey">실태조사</option><option value="followup">사후점검</option>
           </select></div>
         <div class="col-4"><label class="form-label small fw-semibold">연도 *</label><input type="number" id="pe-year" class="form-control form-control-sm"></div>
-        <div class="col-4"><label class="form-label small fw-semibold">분기</label>
-          <select id="pe-quarter" class="form-select form-select-sm"><option value="">-</option><option value="1">1분기</option><option value="2">2분기</option><option value="3">3분기</option><option value="4">4분기</option></select></div>
+        <div class="col-4"><label class="form-label small fw-semibold">차수</label>
+          <select id="pe-quarter" class="form-select form-select-sm"><option value="">-</option><option value="1">1차</option><option value="2">2차</option><option value="3">3차</option></select></div>
         <div class="col-4"><label class="form-label small fw-semibold">상태</label>
           <select id="pe-status" class="form-select form-select-sm"><option value="draft">준비중</option><option value="active">진행중</option><option value="completed">완료</option></select></div>
         <div class="col-6"><label class="form-label small fw-semibold">시작일 *</label><input type="date" id="pe-start" class="form-control form-control-sm"></div>
@@ -392,7 +392,7 @@ async function loadPlans() {
           <span class="badge bg-${TYPE_COLOR[p.plan_type]||'secondary'}" style="font-size:0.65rem;">${p.plan_type_display}</span>
           <div class="flex-fill min-w-0">
             <div class="fw-semibold text-truncate" style="font-size:0.8rem;">${p.name}</div>
-            <small class="text-muted" style="font-size:0.7rem;">${p.year}년${p.quarter?` ${p.quarter}분기`:''} · ${p.start_date}~${p.end_date}</small>
+            <small class="text-muted" style="font-size:0.7rem;">${p.year}년${p.quarter?` ${p.quarter}차`:''} · ${p.start_date}~${p.end_date}</small>
           </div>
           ${STATUS_BADGE[p.status]||''}
         </div>
@@ -1054,21 +1054,6 @@ function csvDownload(tab) {
 }
 
 // ─────────────────────────────────────
-// 분기 선택 → 시작일/종료일 자동입력
-// ─────────────────────────────────────
-function autoFillQuarterDates(quarter, yearId, startId, endId) {
-  const q = parseInt(quarter);
-  if (!q) return;
-  const y = parseInt(document.getElementById(yearId).value) || new Date().getFullYear();
-  const ranges = { 1:['01-01','03-31'], 2:['04-01','06-30'], 3:['07-01','09-30'], 4:['10-01','12-31'] };
-  const [s, e] = ranges[q] || [];
-  if (!s) return;
-  const sEl = document.getElementById(startId), eEl = document.getElementById(endId);
-  if (sEl && !sEl.value) sEl.value = `${y}-${s}`;
-  if (eEl && !eEl.value) eEl.value = `${y}-${e}`;
-}
-
-// ─────────────────────────────────────
 // 초기화
 // ─────────────────────────────────────
 (function init() {
@@ -1077,11 +1062,6 @@ function autoFillQuarterDates(quarter, yearId, startId, endId) {
 })();
 document.getElementById('filter-type').addEventListener('change', loadPlans);
 document.getElementById('filter-year').addEventListener('change', loadPlans);
-document.getElementById('pm-quarter').addEventListener('change', function() {
-  autoFillQuarterDates(this.value, 'pm-year', 'pm-start', 'pm-end');
-});
-document.getElementById('pe-quarter').addEventListener('change', function() {
-  autoFillQuarterDates(this.value, 'pe-year', 'pe-start', 'pe-end');
 });
 </script>
 {% endblock %}

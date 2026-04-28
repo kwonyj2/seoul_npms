@@ -84,7 +84,8 @@ class InspectionPlan(models.Model):
     name         = models.CharField('계획명', max_length=200)
     plan_type    = models.CharField('유형', max_length=20, choices=TYPE_CHOICES, default='regular')
     year         = models.PositiveSmallIntegerField('연도')
-    quarter      = models.PositiveSmallIntegerField('분기', null=True, blank=True)
+    quarter      = models.PositiveSmallIntegerField('차수', null=True, blank=True,
+        help_text='정기점검 차수 (1차/2차/3차)')
     start_date   = models.DateField('시작일')
     end_date     = models.DateField('종료일')
     description  = models.TextField('설명', blank=True)

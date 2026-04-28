@@ -1486,10 +1486,10 @@ var regularPhotos={};
 function renderRegularInspectForm(){
   var t=new Date();
   var todayStr=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
-  /* 사업 기간: 5~6월=2분기, 7~9월=3분기, 10~12월=4분기 */
+  /* 차수: 1차/2차/3차 — 기간 확정 후 조정 */
   var month=t.getMonth()+1;
-  var quarter=(month<=6)?2:(month<=9)?3:4;
-  var titleText=quarter+'분기 정기점검 보고서';
+  var quarter=(month<=8)?1:(month<=10)?2:3;
+  var titleText=quarter+'차 정기점검 보고서';
   regularPhotos={};
 
   /* 학교 장비 수량 자동 조회 → 점검결과 드롭다운 업데이트 */
@@ -1521,8 +1521,8 @@ function renderRegularInspectForm(){
   html+='<input type="date" id="ri-inspect-date" class="form-control form-control-sm" value="'+todayStr+'">';
   html+='</div></div>';
   html+='<div class="col-12 col-sm-6"><div class="form-field">';
-  html+='<label>분기 (자동)</label>';
-  html+='<input type="text" class="form-control form-control-sm" value="'+quarter+'분기" readonly>';
+  html+='<label>차수 (자동)</label>';
+  html+='<input type="text" class="form-control form-control-sm" value="'+quarter+'차" readonly>';
   html+='<input type="hidden" id="ri-quarter" value="'+quarter+'">';
   html+='</div></div>';
   html+='</div></div>';
@@ -2076,7 +2076,7 @@ function _renderRegularInspectConfirm(){
   var html='<table class="table table-sm table-bordered small mb-3">';
   html+='<tr class="table-light"><th style="width:35%;">항목</th><th>입력값</th></tr>';
   html+='<tr><td class="fw-semibold">학교</td><td>'+escH(selSchool.name)+'</td></tr>';
-  html+='<tr><td class="text-muted">분기</td><td>'+d.quarter+'분기</td></tr>';
+  html+='<tr><td class="text-muted">차수</td><td>'+d.quarter+'차</td></tr>';
   html+='<tr><td class="text-muted">점검일자</td><td>'+escH(d.inspect_date)+'</td></tr>';
   html+='<tr><td class="text-muted">장비</td><td>스위치 '+d.switch_count+'대, PoE '+d.poe_count+'대, AP '+d.ap_count+'대</td></tr>';
   html+='<tr><td class="text-muted">유선 교사망</td><td>집선 '+escH(d.wired_teacher_hub_down||'-')+'/'+escH(d.wired_teacher_hub_up||'-')+' 단말 '+escH(d.wired_teacher_end_down||'-')+'/'+escH(d.wired_teacher_end_up||'-')+' Mbps</td></tr>';
@@ -2364,7 +2364,7 @@ async function wmComplete(){
     /* 정기점검 보고서 */
     data=collectRegularData();
     var q=data.quarter||'';
-    title=q+'분기 정기점검 보고서 - '+selSchool.name;
+    title=q+'차 정기점검 보고서 - '+selSchool.name;
     /* 전자서명 데이터 */
     var schContactSel3=document.getElementById('sig-sch-contact-sel');
     var schName3='';
