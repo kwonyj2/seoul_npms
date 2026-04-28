@@ -147,7 +147,7 @@ def performance_report_data_api(request):
     # 2) 학제별 × 교육지원청 크로스탭
     from apps.schools.models import SchoolType
     school_types = list(
-        SchoolType.objects.filter(is_active=True).order_by('order').values_list('name', flat=True)
+        SchoolType.objects.all().order_by('order').values_list('name', flat=True)
     )
     school_type_cross = []
     for st_name in school_types:
