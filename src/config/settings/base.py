@@ -206,6 +206,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.wbs.tasks.snapshot_wbs_progress',
         'schedule': crontab(hour=1, minute=0, day_of_week=1),
     },
+    # SLA 월간 지표 자동 산출 (매일 새벽 5시 — 전월+당월 재계산)
+    'auto-calculate-sla': {
+        'task': 'apps.incidents.tasks.auto_calculate_sla',
+        'schedule': crontab(hour=5, minute=0),
+    },
     # ── 보안관제 ────────────────────────
     # SSH 로그 수집 (5분마다)
     'collect-system-logs': {

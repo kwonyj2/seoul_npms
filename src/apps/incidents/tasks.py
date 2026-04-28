@@ -105,6 +105,33 @@ def check_sla_violations():
 
 
 @celery_app.task
+def auto_calculate_sla():
+    """SLA 월간 지표 자동 산출 — 매월 1일 전월 + 당월 재계산"""
+    from core.sla_calculator import save_monthly
+    today = timezone.localdate()
+
+    # 전월 산출
+    if today.month == 1:
+        prev_year, prev_month = today.year - 1, 12
+    else:
+        prev_year, prev_month = today.year, today.month - 1
+    try:
+        obj, _ = save_monthly(prev_year, prev_month)
+        logger.info('SLA 자동산출 %d년 %d월: %.1f점 (%s), 장애건수=%s',
+                     prev_year, prev_month, obj.total_score or 0, obj.grade, obj.fault_count)
+    except Exception as e:
+        logger.error('SLA 자동산출 실패 %d년 %d월: %s', prev_year, prev_month, e)
+
+    # 당월 산출 (진행중 데이터 반영)
+    try:
+        obj, _ = save_monthly(today.year, today.month)
+        logger.info('SLA 자동산출 %d년 %d월: %.1f점 (%s), 장애건수=%s',
+                     today.year, today.month, obj.total_score or 0, obj.grade, obj.fault_count)
+    except Exception as e:
+        logger.error('SLA 자동산출 실패 %d년 %d월: %s', today.year, today.month, e)
+
+
+@celery_app.task
 def update_daily_statistics():
     """일별 통계 업데이트 (Celery Beat - 매일 자정)"""
     from .models import Incident
