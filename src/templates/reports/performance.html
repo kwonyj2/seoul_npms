@@ -17,6 +17,14 @@
 .section-title { font-size:.9rem; font-weight:600; color:#495057;
   border-bottom:2px solid #dee2e6; padding-bottom:.3rem; margin-bottom:.8rem; }
 .grade-badge { font-size:1.1rem; font-weight:700; padding:.2rem .6rem; border-radius:6px; }
+.center-btn { font-size:.78rem; padding:.2rem .5rem; border-radius:4px; }
+.center-btn.active { background:#0d6efd; color:#fff !important; border-color:#0d6efd !important; font-weight:600; }
+.cross-table { table-layout:fixed; }
+.cross-table th, .cross-table td { font-size:.78rem; text-align:center; vertical-align:middle; }
+.cross-table .row-label { text-align:left; font-weight:600; }
+.cross-table .clickable { cursor:pointer; }
+.cross-table .clickable:hover { color:#0d6efd; text-decoration:underline; }
+.cross-table .col-total { font-weight:700; background:#f8f9fa; }
 @media print {
   #sidebar, .npms-topbar, .no-print { display:none !important; }
   .main-content { margin:0 !important; padding:0 !important; }
@@ -28,12 +36,10 @@
 {% block content %}
 <div class="container-fluid px-3 py-2">
 
-  <!-- ── 기간 선택 컨트롤 ── -->
+  <!-- 기간 선택 컨트롤 -->
   <div class="card border-0 shadow-sm mb-3 no-print">
     <div class="card-body py-2 px-3">
       <div class="d-flex flex-wrap align-items-center gap-2">
-
-        <!-- 기간 유형 탭 -->
         <div class="btn-group btn-group-sm" id="period-tabs">
           <button class="btn btn-outline-primary period-tab active" data-type="weekly">주간</button>
           <button class="btn btn-outline-primary period-tab" data-type="monthly">월간</button>
@@ -41,42 +47,28 @@
           <button class="btn btn-outline-primary period-tab" data-type="half">반기</button>
           <button class="btn btn-outline-primary period-tab" data-type="annual">연간</button>
         </div>
-
-        <!-- 연도 -->
         <select id="sel-year" class="form-select form-select-sm" style="width:90px;">
           {% for y in years %}
           <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}년</option>
           {% endfor %}
         </select>
-
-        <!-- 월 (monthly/weekly) -->
         <select id="sel-month" class="form-select form-select-sm" style="width:80px;">
           {% for m in months %}
           <option value="{{ m }}" {% if m == current_month %}selected{% endif %}>{{ m }}월</option>
           {% endfor %}
         </select>
-
-        <!-- 주차 (weekly) -->
         <select id="sel-week" class="form-select form-select-sm" style="width:90px;">
           {% for w in weeks %}
           <option value="{{ w }}">{{ w }}주차</option>
           {% endfor %}
         </select>
-
-        <!-- 분기 -->
         <select id="sel-quarter" class="form-select form-select-sm d-none" style="width:80px;">
-          <option value="1">1분기</option>
-          <option value="2">2분기</option>
-          <option value="3">3분기</option>
-          <option value="4">4분기</option>
+          <option value="1">1분기</option><option value="2">2분기</option>
+          <option value="3">3분기</option><option value="4">4분기</option>
         </select>
-
-        <!-- 반기 -->
         <select id="sel-half" class="form-select form-select-sm d-none" style="width:80px;">
-          <option value="1">상반기</option>
-          <option value="2">하반기</option>
+          <option value="1">상반기</option><option value="2">하반기</option>
         </select>
-
         <button class="btn btn-sm btn-primary" onclick="loadReport()">
           <i class="bi bi-search me-1"></i>조회
         </button>
@@ -92,7 +84,20 @@
     </div>
   </div>
 
-  <!-- ── 보고서 본문 ── -->
+  <!-- 교육지원청 선택 -->
+  <div class="card border-0 shadow-sm mb-3 no-print" id="center-selector" style="display:none;">
+    <div class="card-body py-2 px-3">
+      <div class="d-flex flex-wrap align-items-center gap-1">
+        <span class="text-muted small me-1"><i class="bi bi-building me-1"></i>교육지원청:</span>
+        <button class="btn btn-outline-secondary center-btn active" data-center="all" onclick="selectCenter(this)">전체</button>
+        {% for c in centers %}
+        <button class="btn btn-outline-secondary center-btn" data-center="{{ c.code }}" onclick="selectCenter(this)">{{ c.name }}</button>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- 보고서 본문 -->
   <div id="report-body">
     <div class="text-center text-muted py-5">
       <i class="bi bi-file-earmark-bar-graph" style="font-size:2.5rem;"></i>
@@ -108,8 +113,10 @@
 <script>
 const BASE = '/npms';
 let chartRefs = {};
+let _lastParams = null;
+let _currentCenter = 'all';
 
-// ── 기간 유형 탭 전환 ─────────────────────────────────
+// -- 기간 유형 탭 전환
 document.querySelectorAll('.period-tab').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
@@ -122,10 +129,19 @@ document.querySelectorAll('.period-tab').forEach(btn => {
     document.getElementById('sel-half').style.display    = (t === 'half')      ? '' : 'none';
   });
 });
-// 초기화: 주간 탭 active
 document.querySelector('.period-tab[data-type="weekly"]').click();
 
-// ── 조회 ─────────────────────────────────────────────
+function selectCenter(btn) {
+  document.querySelectorAll('.center-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _currentCenter = btn.dataset.center;
+  loadReport();
+}
+function selectCenterByCode(code) {
+  const btn = document.querySelector(`.center-btn[data-center="${code}"]`);
+  if (btn) selectCenter(btn);
+}
+
 async function loadReport() {
   const type    = document.querySelector('.period-tab.active').dataset.type;
   const year    = document.getElementById('sel-year').value;
@@ -134,36 +150,68 @@ async function loadReport() {
   const quarter = document.getElementById('sel-quarter').value;
   const half    = document.getElementById('sel-half').value;
 
-  const params = new URLSearchParams({ type, year, month, week, quarter, half });
+  const params = new URLSearchParams({ type, year, month, week, quarter, half, center: _currentCenter });
   _lastParams = params.toString();
-  const body   = document.getElementById('report-body');
+  const body = document.getElementById('report-body');
   body.innerHTML = `<div class="text-center py-5 text-muted">
     <div class="spinner-border"></div><div class="mt-2">데이터 조회 중...</div></div>`;
 
-  // 기존 차트 파기
   Object.values(chartRefs).forEach(c => c.destroy());
   chartRefs = {};
   document.getElementById('btn-export').disabled = true;
 
   try {
-    const res  = await fetch(`${BASE}/performance/data/?${params}`);
+    const res = await fetch(`${BASE}/performance/data/?${params}`);
     if (!res.ok) throw new Error(res.status);
     const d = await res.json();
     renderReport(d);
     document.getElementById('btn-export').disabled = false;
+    document.getElementById('center-selector').style.display = '';
   } catch(e) {
     body.innerHTML = `<div class="alert alert-danger">데이터 로드 실패: ${e.message}</div>`;
   }
 }
 
-// ── Excel 내보내기 ────────────────────────────────────
-let _lastParams = null;
 function exportExcel() {
   if (!_lastParams) return;
   window.location.href = `${BASE}/performance/export/?${_lastParams}`;
 }
 
-// ── 렌더 ─────────────────────────────────────────────
+// -- 교육지원청별 크로스탭 테이블 생성 헬퍼
+function buildCrossTable(centers, rows, valueKey, opts={}) {
+  if (!centers || !centers.length) return '';
+  const hdrs = centers.map(c => `<th>${c.name}</th>`).join('');
+  const bodyRows = rows.map(r => {
+    const cells = centers.map(c => {
+      const v = r[c.code] ?? 0;
+      return `<td>${v}</td>`;
+    }).join('');
+    const total = r.total ?? 0;
+    return `<tr><td class="row-label">${r.name||'미분류'}</td>${cells}<td class="col-total">${total}</td></tr>`;
+  }).join('');
+  if (!bodyRows) return '';
+
+  // 합계 행
+  let footRow = '';
+  if (opts.showTotal !== false) {
+    const footCells = centers.map(c => {
+      const sum = rows.reduce((s, r) => s + (r[c.code]||0), 0);
+      return `<td class="col-total">${sum}</td>`;
+    }).join('');
+    const grandTotal = rows.reduce((s, r) => s + (r.total||0), 0);
+    footRow = `<tr class="table-light"><td class="row-label">합계</td>${footCells}<td class="col-total">${grandTotal}</td></tr>`;
+  }
+
+  return `<div class="table-responsive">
+    <table class="table table-sm table-bordered mb-0 cross-table">
+      <thead class="table-light">
+        <tr><th>구분</th>${hdrs}<th class="col-total">합계</th></tr>
+      </thead>
+      <tbody>${bodyRows}${footRow}</tbody>
+    </table>
+  </div>`;
+}
+
 function renderReport(d) {
   const inc  = d.incidents;
   const sla  = d.sla;
@@ -171,38 +219,166 @@ function renderReport(d) {
   const wf   = d.workforce  || {};
   const avgS = sla.avg_score;
   const sc   = avgS != null ? (avgS>=90?'success':avgS>=80?'warning':'danger') : 'secondary';
+  const centers = d.centers || [];
+  const isAll = d.center_code === 'all';
+
+  // ── 1. 교육지원청별 접수 현황 ──
+  let centerTableHtml = '';
+  if (isAll && inc.by_center && inc.by_center.length) {
+    const hdrs = inc.by_center.map(c => `<th>${c.name}</th>`).join('');
+    const recvCells = inc.by_center.map(c =>
+      `<td class="clickable" onclick="selectCenterByCode('${c.code}')">${c.total}</td>`).join('');
+    const compCells = inc.by_center.map(c => `<td>${c.completed}</td>`).join('');
+    const progCells = inc.by_center.map(c => `<td>${c.in_progress}</td>`).join('');
+    const totR = inc.by_center.reduce((s,c)=>s+c.total,0);
+    const totC = inc.by_center.reduce((s,c)=>s+c.completed,0);
+    const totP = inc.by_center.reduce((s,c)=>s+c.in_progress,0);
+
+    centerTableHtml = `
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body py-3">
+          <div class="section-title"><i class="bi bi-building me-1 text-primary"></i>교육지원청별 접수 현황</div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0 cross-table">
+              <thead class="table-light">
+                <tr><th>구분</th>${hdrs}<th class="col-total">합계</th></tr>
+              </thead>
+              <tbody>
+                <tr><td class="row-label">접수</td>${recvCells}<td class="col-total">${totR}</td></tr>
+                <tr><td class="row-label">완료</td>${compCells}<td class="col-total">${totC}</td></tr>
+                <tr><td class="row-label">진행</td>${progCells}<td class="col-total">${totP}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="text-muted small mt-1"><i class="bi bi-info-circle me-1"></i>접수 건수 클릭 시 해당 지원청 상세 보기</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ── 2. 학제별 접수 현황 (크로스탭) ──
+  let schoolTypeCrossHtml = '';
+  if (isAll && inc.school_type_cross && inc.school_type_cross.length) {
+    schoolTypeCrossHtml = `
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body py-3">
+          <div class="section-title"><i class="bi bi-mortarboard me-1 text-success"></i>학제별 접수 현황</div>
+          ${buildCrossTable(centers, inc.school_type_cross)}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ── 3. 장애 분류 (크로스탭) ──
+  let faultTypeCrossHtml = '';
+  if (isAll && inc.fault_type_cross && inc.fault_type_cross.length) {
+    faultTypeCrossHtml = `
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body py-3">
+          <div class="section-title"><i class="bi bi-exclamation-triangle me-1 text-warning"></i>장애 분류</div>
+          ${buildCrossTable(centers, inc.fault_type_cross)}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ── 4. 정기점검 현황 (크로스탭) ──
+  let inspectCrossHtml = '';
+  if (isAll && insp.by_center && insp.by_center.length) {
+    const hdrs = insp.by_center.map(c => `<th>${c.name}</th>`).join('');
+    const schoolCells = insp.by_center.map(c => `<td>${c.total_schools}</td>`).join('');
+    const doneCells   = insp.by_center.map(c => `<td>${c.completed}</td>`).join('');
+    const pctCells    = insp.by_center.map(c => `<td>${c.pct}%</td>`).join('');
+    const totS = insp.by_center.reduce((s,c)=>s+c.total_schools,0);
+    const totD = insp.by_center.reduce((s,c)=>s+c.completed,0);
+    const totPct = totS ? Math.round(totD/totS*100*10)/10 : 0;
+
+    inspectCrossHtml = `
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body py-3">
+          <div class="section-title"><i class="bi bi-clipboard-check me-1 text-primary"></i>정기점검 현황 (교육지원청별)</div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0 cross-table">
+              <thead class="table-light">
+                <tr><th>구분</th>${hdrs}<th class="col-total">합계</th></tr>
+              </thead>
+              <tbody>
+                <tr><td class="row-label">전체 학교</td>${schoolCells}<td class="col-total">${totS}</td></tr>
+                <tr><td class="row-label">점검 완료</td>${doneCells}<td class="col-total">${totD}</td></tr>
+                <tr><td class="row-label">점검률</td>${pctCells}<td class="col-total">${totPct}%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ── 5. 인력 투입 현황 (크로스탭) ──
+  let wfCrossHtml = '';
+  if (isAll && wf.by_center && wf.by_center.length) {
+    const hdrs = wf.by_center.map(c => `<th>${c.name}</th>`).join('');
+    const totalCells = wf.by_center.map(c => `<td>${c.total}</td>`).join('');
+    const compCells  = wf.by_center.map(c => `<td>${c.completed}</td>`).join('');
+    const totT = wf.by_center.reduce((s,c)=>s+c.total,0);
+    const totC = wf.by_center.reduce((s,c)=>s+c.completed,0);
+
+    wfCrossHtml = `
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body py-3">
+          <div class="section-title"><i class="bi bi-people me-1 text-secondary"></i>인력 투입 현황 (교육지원청별)</div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0 cross-table">
+              <thead class="table-light">
+                <tr><th>구분</th>${hdrs}<th class="col-total">합계</th></tr>
+              </thead>
+              <tbody>
+                <tr><td class="row-label">총 업무</td>${totalCells}<td class="col-total">${totT}</td></tr>
+                <tr><td class="row-label">완료</td>${compCells}<td class="col-total">${totC}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
 
   // SLA 월별 행
   const slaRows = sla.months.map(m => {
     const gc = m.total_score!=null?(m.total_score>=90?'table-success':m.total_score>=80?'table-warning':'table-danger'):'';
     return `<tr class="${gc}">
-      <td class="small text-center">${m.year}.${String(m.month).padStart(2,'0')}</td>
-      <td class="small text-center fw-bold">${m.total_score!=null?m.total_score.toFixed(1)+' 점':'-'}</td>
-      <td class="small text-center">${m.grade||'-'}</td>
-      <td class="small text-center">${m.uptime_pct!=null?m.uptime_pct.toFixed(3)+'%':'-'}</td>
-      <td class="small text-center">${m.inspection_pct!=null?m.inspection_pct.toFixed(1)+'%':'-'}</td>
-      <td class="small text-center">${m.fault_count??'-'}</td>
-      <td class="small text-center">${m.avg_fault_min!=null?Math.round(m.avg_fault_min)+'분':'-'}</td>
-      <td class="small text-center">${m.overtime_count??'-'}</td>
-      <td class="small text-center">${m.recurrence_count??'-'}</td>
-      <td class="small text-center">${m.satisfaction_pct!=null?m.satisfaction_pct.toFixed(1)+'%':'-'}</td>
+      <td>${m.year}.${String(m.month).padStart(2,'0')}</td>
+      <td class="fw-bold">${m.total_score!=null?m.total_score.toFixed(1)+' 점':'-'}</td>
+      <td>${m.grade||'-'}</td>
+      <td>${m.uptime_pct!=null?m.uptime_pct.toFixed(3)+'%':'-'}</td>
+      <td>${m.inspection_pct!=null?m.inspection_pct.toFixed(1)+'%':'-'}</td>
+      <td>${m.fault_count??'-'}</td>
+      <td>${m.avg_fault_min!=null?Math.round(m.avg_fault_min)+'분':'-'}</td>
+      <td>${m.overtime_count??'-'}</td>
+      <td>${m.recurrence_count??'-'}</td>
+      <td>${m.satisfaction_pct!=null?m.satisfaction_pct.toFixed(1)+'%':'-'}</td>
     </tr>`;
-  }).join('') || `<tr><td colspan="10" class="text-center text-muted py-3 small">해당 기간 SLA 데이터 없음</td></tr>`;
+  }).join('') || `<tr><td colspan="10" class="text-center text-muted py-3">해당 기간 SLA 데이터 없음</td></tr>`;
 
-  // 장애 유형별 rows
+  // 장애 유형별 (개별 지원청 선택 시)
   const typeRows = inc.by_type.map(t =>
     `<tr><td class="small">${t.fault_type||'미분류'}</td>
          <td class="small text-center fw-semibold">${t.cnt}건</td>
          <td class="small text-end">${inc.total?(t.cnt/inc.total*100).toFixed(1):'0'}%</td></tr>`
   ).join('') || `<tr><td colspan="3" class="text-center text-muted py-2 small">데이터 없음</td></tr>`;
 
-  // 학교별 rows
+  // 학교별 TOP
   const schoolRows = inc.by_school.map((s,i) =>
     `<tr><td class="small">${i+1}. ${s.school__name||'-'}</td>
          <td class="small text-center fw-semibold">${s.cnt}건</td></tr>`
   ).join('') || `<tr><td colspan="2" class="text-center text-muted py-2 small">데이터 없음</td></tr>`;
 
-  // 정기점검 현황
+  // 정기점검 (개별 지원청)
   const inspPct = insp.pct || 0;
   const inspColor = inspPct >= 90 ? 'success' : inspPct >= 60 ? 'warning' : 'danger';
   const inspSchoolRows = (insp.by_school || []).map((s,i) =>
@@ -210,7 +386,7 @@ function renderReport(d) {
          <td class="small text-center">${s.cnt}건</td></tr>`
   ).join('') || `<tr><td colspan="2" class="text-center text-muted py-2 small">데이터 없음</td></tr>`;
 
-  // 인력 투입 현황
+  // 인력 투입 (개별 지원청)
   const wfTotal = wf.total || 0;
   const wfDone  = wf.completed || 0;
   const wfPct   = wfTotal ? Math.round(wfDone/wfTotal*100) : 0;
@@ -224,6 +400,7 @@ function renderReport(d) {
          <td class="small text-center">${w.cnt}건</td></tr>`
   ).join('') || `<tr><td colspan="2" class="text-center text-muted py-2 small">데이터 없음</td></tr>`;
 
+  // ════════════════ HTML 렌더 ════════════════
   document.getElementById('report-body').innerHTML = `
 
   <!-- 보고서 헤더 -->
@@ -273,7 +450,7 @@ function renderReport(d) {
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm h-100 report-card ${sla.months.some(m=>m.grade==='A')?'success':'warning'}">
+      <div class="card border-0 shadow-sm h-100 report-card ${sla.months.some(m=>m.grade)?'success':'warning'}">
         <div class="card-body py-3 text-center">
           <div class="kpi-label mb-1">SLA 등급</div>
           <div class="kpi-val">${sla.months.length===1?(sla.months[0].grade||'-'):'-'}</div>
@@ -285,25 +462,69 @@ function renderReport(d) {
 
   <div class="row g-3">
 
+    <!-- ① 교육지원청별 접수 현황 -->
+    ${centerTableHtml}
+
+    <!-- ② 학제별 접수 현황 -->
+    ${schoolTypeCrossHtml}
+
+    <!-- ③ 장애 분류 -->
+    ${faultTypeCrossHtml}
+
+    <!-- 개별 지원청 선택 시: 장애 유형별 + 학교 TOP 5 -->
+    ${!isAll ? `
+    <div class="col-12 col-lg-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body py-3">
+          <div class="section-title"><i class="bi bi-exclamation-triangle me-1 text-warning"></i>장애 유형별 현황</div>
+          <div class="row g-2">
+            <div class="col-6"><canvas id="chart-type-pie" height="160"></canvas></div>
+            <div class="col-6"><table class="table table-sm mb-0"><tbody>${typeRows}</tbody></table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body py-3">
+          <div class="section-title"><i class="bi bi-building me-1 text-info"></i>장애 다발 학교 TOP 5</div>
+          <canvas id="chart-school-bar" height="160"></canvas>
+          <table class="table table-sm mt-2 mb-0"><tbody>${schoolRows}</tbody></table>
+        </div>
+      </div>
+    </div>` : `
+    <div class="col-12 col-lg-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body py-3">
+          <div class="section-title"><i class="bi bi-exclamation-triangle me-1 text-warning"></i>장애 유형별 현황</div>
+          <div class="row g-2">
+            <div class="col-6"><canvas id="chart-type-pie" height="160"></canvas></div>
+            <div class="col-6"><table class="table table-sm mb-0"><tbody>${typeRows}</tbody></table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body py-3">
+          <div class="section-title"><i class="bi bi-building me-1 text-info"></i>장애 다발 학교 TOP 5</div>
+          <canvas id="chart-school-bar" height="160"></canvas>
+          <table class="table table-sm mt-2 mb-0"><tbody>${schoolRows}</tbody></table>
+        </div>
+      </div>
+    </div>`}
+
     <!-- SLA 현황 테이블 -->
     <div class="col-12">
       <div class="card border-0 shadow-sm">
         <div class="card-body py-3">
           <div class="section-title"><i class="bi bi-shield-check me-1 text-primary"></i>SLA 종합 현황</div>
           <div class="table-responsive">
-            <table class="table table-sm table-bordered table-hover mb-0" style="font-size:.8rem;">
+            <table class="table table-sm table-bordered table-hover mb-0 cross-table">
               <thead class="table-light">
                 <tr>
-                  <th class="text-center">기간</th>
-                  <th class="text-center">종합점수</th>
-                  <th class="text-center">등급</th>
-                  <th class="text-center">가동률</th>
-                  <th class="text-center">점검준수율</th>
-                  <th class="text-center">장애건수</th>
-                  <th class="text-center">평균조치</th>
-                  <th class="text-center">초과건</th>
-                  <th class="text-center">반복장애</th>
-                  <th class="text-center">만족도</th>
+                  <th>기간</th><th>종합점수</th><th>등급</th><th>가동률</th><th>점검준수율</th>
+                  <th>장애건수</th><th>평균조치</th><th>초과건</th><th>반복장애</th><th>만족도</th>
                 </tr>
               </thead>
               <tbody>${slaRows}</tbody>
@@ -313,38 +534,7 @@ function renderReport(d) {
       </div>
     </div>
 
-    <!-- 장애 유형별 / 학교별 -->
-    <div class="col-12 col-lg-6">
-      <div class="card border-0 shadow-sm h-100">
-        <div class="card-body py-3">
-          <div class="section-title"><i class="bi bi-exclamation-triangle me-1 text-warning"></i>장애 유형별 현황</div>
-          <div class="row g-2">
-            <div class="col-6">
-              <canvas id="chart-type-pie" height="160"></canvas>
-            </div>
-            <div class="col-6">
-              <table class="table table-sm mb-0">
-                <tbody>${typeRows}</tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-12 col-lg-6">
-      <div class="card border-0 shadow-sm h-100">
-        <div class="card-body py-3">
-          <div class="section-title"><i class="bi bi-building me-1 text-info"></i>장애 다발 학교 TOP 5</div>
-          <canvas id="chart-school-bar" height="160"></canvas>
-          <table class="table table-sm mt-2 mb-0">
-            <tbody>${schoolRows}</tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- SLA 점수 추이 (복수 월인 경우) -->
+    <!-- SLA 점수 추이 -->
     ${sla.months.length > 1 ? `
     <div class="col-12">
       <div class="card border-0 shadow-sm">
@@ -355,7 +545,10 @@ function renderReport(d) {
       </div>
     </div>` : ''}
 
-    <!-- 정기점검 현황 -->
+    <!-- ④ 정기점검 현황 (교육지원청별) -->
+    ${inspectCrossHtml}
+
+    <!-- 정기점검 상세 (개별 또는 전체) -->
     <div class="col-12 col-lg-6">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body py-3">
@@ -367,8 +560,7 @@ function renderReport(d) {
             </div>
             <div class="flex-grow-1">
               <div class="d-flex justify-content-between small mb-1">
-                <span>진척률</span>
-                <span class="fw-bold">${inspPct}%</span>
+                <span>진척률</span><span class="fw-bold">${inspPct}%</span>
               </div>
               <div class="progress" style="height:12px;">
                 <div class="progress-bar bg-${inspColor}" style="width:${inspPct}%"></div>
@@ -377,47 +569,40 @@ function renderReport(d) {
             </div>
           </div>
           <table class="table table-sm mb-0">
-            <thead class="table-light"><tr>
-              <th class="small">학교명</th>
-              <th class="small text-center">보고서 수</th>
-            </tr></thead>
+            <thead class="table-light"><tr><th class="small">학교명</th><th class="small text-center">보고서 수</th></tr></thead>
             <tbody>${inspSchoolRows}</tbody>
           </table>
         </div>
       </div>
     </div>
 
-    <!-- 인력 투입 현황 -->
+    <!-- ⑤ 인력 투입 현황 (교육지원청별) -->
+    ${wfCrossHtml}
+
+    <!-- 인력 투입 상세 -->
     <div class="col-12 col-lg-6">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body py-3">
           <div class="section-title"><i class="bi bi-people me-1 text-secondary"></i>인력 투입 현황</div>
           <div class="row g-2 mb-2">
             <div class="col-4 text-center">
-              <div class="kpi-val">${wfTotal}</div>
-              <div class="kpi-label">총 업무건수</div>
+              <div class="kpi-val">${wfTotal}</div><div class="kpi-label">총 업무건수</div>
             </div>
             <div class="col-4 text-center">
-              <div class="kpi-val text-success">${wfDone}</div>
-              <div class="kpi-label">완료</div>
+              <div class="kpi-val text-success">${wfDone}</div><div class="kpi-label">완료</div>
             </div>
             <div class="col-4 text-center">
-              <div class="kpi-val text-primary">${wfPct}%</div>
-              <div class="kpi-label">완료율</div>
+              <div class="kpi-val text-primary">${wfPct}%</div><div class="kpi-label">완료율</div>
             </div>
           </div>
           <div class="row g-2">
             <div class="col-7">
               <div class="small fw-bold mb-1 text-muted">업무 유형별</div>
-              <table class="table table-sm mb-0">
-                <tbody>${wfTypeRows}</tbody>
-              </table>
+              <table class="table table-sm mb-0"><tbody>${wfTypeRows}</tbody></table>
             </div>
             <div class="col-5">
               <div class="small fw-bold mb-1 text-muted">인력별 TOP 8</div>
-              <table class="table table-sm mb-0">
-                <tbody>${wfWorkerRows}</tbody>
-              </table>
+              <table class="table table-sm mb-0"><tbody>${wfWorkerRows}</tbody></table>
             </div>
           </div>
         </div>
@@ -427,21 +612,25 @@ function renderReport(d) {
   </div>`;
 
   // ── 차트 렌더 ──
-  const colors = ['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1','#fd7e14','#20c997'];
+  const colors = ['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1','#fd7e14','#20c997','#0dcaf0','#6610f2','#d63384'];
 
   if (inc.by_type.length) {
-    chartRefs.typePie = new Chart(document.getElementById('chart-type-pie'), {
-      type: 'pie',
-      data: {
-        labels: inc.by_type.map(t => t.fault_type||'미분류'),
-        datasets: [{ data: inc.by_type.map(t => t.cnt), backgroundColor: colors, borderWidth:1 }]
-      },
-      options: { responsive:true, plugins:{ legend:{ display:false } } }
-    });
+    const el = document.getElementById('chart-type-pie');
+    if (el) {
+      chartRefs.typePie = new Chart(el, {
+        type: 'pie',
+        data: {
+          labels: inc.by_type.map(t => t.fault_type||'미분류'),
+          datasets: [{ data: inc.by_type.map(t => t.cnt), backgroundColor: colors, borderWidth:1 }]
+        },
+        options: { responsive:true, plugins:{ legend:{ display:false } } }
+      });
+    }
   }
 
-  if (inc.by_school.length) {
-    chartRefs.schoolBar = new Chart(document.getElementById('chart-school-bar'), {
+  const schoolBarEl = document.getElementById('chart-school-bar');
+  if (schoolBarEl && inc.by_school.length) {
+    chartRefs.schoolBar = new Chart(schoolBarEl, {
       type: 'bar',
       data: {
         labels: inc.by_school.map(s => s.school__name||'-'),

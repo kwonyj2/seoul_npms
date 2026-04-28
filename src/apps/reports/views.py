@@ -19,21 +19,24 @@ def reports_view(request):
 
 @login_required
 def performance_report_view(request):
-    """성과보고서 페이지 (주간/월간/분기/반기/연간)"""
+    """성과보고서 페이지 (주간/월간/분기/반기/연간, 교육지원청별)"""
     from django.utils import timezone as tz
+    from apps.schools.models import SupportCenter
     now = tz.localdate()
+    centers = SupportCenter.objects.filter(is_active=True).order_by('id')
     return render(request, 'reports/performance.html', {
         'current_year':  now.year,
         'current_month': now.month,
         'years':  list(range(2024, now.year + 2)),
         'months': list(range(1, 13)),
         'weeks':  list(range(1, 54)),
+        'centers': centers,
     })
 
 
 @login_required
 def performance_report_data_api(request):
-    """성과보고서 데이터 API — GET ?type=monthly&year=2026&month=4 등"""
+    """성과보고서 데이터 API — GET ?type=monthly&year=2026&month=4&center=all 등"""
     import json, calendar
     from django.http import JsonResponse
     from django.db.models import Count, Avg
@@ -44,6 +47,7 @@ def performance_report_data_api(request):
     year  = int(request.GET.get('year',  tz.localdate().year))
     month = int(request.GET.get('month', tz.localdate().month))
     week  = int(request.GET.get('week',  1))   # 주간용 ISO week
+    center_code = request.GET.get('center', 'all')     # 교육지원청 코드 또는 'all'
 
     # ── 기간 범위 산정 ────────────────────────────────────
     if period_type == 'weekly':
@@ -74,12 +78,33 @@ def performance_report_data_api(request):
         date_to   = date(year, 12, 31)
         label = f"{year}년 연간"
 
+    # ── 교육지원청 필터 준비 ──────────────────────────────
+    from apps.schools.models import SupportCenter
+    center_name = '전체'
+    center_filter = {}            # Incident: school__support_center
+    school_filter = {}            # School 직접 쿼리
+    report_filter = {}            # Report: school__support_center
+    ws_filter = {}                # WorkSchedule: school__support_center
+
+    if center_code and center_code != 'all':
+        sc = SupportCenter.objects.filter(code=center_code).first()
+        if sc:
+            center_name = sc.name
+            center_filter = {'school__support_center': sc}
+            school_filter = {'support_center': sc}
+            report_filter = {'school__support_center': sc}
+            ws_filter = {'school__support_center': sc}
+
+    label_prefix = f"[{center_name}] " if center_code != 'all' else ''
+    label = label_prefix + label
+
     from apps.incidents.models import Incident, SLAMonthly
 
     # ── 장애 현황 ─────────────────────────────────────────
     inc_qs = Incident.objects.filter(
         received_at__date__gte=date_from,
         received_at__date__lte=date_to,
+        **center_filter,
     )
     total_inc     = inc_qs.count()
     completed_inc = inc_qs.filter(status='completed').count()
@@ -91,6 +116,67 @@ def performance_report_data_api(request):
     # 학교별 상위
     by_school = list(
         inc_qs.values('school__name').annotate(cnt=Count('id')).order_by('-cnt')[:5]
+    )
+
+    # ── 교육지원청별 크로스탭 데이터 ──────────────────────
+    from apps.schools.models import School as SchoolModel
+
+    all_centers = list(SupportCenter.objects.filter(is_active=True).order_by('id'))
+    centers_info = [{'code': c.code, 'name': c.name} for c in all_centers]
+
+    # 기간 내 전체 장애 (교육지원청 필터 무관)
+    inc_all = Incident.objects.filter(
+        received_at__date__gte=date_from,
+        received_at__date__lte=date_to,
+    )
+
+    # 1) 교육지원청별 접수/완료/진행
+    center_summary = []
+    for sc in all_centers:
+        sc_inc = inc_all.filter(school__support_center=sc)
+        center_summary.append({
+            'code': sc.code, 'name': sc.name,
+            'total': sc_inc.count(),
+            'completed': sc_inc.filter(status='completed').count(),
+            'in_progress': sc_inc.exclude(status='completed').count(),
+        })
+
+    # 2) 학제별 × 교육지원청 크로스탭
+    school_types = list(
+        SchoolModel.objects.filter(is_active=True)
+        .values_list('school_type__name', flat=True).distinct().order_by('school_type__order')
+    )
+    school_type_cross = []
+    for st_name in school_types:
+        row = {'name': st_name}
+        row_total = 0
+        for sc in all_centers:
+            cnt = inc_all.filter(school__school_type__name=st_name, school__support_center=sc).count()
+            row[sc.code] = cnt
+            row_total += cnt
+        row['total'] = row_total
+        school_type_cross.append(row)
+
+    # 3) 장애유형별 × 교육지원청 크로스탭
+    fault_types = list(
+        inc_all.values_list('fault_type', flat=True).distinct().order_by('fault_type')
+    )
+    fault_type_cross = []
+    for ft in fault_types:
+        row = {'name': ft or '미분류'}
+        row_total = 0
+        for sc in all_centers:
+            cnt = inc_all.filter(fault_type=ft, school__support_center=sc).count()
+            row[sc.code] = cnt
+            row_total += cnt
+        row['total'] = row_total
+        fault_type_cross.append(row)
+
+    # 학제별 단순 집계 (기존 호환)
+    by_school_type = list(
+        inc_qs.values('school__school_type__name')
+        .annotate(cnt=Count('id'))
+        .order_by('-cnt')
     )
 
     # ── SLA 현황 (월간만 저장되므로 기간 내 해당 월들 집계) ──
@@ -134,15 +220,15 @@ def performance_report_data_api(request):
     )
 
     # ── 정기점검 현황 ─────────────────────────────────────
-    from apps.schools.models import School as SchoolModel
-    total_schools = SchoolModel.objects.filter(is_active=True).count()
+    total_schools = SchoolModel.objects.filter(is_active=True, **school_filter).count()
 
-    inspect_qs = Report.objects.filter(
+    inspect_all = Report.objects.filter(
         template__report_type='regular',
         completed_at__date__gte=date_from,
         completed_at__date__lte=date_to,
         status='completed',
     )
+    inspect_qs = inspect_all.filter(**report_filter) if report_filter else inspect_all
     inspect_completed = inspect_qs.values('school_id').distinct().count()
     inspect_by_school = list(
         inspect_qs.values('school__name')
@@ -150,12 +236,25 @@ def performance_report_data_api(request):
         .order_by('school__name')[:10]
     )
 
+    # 4) 정기점검 × 교육지원청 크로스탭
+    inspect_cross = []
+    for sc in all_centers:
+        sc_schools = SchoolModel.objects.filter(is_active=True, support_center=sc).count()
+        sc_done = inspect_all.filter(school__support_center=sc).values('school_id').distinct().count()
+        inspect_cross.append({
+            'code': sc.code, 'name': sc.name,
+            'total_schools': sc_schools,
+            'completed': sc_done,
+            'pct': round(sc_done / sc_schools * 100, 1) if sc_schools else 0,
+        })
+
     # ── 인력 투입 현황 ────────────────────────────────────
     from apps.workforce.models import WorkSchedule
-    ws_qs = WorkSchedule.objects.filter(
+    ws_all = WorkSchedule.objects.filter(
         start_dt__date__gte=date_from,
         start_dt__date__lte=date_to,
     )
+    ws_qs = ws_all.filter(**ws_filter) if ws_filter else ws_all
     ws_by_type = list(
         ws_qs.values('schedule_type__name')
         .annotate(cnt=Count('id'))
@@ -169,16 +268,33 @@ def performance_report_data_api(request):
     ws_total = ws_qs.count()
     ws_completed = ws_qs.filter(status='completed').count()
 
+    # 5) 인력투입 × 교육지원청 크로스탭
+    workforce_cross = []
+    for sc in all_centers:
+        sc_ws = ws_all.filter(school__support_center=sc)
+        workforce_cross.append({
+            'code': sc.code, 'name': sc.name,
+            'total': sc_ws.count(),
+            'completed': sc_ws.filter(status='completed').count(),
+        })
+
     return JsonResponse({
         'period_type': period_type,
+        'center_code': center_code,
+        'center_name': center_name,
         'label':       label,
         'date_from':   date_from.isoformat(),
         'date_to':     date_to.isoformat(),
+        'centers':     centers_info,
         'incidents': {
             'total':     total_inc,
             'completed': completed_inc,
             'by_type':   by_type,
             'by_school': by_school,
+            'by_center': center_summary,
+            'by_school_type': by_school_type,
+            'school_type_cross': school_type_cross,
+            'fault_type_cross': fault_type_cross,
         },
         'sla': {
             'months':    sla_list,
@@ -189,12 +305,14 @@ def performance_report_data_api(request):
             'completed_schools': inspect_completed,
             'pct': round(inspect_completed / total_schools * 100, 1) if total_schools else 0,
             'by_school': inspect_by_school,
+            'by_center': inspect_cross,
         },
         'workforce': {
             'total':     ws_total,
             'completed': ws_completed,
             'by_type':   ws_by_type,
             'by_worker': ws_by_worker,
+            'by_center': workforce_cross,
         },
     })
 
@@ -221,6 +339,7 @@ def export_performance_excel(request):
     year  = int(request.GET.get('year',  tz.localdate().year))
     month = int(request.GET.get('month', tz.localdate().month))
     week  = int(request.GET.get('week', 1))
+    center_code = request.GET.get('center', 'all')
 
     if period_type == 'weekly':
         d = date.fromisocalendar(year, week, 1)
@@ -249,11 +368,29 @@ def export_performance_excel(request):
         label = f"{year}년 연간"
 
     from apps.incidents.models import Incident, SLAMonthly
-    from apps.schools.models import School as SchoolModel
+    from apps.schools.models import School as SchoolModel, SupportCenter
     from apps.workforce.models import WorkSchedule
 
+    # 교육지원청 필터
+    center_filter = {}
+    school_filter = {}
+    report_filter = {}
+    ws_filter = {}
+    center_name = '전체'
+    if center_code and center_code != 'all':
+        sc = SupportCenter.objects.filter(code=center_code).first()
+        if sc:
+            center_name = sc.name
+            center_filter = {'school__support_center': sc}
+            school_filter = {'support_center': sc}
+            report_filter = {'school__support_center': sc}
+            ws_filter = {'school__support_center': sc}
+    label_prefix = f"[{center_name}] " if center_code != 'all' else ''
+    label = label_prefix + label
+
     inc_qs = Incident.objects.filter(
-        received_at__date__gte=date_from, received_at__date__lte=date_to)
+        received_at__date__gte=date_from, received_at__date__lte=date_to,
+        **center_filter)
     total_inc     = inc_qs.count()
     completed_inc = inc_qs.filter(status='completed').count()
     by_type   = list(inc_qs.values('fault_type').annotate(cnt=Count('id')).order_by('-cnt')[:10])
@@ -267,14 +404,16 @@ def export_performance_excel(request):
         sla_qs = sla_qs.filter(
             year=year, month__gte=date_from.month, month__lte=date_to.month)
 
-    total_schools = SchoolModel.objects.filter(is_active=True).count()
+    total_schools = SchoolModel.objects.filter(is_active=True, **school_filter).count()
     inspect_qs    = Report.objects.filter(
         template__report_type='regular', status='completed',
-        completed_at__date__gte=date_from, completed_at__date__lte=date_to)
+        completed_at__date__gte=date_from, completed_at__date__lte=date_to,
+        **report_filter)
     inspect_cnt   = inspect_qs.values('school_id').distinct().count()
 
     ws_qs      = WorkSchedule.objects.filter(
-        start_dt__date__gte=date_from, start_dt__date__lte=date_to)
+        start_dt__date__gte=date_from, start_dt__date__lte=date_to,
+        **ws_filter)
     ws_by_type = list(ws_qs.values('schedule_type__name').annotate(cnt=Count('id')).order_by('-cnt'))
     ws_by_wkr  = list(ws_qs.values('worker__name').annotate(cnt=Count('id')).order_by('-cnt')[:10])
 
@@ -307,7 +446,7 @@ def export_performance_excel(request):
     r = 1
     # 타이틀
     ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=8)
-    _set(r, 1, f'서울시교육청 학교망 유지보수 용역 — {label} 성과보고서',
+    _set(r, 1, f'서울시교육청 학교망 유지보수 용역 \u2014 {label} 성과보고서',
          Font(bold=True, size=14), hdr_fill, ctr)
     ws.row_dimensions[r].height = 30
     r += 1
