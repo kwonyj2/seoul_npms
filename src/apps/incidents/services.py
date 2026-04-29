@@ -209,6 +209,32 @@ def generate_incident_pdf(incident_id):
     return nas_path
 
 
+def generate_work_order_pdf(wo):
+    """작업지시서 PDF 생성 → NAS 저장"""
+    from django.template.loader import render_to_string
+    from django.utils import timezone
+    import weasyprint, os
+
+    wo = type(wo).objects.select_related(
+        'incident__school__support_center', 'incident__category',
+        'school__support_center', 'assigned_to', 'created_by', 'confirmed_by'
+    ).get(id=wo.id)
+
+    html = render_to_string('incidents/pdf_work_order.html', {
+        'wo': wo,
+        'now': timezone.now(),
+    })
+    nas_path = os.path.join(
+        settings.NAS_OUTPUT_ROOT, '작업지시서',
+        f'작업지시서_{wo.school.name}_{wo.work_order_number}.pdf'
+    )
+    os.makedirs(os.path.dirname(nas_path), exist_ok=True)
+    weasyprint.HTML(string=html).write_pdf(nas_path)
+    wo.pdf_path = nas_path
+    wo.save(update_fields=['pdf_path'])
+    return nas_path
+
+
 def generate_delay_reason_pdf(delay_reason):
     """지연처리사유서 PDF 생성 → NAS 저장"""
     from .models import IncidentSLA

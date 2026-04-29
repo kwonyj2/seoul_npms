@@ -239,6 +239,11 @@ def incident_create_view(request):
 
 
 @login_required
+def work_orders_view(request):
+    return render(request, 'incidents/work_orders.html')
+
+
+@login_required
 def sla_view(request):
     """SLA 관리 화면"""
     from django.utils import timezone as tz
@@ -1273,6 +1278,12 @@ class IncidentViewSet(viewsets.ModelViewSet):
             required_parts=data.get('required_parts', ''),
             created_by=request.user,
         )
+        # 발행 즉시 PDF 자동 생성
+        try:
+            from .services import generate_work_order_pdf
+            generate_work_order_pdf(wo)
+        except Exception as e:
+            logger.error(f'작업지시서 PDF 생성 실패: {e}')
         return Response(WorkOrderSerializer(wo).data, status=status.HTTP_201_CREATED)
 
     # ── CSV 업로드 (기존 장애 일괄 등록) ──────
@@ -1671,3 +1682,29 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         wo.save()
         from .serializers import WorkOrderSerializer
         return Response(WorkOrderSerializer(wo).data)
+
+    @action(detail=True, methods=['post'])
+    def generate_pdf(self, request, pk=None):
+        """작업지시서 PDF 생성"""
+        wo = self.get_object()
+        from .services import generate_work_order_pdf
+        try:
+            generate_work_order_pdf(wo)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        download_url = f'/npms/api/incidents/work-orders/{wo.id}/download_pdf/'
+        return Response({'message': 'PDF가 생성되었습니다.', 'download_url': download_url})
+
+    @action(detail=True, methods=['get'])
+    def download_pdf(self, request, pk=None):
+        """작업지시서 PDF 다운로드"""
+        import os
+        from django.http import FileResponse
+        wo = self.get_object()
+        path = wo.pdf_path
+        if not path or not os.path.exists(path):
+            return Response({'error': 'PDF가 없습니다. 먼저 생성해주세요.'}, status=status.HTTP_404_NOT_FOUND)
+        filename = os.path.basename(path)
+        response = FileResponse(open(path, 'rb'), content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        return response

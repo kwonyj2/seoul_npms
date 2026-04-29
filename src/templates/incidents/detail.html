@@ -557,6 +557,22 @@
     </div>
   </div>
 </div>
+<!-- 작업지시서 상세 모달 -->
+<div class="modal fade" id="woDetailModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2" style="background:#1a3a5a;color:#fff;">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-file-text me-1"></i>작업지시서 상세</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0" id="wo-detail-body">
+        <div class="text-center py-4 text-muted">로딩 중...</div>
+      </div>
+      <div class="modal-footer py-2" id="wo-detail-footer"></div>
+    </div>
+  </div>
+</div>
+
 <!-- 지연처리사유서 모달 -->
 <div class="modal fade" id="delayReasonModal" tabindex="-1">
   <div class="modal-dialog modal-lg">
@@ -1429,9 +1445,10 @@ const WO_STATUS = {
 };
 
 async function loadWorkOrders() {
-  const res = await fetch(`${WO_API}?incident=${INCIDENT_ID}`, {credentials:'same-origin'});
-  if (!res.ok) return;
-  const wos = await res.json();
+  let wos;
+  try {
+    wos = await apiGet(`${WO_API}`, {incident: INCIDENT_ID});
+  } catch(e) { return; }
   const el  = document.getElementById('wo-list');
   if (!wos.length) {
     el.innerHTML = '<div class="text-muted small text-center py-2">발행된 작업지시서가 없습니다</div>';
@@ -1451,9 +1468,9 @@ async function loadWorkOrders() {
                      onclick="confirmWO(${wo.id})"><i class="bi bi-patch-check"></i> 확인</button>`;
 
     return `<div class="d-flex align-items-start gap-2 py-2 border-bottom" style="font-size:.78rem;">
-      <div class="flex-grow-1">
+      <div class="flex-grow-1" style="cursor:pointer;" onclick="openWODetail(${wo.id})">
         <div class="d-flex align-items-center gap-1 mb-1">
-          <span class="fw-semibold">${wo.work_order_number}</span>
+          <span class="fw-semibold text-primary">${wo.work_order_number}</span>
           <span class="${st.cls}" style="font-size:.62rem;">${st.label}</span>
         </div>
         <div>${wo.title}</div>
@@ -1461,7 +1478,7 @@ async function loadWorkOrders() {
           담당: ${wo.assigned_to_name||'미배정'}
           ${wo.due_date?` | 기한: ${wo.due_date}`:''}
         </div>
-        ${wo.actual_work?`<div class="mt-1 p-1" style="background:#f0f9f0;border-radius:4px;font-size:.72rem;color:#2a6a3a;">${wo.actual_work}</div>`:''}
+        ${wo.actual_work?`<div class="mt-1 p-1" style="background:#f0f9f0;border-radius:4px;font-size:.72rem;color:#2a6a3a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:400px;">${wo.actual_work}</div>`:''}
       </div>
       <div class="flex-shrink-0">${btn}</div>
     </div>`;
@@ -1521,7 +1538,7 @@ async function openNewWorkOrderModal() {
 
 async function submitWorkOrder() {
   const title = document.getElementById('wo-title').value.trim();
-  if (!title) { alert('작업제목을 입력하세요'); return; }
+  if (!title) { showToast('작업제목을 입력하세요', 'warning'); return; }
   const payload = {
     title,
     work_description: document.getElementById('wo-desc').value,
@@ -1530,19 +1547,21 @@ async function submitWorkOrder() {
     due_date:         document.getElementById('wo-due').value || null,
     required_parts:   document.getElementById('wo-parts').value,
   };
-  const res = await fetch(`/npms/api/incidents/incidents/${INCIDENT_ID}/work_orders/`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json','X-CSRFToken':getCsrf()},
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) { alert('발행 실패: ' + (await res.json()).detail || '오류'); return; }
-  bootstrap.Modal.getInstance(document.getElementById('woModal')).hide();
-  loadWorkOrders();
+  try {
+    await apiPost(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/work_orders/`, payload);
+    bootstrap.Modal.getInstance(document.getElementById('woModal')).hide();
+    showToast('작업지시서가 발행되었습니다', 'success');
+    loadWorkOrders();
+  } catch(e) {
+    showToast('발행 실패: ' + (e?.detail || JSON.stringify(e) || '오류'), 'error');
+  }
 }
 
 async function startWO(id) {
-  await fetch(`${WO_API}${id}/start/`, {method:'POST', headers:{'X-CSRFToken':getCsrf()}});
-  loadWorkOrders();
+  try {
+    await apiPost(`${WO_API}${id}/start/`, {});
+    loadWorkOrders();
+  } catch(e) { showToast('시작 실패', 'error'); }
 }
 
 function openWOComplete(id) {
@@ -1555,25 +1574,88 @@ function openWOComplete(id) {
 
 async function submitWOComplete() {
   const actual = document.getElementById('wo-actual').value.trim();
-  if (!actual) { alert('수행 내용을 입력하세요'); return; }
-  const res = await fetch(`${WO_API}${_curWOId}/complete/`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json','X-CSRFToken':getCsrf()},
-    body: JSON.stringify({
+  if (!actual) { showToast('수행 내용을 입력하세요', 'warning'); return; }
+  try {
+    await apiPost(`${WO_API}${_curWOId}/complete/`, {
       actual_work: actual,
       parts_used:  document.getElementById('wo-parts-used').value,
       work_note:   document.getElementById('wo-note').value,
-    }),
-  });
-  if (!res.ok) { alert('처리 실패'); return; }
-  bootstrap.Modal.getInstance(document.getElementById('woCompleteModal')).hide();
-  loadWorkOrders();
+    });
+    bootstrap.Modal.getInstance(document.getElementById('woCompleteModal')).hide();
+    loadWorkOrders();
+  } catch(e) { showToast('처리 실패', 'error'); }
 }
 
 async function confirmWO(id) {
   if (!confirm('작업을 확인완료 처리하시겠습니까?')) return;
-  await fetch(`${WO_API}${id}/confirm/`, {method:'POST', headers:{'X-CSRFToken':getCsrf()}});
-  loadWorkOrders();
+  try {
+    await apiPost(`${WO_API}${id}/confirm/`, {});
+    loadWorkOrders();
+  } catch(e) { showToast('확인 실패', 'error'); }
+}
+
+async function openWODetail(id) {
+  const body = document.getElementById('wo-detail-body');
+  const footer = document.getElementById('wo-detail-footer');
+  body.innerHTML = '<div class="text-center py-4 text-muted">로딩 중...</div>';
+  footer.innerHTML = '';
+  new bootstrap.Modal(document.getElementById('woDetailModal')).show();
+
+  try {
+    const wo = await apiGet(`${WO_API}${id}/`);
+    const WO_TYPE = {repair:'수리/복구',installation:'설치',inspection:'점검',replacement:'교체',config:'설정변경',other:'기타'};
+    const st = WO_STATUS[wo.status] || WO_STATUS.issued;
+
+    body.innerHTML = `
+      <table class="table table-sm mb-0">
+        <tbody>
+          <tr><td class="text-muted fw-semibold" style="width:25%;background:#f8f8f8;">지시번호</td><td>${wo.work_order_number}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">상태</td><td><span class="${st.cls}">${st.label}</span></td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">학교명</td><td>${wo.school_name||'-'}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">장애접수번호</td><td>${wo.incident_number||'-'}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">작업제목</td><td>${wo.title}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">작업유형</td><td>${WO_TYPE[wo.work_type]||wo.work_type||'-'}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">담당자</td><td>${wo.assigned_to_name||'미배정'}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">작성자</td><td>${wo.created_by_name||'-'}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">완료기한</td><td>${wo.due_date||'-'}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">발행일</td><td>${formatDateTime(wo.created_at)}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;" colspan="2">작업지시 내용</td></tr>
+          <tr><td colspan="2" style="white-space:pre-line;">${wo.work_description||'-'}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">필요 자재</td><td>${wo.required_parts||'-'}</td></tr>
+          ${wo.actual_work ? `
+          <tr><td colspan="2" class="fw-semibold text-center" style="background:#e8f5e9;">수 행 결 과</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;" colspan="2">수행 내용</td></tr>
+          <tr><td colspan="2" style="white-space:pre-line;">${wo.actual_work}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">사용 자재</td><td>${wo.parts_used||'-'}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">특이사항</td><td>${wo.work_note||'-'}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">수행완료</td><td>${wo.completed_at ? formatDateTime(wo.completed_at) : '-'}</td></tr>
+          <tr><td class="text-muted fw-semibold" style="background:#f8f8f8;">확인완료</td><td>${wo.confirmed_at ? formatDateTime(wo.confirmed_at)+' ('+wo.confirmed_by_name+')' : '-'}</td></tr>
+          ` : ''}
+        </tbody>
+      </table>`;
+
+    // 하단 버튼
+    let btns = `<button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">닫기</button>`;
+    btns += `<a href="${WO_API}${id}/download_pdf/" target="_blank" class="btn btn-sm btn-outline-danger">
+      <i class="bi bi-file-pdf me-1"></i>PDF 보기</a>`;
+    if (wo.status === 'issued') {
+      btns += `<button class="btn btn-sm btn-danger" onclick="deleteWO(${id})">
+        <i class="bi bi-trash me-1"></i>삭제</button>`;
+    }
+    footer.innerHTML = btns;
+  } catch(e) {
+    body.innerHTML = '<div class="text-center py-4 text-danger">로드 실패</div>';
+  }
+}
+
+async function deleteWO(id) {
+  if (!confirm('이 작업지시서를 삭제하시겠습니까?')) return;
+  try {
+    await apiDelete(`${WO_API}${id}/`);
+    bootstrap.Modal.getInstance(document.getElementById('woDetailModal')).hide();
+    showToast('작업지시서가 삭제되었습니다', 'success');
+    loadWorkOrders();
+  } catch(e) { showToast('삭제 실패', 'error'); }
 }
 
 function getCsrf() {

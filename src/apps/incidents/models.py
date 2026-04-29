@@ -491,6 +491,8 @@ class WorkOrder(models.Model):
         related_name='confirmed_work_orders', verbose_name='확인자'
     )
 
+    pdf_path   = models.CharField('PDF 경로', max_length=500, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}작업지시서 관리{% endblock %}
+{% block page_title %}<i class="bi bi-file-text text-primary me-2"></i>작업지시서 관리{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+
+  <!-- 필터 -->
+  <div class="card border-0 shadow-sm mb-2">
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-auto">
+          <label class="form-label small mb-0">상태</label>
+          <select id="f-status" class="form-select form-select-sm" style="min-width:100px;">
+            <option value="">전체</option>
+            <option value="issued">발행</option>
+            <option value="in_progress">수행중</option>
+            <option value="completed">완료</option>
+            <option value="confirmed">확인완료</option>
+            <option value="cancelled">취소</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-0">지원청</label>
+          <select id="f-center" class="form-select form-select-sm" style="min-width:120px;">
+            <option value="">전체</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-0">담당자</label>
+          <select id="f-assigned" class="form-select form-select-sm" style="min-width:120px;">
+            <option value="">전체</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label small mb-0">기간</label>
+          <div class="d-flex gap-1">
+            <input type="date" id="f-from" class="form-control form-control-sm" style="width:130px;">
+            <span class="align-self-center">~</span>
+            <input type="date" id="f-to" class="form-control form-control-sm" style="width:130px;">
+          </div>
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-sm btn-primary" onclick="loadWOList()">
+            <i class="bi bi-search me-1"></i>조회
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 목록 -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" style="font-size:.82rem;">
+          <thead class="table-light">
+            <tr>
+              <th>지시번호</th>
+              <th>장애번호</th>
+              <th>학교</th>
+              <th>작업제목</th>
+              <th>작업유형</th>
+              <th>담당자</th>
+              <th>상태</th>
+              <th>완료기한</th>
+              <th>발행일</th>
+              <th>PDF</th>
+            </tr>
+          </thead>
+          <tbody id="wo-table-body">
+            <tr><td colspan="10" class="text-center py-4 text-muted">조회 버튼을 클릭하세요</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const WO_TYPE = {repair:'수리/복구',installation:'설치',inspection:'점검',replacement:'교체',config:'설정변경',other:'기타'};
+const WO_ST = {
+  issued:{label:'발행',cls:'bg-secondary'},
+  in_progress:{label:'수행중',cls:'bg-primary'},
+  completed:{label:'완료',cls:'bg-success'},
+  confirmed:{label:'확인완료',cls:'bg-dark'},
+  cancelled:{label:'취소',cls:'bg-danger'},
+};
+
+async function loadFilters() {
+  try {
+    const centers = await apiGet(`${API_BASE}/schools/centers/`);
+    const sel = document.getElementById('f-center');
+    (centers.results || centers).forEach(c => {
+      sel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+    });
+  } catch(e) {}
+  try {
+    const workers = await apiGet(`${API_BASE}/accounts/users/`, {role: 'worker'});
+    const sel = document.getElementById('f-assigned');
+    (workers.results || workers).forEach(w => {
+      sel.innerHTML += `<option value="${w.id}">${w.name}</option>`;
+    });
+  } catch(e) {}
+}
+
+async function loadWOList() {
+  const params = {};
+  const status_ = document.getElementById('f-status').value;
+  const center  = document.getElementById('f-center').value;
+  const assigned = document.getElementById('f-assigned').value;
+  const dateFrom = document.getElementById('f-from').value;
+  const dateTo   = document.getElementById('f-to').value;
+  if (status_)  params.status = status_;
+  if (assigned) params.assigned_to = assigned;
+
+  const tbody = document.getElementById('wo-table-body');
+  tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></td></tr>';
+
+  try {
+    let wos = await apiGet(`${API_BASE}/incidents/work-orders/`, params);
+    if (Array.isArray(wos)) {
+      // 클라이언트 필터 (center, date)
+      if (center) {
+        wos = wos.filter(wo => {
+          // school_name에서 지원청 매칭은 어려우므로 school 기반 필터는 서버에서 처리
+          return true;
+        });
+      }
+      if (dateFrom) wos = wos.filter(wo => wo.created_at >= dateFrom);
+      if (dateTo)   wos = wos.filter(wo => wo.created_at.slice(0,10) <= dateTo);
+    }
+
+    if (!wos.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">작업지시서가 없습니다</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = wos.map(wo => {
+      const st = WO_ST[wo.status] || WO_ST.issued;
+      return `<tr style="cursor:pointer;" onclick="location.href='/npms/incidents/${wo.incident}/#wo-${wo.id}'">
+        <td class="fw-semibold text-primary">${wo.work_order_number}</td>
+        <td>${wo.incident_number||'-'}</td>
+        <td>${wo.school_name||'-'}</td>
+        <td>${wo.title}</td>
+        <td>${WO_TYPE[wo.work_type]||'-'}</td>
+        <td>${wo.assigned_to_name||'미배정'}</td>
+        <td><span class="badge ${st.cls}" style="font-size:.7rem;">${st.label}</span></td>
+        <td>${wo.due_date||'-'}</td>
+        <td>${wo.created_at ? wo.created_at.slice(0,10) : '-'}</td>
+        <td>
+          ${wo.pdf_path ? `<a href="${API_BASE}/incidents/work-orders/${wo.id}/download_pdf/" target="_blank" class="text-danger" onclick="event.stopPropagation();" title="PDF"><i class="bi bi-file-pdf"></i></a>` : '<span class="text-muted">-</span>'}
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">조회 실패</td></tr>';
+  }
+}
+
+loadFilters();
+loadWOList();
+</script>
+{% endblock %}

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+  @font-face {
+    font-family: 'NanumGothic';
+    src: url('file:///app/static/fonts/NanumGothic.ttf');
+    font-weight: normal;
+  }
+  @font-face {
+    font-family: 'NanumGothic';
+    src: url('file:///app/static/fonts/NanumGothicBold.ttf');
+    font-weight: bold;
+  }
+  @page { size: A4; margin: 20mm 15mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'NanumGothic', sans-serif;
+    font-size: 9.5pt;
+    color: #000;
+  }
+
+  .main-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1.5px solid #000;
+  }
+  .main-table th,
+  .main-table td {
+    border: 1px solid #555;
+    padding: 5px 8px;
+    vertical-align: middle;
+  }
+
+  .title-row td {
+    text-align: center;
+    font-size: 16pt;
+    font-weight: bold;
+    letter-spacing: 6px;
+    padding: 10px 0;
+    border-bottom: 1.5px solid #000;
+  }
+
+  .label {
+    background: #f5f5f5;
+    font-weight: bold;
+    white-space: nowrap;
+    width: 15%;
+    text-align: center;
+  }
+
+  .value { width: 35%; }
+
+  .value-full {
+    min-height: 30px;
+    white-space: pre-line;
+  }
+
+  .work-type-cell { letter-spacing: 0; }
+  .chk { margin-right: 6px; font-size: 11pt; }
+  .chk-item { display: inline-block; margin-right: 16px; }
+
+  .result-section td {
+    background: #f9f9f9;
+  }
+</style>
+</head>
+<body>
+
+<table class="main-table">
+
+  <!-- 제목 -->
+  <tr class="title-row">
+    <td colspan="4">작 업 지 시 서</td>
+  </tr>
+
+  <!-- 지시번호 / 발행일 -->
+  <tr>
+    <td class="label">지시번호</td>
+    <td class="value">{{ wo.work_order_number }}</td>
+    <td class="label">발행일</td>
+    <td class="value">{{ wo.created_at|date:"Y-m-d H:i" }}</td>
+  </tr>
+
+  <!-- 학교명 / 교육지원청 -->
+  <tr>
+    <td class="label">학교명</td>
+    <td class="value">{{ wo.school.name }}</td>
+    <td class="label">교육지원청</td>
+    <td class="value">{{ wo.school.support_center.name }}</td>
+  </tr>
+
+  <!-- 연계 장애번호 / 접수일시 -->
+  <tr>
+    <td class="label">장애접수번호</td>
+    <td class="value">{{ wo.incident.incident_number }}</td>
+    <td class="label">접수일시</td>
+    <td class="value">{{ wo.incident.received_at|date:"Y-m-d H:i" }}</td>
+  </tr>
+
+  <!-- 담당자 / 완료기한 -->
+  <tr>
+    <td class="label">담당자</td>
+    <td class="value">{% if wo.assigned_to %}{{ wo.assigned_to.name }}{% else %}-{% endif %}</td>
+    <td class="label">완료기한</td>
+    <td class="value">{{ wo.due_date|date:"Y-m-d"|default:"-" }}</td>
+  </tr>
+
+  <!-- 작성자 / 상태 -->
+  <tr>
+    <td class="label">작성자</td>
+    <td class="value">{% if wo.created_by %}{{ wo.created_by.name }}{% else %}-{% endif %}</td>
+    <td class="label">상태</td>
+    <td class="value">{{ wo.get_status_display }}</td>
+  </tr>
+
+  <!-- 작업제목 -->
+  <tr>
+    <td class="label">작업제목</td>
+    <td colspan="3">{{ wo.title }}</td>
+  </tr>
+
+  <!-- 작업유형 -->
+  <tr>
+    <td class="label">작업유형</td>
+    <td colspan="3" class="work-type-cell">
+      <span class="chk-item"><span class="chk">{% if wo.work_type == 'repair' %}☑{% else %}☐{% endif %}</span>수리/복구</span>
+      <span class="chk-item"><span class="chk">{% if wo.work_type == 'installation' %}☑{% else %}☐{% endif %}</span>설치</span>
+      <span class="chk-item"><span class="chk">{% if wo.work_type == 'inspection' %}☑{% else %}☐{% endif %}</span>점검</span>
+      <span class="chk-item"><span class="chk">{% if wo.work_type == 'replacement' %}☑{% else %}☐{% endif %}</span>교체</span>
+      <span class="chk-item"><span class="chk">{% if wo.work_type == 'config' %}☑{% else %}☐{% endif %}</span>설정변경</span>
+      <span class="chk-item"><span class="chk">{% if wo.work_type == 'other' %}☑{% else %}☐{% endif %}</span>기타</span>
+    </td>
+  </tr>
+
+  <!-- 장애 내용 (원 장애 증상) -->
+  <tr>
+    <td class="label">장애 내용</td>
+    <td colspan="3" class="value-full" style="min-height:40px;">{{ wo.incident.description }}</td>
+  </tr>
+
+  <!-- 작업지시 내용 -->
+  <tr>
+    <td class="label">작업지시 내용</td>
+    <td colspan="3" class="value-full" style="min-height:60px;">{{ wo.work_description }}</td>
+  </tr>
+
+  <!-- 필요 자재 -->
+  <tr>
+    <td class="label">필요 자재</td>
+    <td colspan="3" class="value-full">{{ wo.required_parts|default:"-" }}</td>
+  </tr>
+
+  {% if wo.actual_work %}
+  <!-- 수행 결과 섹션 -->
+  <tr class="result-section">
+    <td colspan="4" style="text-align:center; font-weight:bold; padding:6px;">수 행 결 과</td>
+  </tr>
+  <tr>
+    <td class="label">수행 내용</td>
+    <td colspan="3" class="value-full" style="min-height:50px;">{{ wo.actual_work }}</td>
+  </tr>
+  <tr>
+    <td class="label">사용 자재</td>
+    <td colspan="3" class="value-full">{{ wo.parts_used|default:"-" }}</td>
+  </tr>
+  <tr>
+    <td class="label">특이사항</td>
+    <td colspan="3" class="value-full">{{ wo.work_note|default:"-" }}</td>
+  </tr>
+  <tr>
+    <td class="label">수행완료</td>
+    <td class="value">{{ wo.completed_at|date:"Y-m-d H:i"|default:"-" }}</td>
+    <td class="label">확인완료</td>
+    <td class="value">{{ wo.confirmed_at|date:"Y-m-d H:i"|default:"-" }}</td>
+  </tr>
+  {% endif %}
+
+</table>
+
+</body>
+</html>

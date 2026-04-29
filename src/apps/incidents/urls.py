@@ -22,6 +22,7 @@ urlpatterns = [
     path('<int:pk>/',    views.incident_detail_view, name='detail'),
     path('create/',      views.incident_create_view, name='create'),
     path('sla/',         views.sla_view,             name='sla'),
+    path('work-orders/', views.work_orders_view,     name='work_orders'),
     # SLA API
     path('sla/calculate/', views.sla_calculate_api, name='sla_calculate'),
     path('sla/report/',    sla_report_api,           name='sla_report'),
