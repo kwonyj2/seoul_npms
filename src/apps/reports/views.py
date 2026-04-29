@@ -1224,44 +1224,69 @@ def _export_rows_cable(qs):
 
 
 def _export_rows_regular(qs):
-    """정기점검 보고서 전용 Excel export"""
+    """정기점검 보고서 전용 Excel export (신규 양식)"""
     rows = []
     for rpt in qs:
         data = rpt.data or {}
         row = _common_cols(rpt)
-        row['분기'] = data.get('quarter', '')
+        row['차수'] = data.get('quarter', '')
         row['점검일자'] = data.get('inspect_date', '')
+        row['선생님 의견'] = data.get('teacher_opinion', '')
+        row['점검/조치 결과'] = data.get('action_result', '')
+        # 장비
         row['스위치 수량'] = data.get('switch_count', '')
         row['PoE 수량'] = data.get('poe_count', '')
         row['AP 수량'] = data.get('ap_count', '')
-        row['스위치 점검결과'] = data.get('switch_result', '')
-        row['PoE 점검결과'] = data.get('poe_result', '')
-        row['AP 점검결과'] = data.get('ap_result', '')
-        # 유선 속도
-        for net, net_label in [('teacher', '교사망'), ('student', '학생망'), ('wireless', '무선망')]:
-            for pos, pos_label in [('hub', '집선'), ('end', '단말')]:
-                for d in ['down', 'up']:
-                    key = f'wired_{net}_{pos}_{d}'
-                    row[f'{net_label} {pos_label} {d.upper()}'] = data.get(key, '')
-        # 무선 속도
-        row['무선 중앙 Down'] = data.get('wifi_center_down', '')
-        row['무선 중앙 Up'] = data.get('wifi_center_up', '')
-        row['무선 외곽 Down'] = data.get('wifi_edge_down', '')
-        row['무선 외곽 Up'] = data.get('wifi_edge_up', '')
-        # 점검 항목
-        row['AP 배치'] = data.get('ap_placement_result', '')
-        row['신호세기'] = data.get('signal_result', '')
-        row['스위치 수량변경'] = data.get('switch_change_result', '')
-        row['PoE 수량변경'] = data.get('poe_change_result', '')
-        row['정보자원 현황변경'] = data.get('info_resource_result', '')
-        row['정보자원 목록'] = data.get('chk_resource_list', '')
-        row['네트워크구성도'] = data.get('chk_network_diagram', '')
-        row['AP 배치도'] = data.get('chk_ap_layout', '')
-        row['랙 실장도'] = data.get('chk_rack_layout', '')
-        row['선번장'] = data.get('chk_cable_schedule', '')
+        row['WEISS'] = data.get('ap_weiss_count', '')
+        row['컨트롤러'] = data.get('ap_controller_count', '')
+        row['자체구축'] = data.get('ap_self_count', '')
+        row['스위치 결과'] = data.get('switch_result', '')
+        row['PoE 결과'] = data.get('poe_result', '')
+        row['AP 결과'] = data.get('ap_result', '')
+        row['무선망 대역폭'] = data.get('wireless_band', '')
+        # iperf 속도
+        row['교사망 망id'] = f"K{data.get('teacher_vlan_id', '')}"
+        row['교사망 측정장소'] = data.get('teacher_location', '교무실')
+        row['교사망 Down'] = data.get('wired_teacher_down', '')
+        row['교사망 Up'] = data.get('wired_teacher_up', '')
+        row['학생망 망id'] = f"H{data.get('student_vlan_id', '')}"
+        row['학생망 측정장소'] = data.get('student_location', '컴퓨터실')
+        row['학생망 Down'] = data.get('wired_student_down', '')
+        row['학생망 Up'] = data.get('wired_student_up', '')
+        row['무선망 망id'] = f"PoE{data.get('wireless_vlan_id', '')}"
+        row['무선망 측정장소'] = data.get('wireless_location', '교실')
+        row['무선망 Down'] = data.get('wired_wireless_down', '')
+        row['무선망 Up'] = data.get('wired_wireless_up', '')
+        # Wifi 360
+        row['Wifi360 APid'] = data.get('wifi360_ap_id', '')
+        row['Wifi360 측정장소'] = data.get('wifi360_location', '')
+        row['Wifi360 Down'] = data.get('wifi360_down', '')
+        row['Wifi360 Up'] = data.get('wifi360_up', '')
+        # 전산실환경
+        row['전원콘센트 수량'] = data.get('outlet_count', '')
+        row['패치판넬 수'] = data.get('patch_panel_count', '')
+        row['케이블 타입'] = data.get('patch_cable_type', '')
+        # 전화망
+        row['전화 구분'] = data.get('phone_type', '')
+        row['전화 구성'] = data.get('phone_config', '')
+        # 케이블
+        row['교무실 케이블'] = data.get('cable_office', '')
+        row['컴퓨터실 케이블'] = data.get('cable_computer', '')
+        # 기타
         row['전자칠판'] = data.get('smartboard_result', '')
         row['디벗'] = data.get('devit_result', '')
-        row['기타 요청사항'] = data.get('etc_request', '')
+        row['기타사항'] = data.get('etc_request', '')
+        # 차수별 점검
+        q = str(data.get('quarter', ''))
+        if q == '1':
+            row['1차-구성도'] = data.get('chk_1_diagram', '')
+            row['1차-랙실장도'] = data.get('chk_1_rack', '')
+            row['1차-장비목록'] = data.get('chk_1_equipment', '')
+        elif q == '2':
+            row['2차-자산라벨'] = data.get('chk_2_asset_label', '')
+            row['2차-스위치교체'] = data.get('chk_2_switch_replace', '')
+        elif q == '3':
+            row['3차-AP배치도'] = data.get('chk_3_ap_layout', '')
         # 서명
         row.update(_sig_cols(data))
         rows.append(row)
