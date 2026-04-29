@@ -19,7 +19,7 @@ def health_check(request):
 # ─────────────────────────────────────────
 from apps.accounts.views import LoginView, LogoutView, data_management_view
 from apps.dashboard.views import index as dashboard_index, vworld_sdk_proxy
-from apps.incidents.views import incident_list_view, incident_detail_view, incident_create_view, sla_view
+from apps.incidents.views import incident_list_view, incident_detail_view, incident_create_view, sla_view, work_orders_view
 from apps.schools.views import school_list_view, school_detail_view, school_map_view
 from apps.workforce.views import schedule_view, attendance_view, worker_list_view
 from apps.materials.views import materials_view
@@ -140,6 +140,7 @@ urlpatterns = [
     path('incidents/create/',     incident_create_view,            name='incident-create'),
     path('incidents/<int:pk>/',   incident_detail_view,            name='incident-detail'),
     path('incidents/sla/',        sla_view,                        name='incident-sla'),
+    path('incidents/work-orders/', work_orders_view,               name='incident-work-orders'),
 
     # 학교
     path('schools/list/',         school_list_view,                name='school-list'),

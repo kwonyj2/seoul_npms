@@ -1432,7 +1432,7 @@ document.getElementById('comment-input').addEventListener('keydown', e => {
 });
 
 // ── 작업지시서 ────────────────────────────────────────
-const WO_API = '/npms/api/incidents/work-orders/';
+const WO_API = `${API_BASE}/incidents/work-orders/`;
 let _curWOId = null;
 loadWorkOrders();
 
@@ -1445,16 +1445,20 @@ const WO_STATUS = {
 };
 
 async function loadWorkOrders() {
-  let wos;
+  const el = document.getElementById('wo-list');
   try {
-    wos = await apiGet(`${WO_API}`, {incident: INCIDENT_ID});
-  } catch(e) { return; }
-  const el  = document.getElementById('wo-list');
-  if (!wos.length) {
-    el.innerHTML = '<div class="text-muted small text-center py-2">발행된 작업지시서가 없습니다</div>';
-    return;
-  }
-  el.innerHTML = wos.map(wo => {
+    const woUrl = `${API_BASE}/incidents/work-orders/?incident=${INCIDENT_ID}`;
+    const resp = await fetch(woUrl, {
+      headers: {'X-CSRFToken': getCsrfToken()}, credentials: 'same-origin'
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const wos = Array.isArray(data) ? data : (data.results || []);
+    if (!wos.length) {
+      el.innerHTML = '<div class="text-muted small text-center py-2">발행된 작업지시서가 없습니다</div>';
+      return;
+    }
+    el.innerHTML = wos.map(wo => {
     const st = WO_STATUS[wo.status] || WO_STATUS.issued;
     let btn = '';
     if (wo.status === 'issued')
@@ -1482,7 +1486,11 @@ async function loadWorkOrders() {
       </div>
       <div class="flex-shrink-0">${btn}</div>
     </div>`;
-  }).join('');
+    }).join('');
+  } catch(e) {
+    console.error('loadWorkOrders error:', e);
+    el.innerHTML = '<div class="text-danger small text-center py-2">작업지시서 로드 실패</div>';
+  }
 }
 
 async function openNewWorkOrderModal() {
