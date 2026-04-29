@@ -17,6 +17,9 @@
     <span id="inc-priority-badge"></span>
     <div class="ms-auto d-flex gap-2 flex-wrap">
       {% if user.role in 'superadmin,admin' %}
+      <button class="btn btn-sm btn-warning" id="btn-edit" onclick="openEditModal()">
+        <i class="bi bi-pencil-square me-1"></i>수정
+      </button>
       <button class="btn btn-sm btn-info" onclick="openAssignModal()">
         <i class="bi bi-person-plus me-1"></i>배정
       </button>
@@ -148,6 +151,184 @@
         <div class="card-body p-2" id="wo-list">
           <div class="text-center text-muted small py-2">로딩 중...</div>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 수정 모달 -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2 bg-warning">
+        <h6 class="modal-title fw-semibold"><i class="bi bi-pencil-square me-1"></i>장애 정보 수정</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <!-- 학교 선택 -->
+        <div class="row g-2 mb-2">
+          <div class="col-12 col-md-4">
+            <label class="form-label small fw-semibold">지원청 <span class="text-danger">*</span></label>
+            <select id="edit-center" class="form-select form-select-sm"></select>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small fw-semibold">학제 <span class="text-danger">*</span></label>
+            <select id="edit-type" class="form-select form-select-sm" disabled></select>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small fw-semibold">학교 <span class="text-danger">*</span></label>
+            <select id="edit-school" class="form-select form-select-sm" disabled></select>
+          </div>
+        </div>
+        <!-- 장애 위치 -->
+        <div class="row g-1 mb-2" id="edit-location-row">
+          <div class="col-12 mb-1">
+            <label class="form-label small fw-semibold mb-0">
+              <i class="bi bi-geo-alt me-1 text-secondary"></i>장애 위치 <small class="text-muted fw-normal">(선택)</small>
+            </label>
+          </div>
+          <div id="edit-loc-mode-building" class="col-12">
+            <div class="row g-1">
+              <div class="col-4">
+                <select id="edit-loc-building" class="form-select form-select-sm">
+                  <option value="">건물 선택</option>
+                </select>
+              </div>
+              <div class="col-4">
+                <select id="edit-loc-floor" class="form-select form-select-sm" disabled>
+                  <option value="">층 선택</option>
+                </select>
+              </div>
+              <div class="col-4">
+                <select id="edit-loc-room" class="form-select form-select-sm" disabled>
+                  <option value="">교실 선택</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 mt-1">
+            <input type="text" id="edit-loc-detail" class="form-control form-control-sm"
+                   placeholder="위치 상세 (예: 서버실 2번 랙)">
+          </div>
+        </div>
+        <!-- 분류 -->
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">분류 <span class="text-danger">*</span></label>
+            <select id="edit-category" class="form-select form-select-sm"></select>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">세부분류</label>
+            <select id="edit-subcategory" class="form-select form-select-sm"></select>
+          </div>
+        </div>
+        <!-- 우선순위 / 접수경로 / 접수일시 -->
+        <div class="row g-2 mb-2">
+          <div class="col-4">
+            <label class="form-label small fw-semibold">우선순위</label>
+            <select id="edit-priority" class="form-select form-select-sm">
+              <option value="critical">긴급</option>
+              <option value="high">높음</option>
+              <option value="medium">중간</option>
+              <option value="low">낮음</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold">접수 경로</label>
+            <select id="edit-contact-method" class="form-select form-select-sm">
+              <option value="phone">전화</option>
+              <option value="visit">방문</option>
+              <option value="system">시스템</option>
+              <option value="email">이메일</option>
+              <option value="auto">자동감지</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold">접수일시</label>
+            <input type="datetime-local" id="edit-received-at" class="form-control form-control-sm">
+          </div>
+        </div>
+        <!-- 요청자 -->
+        <div class="row g-2 mb-2">
+          <div class="col-4">
+            <label class="form-label small fw-semibold">요청자 <span class="text-danger">*</span></label>
+            <input type="text" id="edit-requester-name" class="form-control form-control-sm">
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold">요청자 연락처 <span class="text-danger">*</span></label>
+            <input type="tel" id="edit-requester-phone" class="form-control form-control-sm">
+          </div>
+          <div class="col-4">
+            <label class="form-label small fw-semibold">요청자 직책</label>
+            <input type="text" id="edit-requester-position" class="form-control form-control-sm">
+          </div>
+        </div>
+        <!-- 장애유형 / 인적장애 -->
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">장애 유형</label>
+            <select id="edit-fault-type" class="form-select form-select-sm">
+              <option value="service_stop">서비스 중단</option>
+              <option value="service_delay">서비스 지연</option>
+              <option value="malfunction">서비스 오작동</option>
+              <option value="terminal">단말 장애</option>
+              <option value="infra">기반시설 장애</option>
+              <option value="cyber">사이버 침해</option>
+              <option value="other">기타</option>
+            </select>
+          </div>
+          <div class="col-6 d-flex align-items-end pb-1">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="edit-is-human-error">
+              <label class="form-check-label small" for="edit-is-human-error">인적장애 (사람 실수/과실)</label>
+            </div>
+          </div>
+        </div>
+        <!-- 증상 -->
+        <div class="mb-2">
+          <label class="form-label small fw-semibold">증상 설명 <span class="text-danger">*</span></label>
+          <textarea id="edit-description" class="form-control form-control-sm" rows="4"></textarea>
+        </div>
+        <!-- 처리유형 / 처리내용 (완료 건 수정용) -->
+        <div id="edit-resolution-group" style="display:none;">
+          <hr class="my-2">
+          <div class="row g-2 mb-2">
+            <div class="col-4">
+              <label class="form-label small fw-semibold">처리유형</label>
+              <select id="edit-resolution-type" class="form-select form-select-sm">
+                <option value="">미입력</option>
+                <option value="전화상담">전화상담</option>
+                <option value="원격지원">원격지원</option>
+                <option value="현장수리">현장수리</option>
+                <option value="부품교체">부품교체</option>
+                <option value="설정변경">설정변경</option>
+                <option value="재부팅">재부팅</option>
+                <option value="케이블교체">케이블교체</option>
+                <option value="장비교체">장비교체</option>
+                <option value="이관">이관</option>
+                <option value="기타">기타</option>
+              </select>
+            </div>
+            <div class="col-4">
+              <label class="form-label small fw-semibold">완료일시</label>
+              <input type="datetime-local" id="edit-completed-at" class="form-control form-control-sm">
+            </div>
+            <div class="col-4">
+              <label class="form-label small fw-semibold">도착일시</label>
+              <input type="datetime-local" id="edit-arrived-at" class="form-control form-control-sm">
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold">처리내용</label>
+            <textarea id="edit-resolution" class="form-control form-control-sm" rows="3"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-sm btn-warning" onclick="submitEdit()">
+          <i class="bi bi-check-lg me-1"></i>수정 저장
+        </button>
       </div>
     </div>
   </div>
@@ -395,6 +576,9 @@ const FAULT_TYPE_LABEL = {
   cyber:         '사이버 침해',
   other:         '기타',
 };
+const CONTACT_METHOD_LABEL = {
+  phone: '전화', visit: '방문', system: '시스템', email: '이메일', auto: '자동감지',
+};
 const STATUS_NEXT = {
   received:   [{s:'moving',     label:'이동 시작', cls:'btn-primary'}, {s:'arrived', label:'현장 도착', cls:'btn-info'}],
   assigned:   [{s:'moving',     label:'이동 시작', cls:'btn-primary'}, {s:'arrived', label:'현장 도착', cls:'btn-info'}],
@@ -413,23 +597,28 @@ async function loadIncident() {
     document.getElementById('inc-status-badge').innerHTML   = STATUS_BADGE[d.status] || d.status;
     document.getElementById('inc-priority-badge').innerHTML = PRIORITY_BADGE[d.priority] || '';
 
+    // 장애위치 조합
+    const locParts = [d.location_building_name, d.location_floor_name, d.location_room_name].filter(Boolean);
+    const locStr = locParts.length
+      ? locParts.join(' &rsaquo; ') + (d.location_detail ? ` <small class="text-muted">(${d.location_detail})</small>` : '')
+      : (d.location_detail || '<span class="text-muted">-</span>');
+
     // 기본 정보 테이블
     document.getElementById('inc-info-table').innerHTML = `
       <tr><td class="text-muted fw-semibold" style="width:35%">학교</td><td>${d.school_name}</td></tr>
       <tr><td class="text-muted fw-semibold">지원청</td><td>${d.center_name||'-'}</td></tr>
       <tr><td class="text-muted fw-semibold">분류</td><td>${d.category_name||'-'}</td></tr>
       <tr><td class="text-muted fw-semibold">세부분류</td><td>${d.subcategory_name||'-'}</td></tr>
+      <tr><td class="text-muted fw-semibold">장애위치</td><td>${locStr}</td></tr>
+      <tr><td class="text-muted fw-semibold">장애 유형</td><td>${FAULT_TYPE_LABEL[d.fault_type]||'-'}</td></tr>
+      <tr><td class="text-muted fw-semibold">인적장애</td><td>${d.is_human_error ? '<span class="badge bg-danger">해당</span>' : '<span class="text-muted">-</span>'}</td></tr>
       <tr><td class="text-muted fw-semibold">담당자</td><td>${d.assigned_worker_name||'<span class="text-danger">미배정</span>'}</td></tr>
       <tr><td class="text-muted fw-semibold">접수자</td><td>${d.received_by_name||'-'}</td></tr>
       <tr><td class="text-muted fw-semibold">접수일시</td><td>${formatDateTime(d.received_at)}</td></tr>
+      <tr><td class="text-muted fw-semibold">접수경로</td><td>${d.contact_method_display || CONTACT_METHOD_LABEL[d.contact_method] || '-'}</td></tr>
       <tr><td class="text-muted fw-semibold">경과시간</td><td>${d.elapsed_minutes||0}분</td></tr>
-      <tr><td class="text-muted fw-semibold">장애 유형</td><td>${FAULT_TYPE_LABEL[d.fault_type]||'-'}</td></tr>
-      <tr><td class="text-muted fw-semibold">인적장애</td><td>${d.is_human_error ? '<span class="badge bg-danger">해당</span>' : '<span class="text-muted">-</span>'}</td></tr>
-      ${(d.location_building_name || d.location_detail) ? `
-      <tr><td class="text-muted fw-semibold">장애위치</td><td>
-        ${[d.location_building_name, d.location_floor_name, d.location_room_name].filter(Boolean).join(' &rsaquo; ')}
-        ${d.location_detail ? `<small class="text-muted ms-1">(${d.location_detail})</small>` : ''}
-      </td></tr>` : ''}
+      <tr><td class="text-muted fw-semibold">요청자</td><td>${d.requester_name||'-'}${d.requester_position ? ' <small class="text-muted">('+d.requester_position+')</small>' : ''}</td></tr>
+      <tr><td class="text-muted fw-semibold">요청자 연락처</td><td>${d.requester_phone||'-'}</td></tr>
       <tr><td class="text-muted fw-semibold" colspan="2">증상</td></tr>
       <tr><td colspan="2" class="text-wrap" style="white-space:pre-line">${d.description||'-'}</td></tr>
       ${d.status === 'completed' ? `
@@ -445,11 +634,11 @@ async function loadIncident() {
       ` : ''}
     `;
 
-    // 완료 등록 버튼 — 완료/취소 외 모든 상태에서 표시 (콜센터 즉시 완료 가능)
+    // 완료 등록 버튼
     const btnComplete = document.getElementById('btn-complete');
     if (btnComplete) btnComplete.style.display = !['completed','cancelled'].includes(d.status) ? '' : 'none';
 
-    // 상태 변경 버튼 (완료 제외 — 완료는 모달로 처리)
+    // 상태 변경 버튼 (완료 제외)
     const nextActions = (STATUS_NEXT[d.status] || []).filter(a => a.s !== 'completed');
     const actionsHtml = nextActions.map(a => `
       <button class="btn btn-sm ${a.cls}" onclick="changeStatus('${a.s}')">
@@ -476,11 +665,9 @@ async function loadIncident() {
           ? `<small class="text-success ms-1">(${label} 여유)</small>`
           : `<small class="text-danger ms-1">(${label} 초과)</small>`;
       };
-      // 고객협의 조정 배지
       document.getElementById('sla-adjusted-badge').innerHTML = sla.is_adjusted
         ? '<span class="badge bg-warning text-dark"><i class="bi bi-telephone-forward me-1"></i>고객협의 조정</span>'
         : '';
-      // 완료/취소 시 고객협의 버튼 숨김
       const btnAppt = document.getElementById('btn-appointment');
       if (btnAppt) btnAppt.style.display = ['completed','cancelled'].includes(d.status) ? 'none' : '';
 
@@ -640,7 +827,6 @@ function openAppointmentModal() {
   const now = new Date();
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   document.getElementById('appt-call-at').value = now.toISOString().slice(0, 16);
-  // 기존 약속시간이 있으면 채움
   if (incidentData.appointment_at) {
     const appt = new Date(incidentData.appointment_at);
     appt.setMinutes(appt.getMinutes() - appt.getTimezoneOffset());
@@ -668,7 +854,7 @@ async function submitAppointment() {
       customer_call_note: callNote,
     });
     bootstrap.Modal.getInstance(document.getElementById('appointmentModal')).hide();
-    showToast('고객 협의에 따라 SLA가 조정되었습��다', 'success');
+    showToast('고객 협의에 따라 SLA가 조정되었습니다', 'success');
     loadIncident();
   } catch(e) {
     showToast('SLA 조정 실패: ' + (e?.detail || ''), 'error');
@@ -682,17 +868,14 @@ function toggleArrivedGroup() {
 }
 
 function openCompleteModal() {
-  // 현재 일시를 기본값으로
   const now = new Date();
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   document.getElementById('completed-at').value = now.toISOString().slice(0, 16);
   document.getElementById('resolution-text').value = '';
-  // 기존 fault_type, is_human_error 값 반영
   if (incidentData.fault_type) {
     document.getElementById('fault-type').value = incidentData.fault_type;
   }
   document.getElementById('is-human-error').checked = !!incidentData.is_human_error;
-  // 기존 arrived_at이 있으면 채워줌, 없으면 비움
   if (incidentData.arrived_at) {
     const arr = new Date(incidentData.arrived_at);
     arr.setMinutes(arr.getMinutes() - arr.getTimezoneOffset());
@@ -700,7 +883,6 @@ function openCompleteModal() {
   } else {
     document.getElementById('arrived-at').value = '';
   }
-  // 처리유형에 따라 도착일시 필드 토글
   document.getElementById('resolution-type').addEventListener('change', toggleArrivedGroup);
   toggleArrivedGroup();
   new bootstrap.Modal(document.getElementById('completeModal')).show();
@@ -812,6 +994,336 @@ async function uploadPhotos(input) {
   if (ok > 0) loadPhotos();
 }
 
+// ── 수정 모달 ────────────────────────────────────────────────────────
+let _editTreeData = [];
+let _editCategories = [];
+let _editLocSchoolId = null;
+let _editLocBuildings = [];  // [{id, name, floors}]
+
+async function openEditModal() {
+  const d = incidentData;
+  if (!d || !d.id) { showToast('장애 데이터를 불러오는 중입니다', 'warning'); return; }
+
+  // 트리 / 카테고리 로드 (캐시)
+  if (!_editTreeData.length) {
+    _editTreeData = await apiGet(`${API_BASE}/schools/schools/tree/`);
+  }
+  if (!_editCategories.length) {
+    const catData = await apiGet(`${API_BASE}/incidents/categories/`);
+    _editCategories = catData.results || catData;
+  }
+
+  // 지원청 채우기
+  const centerSel = document.getElementById('edit-center');
+  centerSel.innerHTML = '<option value="">지원청 선택...</option>' +
+    _editTreeData.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+
+  // 현재 학교에 해당하는 지원청/학제/학교 선택
+  // school 상세에서 center code, type id를 알아야 함
+  // incidentData에 school 정보가 제한적이므로 트리에서 찾기
+  let foundCenter = null, foundType = null;
+  for (const center of _editTreeData) {
+    for (const type of center.types) {
+      const sch = type.schools.find(s => s.id === d.school);
+      if (sch) { foundCenter = center; foundType = type; break; }
+    }
+    if (foundCenter) break;
+  }
+
+  if (foundCenter) {
+    centerSel.value = foundCenter.code;
+    // 학제 채우기
+    const typeSel = document.getElementById('edit-type');
+    typeSel.innerHTML = '<option value="">학제 선택...</option>' +
+      foundCenter.types.map(t => `<option value="${t.id}">${t.name} (${t.count})</option>`).join('');
+    typeSel.disabled = false;
+    typeSel.value = foundType.id;
+
+    // 학교 채우기
+    const schSel = document.getElementById('edit-school');
+    const sorted = [...foundType.schools].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    schSel.innerHTML = '<option value="">학교 선택...</option>' +
+      sorted.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    schSel.disabled = false;
+    schSel.value = d.school;
+  }
+
+  // 분류 채우기
+  const catSel = document.getElementById('edit-category');
+  catSel.innerHTML = '<option value="">분류 선택...</option>' +
+    _editCategories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  catSel.value = d.category || '';
+
+  // 세부분류 채우기
+  const cat = _editCategories.find(c => c.id === d.category);
+  const subSel = document.getElementById('edit-subcategory');
+  if (cat && cat.subcategories && cat.subcategories.length) {
+    subSel.innerHTML = '<option value="">세부분류 선택...</option>' +
+      cat.subcategories.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    subSel.disabled = false;
+    subSel.value = d.subcategory || '';
+  } else {
+    subSel.innerHTML = '<option value="">세부분류 없음</option>';
+    subSel.disabled = true;
+  }
+
+  // 나머지 필드
+  document.getElementById('edit-priority').value = d.priority || 'medium';
+  document.getElementById('edit-contact-method').value = d.contact_method || 'phone';
+  document.getElementById('edit-fault-type').value = d.fault_type || 'service_stop';
+  document.getElementById('edit-is-human-error').checked = !!d.is_human_error;
+  document.getElementById('edit-requester-name').value = d.requester_name || '';
+  document.getElementById('edit-requester-phone').value = d.requester_phone || '';
+  document.getElementById('edit-requester-position').value = d.requester_position || '';
+  document.getElementById('edit-description').value = d.description || '';
+  document.getElementById('edit-loc-detail').value = d.location_detail || '';
+
+  // 접수일시
+  if (d.received_at) {
+    const dt = new Date(d.received_at);
+    dt.setMinutes(dt.getMinutes() - dt.getTimezoneOffset());
+    document.getElementById('edit-received-at').value = dt.toISOString().slice(0, 16);
+  }
+
+  // 처리유형/처리내용 (완료 건이면 표시)
+  const resGroup = document.getElementById('edit-resolution-group');
+  if (d.resolution_type || d.resolution || d.status === 'completed') {
+    resGroup.style.display = '';
+    document.getElementById('edit-resolution-type').value = d.resolution_type || '';
+    document.getElementById('edit-resolution').value = d.resolution || '';
+    if (d.completed_at) {
+      const ct = new Date(d.completed_at);
+      ct.setMinutes(ct.getMinutes() - ct.getTimezoneOffset());
+      document.getElementById('edit-completed-at').value = ct.toISOString().slice(0, 16);
+    } else {
+      document.getElementById('edit-completed-at').value = '';
+    }
+    if (d.arrived_at) {
+      const at = new Date(d.arrived_at);
+      at.setMinutes(at.getMinutes() - at.getTimezoneOffset());
+      document.getElementById('edit-arrived-at').value = at.toISOString().slice(0, 16);
+    } else {
+      document.getElementById('edit-arrived-at').value = '';
+    }
+  } else {
+    resGroup.style.display = 'none';
+  }
+
+  // 장애위치 cascade 로드
+  await editLoadLocBuildings(d.school, d.location_building, d.location_floor, d.location_room);
+
+  new bootstrap.Modal(document.getElementById('editModal')).show();
+}
+
+// 수정모달: 지원청 변경
+document.getElementById('edit-center').addEventListener('change', function() {
+  const code = this.value;
+  const typeSel = document.getElementById('edit-type');
+  const schSel  = document.getElementById('edit-school');
+  typeSel.innerHTML = '<option value="">학제 선택...</option>';
+  schSel.innerHTML  = '<option value="">학교 선택...</option>';
+  typeSel.disabled = true;
+  schSel.disabled  = true;
+  editResetLocation();
+  if (!code) return;
+  const center = _editTreeData.find(c => c.code === code);
+  if (!center) return;
+  center.types.forEach(t => {
+    typeSel.innerHTML += `<option value="${t.id}">${t.name} (${t.count})</option>`;
+  });
+  typeSel.disabled = false;
+});
+
+// 수정모달: 학제 변경
+document.getElementById('edit-type').addEventListener('change', function() {
+  const typeId = parseInt(this.value);
+  const code   = document.getElementById('edit-center').value;
+  const schSel = document.getElementById('edit-school');
+  schSel.innerHTML = '<option value="">학교 선택...</option>';
+  schSel.disabled  = true;
+  editResetLocation();
+  if (!typeId || !code) return;
+  const center = _editTreeData.find(c => c.code === code);
+  if (!center) return;
+  const type = center.types.find(t => t.id === typeId);
+  if (!type) return;
+  const sorted = [...type.schools].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  schSel.innerHTML = '<option value="">학교 선택...</option>' +
+    sorted.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  schSel.disabled = false;
+});
+
+// 수정모달: 학교 변경 → 위치 cascade 재로드
+document.getElementById('edit-school').addEventListener('change', function() {
+  const schoolId = this.value;
+  editResetLocation();
+  if (schoolId) editLoadLocBuildings(schoolId);
+});
+
+// 수정모달: 분류 변경 → 세부분류
+document.getElementById('edit-category').addEventListener('change', function() {
+  const catId = parseInt(this.value);
+  const subSel = document.getElementById('edit-subcategory');
+  const cat = _editCategories.find(c => c.id === catId);
+  subSel.innerHTML = '<option value="">세부분류 선택...</option>';
+  if (cat && cat.subcategories && cat.subcategories.length) {
+    cat.subcategories.forEach(s => { subSel.innerHTML += `<option value="${s.id}">${s.name}</option>`; });
+    subSel.disabled = false;
+  } else {
+    subSel.disabled = true;
+  }
+});
+
+function editResetLocation() {
+  _editLocSchoolId = null;
+  _editLocBuildings = [];
+  document.getElementById('edit-loc-building').innerHTML = '<option value="">건물 선택</option>';
+  document.getElementById('edit-loc-floor').innerHTML = '<option value="">층 선택</option>';
+  document.getElementById('edit-loc-room').innerHTML = '<option value="">교실 선택</option>';
+  document.getElementById('edit-loc-floor').disabled = true;
+  document.getElementById('edit-loc-room').disabled = true;
+}
+
+async function editLoadLocBuildings(schoolId, preBuilding, preFloor, preRoom) {
+  _editLocSchoolId = schoolId;
+  const bldSel   = document.getElementById('edit-loc-building');
+  const floorSel = document.getElementById('edit-loc-floor');
+  const roomSel  = document.getElementById('edit-loc-room');
+  bldSel.innerHTML   = '<option value="">건물 선택</option>';
+  floorSel.innerHTML = '<option value="">층 선택</option>';
+  roomSel.innerHTML  = '<option value="">교실 선택</option>';
+  floorSel.disabled = true;
+  roomSel.disabled  = true;
+
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${schoolId}/rooms_for_select/`);
+    _editLocBuildings = data || [];
+    if (_editLocBuildings.length) {
+      bldSel.innerHTML = '<option value="">건물 선택</option>' +
+        _editLocBuildings.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+      if (preBuilding) {
+        bldSel.value = preBuilding;
+        // 층 로드
+        await editLoadLocFloors(preBuilding, preFloor, preRoom);
+      }
+    }
+  } catch(e) {}
+}
+
+async function editLoadLocFloors(buildingId, preFloor, preRoom) {
+  const floorSel = document.getElementById('edit-loc-floor');
+  const roomSel  = document.getElementById('edit-loc-room');
+  floorSel.innerHTML = '<option value="">층 선택</option>';
+  roomSel.innerHTML  = '<option value="">교실 선택</option>';
+  floorSel.disabled = true;
+  roomSel.disabled  = true;
+  if (!buildingId || !_editLocSchoolId) return;
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${_editLocSchoolId}/rooms_for_select/`, {building: buildingId});
+    if (data && data.length) {
+      floorSel.innerHTML = '<option value="">층 선택</option>' +
+        data.map(f => `<option value="${f.id}">${f.floor_name}</option>`).join('');
+      floorSel.disabled = false;
+      if (preFloor) {
+        floorSel.value = preFloor;
+        await editLoadLocRooms(preFloor, preRoom);
+      }
+    }
+  } catch(e) {}
+}
+
+async function editLoadLocRooms(floorId, preRoom) {
+  const roomSel = document.getElementById('edit-loc-room');
+  roomSel.innerHTML = '<option value="">교실 선택</option>';
+  roomSel.disabled  = true;
+  if (!floorId || !_editLocSchoolId) return;
+  try {
+    const data = await apiGet(`${API_BASE}/schools/schools/${_editLocSchoolId}/rooms_for_select/`, {floor: floorId});
+    if (data && data.length) {
+      roomSel.innerHTML = '<option value="">교실 선택</option>' +
+        data.map(r => `<option value="${r.id}">${r.room_number ? r.room_number+' '+r.name : r.name}</option>`).join('');
+      roomSel.disabled = false;
+      if (preRoom) roomSel.value = preRoom;
+    }
+  } catch(e) {}
+}
+
+// 수정모달: 건물 변경 → 층 로드
+document.getElementById('edit-loc-building').addEventListener('change', function() {
+  editLoadLocFloors(this.value);
+});
+
+// 수정모달: 층 변경 → 교실 로드
+document.getElementById('edit-loc-floor').addEventListener('change', function() {
+  editLoadLocRooms(this.value);
+});
+
+async function submitEdit() {
+  const school   = document.getElementById('edit-school').value;
+  const category = document.getElementById('edit-category').value;
+  const desc     = document.getElementById('edit-description').value.trim();
+  const reqName  = document.getElementById('edit-requester-name').value.trim();
+  const reqPhone = document.getElementById('edit-requester-phone').value.trim();
+
+  if (!school)   { showToast('학교를 선택하세요', 'warning'); return; }
+  if (!category) { showToast('분류를 선택하세요', 'warning'); return; }
+  if (!desc)     { showToast('증상 설명을 입력하세요', 'warning'); return; }
+  if (!reqName)  { showToast('요청자 이름을 입력하세요', 'warning'); return; }
+  if (!reqPhone) { showToast('요청자 연락처를 입력하세요', 'warning'); return; }
+
+  const payload = {
+    school:             parseInt(school),
+    category:           parseInt(category),
+    priority:           document.getElementById('edit-priority').value,
+    contact_method:     document.getElementById('edit-contact-method').value,
+    fault_type:         document.getElementById('edit-fault-type').value,
+    is_human_error:     document.getElementById('edit-is-human-error').checked,
+    description:        desc,
+    requester_name:     reqName,
+    requester_phone:    reqPhone,
+    requester_position: document.getElementById('edit-requester-position').value.trim(),
+    received_at:        document.getElementById('edit-received-at').value || undefined,
+    location_detail:    document.getElementById('edit-loc-detail').value.trim() || '',
+  };
+
+  const subcat = document.getElementById('edit-subcategory').value;
+  payload.subcategory = subcat ? parseInt(subcat) : null;
+
+  const locBld   = document.getElementById('edit-loc-building').value;
+  const locFloor = document.getElementById('edit-loc-floor').value;
+  const locRoom  = document.getElementById('edit-loc-room').value;
+  payload.location_building = locBld   ? parseInt(locBld)   : null;
+  payload.location_floor    = locFloor ? parseInt(locFloor) : null;
+  payload.location_room     = locRoom  ? parseInt(locRoom)  : null;
+
+  // 처리유형/처리내용 (표시 중일 때만)
+  if (document.getElementById('edit-resolution-group').style.display !== 'none') {
+    payload.resolution_type = document.getElementById('edit-resolution-type').value || '';
+    payload.resolution      = document.getElementById('edit-resolution').value || '';
+    const editCompletedAt   = document.getElementById('edit-completed-at').value;
+    const editArrivedAt     = document.getElementById('edit-arrived-at').value;
+    if (editCompletedAt) payload.completed_at = editCompletedAt;
+    if (editArrivedAt)   payload.arrived_at   = editArrivedAt;
+  }
+
+  try {
+    await apiPatch(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/`, payload);
+    bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+    showToast('장애 정보가 수정되었습니다', 'success');
+    loadIncident();
+  } catch(e) {
+    let msg = '수정 실패';
+    if (typeof e === 'object' && e !== null) {
+      const lines = [];
+      for (const [k, v] of Object.entries(e)) {
+        lines.push(`[${k}] ${Array.isArray(v) ? v.join(', ') : v}`);
+      }
+      if (lines.length) msg = lines.join('\n');
+    }
+    showToast(msg, 'error');
+  }
+}
+
 // 초기 로드
 loadIncident();
 loadComments();
@@ -877,20 +1389,17 @@ async function loadWorkOrders() {
 }
 
 function openNewWorkOrderModal() {
-  // 현재 장애 정보로 기본값 세팅
   fetch(`/npms/api/incidents/incidents/${INCIDENT_ID}/`, {credentials:'same-origin'})
     .then(r=>r.json())
     .then(d => {
       document.getElementById('wo-title').value =
         `[${d.category_name||''}] ${d.school_name||''} 장애처리`;
       document.getElementById('wo-desc').value = d.description || '';
-      // 배정된 인력 가져오기
       const assigneeEl = document.getElementById('wo-assignee');
       assigneeEl.innerHTML = '<option value="">-- 선택 --</option>';
       (d.assignments||[]).forEach(a => {
         assigneeEl.innerHTML += `<option value="${a.worker_id}">${a.worker_name}</option>`;
       });
-      // 기한: 오늘+1일
       const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
       document.getElementById('wo-due').value = tomorrow.toISOString().slice(0,10);
     });

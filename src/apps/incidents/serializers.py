@@ -68,6 +68,7 @@ class IncidentDetailSerializer(serializers.ModelSerializer):
     subcategory_name      = serializers.CharField(source='subcategory.name', read_only=True)
     status_display        = serializers.CharField(source='get_status_display', read_only=True)
     priority_display      = serializers.CharField(source='get_priority_display', read_only=True)
+    contact_method_display = serializers.CharField(source='get_contact_method_display', read_only=True)
     received_by_name      = serializers.CharField(source='received_by.name', read_only=True)
     assigned_worker_name  = serializers.SerializerMethodField()
     elapsed_minutes       = serializers.SerializerMethodField()
@@ -156,9 +157,14 @@ class IncidentCreateSerializer(serializers.ModelSerializer):
 class IncidentUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Incident
-        fields = ['status', 'priority', 'resolution', 'resolution_type',
-                  'arrived_at', 'started_at', 'completed_at', 'description',
-                  'fault_type', 'is_human_error']
+        fields = ['school', 'category', 'subcategory', 'other_detail',
+                  'status', 'priority', 'resolution', 'resolution_type',
+                  'contact_method', 'requester_name', 'requester_phone',
+                  'requester_position', 'description',
+                  'received_at', 'arrived_at', 'started_at', 'completed_at',
+                  'fault_type', 'is_human_error',
+                  'location_building', 'location_floor', 'location_room',
+                  'location_detail']
 
     def update(self, instance, validated_data):
         old_status = instance.status
