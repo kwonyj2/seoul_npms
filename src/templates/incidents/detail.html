@@ -1468,21 +1468,54 @@ async function loadWorkOrders() {
   }).join('');
 }
 
-function openNewWorkOrderModal() {
-  fetch(`/npms/api/incidents/incidents/${INCIDENT_ID}/`, {credentials:'same-origin'})
-    .then(r=>r.json())
-    .then(d => {
-      document.getElementById('wo-title').value =
-        `[${d.category_name||''}] ${d.school_name||''} 장애처리`;
-      document.getElementById('wo-desc').value = d.description || '';
-      const assigneeEl = document.getElementById('wo-assignee');
-      assigneeEl.innerHTML = '<option value="">-- 선택 --</option>';
-      (d.assignments||[]).forEach(a => {
-        assigneeEl.innerHTML += `<option value="${a.worker_id}">${a.worker_name}</option>`;
-      });
-      const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
-      document.getElementById('wo-due').value = tomorrow.toISOString().slice(0,10);
+async function openNewWorkOrderModal() {
+  const d = incidentData;
+  document.getElementById('wo-title').value =
+    `[${d.category_name||''}] ${d.school_name||''} 장애처리`;
+  document.getElementById('wo-desc').value = d.description || '';
+  // 완료기한: SLA 처리 목표시각 (업무시간/공휴일 반영된 기준시간)
+  if (d.sla && d.sla.resolve_target) {
+    const rt = new Date(d.sla.resolve_target);
+    document.getElementById('wo-due').value = rt.toISOString().slice(0, 10);
+  } else {
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+    document.getElementById('wo-due').value = tomorrow.toISOString().slice(0, 10);
+  }
+
+  // 담당자: 배정 인력 + 해당 지원청 인력 목록
+  const assigneeEl = document.getElementById('wo-assignee');
+  assigneeEl.innerHTML = '<option value="">-- 선택 --</option>';
+
+  // 1) 이미 배정된 인력 (우선 표시)
+  const assigned = d.assignments || [];
+  let assignedIds = [];
+  if (assigned.length) {
+    assigneeEl.innerHTML += '<optgroup label="배정된 인력">';
+    assigned.forEach(a => {
+      assigneeEl.innerHTML += `<option value="${a.worker}" selected>${a.worker_name} (배정)</option>`;
+      assignedIds.push(a.worker);
     });
+    assigneeEl.innerHTML += '</optgroup>';
+  }
+
+  // 2) 해당 지원청 소속 인력 (배정 인력 제외)
+  try {
+    const workers = await apiGet(`${API_BASE}/incidents/incidents/${INCIDENT_ID}/available_workers/`);
+    const others = (workers||[]).filter(w => !assignedIds.includes(w.id));
+    if (others.length) {
+      assigneeEl.innerHTML += '<optgroup label="지원청 소속 인력">';
+      others.forEach(w => {
+        assigneeEl.innerHTML += `<option value="${w.id}">${w.name} (${w.support_center_name||''})</option>`;
+      });
+      assigneeEl.innerHTML += '</optgroup>';
+    }
+  } catch(e) {}
+
+  // 배정 인력이 있으면 첫 번째를 기본 선택
+  if (assigned.length) {
+    assigneeEl.value = assigned[0].worker;
+  }
+
   new bootstrap.Modal(document.getElementById('woModal')).show();
 }
 
