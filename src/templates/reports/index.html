@@ -1541,9 +1541,23 @@ async function renderRegularInspectForm(){
   html+='<div class="col-4"><div class="form-field"><label>컨트롤러 (대)</label><input type="number" id="ri-ap-controller" class="form-control form-control-sm" value="0"></div></div>';
   html+='<div class="col-4"><div class="form-field"><label>자체구축 (대)</label><input type="number" id="ri-ap-self" class="form-control form-control-sm" value="0"></div></div>';
   /* 점검결과 */
-  html+='<div class="col-12 col-sm-4"><div class="form-field"><label>스위치 결과</label><input type="text" id="ri-switch-result" class="form-control form-control-sm" value="특이사항 없음"></div></div>';
-  html+='<div class="col-12 col-sm-4"><div class="form-field"><label>PoE 결과</label><input type="text" id="ri-poe-result" class="form-control form-control-sm" value="특이사항 없음"></div></div>';
-  html+='<div class="col-12 col-sm-4"><div class="form-field"><label>AP 결과</label><input type="text" id="ri-ap-result" class="form-control form-control-sm" value="특이사항 없음"></div></div>';
+  function _riChangeSelect(id){
+    return '<div class="form-field"><label>'+id.replace('ri-','').replace('-result','').replace('switch','스위치').replace('poe','PoE')+' 결과</label>'
+      +'<select id="'+id+'" class="form-select form-select-sm" onchange="_riOnChangeResult(\''+id+'\')">'
+      +'<option value="전월대비 변동 없음" selected>전월대비 변동 없음</option>'
+      +'<option value="증가">증가</option>'
+      +'<option value="감소">감소</option>'
+      +'</select>'
+      +'<div id="'+id+'-detail" style="display:none;" class="mt-1 p-2 border rounded bg-light">'
+      +'<div class="row g-1">'
+      +'<div class="col-4"><input type="text" id="'+id+'-model" class="form-control form-control-sm" placeholder="모델명"></div>'
+      +'<div class="col-4"><input type="text" id="'+id+'-vlan" class="form-control form-control-sm" placeholder="망ID"></div>'
+      +'<div class="col-4"><input type="text" id="'+id+'-loc" class="form-control form-control-sm" placeholder="위치"></div>'
+      +'</div></div></div>';
+  }
+  html+='<div class="col-12 col-sm-4">'+_riChangeSelect('ri-switch-result')+'</div>';
+  html+='<div class="col-12 col-sm-4">'+_riChangeSelect('ri-poe-result')+'</div>';
+  html+='<div class="col-12 col-sm-4"><div class="form-field"><label>AP 결과</label><textarea id="ri-ap-result" class="form-control form-control-sm" rows="2">특이사항 없음</textarea></div></div>';
   /* 무선망 대역폭 */
   html+='<div class="col-12"><div class="form-field"><label>무선망 대역폭</label>';
   html+='<select id="ri-wireless-band" class="form-select form-select-sm">';
@@ -1615,23 +1629,23 @@ async function renderRegularInspectForm(){
   /* ── 스마트기기 / 기타 ── */
   html+='<div class="form-section"><div class="form-section-title">스마트기기 / 기타</div>';
   html+='<div class="row g-2">';
-  html+='<div class="col-6"><div class="form-field"><label>전자칠판</label><input type="text" id="ri-smartboard" class="form-control form-control-sm" placeholder="요청시"></div></div>';
-  html+='<div class="col-6"><div class="form-field"><label>디벗</label><input type="text" id="ri-devit" class="form-control form-control-sm" placeholder="요청시"></div></div>';
-  html+='<div class="col-12"><div class="form-field"><label>기타사항</label><input type="text" id="ri-etc-request" class="form-control form-control-sm" placeholder="요청시"></div></div>';
+  html+='<div class="col-6"><div class="form-field"><label>전자칠판</label><textarea id="ri-smartboard" class="form-control form-control-sm" rows="2">특이사항 없음</textarea></div></div>';
+  html+='<div class="col-6"><div class="form-field"><label>디벗</label><textarea id="ri-devit" class="form-control form-control-sm" rows="2">특이사항 없음</textarea></div></div>';
+  html+='<div class="col-12"><div class="form-field"><label>기타사항</label><textarea id="ri-etc-request" class="form-control form-control-sm" rows="2">특이사항 없음</textarea></div></div>';
   html+='</div></div>';
 
   /* ── 차수별 점검 사항 (해당 차수만 표시) ── */
   html+='<div class="form-section"><div class="form-section-title">차수별 점검 사항 ('+quarter+'차)</div>';
   html+='<div class="row g-2">';
   if(quarter==1){
-    html+='<div class="col-4"><div class="form-field"><label>구성도</label><input type="text" id="ri-chk1-diagram" class="form-control form-control-sm" placeholder="결과"></div></div>';
-    html+='<div class="col-4"><div class="form-field"><label>랙실장도</label><input type="text" id="ri-chk1-rack" class="form-control form-control-sm" placeholder="결과"></div></div>';
-    html+='<div class="col-4"><div class="form-field"><label>장비목록</label><input type="text" id="ri-chk1-equipment" class="form-control form-control-sm" placeholder="결과"></div></div>';
+    html+='<div class="col-4"><div class="form-field"><label>구성도</label><textarea id="ri-chk1-diagram" class="form-control form-control-sm" rows="2" placeholder="결과"></textarea></div></div>';
+    html+='<div class="col-4"><div class="form-field"><label>랙실장도</label><textarea id="ri-chk1-rack" class="form-control form-control-sm" rows="2" placeholder="결과"></textarea></div></div>';
+    html+='<div class="col-4"><div class="form-field"><label>장비목록</label><textarea id="ri-chk1-equipment" class="form-control form-control-sm" rows="2" placeholder="결과"></textarea></div></div>';
   } else if(quarter==2){
-    html+='<div class="col-6"><div class="form-field"><label>자산라벨</label><input type="text" id="ri-chk2-asset" class="form-control form-control-sm" placeholder="결과"></div></div>';
-    html+='<div class="col-6"><div class="form-field"><label>스위치 교체</label><input type="text" id="ri-chk2-switch" class="form-control form-control-sm" placeholder="결과"></div></div>';
+    html+='<div class="col-6"><div class="form-field"><label>자산라벨</label><textarea id="ri-chk2-asset" class="form-control form-control-sm" rows="2" placeholder="결과"></textarea></div></div>';
+    html+='<div class="col-6"><div class="form-field"><label>스위치 교체</label><textarea id="ri-chk2-switch" class="form-control form-control-sm" rows="2" placeholder="결과"></textarea></div></div>';
   } else if(quarter==3){
-    html+='<div class="col-12"><div class="form-field"><label>AP배치도</label><input type="text" id="ri-chk3-ap" class="form-control form-control-sm" placeholder="결과"></div></div>';
+    html+='<div class="col-12"><div class="form-field"><label>AP배치도</label><textarea id="ri-chk3-ap" class="form-control form-control-sm" rows="2" placeholder="결과"></textarea></div></div>';
   }
   html+='</div></div>';
 
@@ -1669,6 +1683,17 @@ function _riUpdateCountOption(id, count, suffix){
     sel.options[0].value=newText;
     sel.options[0].text=newText;
     sel.value=newText;
+  }
+}
+
+function _riOnChangeResult(id){
+  var sel=document.getElementById(id);
+  var detail=document.getElementById(id+'-detail');
+  if(!sel||!detail) return;
+  if(sel.value==='증가'||sel.value==='감소'){
+    detail.style.display='';
+  } else {
+    detail.style.display='none';
   }
 }
 
@@ -1732,8 +1757,22 @@ function collectRegularData(){
     ap_weiss_count:       parseInt(g('ri-ap-weiss'))||0,
     ap_controller_count:  parseInt(g('ri-ap-controller'))||0,
     ap_self_count:        parseInt(g('ri-ap-self'))||0,
-    switch_result:        g('ri-switch-result'),
-    poe_result:           g('ri-poe-result'),
+    switch_result:        (function(){
+      var v=g('ri-switch-result');
+      if(v==='증가'||v==='감소'){
+        var m=g('ri-switch-result-model'),vl=g('ri-switch-result-vlan'),lo=g('ri-switch-result-loc');
+        return v+' (모델: '+(m||'-')+', 망ID: '+(vl||'-')+', 위치: '+(lo||'-')+')';
+      }
+      return v;
+    })(),
+    poe_result:           (function(){
+      var v=g('ri-poe-result');
+      if(v==='증가'||v==='감소'){
+        var m=g('ri-poe-result-model'),vl=g('ri-poe-result-vlan'),lo=g('ri-poe-result-loc');
+        return v+' (모델: '+(m||'-')+', 망ID: '+(vl||'-')+', 위치: '+(lo||'-')+')';
+      }
+      return v;
+    })(),
     ap_result:            g('ri-ap-result'),
     wireless_band:        g('ri-wireless-band'),
     /* iperf 속도 */
