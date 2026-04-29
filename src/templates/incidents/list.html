@@ -1,11 +1,29 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}장애 목록{% endblock %}
-{% block page_title %}<i class="bi bi-exclamation-triangle me-2 text-danger"></i>장애 목록{% endblock %}
+{% block title %}장애관리{% endblock %}
+{% block page_title %}<i class="bi bi-exclamation-triangle me-2 text-danger"></i>장애관리{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-3 py-2">
+
+  <!-- 탭 메뉴 -->
+  <ul class="nav nav-tabs mb-2" id="incidentTabs">
+    <li class="nav-item">
+      <a class="nav-link active" id="tab-incidents" data-bs-toggle="tab" href="#pane-incidents" role="tab">
+        <i class="bi bi-exclamation-triangle me-1"></i>장애 목록
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" id="tab-workorders" data-bs-toggle="tab" href="#pane-workorders" role="tab">
+        <i class="bi bi-file-text me-1"></i>작업지시서
+      </a>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+  <!-- ═══ 탭1: 장애 목록 ═══ -->
+  <div class="tab-pane fade show active" id="pane-incidents" role="tabpanel">
 
   <!-- 검색/필터 바 -->
   <div class="card border-0 shadow-sm mb-2">
@@ -267,6 +285,70 @@
       </div>
     </div>
   </div>
+
+  </div><!-- /pane-incidents -->
+
+  <!-- ═══ 탭2: 작업지시서 ═══ -->
+  <div class="tab-pane fade" id="pane-workorders" role="tabpanel">
+
+    <!-- 필터 -->
+    <div class="card border-0 shadow-sm mb-2">
+      <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+          <div class="col-auto">
+            <label class="form-label small mb-0">상태</label>
+            <select id="wo-f-status" class="form-select form-select-sm" style="min-width:100px;">
+              <option value="">전체</option>
+              <option value="issued">발행</option>
+              <option value="in_progress">수행중</option>
+              <option value="completed">완료</option>
+              <option value="confirmed">확인완료</option>
+            </select>
+          </div>
+          <div class="col-auto">
+            <label class="form-label small mb-0">담당자</label>
+            <select id="wo-f-assigned" class="form-select form-select-sm" style="min-width:120px;">
+              <option value="">전체</option>
+            </select>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-sm btn-primary" onclick="loadWOTab()">
+              <i class="bi bi-search me-1"></i>조회
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 목록 -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0" style="font-size:.82rem;">
+            <thead class="table-light">
+              <tr>
+                <th>지시번호</th>
+                <th>장애번호</th>
+                <th>학교</th>
+                <th>작업제목</th>
+                <th>담당자</th>
+                <th>상태</th>
+                <th>완료기한</th>
+                <th>발행일</th>
+                <th>PDF</th>
+              </tr>
+            </thead>
+            <tbody id="wo-tab-body">
+              <tr><td colspan="9" class="text-center py-4 text-muted">탭을 선택하면 자동 조회됩니다</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /pane-workorders -->
+
+  </div><!-- /tab-content -->
 </div>
 {% endblock %}
 
@@ -695,6 +777,76 @@ document.getElementById('search-q').addEventListener('input', () => {
 document.querySelectorAll('#filter-status,#filter-priority,#filter-category,#filter-from,#filter-to').forEach(el => {
   el.addEventListener('change', () => { currentPage=1; loadIncidents(); });
 });
+
+// ═══ 작업지시서 탭 ═══════════════════════════════════════════
+const WO_ST_TAB = {
+  issued:{label:'발행',cls:'bg-secondary'}, in_progress:{label:'수행중',cls:'bg-primary'},
+  completed:{label:'완료',cls:'bg-success'}, confirmed:{label:'확인완료',cls:'bg-dark'},
+  cancelled:{label:'취소',cls:'bg-danger'},
+};
+const WO_TYPE_TAB = {repair:'수리/복구',installation:'설치',inspection:'점검',replacement:'교체',config:'설정변경',other:'기타'};
+let _woTabLoaded = false;
+
+// 탭 전환 시 자동 로드
+document.getElementById('tab-workorders').addEventListener('shown.bs.tab', function() {
+  if (!_woTabLoaded) {
+    loadWOTabFilters();
+    loadWOTab();
+    _woTabLoaded = true;
+  }
+});
+
+async function loadWOTabFilters() {
+  try {
+    const workers = await apiGet(`${API_BASE}/accounts/users/`, {role: 'worker'});
+    const sel = document.getElementById('wo-f-assigned');
+    (workers.results || workers).forEach(w => {
+      sel.innerHTML += `<option value="${w.id}">${w.name}</option>`;
+    });
+  } catch(e) {}
+}
+
+async function loadWOTab() {
+  const params = {};
+  const st = document.getElementById('wo-f-status').value;
+  const assigned = document.getElementById('wo-f-assigned').value;
+  if (st) params.status = st;
+  if (assigned) params.assigned_to = assigned;
+
+  const tbody = document.getElementById('wo-tab-body');
+  tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></td></tr>';
+
+  try {
+    const resp = await fetch(`${API_BASE}/incidents/work-orders/?${new URLSearchParams(params)}`, {
+      headers: {'X-CSRFToken': getCsrfToken()}, credentials: 'same-origin'
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const wos = Array.isArray(data) ? data : (data.results || []);
+
+    if (!wos.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">작업지시서가 없습니다</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = wos.map(wo => {
+      const st = WO_ST_TAB[wo.status] || WO_ST_TAB.issued;
+      return `<tr style="cursor:pointer;" onclick="location.href='/npms/incidents/${wo.incident}/'">
+        <td class="fw-semibold text-primary">${wo.work_order_number}</td>
+        <td>${wo.incident_number||'-'}</td>
+        <td>${wo.school_name||'-'}</td>
+        <td>${wo.title}</td>
+        <td>${wo.assigned_to_name||'미배정'}</td>
+        <td><span class="badge ${st.cls}" style="font-size:.7rem;">${st.label}</span></td>
+        <td>${wo.due_date||'-'}</td>
+        <td>${wo.created_at ? wo.created_at.slice(0,10) : '-'}</td>
+        <td>${wo.pdf_path ? `<a href="${API_BASE}/incidents/work-orders/${wo.id}/download_pdf/" target="_blank" class="text-danger" onclick="event.stopPropagation();" title="PDF"><i class="bi bi-file-pdf"></i></a>` : '-'}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-danger">조회 실패</td></tr>';
+  }
+}
 </script>
 <style>
 .tree-item { border-radius: 4px; color: inherit; }

@@ -61,11 +61,6 @@
         <span id="badge-incidents" class="badge bg-danger ms-auto"></span>
       </a>
     </li>
-    <li class="nav-item">
-      <a href="/npms/incidents/work-orders/" class="nav-link {% if request.resolver_match.url_name == 'incident-work-orders' %}active{% endif %}">
-        <i class="bi bi-file-text"></i><span>작업지시서</span>
-      </a>
-    </li>
     {% endif %}
     {% if user_access.worker_list or user_access.schedule or user_access.attendance or user_access.gps %}
     <li class="sidebar-section-label">인력/현장</li>
