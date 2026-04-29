@@ -12,7 +12,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import (
     IncidentCategory, IncidentSubcategory, Incident, IncidentSLA,
-    IncidentAssignment, IncidentComment, IncidentPhoto, SLARule, SLAMonthly
+    IncidentAssignment, IncidentComment, IncidentPhoto, SLARule, SLAMonthly,
+    IncidentDelayReason
 )
 from .serializers import (
     IncidentCategorySerializer, IncidentListSerializer, IncidentDetailSerializer,
@@ -1042,6 +1043,97 @@ class IncidentViewSet(viewsets.ModelViewSet):
         path = incident.report_pdf_path
         if not path or not os.path.exists(path):
             return Response({'error': '보고서가 없습니다. 먼저 생성해주세요.'}, status=status.HTTP_404_NOT_FOUND)
+        filename = os.path.basename(path)
+        response = FileResponse(open(path, 'rb'), content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        return response
+
+    # ── 지연처리사유서 ──────────────────────
+    @action(detail=True, methods=['get', 'post'])
+    def delay_reason(self, request, pk=None):
+        incident = self.get_object()
+
+        if request.method == 'GET':
+            try:
+                dr = incident.delay_reason
+                return Response({
+                    'id': dr.id,
+                    'reason': dr.reason,
+                    'sig_worker_org': dr.sig_worker_org,
+                    'sig_worker_name': dr.sig_worker_name,
+                    'sig_worker_phone': dr.sig_worker_phone,
+                    'sig_school_org': dr.sig_school_org,
+                    'sig_school_name': dr.sig_school_name,
+                    'sig_school_phone': dr.sig_school_phone,
+                    'pdf_path': dr.pdf_path,
+                    'created_at': dr.created_at,
+                })
+            except IncidentDelayReason.DoesNotExist:
+                return Response({'exists': False})
+
+        # POST — 사유서 저장 + PDF 생성 + SLA 인정
+        reason = request.data.get('reason', '').strip()
+        if not reason:
+            return Response({'error': '지연 사유를 입력하세요.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        sig_worker_data = request.data.get('sig_worker_data', '')
+        sig_school_data = request.data.get('sig_school_data', '')
+        if not sig_worker_data:
+            return Response({'error': '처리자 서명이 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not sig_school_data:
+            return Response({'error': '담당 선생님 서명이 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        dr, created = IncidentDelayReason.objects.update_or_create(
+            incident=incident,
+            defaults={
+                'reason': reason,
+                'sig_worker_org':   request.data.get('sig_worker_org', '세종아이티엘 컨소시엄'),
+                'sig_worker_name':  request.data.get('sig_worker_name', ''),
+                'sig_worker_phone': request.data.get('sig_worker_phone', ''),
+                'sig_worker_data':  sig_worker_data,
+                'sig_school_org':   request.data.get('sig_school_org', ''),
+                'sig_school_name':  request.data.get('sig_school_name', ''),
+                'sig_school_phone': request.data.get('sig_school_phone', ''),
+                'sig_school_data':  sig_school_data,
+                'created_by':       request.user,
+            }
+        )
+
+        # PDF 생성
+        from .services import generate_delay_reason_pdf
+        try:
+            generate_delay_reason_pdf(dr)
+        except Exception as e:
+            logger.error(f'지연처리사유서 PDF 생성 실패: {e}')
+
+        # SLA 인정 처리 — 기준시간 내 처리로 갱신
+        try:
+            sla = incident.sla
+            sla.resolve_ok = True
+            sla.save(update_fields=['resolve_ok'])
+            incident.sla_resolve_ok = True
+            incident.save(update_fields=['sla_resolve_ok'])
+        except IncidentSLA.DoesNotExist:
+            pass
+
+        download_url = f'/npms/api/incidents/incidents/{incident.id}/download_delay_pdf/'
+        return Response({
+            'message': '지연처리사유서가 저장되었습니다. SLA 준수로 인정됩니다.',
+            'download_url': download_url,
+        })
+
+    @action(detail=True, methods=['get'])
+    def download_delay_pdf(self, request, pk=None):
+        import os
+        from django.http import FileResponse
+        incident = self.get_object()
+        try:
+            dr = incident.delay_reason
+        except IncidentDelayReason.DoesNotExist:
+            return Response({'error': '지연처리사유서가 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+        path = dr.pdf_path
+        if not path or not os.path.exists(path):
+            return Response({'error': 'PDF 파일이 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
         filename = os.path.basename(path)
         response = FileResponse(open(path, 'rb'), content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="{filename}"'

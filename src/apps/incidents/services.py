@@ -209,6 +209,53 @@ def generate_incident_pdf(incident_id):
     return nas_path
 
 
+def generate_delay_reason_pdf(delay_reason):
+    """지연처리사유서 PDF 생성 → NAS 저장"""
+    from .models import IncidentSLA
+    from django.template.loader import render_to_string
+    from django.utils import timezone
+    import weasyprint, os
+
+    incident = delay_reason.incident
+
+    # 처리자
+    first_assignment = incident.assignments.select_related('worker').filter(is_accepted=True).first() \
+                       or incident.assignments.select_related('worker').first()
+
+    # SLA 초과시간 계산
+    sla_target = None
+    exceeded_display = '-'
+    try:
+        sla = incident.sla
+        sla_target = sla.resolve_target
+        if incident.completed_at and sla_target:
+            diff_min = int((incident.completed_at - sla_target).total_seconds() / 60)
+            if diff_min > 0:
+                exceeded_display = f"{diff_min // 60}시간 {diff_min % 60}분 초과"
+            else:
+                exceeded_display = '기준 이내'
+    except IncidentSLA.DoesNotExist:
+        pass
+
+    html = render_to_string('incidents/pdf_delay_reason.html', {
+        'incident':         incident,
+        'delay_reason':     delay_reason,
+        'first_assignment': first_assignment,
+        'sla_target':       sla_target,
+        'exceeded_display': exceeded_display,
+        'now':              timezone.now(),
+    })
+    nas_path = os.path.join(
+        settings.NAS_OUTPUT_ROOT, '지연처리 사유서',
+        f'지연처리사유서_{incident.school.name}_{incident.incident_number}.pdf'
+    )
+    os.makedirs(os.path.dirname(nas_path), exist_ok=True)
+    weasyprint.HTML(string=html).write_pdf(nas_path)
+    delay_reason.pdf_path = nas_path
+    delay_reason.save(update_fields=['pdf_path'])
+    return nas_path
+
+
 def send_satisfaction_survey(incident):
     """만족도 조사 문자 발송 (장애완료 시 담당 선생님에게)"""
     import secrets

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+  @font-face {
+    font-family: 'NanumGothic';
+    src: url('file:///app/static/fonts/NanumGothic.ttf');
+    font-weight: normal;
+  }
+  @font-face {
+    font-family: 'NanumGothic';
+    src: url('file:///app/static/fonts/NanumGothicBold.ttf');
+    font-weight: bold;
+  }
+  @page { size: A4; margin: 20mm 15mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'NanumGothic', sans-serif;
+    font-size: 9.5pt;
+    color: #000;
+  }
+
+  .main-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1.5px solid #000;
+  }
+  .main-table th,
+  .main-table td {
+    border: 1px solid #555;
+    padding: 5px 8px;
+    vertical-align: middle;
+  }
+
+  .title-row td {
+    text-align: center;
+    font-size: 16pt;
+    font-weight: bold;
+    letter-spacing: 6px;
+    padding: 10px 0;
+    border-bottom: 1.5px solid #000;
+  }
+
+  .label {
+    background: #f5f5f5;
+    font-weight: bold;
+    white-space: nowrap;
+    width: 15%;
+    text-align: center;
+  }
+
+  .value { width: 35%; }
+
+  .value-full { min-height: 30px; }
+
+  .section-title {
+    font-size: 10pt;
+    font-weight: bold;
+    margin: 14px 0 4px;
+  }
+
+  .sign-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1.5px solid #000;
+    margin-top: 10px;
+  }
+  .sign-table th,
+  .sign-table td {
+    border: 1px solid #000;
+    padding: 4px 6px;
+    font-size: 9pt;
+    vertical-align: middle;
+  }
+  .sign-table th {
+    background: #f0f0f0;
+    font-weight: bold;
+    text-align: center;
+    white-space: nowrap;
+  }
+  td.sign-area {
+    height: 80px;
+    text-align: center;
+    vertical-align: middle;
+  }
+  td.sign-area img {
+    max-height: 75px;
+    max-width: 100%;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .sla-exceeded {
+    color: #c00;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+
+<table class="main-table">
+
+  <!-- 제목 -->
+  <tr class="title-row">
+    <td colspan="4">지 연 처 리 사 유 서</td>
+  </tr>
+
+  <!-- 학교명 / 교육지원청 -->
+  <tr>
+    <td class="label">학교명</td>
+    <td class="value">{{ incident.school.name }}</td>
+    <td class="label">교육지원청</td>
+    <td class="value">{{ incident.school.support_center.name }}</td>
+  </tr>
+
+  <!-- 접수번호 / 접수일시 -->
+  <tr>
+    <td class="label">접수번호</td>
+    <td class="value">{{ incident.incident_number }}</td>
+    <td class="label">접수일시</td>
+    <td class="value">{{ incident.received_at|date:"Y-m-d H:i" }}</td>
+  </tr>
+
+  <!-- 처리완료시간 / SLA 기준시간 -->
+  <tr>
+    <td class="label">처리완료시간</td>
+    <td class="value">{{ incident.completed_at|date:"Y-m-d H:i"|default:"-" }}</td>
+    <td class="label">SLA 기준시간</td>
+    <td class="value">{{ sla_target|date:"Y-m-d H:i"|default:"-" }}</td>
+  </tr>
+
+  <!-- 초과시간 / 현장도착시간 -->
+  <tr>
+    <td class="label">초과시간</td>
+    <td class="value sla-exceeded">{{ exceeded_display }}</td>
+    <td class="label">현장도착시간</td>
+    <td class="value">{{ incident.arrived_at|date:"Y-m-d H:i"|default:"-" }}</td>
+  </tr>
+
+  <!-- 요청자 / 처리자 -->
+  <tr>
+    <td class="label">요청자</td>
+    <td class="value">{{ incident.requester_name }}{% if incident.requester_phone %} ({{ incident.requester_phone }}){% endif %}</td>
+    <td class="label">처리자</td>
+    <td class="value">
+      {% if first_assignment %}
+        {{ first_assignment.worker.name }}
+      {% else %}-{% endif %}
+    </td>
+  </tr>
+
+  <!-- 장애 내용 -->
+  <tr>
+    <td class="label">장애 내용</td>
+    <td colspan="3" class="value-full" style="min-height:40px;">{{ incident.description }}</td>
+  </tr>
+
+  <!-- 조치 내용 -->
+  <tr>
+    <td class="label">조치 내용</td>
+    <td colspan="3" class="value-full" style="min-height:40px;">{{ incident.resolution|default:"-" }}</td>
+  </tr>
+
+  <!-- 지연 사유 -->
+  <tr>
+    <td class="label">지연 사유</td>
+    <td colspan="3" class="value-full" style="min-height:80px; white-space:pre-line;">{{ delay_reason.reason }}</td>
+  </tr>
+
+</table>
+
+<!-- 확인자 서명 -->
+<p class="section-title">□ 확인자</p>
+<table class="sign-table">
+  <tr>
+    <th style="width:10%;">소&nbsp;&nbsp;&nbsp;속</th>
+    <td style="width:38%;">{{ delay_reason.sig_worker_org }}</td>
+    <th style="width:10%;">소&nbsp;&nbsp;&nbsp;속</th>
+    <td>{{ delay_reason.sig_school_org }}</td>
+  </tr>
+  <tr>
+    <th>담당자</th>
+    <td>{{ delay_reason.sig_worker_name }}</td>
+    <th>담당자</th>
+    <td>{{ delay_reason.sig_school_name }}</td>
+  </tr>
+  <tr>
+    <th>연락처</th>
+    <td>{{ delay_reason.sig_worker_phone }}</td>
+    <th>연락처</th>
+    <td>{{ delay_reason.sig_school_phone }}</td>
+  </tr>
+  <tr>
+    <th colspan="2" style="text-align:center;">처리자 서명</th>
+    <th colspan="2" style="text-align:center;">확인자 서명</th>
+  </tr>
+  <tr>
+    <td colspan="2" class="sign-area">
+      {% if delay_reason.sig_worker_data %}<img src="{{ delay_reason.sig_worker_data }}" alt="처리자 서명">{% endif %}
+    </td>
+    <td colspan="2" class="sign-area">
+      {% if delay_reason.sig_school_data %}<img src="{{ delay_reason.sig_school_data }}" alt="확인자 서명">{% endif %}
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

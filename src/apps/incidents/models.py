@@ -510,3 +510,38 @@ class WorkOrder(models.Model):
         date_str = created_at.strftime('%Y%m%d')
         today_count = cls.objects.filter(work_order_number__contains=date_str).count()
         return f'WO-{date_str}-{str(today_count + 1).zfill(3)}'
+
+
+class IncidentDelayReason(models.Model):
+    """지연처리사유서 — SLA 초과 장애에 대한 지연 사유 및 전자서명"""
+    incident = models.OneToOneField(
+        Incident, on_delete=models.CASCADE,
+        verbose_name='장애', related_name='delay_reason'
+    )
+    reason = models.TextField('지연 사유')
+
+    # 처리자 (세종아이티엘) 서명
+    sig_worker_org   = models.CharField('처리자 소속', max_length=100, default='세종아이티엘 컨소시엄')
+    sig_worker_name  = models.CharField('처리자 이름', max_length=50)
+    sig_worker_phone = models.CharField('처리자 연락처', max_length=20, blank=True)
+    sig_worker_data  = models.TextField('처리자 서명(base64)', blank=True)
+
+    # 담당 선생님 (학교) 서명
+    sig_school_org   = models.CharField('학교 소속', max_length=100)
+    sig_school_name  = models.CharField('선생님 이름', max_length=50)
+    sig_school_phone = models.CharField('선생님 연락처', max_length=20, blank=True)
+    sig_school_data  = models.TextField('선생님 서명(base64)', blank=True)
+
+    pdf_path   = models.CharField('PDF 경로', max_length=500, blank=True)
+    created_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True, verbose_name='작성자'
+    )
+    created_at = models.DateTimeField('작성일시', auto_now_add=True)
+
+    class Meta:
+        db_table = 'incident_delay_reasons'
+        verbose_name = '지연처리사유서'
+
+    def __str__(self):
+        return f'지연사유: {self.incident.incident_number}'
