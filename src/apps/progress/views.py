@@ -95,6 +95,22 @@ class InspectionPlanViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
+    @action(detail=False, methods=['get'])
+    def current_quarter(self, request):
+        """오늘 날짜 기준 현재 진행 중인 차수 반환"""
+        from django.utils import timezone
+        today = timezone.localdate()
+        plan = InspectionPlan.objects.filter(
+            start_date__lte=today, end_date__gte=today
+        ).order_by('quarter').first()
+        if plan:
+            return Response({'quarter': plan.quarter})
+        # 진행 중인 기간 없으면 가장 가까운 미래 차수
+        plan = InspectionPlan.objects.filter(start_date__gt=today).order_by('start_date').first()
+        if plan:
+            return Response({'quarter': plan.quarter})
+        return Response({'quarter': 1})
+
     @action(detail=True, methods=['post'])
     def add_schools(self, request, pk=None):
         """학교 목록 추가"""

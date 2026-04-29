@@ -1483,16 +1483,19 @@ function collectCableRuns(){
 ════════════════════════════════════════════════════════════ */
 var regularPhotos={};
 
-function renderRegularInspectForm(){
+async function renderRegularInspectForm(){
   var t=new Date();
   var todayStr=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
-  /* 차수: 1차/2차/3차 — 기간 확정 후 조정 */
-  var month=t.getMonth()+1;
-  var quarter=(month<=8)?1:(month<=10)?2:3;
-  var titleText=quarter+'차 정기점검 보고서';
+  /* 차수: 진척관리 InspectionPlan 기간 기준 자동 결정 */
+  var quarter=1;
+  try {
+    var qRes=await fetch(API_BASE+'/progress/inspection-plans/current_quarter/');
+    if(qRes.ok){ var qd=await qRes.json(); quarter=qd.quarter||1; }
+  } catch(e){}
+  var titleText='정기점검 보고서('+quarter+'차)';
   regularPhotos={};
 
-  /* 학교 장비 수량 자동 조회 → 점검결과 드롭다운 업데이트 */
+  /* 학교 장비 수량 자동 조회 */
   fetch(API_BASE+'/network/topology/device_counts/?school_id='+selSchool.id)
     .then(r=>r.ok?r.json():{switch_count:0,poe_count:0,ap_count:0})
     .then(counts=>{
@@ -1502,142 +1505,148 @@ function renderRegularInspectForm(){
       if(sc) sc.value=counts.switch_count||0;
       if(pc) pc.value=counts.poe_count||0;
       if(ac) ac.value=counts.ap_count||0;
-      /* 점검결과 드롭다운에 수량 반영 */
-      _riUpdateCountOption('ri-switch-result', counts.switch_count||0, '대 특이사항 없음');
-      _riUpdateCountOption('ri-poe-result', counts.poe_count||0, '대 특이사항 없음');
-      _riUpdateCountOption('ri-ap-result', counts.ap_count||0, '대 특이사항 없음');
     }).catch(()=>{});
 
   var html='';
-  /* 제목 (자동) */
+
+  /* ── 기본 정보 ── */
   html+='<div class="form-section"><div class="form-section-title">기본 정보</div>';
   html+='<div class="row g-2">';
-  html+='<div class="col-12"><div class="form-field">';
-  html+='<label>보고서 제목</label>';
-  html+='<input type="text" id="wm-report-title" class="form-control form-control-sm" value="'+escH(titleText)+'" readonly>';
-  html+='</div></div>';
-  html+='<div class="col-12 col-sm-6"><div class="form-field">';
-  html+='<label>점검일자 <span class="text-danger">*</span></label>';
-  html+='<input type="date" id="ri-inspect-date" class="form-control form-control-sm" value="'+todayStr+'">';
-  html+='</div></div>';
-  html+='<div class="col-12 col-sm-6"><div class="form-field">';
-  html+='<label>차수 (자동)</label>';
+  html+='<div class="col-12"><div class="form-field"><label>보고서 제목</label>';
+  html+='<input type="text" id="wm-report-title" class="form-control form-control-sm" value="'+escH(titleText)+'" readonly></div></div>';
+  html+='<div class="col-6"><div class="form-field"><label>점검일자 <span class="text-danger">*</span></label>';
+  html+='<input type="date" id="ri-inspect-date" class="form-control form-control-sm" value="'+todayStr+'"></div></div>';
+  html+='<div class="col-6"><div class="form-field"><label>차수</label>';
   html+='<input type="text" class="form-control form-control-sm" value="'+quarter+'차" readonly>';
-  html+='<input type="hidden" id="ri-quarter" value="'+quarter+'">';
-  html+='</div></div>';
+  html+='<input type="hidden" id="ri-quarter" value="'+quarter+'"></div></div>';
   html+='</div></div>';
 
-  /* 장비 수량 (자동) */
-  html+='<div class="form-section"><div class="form-section-title">장비 수량 (자동)</div>';
+  /* ── 선생님 의견 / 점검 및 조치 결과 ── */
+  html+='<div class="form-section"><div class="form-section-title">선생님 의견 / 점검 조치 결과</div>';
   html+='<div class="row g-2">';
-  html+='<div class="col-4"><div class="form-field"><label>스위치</label><input type="number" id="ri-switch-count" class="form-control form-control-sm" value="0" readonly></div></div>';
-  html+='<div class="col-4"><div class="form-field"><label>PoE스위치</label><input type="number" id="ri-poe-count" class="form-control form-control-sm" value="0" readonly></div></div>';
-  html+='<div class="col-4"><div class="form-field"><label>무선AP</label><input type="number" id="ri-ap-count" class="form-control form-control-sm" value="0" readonly></div></div>';
+  html+='<div class="col-12"><div class="form-field"><label>선생님 의견</label>';
+  html+='<textarea id="ri-teacher-opinion" class="form-control form-control-sm" rows="2" placeholder="선생님 의견을 기록하세요"></textarea></div></div>';
+  html+='<div class="col-12"><div class="form-field"><label>점검 및 조치 결과</label>';
+  html+='<textarea id="ri-action-result" class="form-control form-control-sm" rows="2" placeholder="점검 및 조치 결과를 기록하세요"></textarea></div></div>';
   html+='</div></div>';
 
-  /* ── 기타 기록 가능한 select 헬퍼 ── */
-  function _riSel(id, label, defaultVal, otherLabel, colCls){
-    colCls=colCls||'col-12 col-sm-6';
-    var h='<div class="'+colCls+'"><div class="form-field"><label>'+label+'</label>';
-    h+='<select id="'+id+'" class="form-select form-select-sm" onchange="_riToggleEtc(\''+id+'\')">';
-    h+='<option value="'+escH(defaultVal)+'" selected>'+escH(defaultVal)+'</option>';
-    h+='<option value="__etc__">'+(otherLabel||'기타')+'</option></select>';
-    h+='<textarea id="'+id+'-etc" class="form-control form-control-sm mt-1" rows="2" placeholder="내용을 기록하세요" style="display:none;"></textarea>';
-    h+='</div></div>';
-    return h;
-  }
-
-  /* 장비 점검결과 */
-  html+='<div class="form-section"><div class="form-section-title">장비 점검 결과</div>';
+  /* ── 장비 수량 + 점검결과 ── */
+  html+='<div class="form-section"><div class="form-section-title">장비 점검</div>';
   html+='<div class="row g-2">';
-  html+=_riSel('ri-switch-result','스위치','특이사항 없음','기타','col-12 col-sm-4');
-  html+=_riSel('ri-poe-result','PoE스위치','특이사항 없음','기타','col-12 col-sm-4');
-  html+=_riSel('ri-ap-result','무선AP','특이사항 없음','기타','col-12 col-sm-4');
+  html+='<div class="col-4"><div class="form-field"><label>스위치 (대)</label><input type="number" id="ri-switch-count" class="form-control form-control-sm" value="0"></div></div>';
+  html+='<div class="col-4"><div class="form-field"><label>PoE (대)</label><input type="number" id="ri-poe-count" class="form-control form-control-sm" value="0"></div></div>';
+  html+='<div class="col-4"><div class="form-field"><label>AP (대)</label><input type="number" id="ri-ap-count" class="form-control form-control-sm" value="0"></div></div>';
+  /* AP 세부 */
+  html+='<div class="col-4"><div class="form-field"><label>WEISS (대)</label><input type="number" id="ri-ap-weiss" class="form-control form-control-sm" value="0"></div></div>';
+  html+='<div class="col-4"><div class="form-field"><label>컨트롤러 (대)</label><input type="number" id="ri-ap-controller" class="form-control form-control-sm" value="0"></div></div>';
+  html+='<div class="col-4"><div class="form-field"><label>자체구축 (대)</label><input type="number" id="ri-ap-self" class="form-control form-control-sm" value="0"></div></div>';
+  /* 점검결과 */
+  html+='<div class="col-12 col-sm-4"><div class="form-field"><label>스위치 결과</label><input type="text" id="ri-switch-result" class="form-control form-control-sm" value="특이사항 없음"></div></div>';
+  html+='<div class="col-12 col-sm-4"><div class="form-field"><label>PoE 결과</label><input type="text" id="ri-poe-result" class="form-control form-control-sm" value="특이사항 없음"></div></div>';
+  html+='<div class="col-12 col-sm-4"><div class="form-field"><label>AP 결과</label><input type="text" id="ri-ap-result" class="form-control form-control-sm" value="특이사항 없음"></div></div>';
+  /* 무선망 대역폭 */
+  html+='<div class="col-12"><div class="form-field"><label>무선망 대역폭</label>';
+  html+='<select id="ri-wireless-band" class="form-select form-select-sm">';
+  html+='<option value="1G">1G</option><option value="10G">10G</option></select></div></div>';
   html+='</div></div>';
 
-  /* 유선 속도측정 */
-  html+='<div class="form-section"><div class="form-section-title">유선망 속도 측정 (Mbps)</div>';
+  /* ── 속도 측정 (iperf) ── */
+  html+='<div class="form-section"><div class="form-section-title">속도 측정 — iperf (Mbits)</div>';
   html+='<table class="table table-sm table-bordered" style="font-size:.82rem;"><thead>';
-  html+='<tr><th>망구분</th><th>집선 Down</th><th>집선 Up</th><th>단말 Down</th><th>단말 Up</th></tr></thead><tbody>';
-  [['교사망','teacher'],['학생망','student']].forEach(function(r){
-    html+='<tr><td class="text-center fw-bold">'+r[0]+'</td>';
-    ['hub_down','hub_up','end_down','end_up'].forEach(function(s){
-      html+='<td><input type="number" id="ri-wired-'+r[1]+'-'+s+'" class="form-control form-control-sm" placeholder="Mbps" min="0" step="1"></td>';
-    });
-    html+='</tr>';
-  });
-  /* 무선망: 집선만 (단말 없음) */
+  html+='<tr><th>망구분</th><th>망id</th><th>측정장소</th><th>Down</th><th>Up</th></tr></thead><tbody>';
+  html+='<tr><td class="text-center fw-bold">교사망</td>';
+  html+='<td><div class="input-group input-group-sm"><span class="input-group-text" style="font-size:.75rem;padding:1px 4px;">K</span><input type="text" id="ri-teacher-vlan" class="form-control form-control-sm" placeholder="숫자" style="max-width:60px;"></div></td>';
+  html+='<td><input type="text" id="ri-teacher-location" class="form-control form-control-sm" value="교무실" placeholder="측정장소"></td>';
+  html+='<td><input type="number" id="ri-wired-teacher-down" class="form-control form-control-sm" placeholder="Mbits"></td>';
+  html+='<td><input type="number" id="ri-wired-teacher-up" class="form-control form-control-sm" placeholder="Mbits"></td></tr>';
+  html+='<tr><td class="text-center fw-bold">학생망</td>';
+  html+='<td><div class="input-group input-group-sm"><span class="input-group-text" style="font-size:.75rem;padding:1px 4px;">H</span><input type="text" id="ri-student-vlan" class="form-control form-control-sm" placeholder="숫자" style="max-width:60px;"></div></td>';
+  html+='<td><input type="text" id="ri-student-location" class="form-control form-control-sm" value="컴퓨터실" placeholder="측정장소"></td>';
+  html+='<td><input type="number" id="ri-wired-student-down" class="form-control form-control-sm" placeholder="Mbits"></td>';
+  html+='<td><input type="number" id="ri-wired-student-up" class="form-control form-control-sm" placeholder="Mbits"></td></tr>';
   html+='<tr><td class="text-center fw-bold">무선망</td>';
-  html+='<td><input type="number" id="ri-wired-wireless-hub_down" class="form-control form-control-sm" placeholder="Mbps" min="0" step="1"></td>';
-  html+='<td><input type="number" id="ri-wired-wireless-hub_up" class="form-control form-control-sm" placeholder="Mbps" min="0" step="1"></td>';
-  html+='<td colspan="2" class="text-center text-muted" style="background:#f8f8f8;">-</td></tr>';
+  html+='<td><div class="input-group input-group-sm"><span class="input-group-text" style="font-size:.75rem;padding:1px 4px;">PoE</span><input type="text" id="ri-wireless-vlan" class="form-control form-control-sm" placeholder="숫자" style="max-width:60px;"></div></td>';
+  html+='<td><input type="text" id="ri-wireless-location" class="form-control form-control-sm" value="" placeholder="측정장소(교실)"></td>';
+  html+='<td><input type="number" id="ri-wired-wireless-down" class="form-control form-control-sm" placeholder="Mbits"></td>';
+  html+='<td><input type="number" id="ri-wired-wireless-up" class="form-control form-control-sm" placeholder="Mbits"></td></tr>';
   html+='</tbody></table></div>';
 
-  /* 무선 속도측정 */
-  html+='<div class="form-section"><div class="form-section-title">무선망 속도 측정 (Mbps)</div>';
-  html+='<table class="table table-sm table-bordered" style="font-size:.82rem;"><thead>';
-  html+='<tr><th>위치</th><th>Down</th><th>Up</th></tr></thead><tbody>';
-  [['교실 중앙(AP 아래)','center'],['교실 외곽(AP에서 먼곳)','edge']].forEach(function(r){
-    html+='<tr><td class="text-center fw-bold">'+r[0]+'</td>';
-    ['down','up'].forEach(function(s){
-      html+='<td><input type="number" id="ri-wifi-'+r[1]+'-'+s+'" class="form-control form-control-sm" placeholder="Mbps" min="0" step="1"></td>';
-    });
-    html+='</tr>';
-  });
-  html+='</tbody></table></div>';
-
-  /* 무선망 점검 */
-  html+='<div class="form-section"><div class="form-section-title">무선망 점검</div>';
+  /* ── Wifi 360 측정 ── */
+  html+='<div class="form-section"><div class="form-section-title">속도 측정 — Wifi 360 (Mbits)</div>';
   html+='<div class="row g-2">';
-  html+=_riSel('ri-ap-placement','AP 배치 일치 여부','특이사항 없음','기타');
-  html+=_riSel('ri-signal','신호세기 결과','특이사항 없음','기타');
+  html+='<div class="col-6"><div class="form-field"><label>AP id</label><input type="text" id="ri-wifi360-apid" class="form-control form-control-sm" placeholder="AP id"></div></div>';
+  html+='<div class="col-6"><div class="form-field"><label>측정 장소</label><input type="text" id="ri-wifi360-location" class="form-control form-control-sm" placeholder="교실명"></div></div>';
+  html+='<div class="col-6"><div class="form-field"><label>Down</label><input type="number" id="ri-wifi360-down" class="form-control form-control-sm" placeholder="Mbits"></div></div>';
+  html+='<div class="col-6"><div class="form-field"><label>Up</label><input type="number" id="ri-wifi360-up" class="form-control form-control-sm" placeholder="Mbits"></div></div>';
   html+='</div></div>';
 
-  /* 수량 변경 확인 */
-  html+='<div class="form-section"><div class="form-section-title">유선망 수량 변경 확인</div>';
+  /* ── 전산실 환경 ── */
+  html+='<div class="form-section"><div class="form-section-title">전산실 환경</div>';
   html+='<div class="row g-2">';
-  html+=_riSel('ri-switch-change','스위치 수량변경','변경 없음','기타');
-  html+=_riSel('ri-poe-change','PoE 수량변경','변경 없음','기타');
+  html+='<div class="col-4"><div class="form-field"><label>전원콘센트 개선 필요 수량</label><input type="number" id="ri-outlet-count" class="form-control form-control-sm" value="0"></div></div>';
+  html+='<div class="col-4"><div class="form-field"><label>패치판넬 수</label><input type="number" id="ri-patch-panel" class="form-control form-control-sm" value="0"></div></div>';
+  html+='<div class="col-4"><div class="form-field"><label>케이블 타입</label>';
+  html+='<select id="ri-patch-cable-type" class="form-select form-select-sm">';
+  html+='<option value="">선택</option><option value="cat5">Cat 5</option><option value="cat5e">Cat5E</option><option value="cat6">Cat6</option></select></div></div>';
   html+='</div></div>';
 
-  /* 정보자료 관리 */
-  html+='<div class="form-section"><div class="form-section-title">정보자료 관리 (현행화)</div>';
+  /* ── 전화망 ── */
+  html+='<div class="form-section"><div class="form-section-title">전화망</div>';
   html+='<div class="row g-2">';
-  [['정보자원 목록','ri-chk-resource'],['네트워크구성도','ri-chk-diagram'],['무선AP 배치도','ri-chk-ap-layout'],['랙 실장도','ri-chk-rack'],['선번장','ri-chk-cable']].forEach(function(r){
-    html+=_riSel(r[1],r[0],'확인','기타','col-6 col-sm-4');
-  });
-  html+=_riSel('ri-info-resource','정보자원 현황변경','특이사항 없음','기타','col-12');
+  html+='<div class="col-6"><div class="form-field"><label>전화 구분</label>';
+  html+='<select id="ri-phone-type" class="form-select form-select-sm">';
+  html+='<option value="">선택</option><option value="analog">일반 전화</option><option value="voip">인터넷 전화</option></select></div></div>';
+  html+='<div class="col-6"><div class="form-field"><label>전화 구성</label>';
+  html+='<select id="ri-phone-config" class="form-select form-select-sm">';
+  html+='<option value="">선택</option><option value="separated">전화망 분리</option><option value="connected">전화기-PC 연결</option></select></div></div>';
   html+='</div></div>';
 
-  /* 기타 */
+  /* ── 케이블 ── */
+  html+='<div class="form-section"><div class="form-section-title">단말 케이블</div>';
+  html+='<div class="row g-2">';
+  html+='<div class="col-6"><div class="form-field"><label>교무실</label>';
+  html+='<select id="ri-cable-office" class="form-select form-select-sm">';
+  html+='<option value="">선택</option><option value="cat5">Cat 5</option><option value="cat5e">Cat5E</option><option value="cat6">Cat6</option></select></div></div>';
+  html+='<div class="col-6"><div class="form-field"><label>컴퓨터실</label>';
+  html+='<select id="ri-cable-computer" class="form-select form-select-sm">';
+  html+='<option value="">선택</option><option value="cat5">Cat 5</option><option value="cat5e">Cat5E</option><option value="cat6">Cat6</option></select></div></div>';
+  html+='</div></div>';
+
+  /* ── 스마트기기 / 기타 ── */
   html+='<div class="form-section"><div class="form-section-title">스마트기기 / 기타</div>';
   html+='<div class="row g-2">';
-  html+=_riSel('ri-smartboard','전자칠판','특이사항 없음','기타');
-  html+=_riSel('ri-devit','디벗','특이사항 없음','기타');
-  html+=_riSel('ri-etc-request','기타 요청사항','특이사항 없음','기타','col-12');
+  html+='<div class="col-6"><div class="form-field"><label>전자칠판</label><input type="text" id="ri-smartboard" class="form-control form-control-sm" placeholder="요청시"></div></div>';
+  html+='<div class="col-6"><div class="form-field"><label>디벗</label><input type="text" id="ri-devit" class="form-control form-control-sm" placeholder="요청시"></div></div>';
+  html+='<div class="col-12"><div class="form-field"><label>기타사항</label><input type="text" id="ri-etc-request" class="form-control form-control-sm" placeholder="요청시"></div></div>';
   html+='</div></div>';
 
-  /* ── 사진 업로드 ── */
+  /* ── 차수별 점검 사항 (해당 차수만 표시) ── */
+  html+='<div class="form-section"><div class="form-section-title">차수별 점검 사항 ('+quarter+'차)</div>';
+  html+='<div class="row g-2">';
+  if(quarter==1){
+    html+='<div class="col-4"><div class="form-field"><label>구성도</label><input type="text" id="ri-chk1-diagram" class="form-control form-control-sm" placeholder="결과"></div></div>';
+    html+='<div class="col-4"><div class="form-field"><label>랙실장도</label><input type="text" id="ri-chk1-rack" class="form-control form-control-sm" placeholder="결과"></div></div>';
+    html+='<div class="col-4"><div class="form-field"><label>장비목록</label><input type="text" id="ri-chk1-equipment" class="form-control form-control-sm" placeholder="결과"></div></div>';
+  } else if(quarter==2){
+    html+='<div class="col-6"><div class="form-field"><label>자산라벨</label><input type="text" id="ri-chk2-asset" class="form-control form-control-sm" placeholder="결과"></div></div>';
+    html+='<div class="col-6"><div class="form-field"><label>스위치 교체</label><input type="text" id="ri-chk2-switch" class="form-control form-control-sm" placeholder="결과"></div></div>';
+  } else if(quarter==3){
+    html+='<div class="col-12"><div class="form-field"><label>AP배치도</label><input type="text" id="ri-chk3-ap" class="form-control form-control-sm" placeholder="결과"></div></div>';
+  }
+  html+='</div></div>';
+
+  /* ── 측정 사진 업로드 ── */
   var photoFields=[
-    {key:'wired_teacher_hub',label:'교사망 집선(전산실)'},
-    {key:'wired_teacher_end',label:'교사망 단말(교무실)'},
-    {key:'wired_student_hub',label:'학생망 집선(전산실)'},
-    {key:'wired_student_end',label:'학생망 단말(컴퓨터실)'},
-    {key:'wired_wireless_hub',label:'무선망 집선(전산실)'},
-    {key:'channel_under_1',label:'채널 AP아래 (1)'},
-    {key:'channel_under_2',label:'채널 AP아래 (2)'},
-    {key:'channel_under_3',label:'채널 AP아래 (3)'},
-    {key:'channel_far_1',label:'채널 먼곳 (1)'},
-    {key:'channel_far_2',label:'채널 먼곳 (2)'},
-    {key:'channel_far_3',label:'채널 먼곳 (3)'},
-    {key:'wifi_center',label:'무선 교실중앙'},
-    {key:'wifi_edge',label:'무선 교실외곽'}
+    {key:'teacher',label:'교사망 iperf 측정'},
+    {key:'student',label:'학생망 iperf 측정'},
+    {key:'wireless',label:'무선망 iperf 측정'},
+    {key:'wifi360',label:'Wifi 360 측정'}
   ];
-  html+='<div class="form-section"><div class="form-section-title">사진 업로드</div>';
+  html+='<div class="form-section"><div class="form-section-title">측정 사진 업로드</div>';
   html+='<div class="row g-2">';
   photoFields.forEach(function(pf){
-    html+='<div class="col-6 col-sm-4 col-md-3">';
-    html+='<div class="border rounded p-2 text-center" style="min-height:120px;">';
+    html+='<div class="col-6 col-sm-3">';
+    html+='<div class="border rounded p-2 text-center" style="min-height:100px;">';
     html+='<div class="small text-muted mb-1">'+escH(pf.label)+'</div>';
     html+='<label class="btn btn-outline-secondary btn-sm" style="cursor:pointer;">';
     html+='<i class="bi bi-camera me-1"></i>촬영/선택';
@@ -1711,60 +1720,66 @@ async function _onRegularPhoto(key){
 function collectRegularData(){
   var g=function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
   return {
-    quarter:                g('ri-quarter'),
-    inspect_date:           g('ri-inspect-date'),
-    switch_count:           parseInt(g('ri-switch-count'))||0,
-    poe_count:              parseInt(g('ri-poe-count'))||0,
-    ap_count:               parseInt(g('ri-ap-count'))||0,
-    switch_result:          _riGetVal('ri-switch-result'),
-    poe_result:             _riGetVal('ri-poe-result'),
-    ap_result:              _riGetVal('ri-ap-result'),
-    /* 유선 속도 */
-    wired_teacher_hub_down: g('ri-wired-teacher-hub_down'),
-    wired_teacher_hub_up:   g('ri-wired-teacher-hub_up'),
-    wired_teacher_end_down: g('ri-wired-teacher-end_down'),
-    wired_teacher_end_up:   g('ri-wired-teacher-end_up'),
-    wired_student_hub_down: g('ri-wired-student-hub_down'),
-    wired_student_hub_up:   g('ri-wired-student-hub_up'),
-    wired_student_end_down: g('ri-wired-student-end_down'),
-    wired_student_end_up:   g('ri-wired-student-end_up'),
-    wired_wireless_hub_down:g('ri-wired-wireless-hub_down'),
-    wired_wireless_hub_up:  g('ri-wired-wireless-hub_up'),
-    /* 무선 속도 */
-    wifi_center_down:       g('ri-wifi-center-down'),
-    wifi_center_up:         g('ri-wifi-center-up'),
-    wifi_edge_down:         g('ri-wifi-edge-down'),
-    wifi_edge_up:           g('ri-wifi-edge-up'),
-    /* 무선 점검 */
-    ap_placement_result:    _riGetVal('ri-ap-placement'),
-    signal_result:          _riGetVal('ri-signal'),
-    switch_change_result:   _riGetVal('ri-switch-change'),
-    poe_change_result:      _riGetVal('ri-poe-change'),
-    /* 정보자료 */
-    info_resource_result:   _riGetVal('ri-info-resource'),
-    chk_resource_list:      _riGetVal('ri-chk-resource'),
-    chk_network_diagram:    _riGetVal('ri-chk-diagram'),
-    chk_ap_layout:          _riGetVal('ri-chk-ap-layout'),
-    chk_rack_layout:        _riGetVal('ri-chk-rack'),
-    chk_cable_schedule:     _riGetVal('ri-chk-cable'),
+    quarter:              g('ri-quarter'),
+    inspect_date:         g('ri-inspect-date'),
+    /* 선생님 의견 / 조치 결과 */
+    teacher_opinion:      g('ri-teacher-opinion'),
+    action_result:        g('ri-action-result'),
+    /* 장비 */
+    switch_count:         parseInt(g('ri-switch-count'))||0,
+    poe_count:            parseInt(g('ri-poe-count'))||0,
+    ap_count:             parseInt(g('ri-ap-count'))||0,
+    ap_weiss_count:       parseInt(g('ri-ap-weiss'))||0,
+    ap_controller_count:  parseInt(g('ri-ap-controller'))||0,
+    ap_self_count:        parseInt(g('ri-ap-self'))||0,
+    switch_result:        g('ri-switch-result'),
+    poe_result:           g('ri-poe-result'),
+    ap_result:            g('ri-ap-result'),
+    wireless_band:        g('ri-wireless-band'),
+    /* iperf 속도 */
+    teacher_vlan_id:      g('ri-teacher-vlan'),
+    teacher_location:     g('ri-teacher-location') || '교무실',
+    wired_teacher_down:   g('ri-wired-teacher-down'),
+    wired_teacher_up:     g('ri-wired-teacher-up'),
+    student_vlan_id:      g('ri-student-vlan'),
+    student_location:     g('ri-student-location') || '컴퓨터실',
+    wired_student_down:   g('ri-wired-student-down'),
+    wired_student_up:     g('ri-wired-student-up'),
+    wireless_vlan_id:     g('ri-wireless-vlan'),
+    wireless_location:    g('ri-wireless-location') || '교실',
+    wired_wireless_down:  g('ri-wired-wireless-down'),
+    wired_wireless_up:    g('ri-wired-wireless-up'),
+    /* Wifi 360 */
+    wifi360_ap_id:        g('ri-wifi360-apid'),
+    wifi360_location:     g('ri-wifi360-location') || '교실',
+    wifi360_down:         g('ri-wifi360-down'),
+    wifi360_up:           g('ri-wifi360-up'),
+    /* 전산실 환경 */
+    outlet_count:         parseInt(g('ri-outlet-count'))||0,
+    patch_panel_count:    parseInt(g('ri-patch-panel'))||0,
+    patch_cable_type:     g('ri-patch-cable-type'),
+    /* 전화망 */
+    phone_type:           g('ri-phone-type'),
+    phone_config:         g('ri-phone-config'),
+    /* 케이블 */
+    cable_office:         g('ri-cable-office'),
+    cable_computer:       g('ri-cable-computer'),
     /* 기타 */
-    smartboard_result:      _riGetVal('ri-smartboard'),
-    devit_result:           _riGetVal('ri-devit'),
-    etc_request:            _riGetVal('ri-etc-request'),
-    /* 사진 ID */
-    photo_wired_teacher_hub_id:  regularPhotos.wired_teacher_hub||null,
-    photo_wired_teacher_end_id:  regularPhotos.wired_teacher_end||null,
-    photo_wired_student_hub_id:  regularPhotos.wired_student_hub||null,
-    photo_wired_student_end_id:  regularPhotos.wired_student_end||null,
-    photo_wired_wireless_hub_id: regularPhotos.wired_wireless_hub||null,
-    photo_channel_under_1_id:    regularPhotos.channel_under_1||null,
-    photo_channel_under_2_id:    regularPhotos.channel_under_2||null,
-    photo_channel_under_3_id:    regularPhotos.channel_under_3||null,
-    photo_channel_far_1_id:      regularPhotos.channel_far_1||null,
-    photo_channel_far_2_id:      regularPhotos.channel_far_2||null,
-    photo_channel_far_3_id:      regularPhotos.channel_far_3||null,
-    photo_wifi_center_id:        regularPhotos.wifi_center||null,
-    photo_wifi_edge_id:          regularPhotos.wifi_edge||null,
+    smartboard_result:    g('ri-smartboard'),
+    devit_result:         g('ri-devit'),
+    etc_request:          g('ri-etc-request'),
+    /* 차수별 점검 */
+    chk_1_diagram:        g('ri-chk1-diagram'),
+    chk_1_rack:           g('ri-chk1-rack'),
+    chk_1_equipment:      g('ri-chk1-equipment'),
+    chk_2_asset_label:    g('ri-chk2-asset'),
+    chk_2_switch_replace: g('ri-chk2-switch'),
+    chk_3_ap_layout:      g('ri-chk3-ap'),
+    /* 측정 사진 ID */
+    photo_teacher_id:     regularPhotos.teacher||null,
+    photo_student_id:     regularPhotos.student||null,
+    photo_wireless_id:    regularPhotos.wireless||null,
+    photo_wifi360_id:     regularPhotos.wifi360||null,
   };
 }
 
@@ -2078,12 +2093,17 @@ function _renderRegularInspectConfirm(){
   html+='<tr><td class="fw-semibold">학교</td><td>'+escH(selSchool.name)+'</td></tr>';
   html+='<tr><td class="text-muted">차수</td><td>'+d.quarter+'차</td></tr>';
   html+='<tr><td class="text-muted">점검일자</td><td>'+escH(d.inspect_date)+'</td></tr>';
-  html+='<tr><td class="text-muted">장비</td><td>스위치 '+d.switch_count+'대, PoE '+d.poe_count+'대, AP '+d.ap_count+'대</td></tr>';
-  html+='<tr><td class="text-muted">유선 교사망</td><td>집선 '+escH(d.wired_teacher_hub_down||'-')+'/'+escH(d.wired_teacher_hub_up||'-')+' 단말 '+escH(d.wired_teacher_end_down||'-')+'/'+escH(d.wired_teacher_end_up||'-')+' Mbps</td></tr>';
-  html+='<tr><td class="text-muted">유선 학생망</td><td>집선 '+escH(d.wired_student_hub_down||'-')+'/'+escH(d.wired_student_hub_up||'-')+' 단말 '+escH(d.wired_student_end_down||'-')+'/'+escH(d.wired_student_end_up||'-')+' Mbps</td></tr>';
-  html+='<tr><td class="text-muted">무선 속도</td><td>중앙 '+escH(d.wifi_center_down||'-')+'/'+escH(d.wifi_center_up||'-')+' 외곽 '+escH(d.wifi_edge_down||'-')+'/'+escH(d.wifi_edge_up||'-')+' Mbps</td></tr>';
-  var photoCount=Object.keys(regularPhotos).filter(k=>regularPhotos[k]).length;
-  html+='<tr><td class="text-muted">사진</td><td>'+photoCount+'장 업로드</td></tr>';
+  html+='<tr><td class="text-muted">선생님 의견</td><td>'+escH(d.teacher_opinion||'-')+'</td></tr>';
+  html+='<tr><td class="text-muted">점검/조치 결과</td><td>'+escH(d.action_result||'-')+'</td></tr>';
+  html+='<tr><td class="text-muted">장비</td><td>스위치 '+d.switch_count+'대, PoE '+d.poe_count+'대, AP '+d.ap_count+'대 (WEISS '+d.ap_weiss_count+', 컨트롤러 '+d.ap_controller_count+', 자체 '+d.ap_self_count+')</td></tr>';
+  html+='<tr><td class="text-muted">무선망</td><td>'+escH(d.wireless_band||'-')+'</td></tr>';
+  html+='<tr><td class="text-muted">iperf 교사망</td><td>Down '+escH(d.wired_teacher_down||'-')+' / Up '+escH(d.wired_teacher_up||'-')+' Mbits (망id: '+escH(d.teacher_vlan_id||'-')+')</td></tr>';
+  html+='<tr><td class="text-muted">iperf 학생망</td><td>Down '+escH(d.wired_student_down||'-')+' / Up '+escH(d.wired_student_up||'-')+' Mbits (망id: '+escH(d.student_vlan_id||'-')+')</td></tr>';
+  html+='<tr><td class="text-muted">iperf 무선망</td><td>Down '+escH(d.wired_wireless_down||'-')+' / Up '+escH(d.wired_wireless_up||'-')+' Mbits (망id: '+escH(d.wireless_vlan_id||'-')+')</td></tr>';
+  html+='<tr><td class="text-muted">Wifi360</td><td>Down '+escH(d.wifi360_down||'-')+' / Up '+escH(d.wifi360_up||'-')+' Mbits (AP: '+escH(d.wifi360_ap_id||'-')+')</td></tr>';
+  html+='<tr><td class="text-muted">전산실</td><td>콘센트 '+d.outlet_count+'ea, 패치판넬 '+d.patch_panel_count+'ea, 케이블 '+escH(d.patch_cable_type||'-')+'</td></tr>';
+  html+='<tr><td class="text-muted">전화망</td><td>'+escH(d.phone_type||'-')+' / '+escH(d.phone_config||'-')+'</td></tr>';
+  html+='<tr><td class="text-muted">케이블</td><td>교무실 '+escH(d.cable_office||'-')+', 컴퓨터실 '+escH(d.cable_computer||'-')+'</td></tr>';
   html+='</table>';
 
   /* ── 전자서명 (스위치 설치확인서와 동일) ── */

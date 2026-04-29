@@ -109,6 +109,9 @@ def _inject_regular_photos(data):
     from apps.photos.models import Photo
 
     PHOTO_FIELDS = [
+        # 신규 양식
+        'photo_teacher', 'photo_student', 'photo_wireless', 'photo_wifi360',
+        # 기존(OLD) 양식 호환
         'photo_wired_teacher_hub', 'photo_wired_teacher_end',
         'photo_wired_student_hub', 'photo_wired_student_end',
         'photo_wired_wireless_hub',
