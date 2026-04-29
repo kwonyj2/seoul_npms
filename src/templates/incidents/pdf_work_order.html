@@ -99,9 +99,23 @@
     <td class="value">{{ wo.incident.received_at|date:"Y-m-d H:i" }}</td>
   </tr>
 
-  <!-- 담당자 / 완료기한 -->
+  <!-- 학교 담당자 / 연락처 -->
   <tr>
-    <td class="label">담당자</td>
+    <td class="label">학교 담당자</td>
+    <td class="value">{{ wo.incident.requester_name|default:"-" }}</td>
+    <td class="label">담당자 연락처</td>
+    <td class="value">{{ wo.incident.requester_phone|default:"-" }}</td>
+  </tr>
+
+  <!-- 장애위치 -->
+  <tr>
+    <td class="label">작업 장소</td>
+    <td colspan="3">{% if wo.incident.location_building %}{{ wo.incident.location_building.name }}{% endif %}{% if wo.incident.location_floor %} &rsaquo; {{ wo.incident.location_floor.floor_name }}{% endif %}{% if wo.incident.location_room %} &rsaquo; {{ wo.incident.location_room.name }}{% endif %}{% if wo.incident.location_detail %} ({{ wo.incident.location_detail }}){% endif %}{% if not wo.incident.location_building and not wo.incident.location_detail %}-{% endif %}</td>
+  </tr>
+
+  <!-- 처리 담당자 / 완료기한 -->
+  <tr>
+    <td class="label">처리 담당자</td>
     <td class="value">{% if wo.assigned_to %}{{ wo.assigned_to.name }}{% else %}-{% endif %}</td>
     <td class="label">완료기한</td>
     <td class="value">{{ wo.due_date|date:"Y-m-d"|default:"-" }}</td>

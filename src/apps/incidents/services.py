@@ -217,6 +217,7 @@ def generate_work_order_pdf(wo):
 
     wo = type(wo).objects.select_related(
         'incident__school__support_center', 'incident__category',
+        'incident__location_building', 'incident__location_floor', 'incident__location_room',
         'school__support_center', 'assigned_to', 'created_by', 'confirmed_by'
     ).get(id=wo.id)
 
