@@ -2525,6 +2525,8 @@ function viewReport(id){
         html=_viewSwitchInstall(data, d);
       } else if(tmplType==='cable'){
         html=_viewCableInstall(data, d);
+      } else if(tmplType==='regular'){
+        html=_viewRegularInspect(data, d);
       } else {
         var cachedTmpl=TEMPLATES.find(t=>t.id===(typeof d.template==='object'?d.template.id:d.template));
         var fields=(cachedTmpl&&cachedTmpl.fields_schema&&cachedTmpl.fields_schema.fields)||[];
@@ -2648,6 +2650,71 @@ function _viewSwitchInstall(data, report){
   }
   /* 비고 */
   if(data.notes) html+=`<div class="mt-2 small"><span class="fw-semibold">비고:</span> ${escH(data.notes)}</div>`;
+  return html;
+}
+
+function _viewRegularInspect(data, report){
+  var html='<table class="table table-sm table-bordered small mb-2">';
+  html+='<tr class="table-light"><th style="width:20%;">항목</th><th>내용</th></tr>';
+  html+='<tr><td class="text-muted">차수</td><td>'+(data.quarter||'-')+'차</td></tr>';
+  html+='<tr><td class="text-muted">점검일</td><td>'+escH(data.inspect_date||'-')+'</td></tr>';
+  if(data.teacher_opinion) html+='<tr><td class="text-muted">선생님 의견</td><td>'+escH(data.teacher_opinion)+'</td></tr>';
+  if(data.action_result) html+='<tr><td class="text-muted">점검/조치 결과</td><td>'+escH(data.action_result)+'</td></tr>';
+  html+='<tr><td class="text-muted">장비</td><td>스위치 '+(data.switch_count||0)+'대, PoE '+(data.poe_count||0)+'대, AP '+(data.ap_count||0)+'대';
+  if(data.ap_weiss_count||data.ap_controller_count||data.ap_self_count)
+    html+=' (WEISS '+(data.ap_weiss_count||0)+', 컨트롤러 '+(data.ap_controller_count||0)+', 자체 '+(data.ap_self_count||0)+')';
+  html+='</td></tr>';
+  if(data.wireless_band) html+='<tr><td class="text-muted">무선망</td><td>'+escH(data.wireless_band)+'</td></tr>';
+  // 속도 측정
+  html+='<tr class="table-light"><td colspan="2" class="fw-semibold">속도 측정 (iperf)</td></tr>';
+  html+='<tr><td class="text-muted">교사망 (K'+(data.teacher_vlan_id||'')+')</td><td>Down: '+(data.wired_teacher_down||'-')+' / Up: '+(data.wired_teacher_up||'-')+' Mbits — '+(data.teacher_location||'교무실')+'</td></tr>';
+  html+='<tr><td class="text-muted">학생망 (H'+(data.student_vlan_id||'')+')</td><td>Down: '+(data.wired_student_down||'-')+' / Up: '+(data.wired_student_up||'-')+' Mbits — '+(data.student_location||'컴퓨터실')+'</td></tr>';
+  html+='<tr><td class="text-muted">무선망 (PoE'+(data.wireless_vlan_id||'')+')</td><td>Down: '+(data.wired_wireless_down||'-')+' / Up: '+(data.wired_wireless_up||'-')+' Mbits — '+(data.wireless_location||'교실')+'</td></tr>';
+  if(data.wifi360_down||data.wifi360_up)
+    html+='<tr><td class="text-muted">Wifi 360 (AP '+(data.wifi360_ap_id||'')+')</td><td>Down: '+(data.wifi360_down||'-')+' / Up: '+(data.wifi360_up||'-')+' Mbits — '+(data.wifi360_location||'교실')+'</td></tr>';
+  // 전산실
+  if(data.outlet_count||data.patch_panel_count||data.patch_cable_type){
+    html+='<tr class="table-light"><td colspan="2" class="fw-semibold">전산실 환경</td></tr>';
+    html+='<tr><td class="text-muted">전원콘센트</td><td>'+(data.outlet_count||0)+' EA</td></tr>';
+    html+='<tr><td class="text-muted">패치판넬</td><td>'+(data.patch_panel_count||0)+' EA, 케이블: '+(data.patch_cable_type||'-')+'</td></tr>';
+  }
+  // 전화망
+  if(data.phone_type||data.phone_config){
+    html+='<tr><td class="text-muted">전화망</td><td>'+(data.phone_type==='analog'?'일반전화':data.phone_type==='voip'?'인터넷전화':'-')+' / '+(data.phone_config==='separated'?'전화망분리':data.phone_config==='connected'?'전화기-PC연결':'-')+'</td></tr>';
+  }
+  // 케이블
+  if(data.cable_office||data.cable_computer){
+    html+='<tr><td class="text-muted">케이블</td><td>교무실: '+(data.cable_office||'-')+', 컴퓨터실: '+(data.cable_computer||'-')+'</td></tr>';
+  }
+  // 기타
+  if(data.smartboard_result) html+='<tr><td class="text-muted">전자칠판</td><td>'+escH(data.smartboard_result)+'</td></tr>';
+  if(data.devit_result) html+='<tr><td class="text-muted">디벗</td><td>'+escH(data.devit_result)+'</td></tr>';
+  if(data.etc_request) html+='<tr><td class="text-muted">기타</td><td>'+escH(data.etc_request)+'</td></tr>';
+  // 차수별 점검
+  var q=parseInt(data.quarter)||1;
+  if(q===1&&(data.chk_1_diagram||data.chk_1_rack||data.chk_1_equipment)){
+    html+='<tr class="table-light"><td colspan="2" class="fw-semibold">1차 점검</td></tr>';
+    if(data.chk_1_diagram) html+='<tr><td class="text-muted">구성도</td><td>'+escH(data.chk_1_diagram)+'</td></tr>';
+    if(data.chk_1_rack) html+='<tr><td class="text-muted">랙실장도</td><td>'+escH(data.chk_1_rack)+'</td></tr>';
+    if(data.chk_1_equipment) html+='<tr><td class="text-muted">장비목록</td><td>'+escH(data.chk_1_equipment)+'</td></tr>';
+  }
+  if(q===2&&(data.chk_2_asset_label||data.chk_2_switch_replace)){
+    html+='<tr class="table-light"><td colspan="2" class="fw-semibold">2차 점검</td></tr>';
+    if(data.chk_2_asset_label) html+='<tr><td class="text-muted">자산라벨</td><td>'+escH(data.chk_2_asset_label)+'</td></tr>';
+    if(data.chk_2_switch_replace) html+='<tr><td class="text-muted">스위치교체</td><td>'+escH(data.chk_2_switch_replace)+'</td></tr>';
+  }
+  if(q===3&&data.chk_3_ap_layout){
+    html+='<tr class="table-light"><td colspan="2" class="fw-semibold">3차 점검</td></tr>';
+    html+='<tr><td class="text-muted">AP배치도</td><td>'+escH(data.chk_3_ap_layout)+'</td></tr>';
+  }
+  // 서명
+  var si=data.signature_itl||{}, ss=data.signature_school||{};
+  if(si.name||ss.name){
+    html+='<tr class="table-light"><td colspan="2" class="fw-semibold">전자서명</td></tr>';
+    html+='<tr><td class="text-muted">점검자</td><td>'+(si.org||'')+' '+(si.name||'')+'</td></tr>';
+    html+='<tr><td class="text-muted">확인자</td><td>'+(ss.org||'')+' '+(ss.name||'')+'</td></tr>';
+  }
+  html+='</table>';
   return html;
 }
 
