@@ -345,6 +345,10 @@ def export_performance_excel(request):
     week  = int(request.GET.get('week', 1))
     center_code = request.GET.get('center', 'all')
 
+    # ── 월간업무보고 엑셀 ──
+    if period_type == 'monthly_work':
+        return _export_monthly_work_excel(request, year, month, center_code, openpyxl)
+
     if period_type == 'weekly':
         d = date.fromisocalendar(year, week, 1)
         date_from, date_to = d, d + timedelta(days=6)
@@ -559,6 +563,138 @@ def export_performance_excel(request):
         buf.read(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     resp['Content-Disposition'] = f'attachment; filename="performance_{safe_label}.xlsx"'
+    return resp
+
+
+def _export_monthly_work_excel(request, year, month, center_code, openpyxl):
+    """월간업무보고 엑셀 내보내기 — 일자별 업무 현황"""
+    import io, calendar
+    from datetime import date, timedelta
+    from collections import defaultdict
+    from django.http import HttpResponse
+    from django.db.models import Count
+    from urllib.parse import quote
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    from apps.schools.models import SupportCenter
+    from apps.incidents.models import Incident
+    from apps.progress.models import SchoolInspection
+    from .models import Report
+
+    date_from = date(year, month, 1)
+    date_to = date(year, month, calendar.monthrange(year, month)[1])
+
+    center_filter = {}
+    center_name = '전체'
+    if center_code and center_code != 'all':
+        sc = SupportCenter.objects.filter(code=center_code).first()
+        if sc:
+            center_name = sc.name
+            center_filter = {'school__support_center': sc}
+
+    # 데이터 수집 (monthly_work_report_api 와 동일 로직)
+    daily_work = defaultdict(lambda: {'inspection': [], 'incident': [], 'switch': [], 'note': ''})
+
+    # 정기점검
+    regular_reports = Report.objects.filter(
+        template__report_type='regular', status='completed', **center_filter,
+    ).select_related('school')
+    for r in regular_reports:
+        inspect_date_str = (r.data or {}).get('inspect_date', '')
+        if inspect_date_str:
+            try:
+                d = date.fromisoformat(inspect_date_str)
+                if date_from <= d <= date_to:
+                    daily_work[d.isoformat()]['inspection'].append(r.school.name)
+            except (ValueError, TypeError):
+                pass
+
+    # 장애처리
+    inc_qs = Incident.objects.filter(
+        received_at__date__gte=date_from, received_at__date__lte=date_to,
+        **center_filter,
+    ).select_related('school')
+    for inc in inc_qs:
+        d = inc.received_at.date()
+        if date_from <= d <= date_to:
+            daily_work[d.isoformat()]['incident'].append(inc.school.name)
+
+    # 스위치교체
+    switch_reports = Report.objects.filter(
+        template__report_type='switch_install', status='completed', **center_filter,
+    ).select_related('school')
+    for r in switch_reports:
+        install_date_str = (r.data or {}).get('install_date', '')
+        if install_date_str:
+            try:
+                d = date.fromisoformat(install_date_str)
+                if date_from <= d <= date_to:
+                    daily_work[d.isoformat()]['switch'].append(r.school.name)
+            except (ValueError, TypeError):
+                pass
+
+    # 엑셀 생성
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = '일자별 업무 현황'
+
+    hdr_fill = PatternFill('solid', fgColor='1F497D')
+    hdr_font = Font(bold=True, color='FFFFFF', size=10)
+    ctr = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    thin = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin'))
+    WEEKDAY_NAMES = ['월', '화', '수', '목', '금', '토', '일']
+
+    # 타이틀
+    ws.merge_cells('A1:F1')
+    c = ws.cell(row=1, column=1, value=f'{year}년 {month}월 월간업무보고 — 일자별 업무 현황 ({center_name})')
+    c.font = Font(bold=True, size=13)
+    c.alignment = ctr
+    ws.row_dimensions[1].height = 28
+
+    # 헤더
+    headers = ['일자', '요일', '정기점검', '장애처리', '스위치교체', '비고']
+    for ci, h in enumerate(headers, 1):
+        c = ws.cell(row=3, column=ci, value=h)
+        c.font = hdr_font
+        c.fill = hdr_fill
+        c.alignment = ctr
+        c.border = thin
+
+    # 데이터
+    row = 4
+    current = date_from
+    while current <= date_to:
+        if current.weekday() < 5:
+            key = current.isoformat()
+            entry = daily_work.get(key, {'inspection': [], 'incident': [], 'switch': [], 'note': ''})
+            insp = ', '.join(dict.fromkeys(entry['inspection']))
+            inci = ', '.join(dict.fromkeys(entry['incident']))
+            swit = ', '.join(dict.fromkeys(entry['switch']))
+
+            vals = [current.day, WEEKDAY_NAMES[current.weekday()], insp, inci, swit, entry['note']]
+            for ci, v in enumerate(vals, 1):
+                c = ws.cell(row=row, column=ci, value=v)
+                c.border = thin
+                c.alignment = ctr if ci <= 2 else Alignment(vertical='center', wrap_text=True)
+            row += 1
+        current += timedelta(days=1)
+
+    # 열 너비
+    col_widths = [8, 6, 30, 30, 30, 15]
+    for ci, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(ci)].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f'월간업무보고_{center_name}_{year}년{month}월.xlsx'
+    resp = HttpResponse(
+        buf.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(fname)}"
     return resp
 
 

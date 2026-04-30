@@ -183,7 +183,8 @@ async function loadReport() {
       if (!res.ok) { const err = await res.json().catch(()=>({})); throw new Error(err.error || res.status); }
       const d = await res.json();
       renderMonthlyWork(d);
-      document.getElementById('btn-export').disabled = true;
+      _lastParams = new URLSearchParams({ type: 'monthly_work', year, month, center: _currentCenter }).toString();
+      document.getElementById('btn-export').disabled = false;
       document.getElementById('center-selector').style.display = '';
     } catch(e) {
       body.innerHTML = `<div class="alert alert-danger">데이터 로드 실패: ${e.message}</div>`;
