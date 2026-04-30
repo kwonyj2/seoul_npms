@@ -1525,3 +1525,233 @@ def _sync_wbs_regular_inspect(report):
             except Exception as e:
                 logger.warning('WBS 진척 버블업 실패 item=%s: %s', item.pk, e)
             break
+
+
+# ═══════════════════════════════════════════════════════════
+# 월간업무보고 데이터 API
+# ═══════════════════════════════════════════════════════════
+@login_required
+def monthly_work_report_api(request):
+    """월간업무보고 데이터 API — GET ?year=2026&month=4&center=dongbu"""
+    import calendar as cal_mod
+    from collections import defaultdict
+    from datetime import date
+    from django.http import JsonResponse
+    from django.db.models import Count, Q
+    from apps.schools.models import School, SupportCenter, SchoolType
+    from apps.incidents.models import Incident, IncidentCategory
+    from apps.progress.models import SchoolInspection
+    from apps.reports.models import Report
+
+    year  = int(request.GET.get('year', 2026))
+    month = int(request.GET.get('month', 4))
+    center_code = request.GET.get('center', '')
+    is_all = (not center_code or center_code == 'all')
+
+    # 지원청 필터 준비
+    center_filter = {}       # school__support_center 용
+    school_filter = {}       # support_center 용
+    if is_all:
+        sc = None
+        center_name = '전체'
+    else:
+        sc = SupportCenter.objects.filter(code=center_code).first()
+        if not sc:
+            return JsonResponse({'error': '유효하지 않은 교육지원청입니다.'}, status=400)
+        center_name = sc.name
+        center_filter = {'school__support_center': sc}
+        school_filter = {'support_center': sc}
+
+    date_from = date(year, month, 1)
+    date_to = date(year, month, cal_mod.monthrange(year, month)[1])
+
+    # ── 1. 사업 개요: 학제별 학교 수 ──
+    school_types = list(SchoolType.objects.order_by('order').values('code', 'name'))
+
+    # 전체: 지원청별 크로스탭 생성
+    centers_list = []
+    if is_all:
+        centers_qs = SupportCenter.objects.filter(is_active=True).order_by('id')
+        for ctr in centers_qs:
+            ctr_counts = dict(
+                School.objects.filter(support_center=ctr, is_active=True)
+                .values_list('school_type__code').annotate(cnt=Count('id'))
+            )
+            ctr_total = sum(ctr_counts.values())
+            row = {'code': ctr.code, 'name': ctr.name, 'total': ctr_total}
+            for st in school_types:
+                row[st['code']] = ctr_counts.get(st['code'], 0)
+            centers_list.append(row)
+
+    school_counts = dict(
+        School.objects.filter(is_active=True, **school_filter)
+        .values_list('school_type__code').annotate(cnt=Count('id'))
+    )
+    total_schools = 0
+    for st in school_types:
+        cnt = school_counts.get(st['code'], 0)
+        st['count'] = cnt
+        total_schools += cnt
+    overview = {
+        'center_name': center_name,
+        'project_period': '2025. 05. 06. ~ 2026. 12. 31.',
+        'school_types': school_types,
+        'total_schools': total_schools,
+        'centers': centers_list,
+    }
+
+    # ── 2. 정기점검 일정: 해당월 점검 예정일 ──
+    inspection_dates = sorted(set(
+        SchoolInspection.objects.filter(
+            scheduled_date__gte=date_from,
+            scheduled_date__lte=date_to,
+            **center_filter,
+        ).values_list('scheduled_date', flat=True)
+    ))
+    # 캘린더 데이터 (월~금 그리드)
+    cal_weeks = []
+    c = cal_mod.Calendar(firstweekday=0)  # 월요일 시작
+    for week in c.monthdatescalendar(year, month):
+        week_data = []
+        for d in week:
+            if d.month == month and d.weekday() < 5:  # 평일만
+                week_data.append({
+                    'day': d.day,
+                    'is_inspection': d in inspection_dates,
+                })
+            elif d.weekday() < 5:
+                week_data.append(None)  # 다른 달
+        # 주말 제외 — 5일만
+        cal_weeks.append(week_data)
+    inspection_schedule = {
+        'weeks': cal_weeks,
+        'inspection_dates': [d.isoformat() for d in inspection_dates],
+    }
+
+    # ── 3. 장애처리 현황 ──
+    inc_qs = Incident.objects.filter(
+        received_at__date__gte=date_from,
+        received_at__date__lte=date_to,
+        **center_filter,
+    )
+
+    # 학제별
+    by_school_type = []
+    st_counts = dict(
+        inc_qs.values_list('school__school_type__code')
+        .annotate(cnt=Count('id'))
+    )
+    inc_total = 0
+    for st in school_types:
+        cnt = st_counts.get(st['code'], 0)
+        by_school_type.append({'code': st['code'], 'name': st['name'], 'count': cnt})
+        inc_total += cnt
+
+    # 전체: 학제별 × 지원청 크로스탭
+    inc_centers_cross = []
+    if is_all:
+        centers_qs = SupportCenter.objects.filter(is_active=True).order_by('id')
+        for ctr in centers_qs:
+            ctr_inc = inc_qs.filter(school__support_center=ctr)
+            ctr_st_counts = dict(
+                ctr_inc.values_list('school__school_type__code').annotate(cnt=Count('id'))
+            )
+            row = {'code': ctr.code, 'name': ctr.name, 'total': sum(ctr_st_counts.values())}
+            for st in school_types:
+                row[st['code']] = ctr_st_counts.get(st['code'], 0)
+            inc_centers_cross.append(row)
+
+    # 장애 분류별
+    categories = list(IncidentCategory.objects.filter(is_active=True).order_by('order').values('code', 'name'))
+    cat_counts = dict(
+        inc_qs.values_list('category__code')
+        .annotate(cnt=Count('id'))
+    )
+    cat_total = 0
+    for cat in categories:
+        cnt = cat_counts.get(cat['code'], 0)
+        cat['count'] = cnt
+        cat_total += cnt
+
+    incidents_summary = {
+        'by_school_type': by_school_type,
+        'total_by_school_type': inc_total,
+        'by_category': categories,
+        'total_by_category': cat_total,
+        'centers_cross': inc_centers_cross,
+    }
+
+    # ── 4. 일자별 업무 현황 ──
+    daily_work = defaultdict(lambda: {
+        'inspection': [], 'incident': [], 'switch': [], 'note': ''
+    })
+
+    # (a) 정기점검: Report(regular) → data['inspect_date'] 기준
+    regular_reports = Report.objects.filter(
+        template__report_type='regular',
+        status='completed',
+        **center_filter,
+    ).select_related('school')
+    for r in regular_reports:
+        inspect_date_str = (r.data or {}).get('inspect_date', '')
+        if inspect_date_str:
+            try:
+                d = date.fromisoformat(inspect_date_str)
+                if date_from <= d <= date_to:
+                    daily_work[d.isoformat()]['inspection'].append(r.school.name)
+            except (ValueError, TypeError):
+                pass
+
+    # (b) 장애처리: Incident → received_at (장애 발생일) 기준
+    for inc in inc_qs.select_related('school'):
+        d = inc.received_at.date()
+        if date_from <= d <= date_to:
+            daily_work[d.isoformat()]['incident'].append(inc.school.name)
+
+    # (c) 스위치교체: Report(switch_install) → data['install_date'] 기준
+    switch_reports = Report.objects.filter(
+        template__report_type='switch_install',
+        status='completed',
+        **center_filter,
+    ).select_related('school')
+    for r in switch_reports:
+        install_date_str = (r.data or {}).get('install_date', '')
+        if install_date_str:
+            try:
+                d = date.fromisoformat(install_date_str)
+                if date_from <= d <= date_to:
+                    daily_work[d.isoformat()]['switch'].append(r.school.name)
+            except (ValueError, TypeError):
+                pass
+
+    # 평일만 정렬하여 리스트로 변환 (학교명 중복 제거, 순서 유지)
+    from datetime import timedelta
+    WEEKDAY_NAMES = ['월', '화', '수', '목', '금', '토', '일']
+    daily_list = []
+    current = date_from
+    while current <= date_to:
+        if current.weekday() < 5:  # 평일
+            key = current.isoformat()
+            entry = daily_work.get(key, {'inspection': [], 'incident': [], 'switch': [], 'note': ''})
+            daily_list.append({
+                'date': key,
+                'day': current.day,
+                'weekday': WEEKDAY_NAMES[current.weekday()],
+                'inspection': list(dict.fromkeys(entry['inspection'])),
+                'incident': list(dict.fromkeys(entry['incident'])),
+                'switch': list(dict.fromkeys(entry['switch'])),
+                'note': entry['note'],
+            })
+        current += timedelta(days=1)
+
+    return JsonResponse({
+        'year': year,
+        'month': month,
+        'center_code': center_code or 'all',
+        'center_name': center_name,
+        'is_all': is_all,
+        'overview': overview,
+        'inspection_schedule': inspection_schedule,
+        'incidents': incidents_summary,
+        'daily_work': daily_list,
+    })

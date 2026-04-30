@@ -29,7 +29,17 @@
   #sidebar, .npms-topbar, .no-print { display:none !important; }
   .main-content { margin:0 !important; padding:0 !important; }
   .card { break-inside:avoid; }
+  .monthly-work-report { font-size:11pt; }
+  .monthly-work-report .card { border:none !important; box-shadow:none !important; }
+  .monthly-work-report .table { font-size:10pt; }
+  .monthly-work-report .section-title { font-size:12pt; border-bottom:2px solid #333; }
 }
+.monthly-work-report .section-title {
+  font-size:1rem; font-weight:700; color:#212529;
+  border-bottom:2px solid #0d6efd; padding-bottom:.4rem; margin-bottom:1rem;
+}
+.monthly-work-report .table th { white-space:nowrap; }
+.monthly-work-report .bg-primary-subtle { background-color:rgba(13,110,253,.15) !important; }
 </style>
 {% endblock %}
 
@@ -46,6 +56,7 @@
           <button class="btn btn-outline-primary period-tab" data-type="quarterly">분기</button>
           <button class="btn btn-outline-primary period-tab" data-type="half">반기</button>
           <button class="btn btn-outline-primary period-tab" data-type="annual">연간</button>
+          <button class="btn btn-outline-success period-tab" data-type="monthly_work">월간업무보고</button>
         </div>
         <select id="sel-year" class="form-select form-select-sm" style="width:90px;">
           {% for y in years %}
@@ -123,10 +134,14 @@ document.querySelectorAll('.period-tab').forEach(btn => {
     btn.classList.add('active');
     const t = btn.dataset.type;
     document.getElementById('sel-month').closest('select').style.display =
-      (t === 'monthly' || t === 'weekly') ? '' : 'none';
+      (t === 'monthly' || t === 'weekly' || t === 'monthly_work') ? '' : 'none';
     document.getElementById('sel-week').style.display    = (t === 'weekly')    ? '' : 'none';
     document.getElementById('sel-quarter').style.display = (t === 'quarterly') ? '' : 'none';
     document.getElementById('sel-half').style.display    = (t === 'half')      ? '' : 'none';
+    // 월간업무보고 탭: 교육지원청 선택 바 항상 표시
+    if (t === 'monthly_work') {
+      document.getElementById('center-selector').style.display = '';
+    }
   });
 });
 document.querySelector('.period-tab[data-type="weekly"]').click();
@@ -150,14 +165,33 @@ async function loadReport() {
   const quarter = document.getElementById('sel-quarter').value;
   const half    = document.getElementById('sel-half').value;
 
-  const params = new URLSearchParams({ type, year, month, week, quarter, half, center: _currentCenter });
-  _lastParams = params.toString();
   const body = document.getElementById('report-body');
   body.innerHTML = `<div class="text-center py-5 text-muted">
     <div class="spinner-border"></div><div class="mt-2">데이터 조회 중...</div></div>`;
 
   Object.values(chartRefs).forEach(c => c.destroy());
   chartRefs = {};
+
+  // ── 월간업무보고 분기 ──
+  if (type === 'monthly_work') {
+    // 전체도 허용 (통합 데이터)
+    const params = new URLSearchParams({ year, month, center: _currentCenter });
+    try {
+      const res = await fetch(`${BASE}/performance/monthly-work/?${params}`);
+      if (!res.ok) { const err = await res.json().catch(()=>({})); throw new Error(err.error || res.status); }
+      const d = await res.json();
+      renderMonthlyWork(d);
+      document.getElementById('btn-export').disabled = true;
+      document.getElementById('center-selector').style.display = '';
+    } catch(e) {
+      body.innerHTML = `<div class="alert alert-danger">데이터 로드 실패: ${e.message}</div>`;
+    }
+    return;
+  }
+
+  // ── 기존 성과보고서 ──
+  const params = new URLSearchParams({ type, year, month, week, quarter, half, center: _currentCenter });
+  _lastParams = params.toString();
   document.getElementById('btn-export').disabled = true;
 
   try {
@@ -668,6 +702,194 @@ function renderReport(d) {
       });
     }
   }
+}
+
+// ══════════════════════════════════════════════
+// 월간업무보고 렌더링
+// ══════════════════════════════════════════════
+function renderMonthlyWork(d) {
+  const ov = d.overview;
+  const sched = d.inspection_schedule;
+  const inc = d.incidents;
+  const daily = d.daily_work;
+  const isAll = d.is_all;
+
+  // ── 1. 사업 개요 ──
+  const stHeaders = ov.school_types.map(s => `<th>${s.name}</th>`).join('');
+
+  let overviewRows = '';
+  if (isAll && ov.centers && ov.centers.length) {
+    // 전체: 지원청별 행
+    ov.centers.forEach(ctr => {
+      const cells = ov.school_types.map(s => `<td>${ctr[s.code] || ''}</td>`).join('');
+      overviewRows += `<tr><td class="fw-bold text-start">${ctr.name}</td>${cells}<td class="col-total fw-bold">${ctr.total}</td></tr>`;
+    });
+    // 합계 행
+    const totalCells = ov.school_types.map(s => {
+      const sum = ov.centers.reduce((acc, c) => acc + (c[s.code]||0), 0);
+      return `<td class="col-total">${sum || ''}</td>`;
+    }).join('');
+    overviewRows += `<tr class="table-light"><td class="fw-bold text-start">합계</td>${totalCells}<td class="col-total fw-bold">${ov.total_schools}</td></tr>`;
+  } else {
+    const stCounts = ov.school_types.map(s => `<td>${s.count || ''}</td>`).join('');
+    overviewRows = `<tr><td class="fw-bold">${ov.center_name}</td>${stCounts}<td class="col-total fw-bold">${ov.total_schools}</td></tr>`;
+  }
+
+  // ── 2. 정기점검 일정 캘린더 ──
+  let calRows = '';
+  sched.weeks.forEach(week => {
+    const cells = week.map(d => {
+      if (!d) return '<td></td>';
+      const cls = d.is_inspection ? 'bg-primary-subtle fw-bold' : '';
+      return `<td class="${cls}">${d.day}</td>`;
+    }).join('');
+    if (week.some(d => d)) calRows += `<tr>${cells}</tr>`;
+  });
+
+  // ── 3. 장애처리 현황 ──
+  // 학제별
+  const incStHeaders = inc.by_school_type.map(s => `<th>${s.name}</th>`).join('');
+
+  let incStRows = '';
+  if (isAll && inc.centers_cross && inc.centers_cross.length) {
+    inc.centers_cross.forEach(ctr => {
+      const cells = inc.by_school_type.map(s => `<td>${ctr[s.code] || ''}</td>`).join('');
+      incStRows += `<tr><td class="fw-bold text-start">${ctr.name}</td>${cells}<td class="col-total fw-bold">${ctr.total}</td></tr>`;
+    });
+    const totalCells = inc.by_school_type.map(s => {
+      const sum = inc.centers_cross.reduce((acc, c) => acc + (c[s.code]||0), 0);
+      return `<td class="col-total">${sum || ''}</td>`;
+    }).join('');
+    incStRows += `<tr class="table-light"><td class="fw-bold text-start">합계</td>${totalCells}<td class="col-total fw-bold">${inc.total_by_school_type}</td></tr>`;
+  } else {
+    const incStCounts = inc.by_school_type.map(s => `<td>${s.count || ''}</td>`).join('');
+    incStRows = `<tr><td class="fw-bold">${ov.center_name}</td>${incStCounts}<td class="col-total fw-bold">${inc.total_by_school_type}</td></tr>`;
+  }
+
+  // 분류별
+  const catHeaders = inc.by_category.map(c => `<th>${c.name}</th>`).join('');
+  const catCounts  = inc.by_category.map(c => `<td>${c.count || ''}</td>`).join('');
+
+  // ── 4. 일자별 업무 현황 ──
+  const dailyRows = daily.map(d => {
+    const inspStr  = d.inspection.length ? d.inspection.join(', ') : '';
+    const incStr   = d.incident.length ? d.incident.join(', ') : '';
+    const swStr    = d.switch.length ? d.switch.join(', ') : '';
+    const hasWork  = d.inspection.length || d.incident.length || d.switch.length;
+    const rowCls   = hasWork ? '' : 'text-muted';
+    return `<tr class="${rowCls}">
+      <td class="text-center text-nowrap">${d.day}</td>
+      <td class="text-center">${d.weekday}</td>
+      <td class="small">${inspStr}</td>
+      <td class="small">${incStr}</td>
+      <td class="small">${swStr}</td>
+      <td class="small">${d.note}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('report-body').innerHTML = `
+  <div class="monthly-work-report">
+
+    <!-- 보고서 헤더 -->
+    <div class="text-center mb-4">
+      <h4 class="fw-bold">${d.year}년 ${d.month}월 월간업무보고서</h4>
+      <div class="text-muted">${isAll ? '전체 교육지원청 통합' : ov.center_name}</div>
+    </div>
+
+    <!-- 1. 사업 개요 -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body py-3">
+        <div class="section-title">1. 사업 개요</div>
+        <div class="mb-2">
+          <i class="bi bi-check-square me-1"></i>사업 기간: ${ov.project_period}
+        </div>
+        <div class="mb-2">
+          <i class="bi bi-check-square me-1"></i>사업 범위
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0 text-center">
+            <thead class="table-light">
+              <tr><th>구분</th>${stHeaders}<th class="col-total">합계</th></tr>
+            </thead>
+            <tbody>${overviewRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. 정기점검 일정 -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body py-3">
+        <div class="section-title">2. 정기점검 일정</div>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0 text-center" style="max-width:500px;">
+            <thead class="table-light">
+              <tr><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th></tr>
+            </thead>
+            <tbody>${calRows}</tbody>
+          </table>
+        </div>
+        <div class="text-muted small mt-1"><i class="bi bi-info-circle me-1"></i>
+          <span class="bg-primary-subtle px-1 rounded">색상</span> = 점검 예정일
+          (총 ${sched.inspection_dates.length}일)
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 장애처리 현황 -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body py-3">
+        <div class="section-title">3. 장애처리 현황</div>
+
+        <div class="mb-2 fw-semibold small"><i class="bi bi-check-square me-1"></i>학제별</div>
+        <div class="table-responsive mb-3">
+          <table class="table table-sm table-bordered mb-0 text-center">
+            <thead class="table-light">
+              <tr><th>지원청</th>${incStHeaders}<th class="col-total">합계</th></tr>
+            </thead>
+            <tbody>${incStRows}</tbody>
+          </table>
+        </div>
+        <div class="text-muted small mb-3">※ 별첨 : 장애처리 보고서</div>
+
+        <div class="mb-2 fw-semibold small"><i class="bi bi-check-square me-1"></i>장애 분류별</div>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0 text-center">
+            <thead class="table-light">
+              <tr>${catHeaders}<th class="col-total">합계</th></tr>
+            </thead>
+            <tbody>
+              <tr>${catCounts}<td class="col-total fw-bold">${inc.total_by_category}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="text-muted small mt-1">※ 별첨 : 장애처리 내역</div>
+      </div>
+    </div>
+
+    <!-- 3. 일자별 업무 현황 -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body py-3">
+        <div class="section-title">3. 일자별 업무 현황</div>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0">
+            <thead class="table-light">
+              <tr>
+                <th class="text-center" style="width:50px;">일자</th>
+                <th class="text-center" style="width:40px;">요일</th>
+                <th>정기점검</th>
+                <th>장애처리</th>
+                <th>스위치교체</th>
+                <th style="width:80px;">비고</th>
+              </tr>
+            </thead>
+            <tbody>${dailyRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>`;
 }
 </script>
 {% endblock %}

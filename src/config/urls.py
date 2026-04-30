@@ -31,7 +31,8 @@ from apps.assets.views import assets_view
 from apps.gps.views import gps_map_view
 from apps.network.views import network_monitor_view, ap_analyzer_view
 from apps.reports.views import (reports_view, performance_report_view,
-                                performance_report_data_api, export_performance_excel)
+                                performance_report_data_api, export_performance_excel,
+                                monthly_work_report_api)
 from apps.nas.views import nas_view, deliverables_view, file_open_view
 from apps.photos.views import photos_view
 from apps.statistics.views import statistics_view, survey_respond
@@ -168,6 +169,7 @@ urlpatterns = [
     path('performance/',          performance_report_view,         name='performance'),
     path('performance/data/',     performance_report_data_api,     name='performance-data'),
     path('performance/export/',   export_performance_excel,        name='performance-export'),
+    path('performance/monthly-work/', monthly_work_report_api,     name='monthly-work-report'),
     path('nas/',                  nas_view,                        name='nas'),
     path('nas/open/<str:token>/', file_open_view,                  name='nas-open'),
     path('deliverables/',         deliverables_view,               name='deliverables'),
