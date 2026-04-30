@@ -166,7 +166,7 @@ def calculate_monthly(year: int, month: int, security_count: int = 0,
     # 해당 월 완료된 장애(서비스 중단)의 조치시간 합산
     # completed_at 기준 월 귀속 (협약서 특이사항)
     # 비장애 카테고리(단순문의/네트워크작업) 제외
-    NON_FAULT_CATEGORIES = ['inquiry', 'network_work']
+    NON_FAULT_CATEGORIES = ['inquiry']
 
     fault_min = 0
     sla_qs = IncidentSLA.objects.filter(
