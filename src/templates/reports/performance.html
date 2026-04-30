@@ -778,6 +778,8 @@ function renderMonthlyWork(d) {
     return items.map(item => {
       if (item.type === 'report') {
         return `<a href="${BASE}/api/reports/reports/${item.id}/download_pdf/" target="_blank" class="text-decoration-none monthly-link">${item.name}</a>`;
+      } else if (item.type === 'nas') {
+        return `<a href="${BASE}/api/nas/files/${item.id}/download/" target="_blank" class="text-decoration-none monthly-link">${item.name}</a>`;
       } else {
         return `<a href="${BASE}/incidents/${item.id}/" target="_blank" class="text-decoration-none monthly-link">${item.name}</a>`;
       }

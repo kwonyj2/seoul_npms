@@ -1706,13 +1706,30 @@ def monthly_work_report_api(request):
                 pass
 
     # (b) 장애처리: Incident → received_at (장애 발생일) 기준
-    for inc_obj in inc_qs.select_related('school'):
+    # NAS에서 장애처리보고서 파일 매핑 (파일명: 장애처리보고서_{학교명}_{incident_number}.pdf)
+    from apps.nas.models import File as NasFile
+    inc_list = list(inc_qs.select_related('school'))
+    nas_file_map = {}  # incident_number → nas_file_id
+    if inc_list:
+        inc_numbers = [inc.incident_number for inc in inc_list]
+        expected_names = [
+            f'장애처리보고서_{inc.school.name}_{inc.incident_number}.pdf'
+            for inc in inc_list
+        ]
+        for nf_id, nf_name in NasFile.objects.filter(
+            original_name__in=expected_names, is_deleted=False,
+        ).values_list('id', 'original_name'):
+            nas_file_map[nf_name] = nf_id
+
+    for inc_obj in inc_list:
         d = inc_obj.received_at.date()
         if date_from <= d <= date_to:
+            expected_name = f'장애처리보고서_{inc_obj.school.name}_{inc_obj.incident_number}.pdf'
+            nas_id = nas_file_map.get(expected_name)
             daily_work[d.isoformat()]['incident'].append({
                 'name': inc_obj.school.name,
-                'id': inc_obj.id,
-                'type': 'incident',
+                'id': nas_id or inc_obj.id,
+                'type': 'nas' if nas_id else 'incident',
             })
 
     # (c) 스위치교체: Report(switch_install) → data['install_date'] 기준
