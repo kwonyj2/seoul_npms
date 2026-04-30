@@ -1736,14 +1736,20 @@ def monthly_work_report_api(request):
         'centers': centers_list,
     }
 
-    # ── 2. 정기점검 일정: 해당월 점검 예정일 ──
-    inspection_dates = sorted(set(
-        SchoolInspection.objects.filter(
-            scheduled_date__gte=date_from,
-            scheduled_date__lte=date_to,
-            **center_filter,
-        ).values_list('scheduled_date', flat=True)
-    ))
+    # ── 2. 정기점검 일정: 해당월 점검 예정일 + 학교명 ──
+    insp_qs = SchoolInspection.objects.filter(
+        scheduled_date__gte=date_from,
+        scheduled_date__lte=date_to,
+        **center_filter,
+    ).select_related('school')
+    # 날짜별 학교명 매핑
+    from collections import defaultdict as _dd
+    insp_by_date = _dd(list)
+    for si in insp_qs:
+        if si.scheduled_date:
+            insp_by_date[si.scheduled_date].append(si.school.name)
+    inspection_dates = sorted(insp_by_date.keys())
+
     # 캘린더 데이터 (월~금 그리드)
     cal_weeks = []
     c = cal_mod.Calendar(firstweekday=0)  # 월요일 시작
@@ -1751,9 +1757,11 @@ def monthly_work_report_api(request):
         week_data = []
         for d in week:
             if d.month == month and d.weekday() < 5:  # 평일만
+                schools = sorted(set(insp_by_date.get(d, [])))
                 week_data.append({
                     'day': d.day,
-                    'is_inspection': d in inspection_dates,
+                    'is_inspection': d in insp_by_date,
+                    'schools': schools,
                 })
             elif d.weekday() < 5:
                 week_data.append(None)  # 다른 달

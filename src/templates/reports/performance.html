@@ -744,7 +744,9 @@ function renderMonthlyWork(d) {
     const cells = week.map(d => {
       if (!d) return '<td></td>';
       const cls = d.is_inspection ? 'bg-primary-subtle fw-bold' : '';
-      return `<td class="${cls}">${d.day}</td>`;
+      const schoolList = d.schools && d.schools.length
+        ? `<div class="small text-muted mt-1" style="font-size:.7rem;line-height:1.2;">${d.schools.join(', ')}</div>` : '';
+      return `<td class="${cls}" style="vertical-align:top;min-width:120px;">${d.day}${schoolList}</td>`;
     }).join('');
     if (week.some(d => d)) calRows += `<tr>${cells}</tr>`;
   });
@@ -834,7 +836,7 @@ function renderMonthlyWork(d) {
       <div class="card-body py-3">
         <div class="section-title">2. 정기점검 일정</div>
         <div class="table-responsive">
-          <table class="table table-sm table-bordered mb-0 text-center" style="max-width:500px;">
+          <table class="table table-sm table-bordered mb-0 text-center" style="table-layout:fixed;">
             <thead class="table-light">
               <tr><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th></tr>
             </thead>
