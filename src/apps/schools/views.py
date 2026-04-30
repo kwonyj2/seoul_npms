@@ -592,9 +592,9 @@ class SchoolViewSet(viewsets.ModelViewSet):
             tagged = eq_qs.filter(asset_tag__gt='').count()
             # 카테고리별
             cats = {}
-            for cat in ['스위치', 'PoE', 'AP']:
-                cat_qs = eq_qs.filter(category=cat)
-                cats[cat] = {'total': cat_qs.count(), 'tagged': cat_qs.filter(asset_tag__gt='').count()}
+            for cat_key, cat_filter in [('스위치', ['스위치']), ('PoE', ['PoE', 'PoE스위치']), ('AP', ['AP'])]:
+                cat_qs = eq_qs.filter(category__in=cat_filter)
+                cats[cat_key] = {'total': cat_qs.count(), 'tagged': cat_qs.filter(asset_tag__gt='').count()}
             # 완료 학교 수
             completed = LabelingCompletion.objects.filter(school_id__in=school_ids).count()
             # 추가/삭감 (original_data가 있는 건 = 변경됨)
