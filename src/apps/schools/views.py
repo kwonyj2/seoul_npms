@@ -398,6 +398,15 @@ class SchoolViewSet(viewsets.ModelViewSet):
             return Response({'error': '장비 ID를 입력하세요.'}, status=400)
         if not asset_tag and asset_tag != '':
             return Response({'error': '관리번호를 입력하세요.'}, status=400)
+        # 관리번호 중복 검사 (빈 문자열/장비없음 제외)
+        if asset_tag and asset_tag != '장비없음':
+            dup = SchoolEquipment.objects.filter(asset_tag=asset_tag).exclude(pk=equip_id).first()
+            if dup:
+                dup_school = dup.school.name if hasattr(dup, 'school') and dup.school else '알 수 없음'
+                return Response({
+                    'error': f'관리번호 "{asset_tag}"는 이미 사용 중입니다. '
+                             f'({dup_school} / {dup.category} / {dup.model_name or ""})'
+                }, status=409)
         try:
             equip = school.equipment_list.get(pk=equip_id)
         except SchoolEquipment.DoesNotExist:

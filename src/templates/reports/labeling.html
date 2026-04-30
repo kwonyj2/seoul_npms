@@ -501,8 +501,8 @@ function $v(id) { return document.getElementById(id)?.value||''; }
 function apiPost(action, data, onSuccess) {
   fetch(`${BASE}/api/schools/schools/${_currentSchool.id}/${action}/`, {
     method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF}, body:JSON.stringify(data)
-  }).then(r=>r.json()).then(res => {
-    if(res.success){if(onSuccess)onSuccess(); loadEquipment(_currentSchool.id); loadSchoolStats(_currentSchool.id,_currentSchool.name);}
+  }).then(r=>r.json().then(res=>({ok:r.ok, res}))).then(({ok, res}) => {
+    if(ok && res.success){if(onSuccess)onSuccess(); loadEquipment(_currentSchool.id); loadSchoolStats(_currentSchool.id,_currentSchool.name);}
     else alert(res.error||'실패');
   });
 }
