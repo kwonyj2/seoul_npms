@@ -874,7 +874,7 @@ function renderMonthlyWork(d) {
             </tbody>
           </table>
         </div>
-        <div class="text-muted small mt-1">※ 별첨 : 장애처리 내역</div>
+        <div class="small mt-1">※ 별첨 : <a href="${BASE}/api/incidents/incidents/excel_download/?center=${d.center_code === 'all' ? '' : d.center_code}&date_from=${d.year}-${String(d.month).padStart(2,'0')}-01&date_to=${d.year}-${String(d.month).padStart(2,'0')}-${new Date(d.year, d.month, 0).getDate()}" class="monthly-link text-decoration-none">장애처리 내역 <i class="bi bi-download"></i></a></div>
       </div>
     </div>
 
