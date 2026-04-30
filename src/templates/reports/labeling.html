@@ -370,7 +370,7 @@ function renderEquipment(list) {
       <td>${tagHtml}</td><td class="text-center">${exist}</td>
       <td class="text-center text-nowrap">
         <i class="bi bi-qr-code-scan scan-btn" onclick="startScan(${e.id})" title="스캔"></i>
-        <i class="bi bi-x-circle scan-btn text-warning ms-1" onclick="markNoEquip(${e.id})" title="장비없음" style="font-size:.95rem;"></i>
+        ${isNo ? `<i class="bi bi-arrow-counterclockwise scan-btn text-secondary ms-1" onclick="clearTag(${e.id})" title="미부여로 되돌리기" style="font-size:.95rem;"></i>` : `<i class="bi bi-x-circle scan-btn text-warning ms-1" onclick="markNoEquip(${e.id})" title="장비없음" style="font-size:.95rem;"></i>`}
         <i class="bi bi-pencil scan-btn text-info ms-1" onclick="showEditEquip(${e.id})" title="수정" style="font-size:.95rem;"></i>
       </td></tr>`;
   }).join('');
@@ -380,6 +380,12 @@ function renderEquipment(list) {
 function markNoEquip(id) {
   if (!confirm('이 장비를 "장비 없음"으로 처리하시겠습니까?')) return;
   apiPost(`equipment_tag`, { equipment_id: id, asset_tag: '장비없음' });
+}
+
+// ═══ 미부여로 되돌리기 ═══
+function clearTag(id) {
+  if (!confirm('이 장비를 "미부여"로 되돌리시겠습니까?')) return;
+  apiPost(`equipment_tag`, { equipment_id: id, asset_tag: '' });
 }
 
 // ═══ QR 스캔 ═══

@@ -394,15 +394,17 @@ class SchoolViewSet(viewsets.ModelViewSet):
         school = self.get_object()
         equip_id = request.data.get('equipment_id')
         asset_tag = request.data.get('asset_tag', '').strip()
-        if not equip_id or not asset_tag:
-            return Response({'error': '장비 ID와 관리번호를 입력하세요.'}, status=400)
+        if not equip_id:
+            return Response({'error': '장비 ID를 입력하세요.'}, status=400)
+        if not asset_tag and asset_tag != '':
+            return Response({'error': '관리번호를 입력하세요.'}, status=400)
         try:
             equip = school.equipment_list.get(pk=equip_id)
         except SchoolEquipment.DoesNotExist:
             return Response({'error': '해당 장비를 찾을 수 없습니다.'}, status=404)
-        equip.asset_tag = asset_tag
-        equip.tagged_at = timezone.now()
-        equip.tagged_by = request.user
+        equip.asset_tag = asset_tag if asset_tag else None
+        equip.tagged_at = timezone.now() if asset_tag else None
+        equip.tagged_by = request.user if asset_tag else None
         equip.save(update_fields=['asset_tag', 'tagged_at', 'tagged_by', 'updated_at']
                    if hasattr(equip, 'updated_at') else ['asset_tag', 'tagged_at', 'tagged_by'])
         return Response({'success': True, 'asset_tag': asset_tag, 'equipment_id': equip.id})
