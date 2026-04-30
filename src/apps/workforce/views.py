@@ -176,6 +176,47 @@ class WorkScheduleViewSet(viewsets.ModelViewSet):
             qs = qs.filter(worker=self.request.user)
         return qs
 
+    @action(detail=False, methods=['post'])
+    def auto_register(self, request):
+        """라벨링 등 자동 근태 등록"""
+        from django.utils import timezone
+        school_id = request.data.get('school_id')
+        work_type = request.data.get('work_type', '라벨링점검')
+        note = request.data.get('note', '')
+
+        # 업무유형: special_check 사용
+        stype = WorkScheduleType.objects.filter(code='special_check').first()
+        if not stype:
+            stype = WorkScheduleType.objects.first()
+
+        now = timezone.now()
+        # 오늘 같은 학교에 이미 등록된 라벨링 근태가 있으면 중복 방지
+        existing = WorkSchedule.objects.filter(
+            worker=request.user,
+            school_id=school_id,
+            start_dt__date=now.date(),
+            title__contains='라벨링',
+        ).first()
+        if existing:
+            # 종료 시간만 갱신
+            existing.end_dt = now
+            existing.description = (existing.description + '\n' + note).strip()
+            existing.save(update_fields=['end_dt', 'description', 'updated_at'])
+            return Response({'success': True, 'schedule_id': existing.id, 'updated': True})
+
+        schedule = WorkSchedule.objects.create(
+            worker=request.user,
+            schedule_type=stype,
+            school_id=school_id,
+            title=f'{work_type}',
+            description=note,
+            start_dt=now,
+            end_dt=now,
+            status='completed',
+            created_by=request.user,
+        )
+        return Response({'success': True, 'schedule_id': schedule.id})
+
     @action(detail=False, methods=['get'])
     def calendar(self, request):
         """FullCalendar 형식 이벤트 반환"""

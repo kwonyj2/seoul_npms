@@ -351,10 +351,88 @@ class SchoolViewSet(viewsets.ModelViewSet):
         qs = school.equipment_list.order_by('category', 'device_id')
         data = list(qs.values(
             'id', 'category', 'model_name', 'manufacturer',
-            'install_location', 'device_id', 'network_type',
-            'speed', 'tier', 'origin', 'mgmt', 'install_year'
+            'building', 'floor', 'install_location', 'device_id', 'network_type',
+            'speed', 'tier', 'origin', 'mgmt', 'install_year',
+            'asset_tag', 'tagged_at', 'tagged_by__name', 'tag_photo',
         ))
         return Response(data)
+
+    @action(detail=True, methods=['post'], url_path='equipment_tag')
+    def equipment_tag(self, request, pk=None):
+        """장비 관리번호(라벨링) 부여"""
+        from .models import SchoolEquipment
+        from django.utils import timezone
+        school = self.get_object()
+        equip_id = request.data.get('equipment_id')
+        asset_tag = request.data.get('asset_tag', '').strip()
+        if not equip_id or not asset_tag:
+            return Response({'error': '장비 ID와 관리번호를 입력하세요.'}, status=400)
+        try:
+            equip = school.equipment_list.get(pk=equip_id)
+        except SchoolEquipment.DoesNotExist:
+            return Response({'error': '해당 장비를 찾을 수 없습니다.'}, status=404)
+        equip.asset_tag = asset_tag
+        equip.tagged_at = timezone.now()
+        equip.tagged_by = request.user
+        equip.save(update_fields=['asset_tag', 'tagged_at', 'tagged_by', 'updated_at']
+                   if hasattr(equip, 'updated_at') else ['asset_tag', 'tagged_at', 'tagged_by'])
+        return Response({'success': True, 'asset_tag': asset_tag, 'equipment_id': equip.id})
+
+    @action(detail=True, methods=['post'], url_path='equipment_add')
+    def equipment_add(self, request, pk=None):
+        """장비 추가 (라벨링 시 리스트에 없는 장비)"""
+        from .models import SchoolEquipment
+        from django.utils import timezone
+        school = self.get_object()
+        equip = SchoolEquipment.objects.create(
+            school=school,
+            category=request.data.get('category', ''),
+            model_name=request.data.get('model_name', ''),
+            manufacturer=request.data.get('manufacturer', ''),
+            building=request.data.get('building', ''),
+            floor=request.data.get('floor', ''),
+            install_location=request.data.get('install_location', ''),
+            device_id=request.data.get('device_id', ''),
+            network_type=request.data.get('network_type', ''),
+            asset_tag=request.data.get('asset_tag', ''),
+            tagged_at=timezone.now() if request.data.get('asset_tag') else None,
+            tagged_by=request.user if request.data.get('asset_tag') else None,
+        )
+        return Response({'success': True, 'equipment_id': equip.id}, status=201)
+
+    @action(detail=True, methods=['post'], url_path='equipment_photo')
+    def equipment_photo(self, request, pk=None):
+        """라벨링 스티커 사진 NAS 저장"""
+        from .models import SchoolEquipment
+        import os, base64
+        school = self.get_object()
+        equip_id = request.data.get('equipment_id')
+        photo_data = request.data.get('photo')  # base64
+        asset_tag = request.data.get('asset_tag', '')
+        if not equip_id or not photo_data:
+            return Response({'error': '장비 ID와 사진 데이터가 필요합니다.'}, status=400)
+        try:
+            equip = school.equipment_list.get(pk=equip_id)
+        except SchoolEquipment.DoesNotExist:
+            return Response({'error': '해당 장비를 찾을 수 없습니다.'}, status=404)
+
+        # NAS 저장
+        nas_dir = '/app/nas/media/npms/산출물/라벨링'
+        os.makedirs(nas_dir, exist_ok=True)
+        safe_school = school.name.replace('/', '_')
+        safe_tag = (asset_tag or equip.asset_tag or str(equip.id)).replace('/', '_')
+        fname = f'라벨링_{safe_school}_{safe_tag}.jpg'
+        fpath = os.path.join(nas_dir, fname)
+
+        # base64 디코딩 저장
+        if ',' in photo_data:
+            photo_data = photo_data.split(',', 1)[1]
+        with open(fpath, 'wb') as f:
+            f.write(base64.b64decode(photo_data))
+
+        equip.tag_photo = fpath
+        equip.save(update_fields=['tag_photo'])
+        return Response({'success': True, 'path': fpath})
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
     def equipment_to_assets(self, request, pk=None):
@@ -641,6 +719,70 @@ class SchoolViewSet(viewsets.ModelViewSet):
         # 건물 목록
         buildings = school.buildings.order_by('order')
         return Response([{'id': b.id, 'name': b.name} for b in buildings])
+
+    @action(detail=True, methods=['get'], url_path='equipment_excel')
+    def equipment_excel(self, request, pk=None):
+        """장비 라벨링 현황 엑셀 다운로드"""
+        import io
+        from urllib.parse import quote
+        from django.http import HttpResponse
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+        except ImportError:
+            return HttpResponse('openpyxl 필요', status=500)
+
+        school = self.get_object()
+        qs = school.equipment_list.order_by('category', 'id')
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = '라벨링 현황'
+
+        hdr_fill = PatternFill('solid', fgColor='1F497D')
+        hdr_font = Font(bold=True, color='FFFFFF', size=10)
+        ctr = Alignment(horizontal='center', vertical='center')
+        thin = Border(left=Side('thin'), right=Side('thin'), top=Side('thin'), bottom=Side('thin'))
+        green = PatternFill('solid', fgColor='C6EFCE')
+
+        ws.merge_cells('A1:H1')
+        c = ws.cell(1, 1, f'{school.name} — 장비 라벨링 현황')
+        c.font = Font(bold=True, size=13)
+        c.alignment = ctr
+
+        headers = ['#', '구분', '모델명', '건물/층', '설치장소', '망구분', '관리번호', '부여일시']
+        for ci, h in enumerate(headers, 1):
+            c = ws.cell(3, ci, h)
+            c.font, c.fill, c.alignment, c.border = hdr_font, hdr_fill, ctr, thin
+
+        for ri, eq in enumerate(qs, 1):
+            vals = [
+                ri, eq.category, eq.model_name or '',
+                f'{eq.building or ""}/{eq.floor or ""}',
+                eq.install_location or '', eq.network_type or '',
+                eq.asset_tag or '미부여',
+                eq.tagged_at.strftime('%Y-%m-%d %H:%M') if eq.tagged_at else '',
+            ]
+            for ci, v in enumerate(vals, 1):
+                c = ws.cell(ri + 3, ci, v)
+                c.border = thin
+                c.alignment = ctr if ci in (1, 2, 6) else Alignment(vertical='center')
+                if eq.asset_tag and ci == 7:
+                    c.fill = green
+
+        col_widths = [5, 8, 18, 12, 20, 10, 20, 16]
+        for ci, w in enumerate(col_widths, 1):
+            ws.column_dimensions[get_column_letter(ci)].width = w
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        fname = f'라벨링현황_{school.name}.xlsx'
+        resp = HttpResponse(buf.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(fname)}"
+        return resp
 
     @action(detail=True, methods=['get'], url_path='equipment_locations')
     def equipment_locations(self, request, pk=None):

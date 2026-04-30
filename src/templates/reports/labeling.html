@@ -1,0 +1,403 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}라벨링 점검{% endblock %}
+{% block page_title %}<i class="bi bi-qr-code me-2"></i>라벨링 점검{% endblock %}
+
+{% block extra_css %}
+<style>
+.equip-row { cursor:pointer; transition:background .15s; }
+.equip-row:hover { background:#f0f4ff !important; }
+.equip-row.tagged { background:#e8f5e9 !important; }
+.scan-btn { font-size:1.2rem; cursor:pointer; }
+.scan-btn:hover { color:#0d6efd; }
+#qr-video { width:100%; max-width:400px; border-radius:8px; }
+.tag-badge { font-size:.75rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <!-- 좌측: 학교 선택 -->
+  <div class="col-md-4 col-lg-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="fw-bold mb-3"><i class="bi bi-building me-1"></i>학교 선택</h6>
+        <select id="sel-center" class="form-select form-select-sm mb-2" onchange="loadSchools()">
+          <option value="">교육지원청 선택</option>
+        </select>
+        <input type="text" id="search-school" class="form-control form-control-sm mb-2"
+               placeholder="학교명 검색..." oninput="filterSchools()">
+        <div id="school-list" style="max-height:60vh;overflow-y:auto;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 우측: 장비 리스트 -->
+  <div class="col-md-8 col-lg-9">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0" id="school-title">
+          <i class="bi bi-hdd-rack me-1"></i>학교를 선택하세요
+        </h6>
+        <div>
+          <button class="btn btn-sm btn-outline-primary me-1" id="btn-add-equip" onclick="showAddEquip()" disabled>
+            <i class="bi bi-plus-lg me-1"></i>장비 추가
+          </button>
+          <button class="btn btn-sm btn-success" id="btn-export" onclick="exportLabeling()" disabled>
+            <i class="bi bi-file-earmark-excel me-1"></i>엑셀
+          </button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0" id="equip-table">
+            <thead class="table-light">
+              <tr>
+                <th style="width:30px;">#</th>
+                <th>구분</th>
+                <th>모델명</th>
+                <th>건물/층</th>
+                <th>설치장소</th>
+                <th>망구분</th>
+                <th style="width:160px;">관리번호</th>
+                <th style="width:60px;">스캔</th>
+              </tr>
+            </thead>
+            <tbody id="equip-body">
+              <tr><td colspan="8" class="text-center text-muted py-4">학교를 선택하면 장비 목록이 표시됩니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="p-2 text-muted small" id="equip-summary"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- QR 스캔 모달 -->
+<div class="modal fade" id="scanModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-qr-code-scan me-2"></i>관리번호 스캔</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center">
+        <div id="scan-status" class="mb-2 text-muted">카메라 로딩 중...</div>
+        <video id="qr-video" autoplay playsinline></video>
+        <canvas id="qr-canvas" style="display:none;"></canvas>
+        <div id="scan-result" class="mt-3" style="display:none;">
+          <div class="alert alert-success">
+            <strong>판독 결과:</strong> <span id="scan-tag"></span>
+          </div>
+          <button class="btn btn-primary" onclick="applyScanResult()">
+            <i class="bi bi-check-lg me-1"></i>적용
+          </button>
+          <button class="btn btn-outline-secondary" onclick="rescan()">
+            <i class="bi bi-arrow-clockwise me-1"></i>재스캔
+          </button>
+          <button class="btn btn-outline-warning" onclick="noEquipment()">
+            <i class="bi bi-x-lg me-1"></i>장비 없음
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 장비 추가 모달 -->
+<div class="modal fade" id="addEquipModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title"><i class="bi bi-plus-circle me-2"></i>장비 추가</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small">구분</label>
+            <select id="add-category" class="form-select form-select-sm">
+              <option value="스위치">스위치</option>
+              <option value="PoE">PoE</option>
+              <option value="AP">AP</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label small">모델명</label>
+            <input type="text" id="add-model" class="form-control form-control-sm">
+          </div>
+          <div class="col-6">
+            <label class="form-label small">건물</label>
+            <input type="text" id="add-building" class="form-control form-control-sm">
+          </div>
+          <div class="col-6">
+            <label class="form-label small">층</label>
+            <input type="text" id="add-floor" class="form-control form-control-sm">
+          </div>
+          <div class="col-6">
+            <label class="form-label small">설치장소</label>
+            <input type="text" id="add-location" class="form-control form-control-sm">
+          </div>
+          <div class="col-6">
+            <label class="form-label small">망구분</label>
+            <input type="text" id="add-network" class="form-control form-control-sm">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="submitAddEquip()">추가</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- QR 디코딩 라이브러리 -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script>
+const BASE = '/npms';
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+             || '{{ csrf_token }}';
+let _schools = [];
+let _currentSchool = null;
+let _equipList = [];
+let _scanEquipId = null;
+let _videoStream = null;
+let _scanInterval = null;
+
+// ── 초기화 ──
+document.addEventListener('DOMContentLoaded', () => {
+  fetch(`${BASE}/api/schools/centers/`)
+    .then(r => r.json()).then(data => {
+      const sel = document.getElementById('sel-center');
+      (data.results || data).forEach(c => {
+        sel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+      });
+    });
+});
+
+function loadSchools() {
+  const centerId = document.getElementById('sel-center').value;
+  if (!centerId) return;
+  fetch(`${BASE}/api/schools/schools/?center_id=${centerId}&page_size=500`)
+    .then(r => r.json()).then(data => {
+      _schools = data.results || data;
+      renderSchoolList(_schools);
+    });
+}
+
+function filterSchools() {
+  const q = document.getElementById('search-school').value.toLowerCase();
+  const filtered = _schools.filter(s => s.name.toLowerCase().includes(q));
+  renderSchoolList(filtered);
+}
+
+function renderSchoolList(schools) {
+  const el = document.getElementById('school-list');
+  el.innerHTML = schools.map(s => `
+    <div class="border rounded p-2 mb-1 equip-row" onclick="selectSchool(${s.id}, '${s.name.replace(/'/g,"\\'")}')">
+      <div class="small fw-bold">${s.name}</div>
+    </div>
+  `).join('');
+}
+
+function selectSchool(id, name) {
+  _currentSchool = { id, name };
+  document.getElementById('school-title').innerHTML =
+    `<i class="bi bi-hdd-rack me-1"></i>${name} — 장비 목록`;
+  document.getElementById('btn-add-equip').disabled = false;
+  document.getElementById('btn-export').disabled = false;
+  loadEquipment(id);
+}
+
+function loadEquipment(schoolId) {
+  fetch(`${BASE}/api/schools/schools/${schoolId}/equipment/`)
+    .then(r => r.json()).then(data => {
+      _equipList = data;
+      renderEquipment(data);
+    });
+}
+
+function renderEquipment(list) {
+  const tbody = document.getElementById('equip-body');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">등록된 장비가 없습니다.</td></tr>';
+    document.getElementById('equip-summary').textContent = '';
+    return;
+  }
+  const tagged = list.filter(e => e.asset_tag).length;
+  document.getElementById('equip-summary').textContent =
+    `총 ${list.length}대 | 라벨링 완료 ${tagged}대 | 미완료 ${list.length - tagged}대`;
+
+  tbody.innerHTML = list.map((e, i) => {
+    const cls = e.asset_tag ? 'tagged' : '';
+    const tagHtml = e.asset_tag
+      ? `<span class="badge bg-success tag-badge">${e.asset_tag}</span>`
+      : `<span class="badge bg-secondary tag-badge">미부여</span>`;
+    return `<tr class="equip-row ${cls}" data-id="${e.id}">
+      <td>${i+1}</td>
+      <td>${e.category}</td>
+      <td class="small">${e.model_name || ''}</td>
+      <td class="small">${[e.building, e.floor].filter(Boolean).join('/') || ''}</td>
+      <td class="small">${e.install_location || ''}</td>
+      <td class="small">${e.network_type || ''}</td>
+      <td>${tagHtml}</td>
+      <td class="text-center">
+        <i class="bi bi-qr-code-scan scan-btn" onclick="startScan(${e.id})" title="QR 스캔"></i>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── QR 스캔 ──
+function startScan(equipId) {
+  _scanEquipId = equipId;
+  document.getElementById('scan-result').style.display = 'none';
+  document.getElementById('scan-status').textContent = '카메라 로딩 중...';
+  const modal = new bootstrap.Modal(document.getElementById('scanModal'));
+  modal.show();
+
+  const video = document.getElementById('qr-video');
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'environment', width: { ideal: 1280 } }
+  }).then(stream => {
+    _videoStream = stream;
+    video.srcObject = stream;
+    video.play();
+    document.getElementById('scan-status').textContent = 'QR코드를 카메라에 비춰주세요';
+    _scanInterval = setInterval(scanFrame, 300);
+  }).catch(err => {
+    document.getElementById('scan-status').textContent = '카메라 접근 실패: ' + err.message;
+  });
+
+  document.getElementById('scanModal').addEventListener('hidden.bs.modal', stopScan, { once: true });
+}
+
+function scanFrame() {
+  const video = document.getElementById('qr-video');
+  const canvas = document.getElementById('qr-canvas');
+  if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const code = jsQR(imageData.data, canvas.width, canvas.height);
+
+  if (code && code.data) {
+    clearInterval(_scanInterval);
+    // 관리번호 패턴 추출 (XXXX-XX-XXXXXX)
+    const match = code.data.match(/\d{4}-[A-Z]{2}-\d{6}/);
+    const tag = match ? match[0] : code.data;
+    document.getElementById('scan-tag').textContent = tag;
+    document.getElementById('scan-result').style.display = '';
+    document.getElementById('scan-status').textContent = '판독 완료!';
+
+    // 캡처 이미지 저장
+    capturePhoto(canvas);
+  }
+}
+
+function capturePhoto(canvas) {
+  _capturedPhoto = canvas.toDataURL('image/jpeg', 0.8);
+}
+let _capturedPhoto = null;
+
+function stopScan() {
+  clearInterval(_scanInterval);
+  if (_videoStream) {
+    _videoStream.getTracks().forEach(t => t.stop());
+    _videoStream = null;
+  }
+}
+
+function rescan() {
+  document.getElementById('scan-result').style.display = 'none';
+  document.getElementById('scan-status').textContent = 'QR코드를 카메라에 비춰주세요';
+  _scanInterval = setInterval(scanFrame, 300);
+}
+
+function noEquipment() {
+  bootstrap.Modal.getInstance(document.getElementById('scanModal')).hide();
+  stopScan();
+  alert('장비 없음으로 처리되었습니다.');
+}
+
+function applyScanResult() {
+  const tag = document.getElementById('scan-tag').textContent;
+  if (!tag || !_scanEquipId) return;
+
+  // 관리번호 부여 API
+  fetch(`${BASE}/api/schools/schools/${_currentSchool.id}/equipment_tag/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify({ equipment_id: _scanEquipId, asset_tag: tag })
+  }).then(r => r.json()).then(res => {
+    if (res.success) {
+      // 사진 NAS 저장
+      if (_capturedPhoto) {
+        fetch(`${BASE}/api/schools/schools/${_currentSchool.id}/equipment_photo/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+          body: JSON.stringify({ equipment_id: _scanEquipId, asset_tag: tag, photo: _capturedPhoto })
+        });
+      }
+      // 근태기록부 자동 등록
+      fetch(`${BASE}/api/workforce/schedules/auto_register/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({
+          school_id: _currentSchool.id,
+          work_type: '라벨링점검',
+          note: `${_currentSchool.name} 라벨링 - ${tag}`
+        })
+      }).catch(() => {});
+
+      bootstrap.Modal.getInstance(document.getElementById('scanModal')).hide();
+      stopScan();
+      loadEquipment(_currentSchool.id);
+    } else {
+      alert(res.error || '저장 실패');
+    }
+  });
+}
+
+// ── 장비 추가 ──
+function showAddEquip() {
+  new bootstrap.Modal(document.getElementById('addEquipModal')).show();
+}
+
+function submitAddEquip() {
+  const data = {
+    category: document.getElementById('add-category').value,
+    model_name: document.getElementById('add-model').value,
+    building: document.getElementById('add-building').value,
+    floor: document.getElementById('add-floor').value,
+    install_location: document.getElementById('add-location').value,
+    network_type: document.getElementById('add-network').value,
+  };
+  fetch(`${BASE}/api/schools/schools/${_currentSchool.id}/equipment_add/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+    body: JSON.stringify(data)
+  }).then(r => r.json()).then(res => {
+    if (res.success) {
+      bootstrap.Modal.getInstance(document.getElementById('addEquipModal')).hide();
+      loadEquipment(_currentSchool.id);
+    } else {
+      alert(res.error || '추가 실패');
+    }
+  });
+}
+
+// ── 엑셀 다운로드 ──
+function exportLabeling() {
+  if (!_currentSchool) return;
+  window.location.href = `${BASE}/api/schools/schools/${_currentSchool.id}/equipment_excel/`;
+}
+</script>
+{% endblock %}

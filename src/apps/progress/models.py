@@ -75,6 +75,7 @@ class InspectionPlan(models.Model):
         ('project',   '사업점검'),
         ('survey',    '실태조사'),
         ('followup',  '사후점검'),
+        ('labeling',  '라벨링점검'),
     ]
     STATUS_CHOICES = [
         ('draft',     '준비중'),

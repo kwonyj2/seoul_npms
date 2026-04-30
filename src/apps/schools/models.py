@@ -258,6 +258,15 @@ class SchoolEquipment(models.Model):
     mgmt             = models.CharField('MGMT', max_length=10, blank=True)
     install_year     = models.PositiveSmallIntegerField('도입년', null=True, blank=True)
 
+    # 라벨링 (관리번호 스티커)
+    asset_tag        = models.CharField('관리번호', max_length=50, blank=True,
+                                         help_text='스티커 관리번호 (예: 2509-SW-000001)')
+    tagged_at        = models.DateTimeField('부여일시', null=True, blank=True)
+    tagged_by        = models.ForeignKey('accounts.User', on_delete=models.SET_NULL,
+                                          null=True, blank=True, verbose_name='부여자',
+                                          related_name='tagged_equipment')
+    tag_photo        = models.CharField('스티커 사진 경로', max_length=500, blank=True)
+
     class Meta:
         db_table = 'school_equipment'
         verbose_name = '학교 장비'
@@ -265,6 +274,7 @@ class SchoolEquipment(models.Model):
         indexes = [
             models.Index(fields=['school', 'category']),
             models.Index(fields=['school', 'network_type']),
+            models.Index(fields=['asset_tag'], condition=models.Q(asset_tag__gt=''), name='idx_equip_asset_tag'),
         ]
 
     def __str__(self):

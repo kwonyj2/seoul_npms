@@ -175,6 +175,11 @@
       </a>
     </li>
     {% endif %}
+    <li class="nav-item">
+      <a href="/npms/labeling/" class="nav-link {% if request.path == '/npms/labeling/' %}active{% endif %}">
+        <i class="bi bi-qr-code"></i><span>라벨링점검</span>
+      </a>
+    </li>
     {% if user_access.reports %}
     <li class="nav-item">
       <a href="/npms/reports/" class="nav-link {% if request.path == '/npms/reports/' %}active{% endif %}">

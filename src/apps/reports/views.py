@@ -18,6 +18,11 @@ def reports_view(request):
 
 
 @login_required
+def labeling_view(request):
+    return render(request, 'reports/labeling.html')
+
+
+@login_required
 def performance_report_view(request):
     """성과보고서 페이지 (주간/월간/분기/반기/연간, 교육지원청별)"""
     from django.utils import timezone as tz
