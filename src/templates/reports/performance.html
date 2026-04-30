@@ -40,6 +40,8 @@
 }
 .monthly-work-report .table th { white-space:nowrap; }
 .monthly-work-report .bg-primary-subtle { background-color:rgba(13,110,253,.15) !important; }
+.monthly-link { color:#0d6efd; cursor:pointer; }
+.monthly-link:hover { color:#0a58ca; text-decoration:underline !important; }
 </style>
 {% endblock %}
 
@@ -771,18 +773,25 @@ function renderMonthlyWork(d) {
   const catCounts  = inc.by_category.map(c => `<td>${c.count || ''}</td>`).join('');
 
   // ── 4. 일자별 업무 현황 ──
+  function linkItems(items) {
+    if (!items || !items.length) return '';
+    return items.map(item => {
+      if (item.type === 'report') {
+        return `<a href="${BASE}/api/reports/reports/${item.id}/download_pdf/" target="_blank" class="text-decoration-none monthly-link">${item.name}</a>`;
+      } else {
+        return `<a href="${BASE}/incidents/#detail-${item.id}" target="_blank" class="text-decoration-none monthly-link">${item.name}</a>`;
+      }
+    }).join(', ');
+  }
   const dailyRows = daily.map(d => {
-    const inspStr  = d.inspection.length ? d.inspection.join(', ') : '';
-    const incStr   = d.incident.length ? d.incident.join(', ') : '';
-    const swStr    = d.switch.length ? d.switch.join(', ') : '';
     const hasWork  = d.inspection.length || d.incident.length || d.switch.length;
     const rowCls   = hasWork ? '' : 'text-muted';
     return `<tr class="${rowCls}">
       <td class="text-center text-nowrap">${d.day}</td>
       <td class="text-center">${d.weekday}</td>
-      <td class="small">${inspStr}</td>
-      <td class="small">${incStr}</td>
-      <td class="small">${swStr}</td>
+      <td class="small">${linkItems(d.inspection)}</td>
+      <td class="small">${linkItems(d.incident)}</td>
+      <td class="small">${linkItems(d.switch)}</td>
       <td class="small">${d.note}</td>
     </tr>`;
   }).join('');
@@ -875,12 +884,12 @@ function renderMonthlyWork(d) {
           <table class="table table-sm table-bordered mb-0">
             <thead class="table-light">
               <tr>
-                <th class="text-center" style="width:50px;">일자</th>
-                <th class="text-center" style="width:40px;">요일</th>
-                <th>정기점검</th>
-                <th>장애처리</th>
-                <th>스위치교체</th>
-                <th style="width:80px;">비고</th>
+                <th class="text-center" style="width:45px;">일자</th>
+                <th class="text-center" style="width:35px;">요일</th>
+                <th style="width:22%;">정기점검</th>
+                <th style="width:22%;">장애처리</th>
+                <th style="width:22%;">스위치교체</th>
+                <th style="width:22%;">비고</th>
               </tr>
             </thead>
             <tbody>${dailyRows}</tbody>

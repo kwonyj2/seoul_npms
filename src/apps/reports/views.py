@@ -1682,6 +1682,7 @@ def monthly_work_report_api(request):
     }
 
     # ── 4. 일자별 업무 현황 ──
+    # 각 항목은 {'name': 학교명, 'id': 보고서/장애 ID, 'type': 'report'|'incident'} 형태
     daily_work = defaultdict(lambda: {
         'inspection': [], 'incident': [], 'switch': [], 'note': ''
     })
@@ -1698,15 +1699,31 @@ def monthly_work_report_api(request):
             try:
                 d = date.fromisoformat(inspect_date_str)
                 if date_from <= d <= date_to:
-                    daily_work[d.isoformat()]['inspection'].append(r.school.name)
+                    daily_work[d.isoformat()]['inspection'].append({
+                        'name': r.school.name, 'id': r.id, 'type': 'report',
+                    })
             except (ValueError, TypeError):
                 pass
 
     # (b) 장애처리: Incident → received_at (장애 발생일) 기준
-    for inc in inc_qs.select_related('school'):
-        d = inc.received_at.date()
+    # 장애에 연결된 보고서가 있으면 보고서 ID 사용, 없으면 장애 상세로 링크
+    inc_report_map = {}
+    inc_ids = list(inc_qs.values_list('id', flat=True))
+    if inc_ids:
+        for rid, iid in Report.objects.filter(
+            incident_id__in=inc_ids, template__report_type='incident'
+        ).values_list('id', 'incident_id'):
+            inc_report_map[iid] = rid
+
+    for inc_obj in inc_qs.select_related('school'):
+        d = inc_obj.received_at.date()
         if date_from <= d <= date_to:
-            daily_work[d.isoformat()]['incident'].append(inc.school.name)
+            report_id = inc_report_map.get(inc_obj.id)
+            daily_work[d.isoformat()]['incident'].append({
+                'name': inc_obj.school.name,
+                'id': report_id or inc_obj.id,
+                'type': 'report' if report_id else 'incident',
+            })
 
     # (c) 스위치교체: Report(switch_install) → data['install_date'] 기준
     switch_reports = Report.objects.filter(
@@ -1720,13 +1737,26 @@ def monthly_work_report_api(request):
             try:
                 d = date.fromisoformat(install_date_str)
                 if date_from <= d <= date_to:
-                    daily_work[d.isoformat()]['switch'].append(r.school.name)
+                    daily_work[d.isoformat()]['switch'].append({
+                        'name': r.school.name, 'id': r.id, 'type': 'report',
+                    })
             except (ValueError, TypeError):
                 pass
 
     # 평일만 정렬하여 리스트로 변환 (학교명 중복 제거, 순서 유지)
     from datetime import timedelta
     WEEKDAY_NAMES = ['월', '화', '수', '목', '금', '토', '일']
+
+    def _dedup_items(items):
+        """학교명 기준 중복 제거 (순서 유지)"""
+        seen = set()
+        result = []
+        for item in items:
+            if item['name'] not in seen:
+                seen.add(item['name'])
+                result.append(item)
+        return result
+
     daily_list = []
     current = date_from
     while current <= date_to:
@@ -1737,9 +1767,9 @@ def monthly_work_report_api(request):
                 'date': key,
                 'day': current.day,
                 'weekday': WEEKDAY_NAMES[current.weekday()],
-                'inspection': list(dict.fromkeys(entry['inspection'])),
-                'incident': list(dict.fromkeys(entry['incident'])),
-                'switch': list(dict.fromkeys(entry['switch'])),
+                'inspection': _dedup_items(entry['inspection']),
+                'incident': _dedup_items(entry['incident']),
+                'switch': _dedup_items(entry['switch']),
                 'note': entry['note'],
             })
         current += timedelta(days=1)
