@@ -1243,11 +1243,25 @@ class IncidentViewSet(viewsets.ModelViewSet):
         wb.save(buf)
         buf.seek(0)
         from django.utils import timezone as tz
-        fname = f'incidents_{tz.localdate().isoformat()}.xlsx'
+        # 파일명: 지원청/월 파라미터가 있으면 장애처리내역_{지원청}_{월}.xlsx
+        params = self.request.query_params
+        center_code = params.get('center', '')
+        date_from = params.get('date_from', '')
+        if center_code and date_from and len(date_from) >= 7:
+            from apps.schools.models import SupportCenter
+            sc = SupportCenter.objects.filter(code=center_code).first()
+            center_label = sc.name if sc else '전체'
+            month_label = date_from[:7]  # YYYY-MM
+            fname = f'장애처리내역_{center_label}_{month_label}.xlsx'
+        elif date_from and len(date_from) >= 7:
+            fname = f'장애처리내역_전체_{date_from[:7]}.xlsx'
+        else:
+            fname = f'incidents_{tz.localdate().isoformat()}.xlsx'
         resp = HttpResponse(
             buf.read(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        resp['Content-Disposition'] = f'attachment; filename="{fname}"'
+        from urllib.parse import quote
+        resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(fname)}"
         return resp
 
     # ── 작업지시서 ─────────────────────────
