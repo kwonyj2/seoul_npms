@@ -289,23 +289,29 @@ class SchoolViewSet(viewsets.ModelViewSet):
     def labeling_summary(self, request):
         """전체 학교 라벨링 현황 요약"""
         from django.db.models import Count, Q
-        from .models import SchoolEquipment
+        from .models import LabelingCompletion
         qs = School.objects.filter(is_active=True).order_by('support_center__id', 'name')
         center = request.query_params.get('center')
         school_type = request.query_params.get('school_type')
+        q = request.query_params.get('q')
         if center:
             qs = qs.filter(support_center__code=center)
         if school_type:
             qs = qs.filter(school_type_id=school_type)
+        if q:
+            qs = qs.filter(name__icontains=q)
         qs = qs.annotate(
             equip_total=Count('equipment_list'),
             equip_tagged=Count('equipment_list', filter=Q(equipment_list__asset_tag__gt='')),
         ).filter(equip_total__gt=0)
+        completed_ids = set(LabelingCompletion.objects.values_list('school_id', flat=True))
         data = [{
             'id': s.id, 'name': s.name,
             'center_name': s.support_center.name if s.support_center else '',
+            'school_type_name': s.school_type.name if s.school_type else '',
             'total': s.equip_total, 'tagged': s.equip_tagged,
-        } for s in qs.select_related('support_center')]
+            'completed': s.id in completed_ids,
+        } for s in qs.select_related('support_center', 'school_type')]
         return Response(data)
 
     @action(detail=False, methods=['get'])
@@ -459,6 +465,149 @@ class SchoolViewSet(viewsets.ModelViewSet):
         equip.tag_photo = fpath
         equip.save(update_fields=['tag_photo'])
         return Response({'success': True, 'path': fpath})
+
+    @action(detail=True, methods=['post'], url_path='equipment_update')
+    def equipment_update(self, request, pk=None):
+        """장비 정보 수정 (변경 전 원본 자동 보존)"""
+        from .models import SchoolEquipment
+        school = self.get_object()
+        equip_id = request.data.get('equipment_id')
+        try:
+            equip = school.equipment_list.get(pk=equip_id)
+        except SchoolEquipment.DoesNotExist:
+            return Response({'error': '해당 장비를 찾을 수 없습니다.'}, status=404)
+        # 원본 보존
+        equip.save_original()
+        # 수정 가능 필드
+        for field in ['category','model_name','manufacturer','building','floor',
+                       'install_location','device_id','network_type','speed','tier','mgmt']:
+            if field in request.data:
+                setattr(equip, field, request.data[field])
+        equip.save()
+        return Response({'success': True})
+
+    @action(detail=True, methods=['post'], url_path='labeling_complete')
+    def labeling_complete(self, request, pk=None):
+        """학교 라벨링 완료 처리 + NAS 엑셀 저장"""
+        import io, os
+        from urllib.parse import quote
+        from django.utils import timezone
+        from .models import LabelingCompletion
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+        except ImportError:
+            return Response({'error': 'openpyxl 필요'}, status=500)
+
+        school = self.get_object()
+        qs = school.equipment_list.order_by('category', 'id')
+
+        wb = openpyxl.Workbook()
+        # ── 시트1: 현재(변경 후) ──
+        ws = wb.active
+        ws.title = '라벨링 결과'
+        hdr_fill = PatternFill('solid', fgColor='1F497D')
+        hdr_font = Font(bold=True, color='FFFFFF', size=10)
+        ctr = Alignment(horizontal='center', vertical='center')
+        thin = Border(left=Side('thin'), right=Side('thin'), top=Side('thin'), bottom=Side('thin'))
+        green = PatternFill('solid', fgColor='C6EFCE')
+
+        ws.merge_cells('A1:J1')
+        ws.cell(1, 1, f'{school.name} — 라벨링 결과').font = Font(bold=True, size=13)
+        headers = ['#','구분','모델명','제조사','건물/층','설치장소','망구분','장비ID','관리번호','유무']
+        for ci, h in enumerate(headers, 1):
+            c = ws.cell(3, ci, h)
+            c.font, c.fill, c.alignment, c.border = hdr_font, hdr_fill, ctr, thin
+        for ri, eq in enumerate(qs, 1):
+            exist = '유' if (eq.asset_tag and eq.asset_tag != '장비없음') else ('무' if eq.asset_tag == '장비없음' else '-')
+            vals = [ri, eq.category, eq.model_name, eq.manufacturer,
+                    f'{eq.building}/{eq.floor}', eq.install_location, eq.network_type,
+                    eq.device_id, eq.asset_tag or '미부여', exist]
+            for ci, v in enumerate(vals, 1):
+                c = ws.cell(ri+3, ci, v)
+                c.border = thin
+                if eq.asset_tag and eq.asset_tag != '장비없음' and ci == 9:
+                    c.fill = green
+
+        # ── 시트2: 변경 전 (original_data) ──
+        ws2 = wb.create_sheet('변경 전')
+        ws2.merge_cells('A1:J1')
+        ws2.cell(1, 1, f'{school.name} — 변경 전 원본').font = Font(bold=True, size=13)
+        for ci, h in enumerate(headers, 1):
+            c = ws2.cell(3, ci, h)
+            c.font, c.fill, c.alignment, c.border = hdr_font, hdr_fill, ctr, thin
+        changed_count = 0
+        for ri, eq in enumerate(qs, 1):
+            orig = eq.original_data or {}
+            if orig:
+                changed_count += 1
+                vals = [ri, orig.get('category',''), orig.get('model_name',''),
+                        orig.get('manufacturer',''), f"{orig.get('building','')}/{orig.get('floor','')}",
+                        orig.get('install_location',''), orig.get('network_type',''),
+                        orig.get('device_id',''), '', '-']
+            else:
+                vals = [ri, eq.category, eq.model_name, eq.manufacturer,
+                        f'{eq.building}/{eq.floor}', eq.install_location, eq.network_type,
+                        eq.device_id, '', '-']
+            for ci, v in enumerate(vals, 1):
+                c = ws2.cell(ri+3, ci, v)
+                c.border = thin
+                if orig:
+                    c.fill = PatternFill('solid', fgColor='FFF3CD')
+
+        col_widths = [5, 8, 18, 12, 12, 20, 10, 14, 20, 6]
+        for ws_ in [ws, ws2]:
+            for ci, w in enumerate(col_widths, 1):
+                ws_.column_dimensions[get_column_letter(ci)].width = w
+
+        # NAS 저장
+        nas_dir = '/app/nas/media/npms/산출물/라벨링 엑셀'
+        os.makedirs(nas_dir, exist_ok=True)
+        safe_name = school.name.replace('/', '_')
+        fpath = os.path.join(nas_dir, f'라벨링목록_{safe_name}.xlsx')
+        wb.save(fpath)
+
+        # 완료 기록
+        now = timezone.now()
+        comp, _ = LabelingCompletion.objects.update_or_create(
+            school=school,
+            defaults={'completed_at': now, 'completed_by': request.user, 'excel_path': fpath}
+        )
+        return Response({'success': True, 'path': fpath, 'changed': changed_count})
+
+    @action(detail=False, methods=['get'], url_path='labeling_stats')
+    def labeling_stats(self, request):
+        """전체 지원청별 라벨링 통계"""
+        from django.db.models import Count, Q
+        from .models import LabelingCompletion
+        centers = SupportCenter.objects.filter(is_active=True).order_by('id')
+        result = []
+        for ctr in centers:
+            schools = School.objects.filter(is_active=True, support_center=ctr)
+            school_ids = list(schools.values_list('id', flat=True))
+            from .models import SchoolEquipment
+            eq_qs = SchoolEquipment.objects.filter(school_id__in=school_ids)
+            total = eq_qs.count()
+            tagged = eq_qs.filter(asset_tag__gt='').count()
+            # 카테고리별
+            cats = {}
+            for cat in ['스위치', 'PoE', 'AP']:
+                cat_qs = eq_qs.filter(category=cat)
+                cats[cat] = {'total': cat_qs.count(), 'tagged': cat_qs.filter(asset_tag__gt='').count()}
+            # 완료 학교 수
+            completed = LabelingCompletion.objects.filter(school_id__in=school_ids).count()
+            # 추가/삭감 (original_data가 있는 건 = 변경됨)
+            changed = eq_qs.filter(original_data__isnull=False).count()
+            # 장비 추가된 건 (install_year가 없고 asset_tag가 있는 건)
+            added = eq_qs.filter(install_year__isnull=True, asset_tag__gt='').count()
+            result.append({
+                'center_name': ctr.name, 'center_code': ctr.code,
+                'school_count': schools.count(), 'completed_count': completed,
+                'total': total, 'tagged': tagged,
+                'categories': cats, 'changed': changed, 'added': added,
+            })
+        return Response(result)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
     def equipment_to_assets(self, request, pk=None):

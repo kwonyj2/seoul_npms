@@ -266,6 +266,9 @@ class SchoolEquipment(models.Model):
                                           null=True, blank=True, verbose_name='부여자',
                                           related_name='tagged_equipment')
     tag_photo        = models.CharField('스티커 사진 경로', max_length=500, blank=True)
+    # 변경 이력 (원본 데이터 보존)
+    original_data    = models.JSONField('원본 데이터', null=True, blank=True,
+                                         help_text='라벨링 전 원본 장비 정보 (자동 저장)')
 
     class Meta:
         db_table = 'school_equipment'
@@ -279,3 +282,28 @@ class SchoolEquipment(models.Model):
 
     def __str__(self):
         return f'{self.school.name} - {self.category} {self.model_name} ({self.device_id})'
+
+    def save_original(self):
+        """최초 라벨링 시 원본 데이터 저장"""
+        if not self.original_data:
+            self.original_data = {
+                'category': self.category, 'model_name': self.model_name,
+                'manufacturer': self.manufacturer, 'building': self.building,
+                'floor': self.floor, 'install_location': self.install_location,
+                'device_id': self.device_id, 'network_type': self.network_type,
+                'speed': self.speed, 'tier': self.tier, 'mgmt': self.mgmt,
+            }
+
+
+class LabelingCompletion(models.Model):
+    """학교별 라벨링 완료 기록"""
+    school       = models.OneToOneField(School, on_delete=models.CASCADE,
+                                         related_name='labeling_completion', verbose_name='학교')
+    completed_at = models.DateTimeField('완료일시')
+    completed_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL,
+                                      null=True, verbose_name='완료자')
+    excel_path   = models.CharField('엑셀 파일 경로', max_length=500, blank=True)
+
+    class Meta:
+        db_table = 'labeling_completions'
+        verbose_name = '라벨링 완료'
