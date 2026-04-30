@@ -791,10 +791,10 @@ function renderMonthlyWork(d) {
     return `<tr class="${rowCls}">
       <td class="text-center text-nowrap">${d.day}</td>
       <td class="text-center">${d.weekday}</td>
-      <td class="small">${linkItems(d.inspection)}</td>
-      <td class="small">${linkItems(d.incident)}</td>
-      <td class="small">${linkItems(d.switch)}</td>
-      <td class="small">${d.note}</td>
+      <td class="small text-center">${linkItems(d.inspection)}</td>
+      <td class="small text-center">${linkItems(d.incident)}</td>
+      <td class="small text-center">${linkItems(d.switch)}</td>
+      <td class="small text-center">${d.note}</td>
     </tr>`;
   }).join('');
 
@@ -818,7 +818,7 @@ function renderMonthlyWork(d) {
           <i class="bi bi-check-square me-1"></i>사업 범위
         </div>
         <div class="table-responsive">
-          <table class="table table-sm table-bordered mb-0 text-center">
+          <table class="table table-sm table-bordered mb-0 text-center" style="table-layout:fixed;">
             <thead class="table-light">
               <tr><th>구분</th>${stHeaders}<th class="col-total">합계</th></tr>
             </thead>
@@ -854,7 +854,7 @@ function renderMonthlyWork(d) {
 
         <div class="mb-2 fw-semibold small"><i class="bi bi-check-square me-1"></i>학제별</div>
         <div class="table-responsive mb-3">
-          <table class="table table-sm table-bordered mb-0 text-center">
+          <table class="table table-sm table-bordered mb-0 text-center" style="table-layout:fixed;">
             <thead class="table-light">
               <tr><th>지원청</th>${incStHeaders}<th class="col-total">합계</th></tr>
             </thead>
@@ -865,7 +865,7 @@ function renderMonthlyWork(d) {
 
         <div class="mb-2 fw-semibold small"><i class="bi bi-check-square me-1"></i>장애 분류별</div>
         <div class="table-responsive">
-          <table class="table table-sm table-bordered mb-0 text-center">
+          <table class="table table-sm table-bordered mb-0 text-center" style="table-layout:fixed;">
             <thead class="table-light">
               <tr>${catHeaders}<th class="col-total">합계</th></tr>
             </thead>
@@ -888,10 +888,10 @@ function renderMonthlyWork(d) {
               <tr>
                 <th class="text-center" style="width:45px;">일자</th>
                 <th class="text-center" style="width:35px;">요일</th>
-                <th style="width:22%;">정기점검</th>
-                <th style="width:22%;">장애처리</th>
-                <th style="width:22%;">스위치교체</th>
-                <th style="width:22%;">비고</th>
+                <th class="text-center" style="width:22%;">정기점검</th>
+                <th class="text-center" style="width:22%;">장애처리</th>
+                <th class="text-center" style="width:22%;">스위치교체</th>
+                <th class="text-center" style="width:22%;">비고</th>
               </tr>
             </thead>
             <tbody>${dailyRows}</tbody>
