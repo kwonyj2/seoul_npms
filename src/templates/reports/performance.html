@@ -779,7 +779,7 @@ function renderMonthlyWork(d) {
       if (item.type === 'report') {
         return `<a href="${BASE}/api/reports/reports/${item.id}/download_pdf/" target="_blank" class="text-decoration-none monthly-link">${item.name}</a>`;
       } else {
-        return `<a href="${BASE}/incidents/#detail-${item.id}" target="_blank" class="text-decoration-none monthly-link">${item.name}</a>`;
+        return `<a href="${BASE}/incidents/${item.id}/" target="_blank" class="text-decoration-none monthly-link">${item.name}</a>`;
       }
     }).join(', ');
   }

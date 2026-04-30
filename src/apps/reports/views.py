@@ -1706,23 +1706,13 @@ def monthly_work_report_api(request):
                 pass
 
     # (b) 장애처리: Incident → received_at (장애 발생일) 기준
-    # 장애에 연결된 보고서가 있으면 보고서 ID 사용, 없으면 장애 상세로 링크
-    inc_report_map = {}
-    inc_ids = list(inc_qs.values_list('id', flat=True))
-    if inc_ids:
-        for rid, iid in Report.objects.filter(
-            incident_id__in=inc_ids, template__report_type='incident'
-        ).values_list('id', 'incident_id'):
-            inc_report_map[iid] = rid
-
     for inc_obj in inc_qs.select_related('school'):
         d = inc_obj.received_at.date()
         if date_from <= d <= date_to:
-            report_id = inc_report_map.get(inc_obj.id)
             daily_work[d.isoformat()]['incident'].append({
                 'name': inc_obj.school.name,
-                'id': report_id or inc_obj.id,
-                'type': 'report' if report_id else 'incident',
+                'id': inc_obj.id,
+                'type': 'incident',
             })
 
     # (c) 스위치교체: Report(switch_install) → data['install_date'] 기준
