@@ -189,7 +189,7 @@ services:
     volumes:
       - ./docker/nginx-main.conf:/etc/nginx/nginx.conf:ro
       - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./docker/ssl:/etc/nginx/ssl:ro
+      - ${SSL_CERT_PATH:-./docker/ssl}:/etc/nginx/ssl:ro
       - npms_static:/app/staticfiles:ro
       - ${NAS_MOUNT_PATH:-/mnt/lvm-cache}:/app/nas:ro
     depends_on:
