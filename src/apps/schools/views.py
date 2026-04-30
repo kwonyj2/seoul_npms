@@ -402,7 +402,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
             equip = school.equipment_list.get(pk=equip_id)
         except SchoolEquipment.DoesNotExist:
             return Response({'error': '해당 장비를 찾을 수 없습니다.'}, status=404)
-        equip.asset_tag = asset_tag if asset_tag else None
+        equip.asset_tag = asset_tag
         equip.tagged_at = timezone.now() if asset_tag else None
         equip.tagged_by = request.user if asset_tag else None
         equip.save(update_fields=['asset_tag', 'tagged_at', 'tagged_by', 'updated_at']
