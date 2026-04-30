@@ -221,7 +221,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const [centers, types] = await Promise.all([
       fetch(`${BASE}/api/schools/centers/`).then(r=>r.json()),
-      fetch(`${BASE}/api/schools/school-types/`).then(r=>r.json()),
+      fetch(`${BASE}/api/schools/types/`).then(r=>r.json()),
     ]);
     const selC = document.getElementById('sel-center');
     (centers.results||centers).forEach(c => selC.innerHTML += `<option value="${c.code||c.id}">${c.name}</option>`);
