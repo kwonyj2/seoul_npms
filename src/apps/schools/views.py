@@ -286,6 +286,29 @@ class SchoolViewSet(viewsets.ModelViewSet):
         return Response(data)
 
     @action(detail=False, methods=['get'])
+    def labeling_summary(self, request):
+        """전체 학교 라벨링 현황 요약"""
+        from django.db.models import Count, Q
+        from .models import SchoolEquipment
+        qs = School.objects.filter(is_active=True).order_by('support_center__id', 'name')
+        center = request.query_params.get('center')
+        school_type = request.query_params.get('school_type')
+        if center:
+            qs = qs.filter(support_center__code=center)
+        if school_type:
+            qs = qs.filter(school_type_id=school_type)
+        qs = qs.annotate(
+            equip_total=Count('equipment_list'),
+            equip_tagged=Count('equipment_list', filter=Q(equipment_list__asset_tag__gt='')),
+        ).filter(equip_total__gt=0)
+        data = [{
+            'id': s.id, 'name': s.name,
+            'center_name': s.support_center.name if s.support_center else '',
+            'total': s.equip_total, 'tagged': s.equip_tagged,
+        } for s in qs.select_related('support_center')]
+        return Response(data)
+
+    @action(detail=False, methods=['get'])
     def tree(self, request):
         """교육청 → 학제 → 학교 3단계 트리 데이터"""
         from collections import defaultdict
@@ -394,6 +417,9 @@ class SchoolViewSet(viewsets.ModelViewSet):
             install_location=request.data.get('install_location', ''),
             device_id=request.data.get('device_id', ''),
             network_type=request.data.get('network_type', ''),
+            speed=request.data.get('speed', ''),
+            tier=request.data.get('tier', ''),
+            mgmt=request.data.get('mgmt', ''),
             asset_tag=request.data.get('asset_tag', ''),
             tagged_at=timezone.now() if request.data.get('asset_tag') else None,
             tagged_by=request.user if request.data.get('asset_tag') else None,
