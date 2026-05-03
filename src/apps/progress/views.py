@@ -27,6 +27,7 @@ def progress_view(request):
 class HolidayViewSet(viewsets.ModelViewSet):
     serializer_class   = HolidaySerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class   = None  # 공휴일은 건수가 적으므로 전체 반환
 
     def get_queryset(self):
         qs = Holiday.objects.all()
