@@ -11,7 +11,7 @@ from django.core.management.base import BaseCommand
 # ── 음력 공휴일 양력 날짜 룩업 (2026~2040) ────────────────────────
 # 설날(음력1/1), 부처님오신날(음력4/8), 추석(음력8/15)
 LUNAR_DATES = {
-    2026: {'seollal': date(2026,  2, 17), 'buddha': date(2026,  5, 24), 'chuseok': date(2026, 10,  4)},
+    2026: {'seollal': date(2026,  2, 17), 'buddha': date(2026,  5, 24), 'chuseok': date(2026,  9, 25)},
     2027: {'seollal': date(2027,  2,  6), 'buddha': date(2027,  5, 13), 'chuseok': date(2027,  9, 23)},
     2028: {'seollal': date(2028,  1, 26), 'buddha': date(2028,  5,  2), 'chuseok': date(2028, 10, 11)},
     2029: {'seollal': date(2029,  2, 13), 'buddha': date(2029,  5, 20), 'chuseok': date(2029,  9, 30)},
@@ -34,11 +34,19 @@ FIXED_HOLIDAYS = [
     (3,  1, '삼일절'),
     (5,  5, '어린이날'),
     (6,  6, '현충일'),
+    (7, 17, '제헌절'),
     (8, 15, '광복절'),
     (10, 3, '개천절'),
     (10, 9, '한글날'),
     (12, 25, '성탄절'),
 ]
+
+# 특정 연도 임시 공휴일 (선거일 등)
+SPECIAL_HOLIDAYS = {
+    2026: [
+        (6, 3, '제9회 전국동시지방선거'),
+    ],
+}
 
 
 def _all_holiday_dates_for_year(year):
@@ -51,6 +59,10 @@ def _all_holiday_dates_for_year(year):
 
     # 근로자의날
     holidays.append((date(year, 5, 1), '근로자의날', 'legal'))
+
+    # 특정 연도 임시 공휴일 (선거일 등)
+    for m, d, name in SPECIAL_HOLIDAYS.get(year, []):
+        holidays.append((date(year, m, d), name, 'legal'))
 
     # 음력 공휴일
     lunar = LUNAR_DATES.get(year)
@@ -83,6 +95,10 @@ def generate_holidays_for_year(year):
     base_holidays = _all_holiday_dates_for_year(year)
     base_dates = {h[0] for h in base_holidays}
     result = []
+
+    # ── 특정 연도 임시 공휴일 (선거일 등) ──
+    for m, d, name in SPECIAL_HOLIDAYS.get(year, []):
+        result.append({'name': name, 'date': date(year, m, d), 'type': 'legal'})
 
     lunar = LUNAR_DATES.get(year)
     if not lunar:
