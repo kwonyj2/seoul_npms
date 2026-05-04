@@ -210,15 +210,17 @@ def network_docs_api(request, pk):
 
 
 class SupportCenterViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = SupportCenter.objects.filter(is_active=True)
+    queryset = SupportCenter.objects.filter(is_active=True).order_by('id')
     serializer_class = SupportCenterSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
 
 class SchoolTypeViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = SchoolType.objects.all()
+    queryset = SchoolType.objects.all().order_by('id')
     serializer_class = SchoolTypeSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
 
 
 class SchoolViewSet(viewsets.ModelViewSet):
