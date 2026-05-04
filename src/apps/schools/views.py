@@ -620,6 +620,190 @@ class SchoolViewSet(viewsets.ModelViewSet):
             })
         return Response(result)
 
+    @action(detail=False, methods=['get'], url_path='labeling_excel_all')
+    def labeling_excel_all(self, request):
+        """전체 학교 라벨링 결과 엑셀 다운로드 (변경후 + 변경전 + 변경내역 시트)"""
+        import io
+        from urllib.parse import quote
+        from django.http import StreamingHttpResponse, HttpResponse
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+        except ImportError:
+            return HttpResponse('openpyxl 필요', status=500)
+
+        from .models import SchoolEquipment
+
+        center = request.query_params.get('center')
+        school_type = request.query_params.get('school_type')
+        q = request.query_params.get('q', '')
+
+        schools_qs = School.objects.filter(is_active=True).select_related(
+            'support_center', 'school_type'
+        ).order_by('support_center__id', 'name')
+        if center:
+            schools_qs = schools_qs.filter(support_center__code=center)
+        if school_type:
+            schools_qs = schools_qs.filter(school_type_id=school_type)
+        if q:
+            schools_qs = schools_qs.filter(name__icontains=q)
+
+        school_ids = list(schools_qs.values_list('id', flat=True))
+
+        # 전체 장비를 한 번에 조회 (N+1 방지)
+        all_equips = list(
+            SchoolEquipment.objects.filter(school_id__in=school_ids)
+            .select_related('school', 'school__support_center')
+            .order_by('school__support_center__id', 'school__name', 'category', 'id')
+        )
+
+        wb = openpyxl.Workbook()
+        hdr_fill = PatternFill('solid', fgColor='1F497D')
+        hdr_font = Font(bold=True, color='FFFFFF', size=10)
+        ctr_align = Alignment(horizontal='center', vertical='center')
+        left_align = Alignment(vertical='center')
+        thin = Border(left=Side('thin'), right=Side('thin'),
+                      top=Side('thin'), bottom=Side('thin'))
+        green = PatternFill('solid', fgColor='C6EFCE')
+        yellow = PatternFill('solid', fgColor='FFF3CD')
+        red_font = Font(color='CC0000', bold=True)
+
+        headers = ['#', '지원청', '학교명', '구분', '모델명', '제조사',
+                   '건물/층', '설치장소', '망구분', '장비ID', '관리번호', '유무']
+        col_widths = [5, 10, 14, 8, 18, 12, 12, 20, 10, 14, 20, 6]
+
+        # ── 시트1: 변경 후 (현재) ──
+        ws1 = wb.active
+        ws1.title = '라벨링 결과(변경후)'
+        ws1.merge_cells('A1:L1')
+        ws1.cell(1, 1, '전체 학교 라벨링 결과 — 변경 후').font = Font(bold=True, size=13)
+        for ci, h in enumerate(headers, 1):
+            c = ws1.cell(3, ci, h)
+            c.font, c.fill, c.alignment, c.border = hdr_font, hdr_fill, ctr_align, thin
+
+        # ── 시트2: 변경 전 ──
+        ws2 = wb.create_sheet('라벨링 원본(변경전)')
+        ws2.merge_cells('A1:L1')
+        ws2.cell(1, 1, '전체 학교 라벨링 결과 — 변경 전 원본').font = Font(bold=True, size=13)
+        for ci, h in enumerate(headers, 1):
+            c = ws2.cell(3, ci, h)
+            c.font, c.fill, c.alignment, c.border = hdr_font, hdr_fill, ctr_align, thin
+
+        # ── 시트3: 변경 내역만 ──
+        ws3 = wb.create_sheet('변경내역')
+        ws3.merge_cells('A1:M1')
+        ws3.cell(1, 1, '라벨링 변경 내역 (변경 전 → 후 비교)').font = Font(bold=True, size=13)
+        chg_headers = ['#', '지원청', '학교명', '구분', '변경항목', '변경 전', '변경 후',
+                       '관리번호', '모델명(현재)', '건물/층(현재)', '설치장소(현재)',
+                       '망구분(현재)', '장비ID(현재)']
+        chg_widths = [5, 10, 14, 8, 12, 20, 20, 20, 18, 12, 20, 10, 14]
+        for ci, h in enumerate(chg_headers, 1):
+            c = ws3.cell(3, ci, h)
+            c.font, c.fill, c.alignment, c.border = hdr_font, hdr_fill, ctr_align, thin
+
+        row1 = 4
+        row3 = 4
+        seq = 0
+        chg_seq = 0
+
+        compare_fields = [
+            ('category', '구분'), ('model_name', '모델명'), ('manufacturer', '제조사'),
+            ('building', '건물'), ('floor', '층'), ('install_location', '설치장소'),
+            ('network_type', '망구분'), ('device_id', '장비ID'),
+        ]
+
+        for eq in all_equips:
+            seq += 1
+            center_name = eq.school.support_center.name if eq.school.support_center else ''
+            exist = '유' if (eq.asset_tag and eq.asset_tag != '장비없음') else (
+                '무' if eq.asset_tag == '장비없음' else '-')
+
+            # 시트1: 변경 후
+            vals1 = [seq, center_name, eq.school.name, eq.category,
+                     eq.model_name or '', eq.manufacturer or '',
+                     f'{eq.building or ""}/{eq.floor or ""}',
+                     eq.install_location or '', eq.network_type or '',
+                     eq.device_id or '', eq.asset_tag or '미부여', exist]
+            for ci, v in enumerate(vals1, 1):
+                c = ws1.cell(row1, ci, v)
+                c.border = thin
+                c.alignment = ctr_align if ci in (1, 4, 12) else left_align
+                if eq.asset_tag and eq.asset_tag != '장비없음' and ci == 11:
+                    c.fill = green
+
+            # 시트2: 변경 전
+            orig = eq.original_data or {}
+            if orig:
+                vals2 = [seq, center_name, eq.school.name,
+                         orig.get('category', ''), orig.get('model_name', ''),
+                         orig.get('manufacturer', ''),
+                         f"{orig.get('building', '')}/{orig.get('floor', '')}",
+                         orig.get('install_location', ''),
+                         orig.get('network_type', ''),
+                         orig.get('device_id', ''), '', '-']
+            else:
+                vals2 = [seq, center_name, eq.school.name, eq.category,
+                         eq.model_name or '', eq.manufacturer or '',
+                         f'{eq.building or ""}/{eq.floor or ""}',
+                         eq.install_location or '', eq.network_type or '',
+                         eq.device_id or '', '', '-']
+            for ci, v in enumerate(vals2, 1):
+                c = ws2.cell(row1, ci, v)
+                c.border = thin
+                c.alignment = ctr_align if ci in (1, 4, 12) else left_align
+                if orig:
+                    c.fill = yellow
+
+            # 시트3: 변경 내역 (original_data가 있는 건만)
+            if orig:
+                for field, label in compare_fields:
+                    old_val = str(orig.get(field, '') or '')
+                    new_val = str(getattr(eq, field, '') or '')
+                    if old_val != new_val:
+                        chg_seq += 1
+                        chg_vals = [chg_seq, center_name, eq.school.name,
+                                    eq.category, label, old_val, new_val,
+                                    eq.asset_tag or '미부여',
+                                    eq.model_name or '',
+                                    f'{eq.building or ""}/{eq.floor or ""}',
+                                    eq.install_location or '',
+                                    eq.network_type or '', eq.device_id or '']
+                        for ci, v in enumerate(chg_vals, 1):
+                            c = ws3.cell(row3, ci, v)
+                            c.border = thin
+                            c.alignment = ctr_align if ci in (1, 4) else left_align
+                            if ci == 6:
+                                c.font = red_font
+                            if ci == 7:
+                                c.fill = green
+                        row3 += 1
+
+            row1 += 1
+
+        # 열 너비
+        for ws_ in [ws1, ws2]:
+            for ci, w in enumerate(col_widths, 1):
+                ws_.column_dimensions[get_column_letter(ci)].width = w
+        for ci, w in enumerate(chg_widths, 1):
+            ws3.column_dimensions[get_column_letter(ci)].width = w
+
+        # 필터 추가
+        if row1 > 4:
+            ws1.auto_filter.ref = f'A3:L{row1-1}'
+            ws2.auto_filter.ref = f'A3:L{row1-1}'
+        if row3 > 4:
+            ws3.auto_filter.ref = f'A3:M{row3-1}'
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        fname = '라벨링결과_전체학교.xlsx'
+        resp = HttpResponse(buf.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(fname)}"
+        return resp
+
     @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
     def equipment_to_assets(self, request, pk=None):
         """SchoolEquipment → Asset 일괄 변환 (슈퍼어드민/관리자 전용)"""
