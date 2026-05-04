@@ -275,6 +275,11 @@ def update_module_role_perm(request, module_key):
 def access_log(request):
     """접속이력 API — LoginHistory + UserActivityLog + 현재접속자"""
     from apps.accounts.models import LoginHistory, UserActivityLog, UserSession
+    from django.utils import timezone as tz
+
+    def _fmt(dt):
+        """datetime → KST 포맷 문자열"""
+        return tz.localtime(dt).strftime('%Y-%m-%d %H:%M:%S') if dt else '-'
 
     kind = request.GET.get('kind', 'login')  # login | activity | session
     page = max(1, int(request.GET.get('page', 1)))
@@ -309,7 +314,7 @@ def access_log(request):
                 'user_agent':  r.user_agent[:80] if r.user_agent else '-',
                 'success':     r.success,
                 'fail_reason': r.fail_reason or '',
-                'created_at':  r.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'created_at':  _fmt(r.created_at),
             })
 
     elif kind == 'activity':
@@ -338,7 +343,7 @@ def access_log(request):
                 'target':     r.target or '-',
                 'detail':     r.detail[:100] if r.detail else '-',
                 'ip':         r.ip_address or '-',
-                'created_at': r.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'created_at': _fmt(r.created_at),
             })
 
     elif kind == 'session':
@@ -358,8 +363,8 @@ def access_log(request):
                 'name':         r.user.name    if r.user else '-',
                 'ip':           r.ip_address or '-',
                 'current_page': r.current_page or '-',
-                'login_at':     r.login_at.strftime('%Y-%m-%d %H:%M:%S'),
-                'last_active':  r.last_active.strftime('%Y-%m-%d %H:%M:%S'),
+                'login_at':     _fmt(r.login_at),
+                'last_active':  _fmt(r.last_active),
             })
 
     elif kind == 'security':
@@ -425,8 +430,8 @@ def access_log(request):
                 'attempted_users': ', '.join(u for u in usernames if u) or '-',
                 'has_success':    has_success,
                 'threat':         threat,
-                'first_attempt':  row['first_attempt'].strftime('%Y-%m-%d %H:%M'),
-                'last_attempt':   row['last_attempt'].strftime('%Y-%m-%d %H:%M'),
+                'first_attempt':  _fmt(row['first_attempt'])[:16],
+                'last_attempt':   _fmt(row['last_attempt'])[:16],
             })
 
         # 요약 통계
@@ -604,7 +609,7 @@ def celery_status(request):
                 'task':      TASK_LABELS.get(r.task_name, r.task_name.split('.')[-1] if r.task_name else '-'),
                 'task_name': r.task_name or '-',
                 'status':    r.status,
-                'date_done': r.date_done.strftime('%Y-%m-%d %H:%M:%S') if r.date_done else '-',
+                'date_done': tz.localtime(r.date_done).strftime('%Y-%m-%d %H:%M:%S') if r.date_done else '-',
                 'runtime':   f'{r.result[:60]}' if r.result and r.status == 'FAILURE' else (
                              f'{float(r.result):.1f}초' if r.result and r.result.replace('.','',1).isdigit() else '-'),
                 'worker':    r.worker or '-',
