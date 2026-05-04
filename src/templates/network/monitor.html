@@ -40,18 +40,23 @@
   <div id="nms-school-bar" class="card border-0 shadow-sm mb-2" style="display:none;">
     <div class="card-body py-2 px-3">
       <div class="row g-2 align-items-end">
-        <div class="col-md-3">
-          <select id="nms-center" class="form-select form-select-sm" onchange="nmsLoadSchoolsByCenter()">
+        <div class="col-md-2">
+          <select id="nms-center" class="form-select form-select-sm" onchange="nmsOnCenter()">
             <option value="">지원청 선택</option>
           </select>
         </div>
         <div class="col-md-2">
-          <select id="nms-stype" class="form-select form-select-sm" onchange="nmsLoadSchoolsByCenter()">
-            <option value="">학제</option>
+          <select id="nms-stype" class="form-select form-select-sm" onchange="nmsOnType()">
+            <option value="">학제 선택</option>
           </select>
         </div>
-        <div class="col-md-4 position-relative">
-          <input type="text" id="nms-school-q" class="form-control form-control-sm" placeholder="학교명 검색 (일부 입력 가능)" onkeyup="nmsSchoolSearch()" autocomplete="off">
+        <div class="col-md-2">
+          <select id="nms-school-sel" class="form-select form-select-sm" onchange="nmsOnSchoolSelect()">
+            <option value="">학교 선택</option>
+          </select>
+        </div>
+        <div class="col-md-3 position-relative">
+          <input type="text" id="nms-school-q" class="form-control form-control-sm" placeholder="학교명 검색" onkeyup="nmsSchoolSearch()" autocomplete="off">
           <div id="nms-school-results" class="list-group position-absolute shadow" style="z-index:10;max-height:200px;overflow-y:auto;display:none;width:100%;"></div>
         </div>
         <div class="col-md-3 d-flex gap-1">
@@ -1376,24 +1381,51 @@ async function convertEquipment() {
 // ══════════════════════════════════════════════════════════
 let _nmsSelectedSchool = null;
 let _currentNmsTab = 'topology';
+let _nmsTree = []; // tree API 캐시
 
 (function initNmsSchoolBar() {
-  // 지원청 로드
-  fetch(`${API}/schools/centers/`).then(r=>r.json()).then(d => {
+  fetch(`${API}/schools/schools/tree/`).then(r=>r.json()).then(d => {
+    _nmsTree = d;
     const sel = document.getElementById('nms-center');
-    (d.results||d).forEach(c => sel.innerHTML += `<option value="${c.code}">${c.name}</option>`);
-  }).catch(()=>{});
-  // 학제 로드
-  fetch(`${API}/schools/types/`).then(r=>r.json()).then(d => {
-    const sel = document.getElementById('nms-stype');
-    (d.results||d).forEach(t => sel.innerHTML += `<option value="${t.id}">${t.name}</option>`);
+    d.forEach(c => sel.innerHTML += `<option value="${c.id}">${c.name}</option>`);
   }).catch(()=>{});
 })();
 
-function nmsLoadSchoolsByCenter() {
-  // 지원청+학제 선택 시 학교 검색 결과 초기화
-  document.getElementById('nms-school-q').value = '';
-  document.getElementById('nms-school-results').style.display = 'none';
+function nmsOnCenter() {
+  const centerId = parseInt(document.getElementById('nms-center').value);
+  const typeSel = document.getElementById('nms-stype');
+  const schoolSel = document.getElementById('nms-school-sel');
+  typeSel.innerHTML = '<option value="">학제 선택</option>';
+  schoolSel.innerHTML = '<option value="">학교 선택</option>';
+  const center = _nmsTree.find(c => c.id === centerId);
+  if (!center) return;
+  (center.types || center.children || []).forEach(t => {
+    typeSel.innerHTML += `<option value="${t.id}">${t.name} (${(t.schools||[]).length})</option>`;
+  });
+}
+
+function nmsOnType() {
+  const centerId = parseInt(document.getElementById('nms-center').value);
+  const typeId = parseInt(document.getElementById('nms-stype').value);
+  const schoolSel = document.getElementById('nms-school-sel');
+  schoolSel.innerHTML = '<option value="">학교 선택</option>';
+  const center = _nmsTree.find(c => c.id === centerId);
+  if (!center) return;
+  const type = (center.types || center.children || []).find(t => t.id === typeId);
+  if (!type) return;
+  (type.schools || []).forEach(s => {
+    schoolSel.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+  });
+}
+
+function nmsOnSchoolSelect() {
+  const schoolId = parseInt(document.getElementById('nms-school-sel').value);
+  const schoolName = document.getElementById('nms-school-sel').selectedOptions[0]?.text || '';
+  if (schoolId) {
+    _nmsSelectedSchool = {id: schoolId, name: schoolName};
+    document.getElementById('nms-school-badge').textContent = schoolName;
+    document.getElementById('nms-school-badge').classList.remove('d-none');
+  }
 }
 
 let _nmsSearchTimer = null;
@@ -1404,16 +1436,10 @@ function nmsSchoolSearch() {
 
 function _doNmsSearch() {
   const q = document.getElementById('nms-school-q').value.trim();
-  const center = document.getElementById('nms-center').value;
-  const stype = document.getElementById('nms-stype').value;
   const resultsEl = document.getElementById('nms-school-results');
   if (q.length < 1) { resultsEl.style.display = 'none'; return; }
 
-  let url = `${API}/schools/schools/search/?q=${encodeURIComponent(q)}`;
-  if (center) url += `&center=${center}`;
-  if (stype) url += `&school_type=${stype}`;
-
-  fetch(url).then(r=>r.json()).then(data => {
+  fetch(`${API}/schools/schools/search/?q=${encodeURIComponent(q)}`).then(r=>r.json()).then(data => {
     const list = data.results || data;
     if (!list.length) {
       resultsEl.innerHTML = '<div class="list-group-item small text-muted">검색 결과 없음</div>';
@@ -1422,7 +1448,7 @@ function _doNmsSearch() {
     }
     resultsEl.innerHTML = list.slice(0, 15).map(s =>
       `<a href="#" class="list-group-item list-group-item-action small py-1" onclick="event.preventDefault();nmsPickSchool(${s.id},'${(s.name||'').replace(/'/g,"\\'")}')">
-        ${s.name} <span class="text-muted">(${s.support_center_name||s.center_name||''})</span></a>`
+        ${s.name} <span class="text-muted">(${s.support_center_name||''})</span></a>`
     ).join('');
     resultsEl.style.display = '';
   }).catch(()=>{});
