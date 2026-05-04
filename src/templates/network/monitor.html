@@ -1384,7 +1384,7 @@ let _currentNmsTab = 'topology';
 let _nmsTree = []; // tree API 캐시
 
 (function initNmsSchoolBar() {
-  fetch(`${API}/schools/schools/tree/`).then(r=>r.json()).then(d => {
+  fetch(`${API_BASE}/schools/schools/tree/`).then(r=>r.json()).then(d => {
     _nmsTree = d;
     const sel = document.getElementById('nms-center');
     d.forEach(c => sel.innerHTML += `<option value="${c.id}">${c.name}</option>`);
@@ -1439,7 +1439,7 @@ function _doNmsSearch() {
   const resultsEl = document.getElementById('nms-school-results');
   if (q.length < 1) { resultsEl.style.display = 'none'; return; }
 
-  fetch(`${API}/schools/schools/search/?q=${encodeURIComponent(q)}`).then(r=>r.json()).then(data => {
+  fetch(`${API_BASE}/schools/schools/search/?q=${encodeURIComponent(q)}`).then(r=>r.json()).then(data => {
     const list = data.results || data;
     if (!list.length) {
       resultsEl.innerHTML = '<div class="list-group-item small text-muted">검색 결과 없음</div>';
@@ -1478,7 +1478,7 @@ function nmsLoadSelected() {
 let _nasFileCache = {};
 
 function nmsLoadNasFile(schoolId, tab) {
-  fetch(`${API}/network/topology/nas_file_info/?school_id=${schoolId}&tab=${tab}`)
+  fetch(`${API_BASE}/network/topology/nas_file_info/?school_id=${schoolId}&tab=${tab}`)
     .then(r => r.json()).then(d => {
       _nasFileCache[tab] = d;
       const contentId = _getContentId(tab);
@@ -1501,7 +1501,7 @@ function nmsLoadNasFile(schoolId, tab) {
           html += `<li class="nav-item"><a class="nav-link ${i===0?'active':''}" href="#" onclick="nmsLoadPage('${tab}',${schoolId},${t.index},this);return false;" style="font-size:.8rem;">${t.name}</a></li>`;
         });
         // 다운로드 버튼
-        html += `<li class="nav-item ms-auto"><a class="nav-link text-success" href="${API}/network/topology/nas_file_download/?school_id=${schoolId}&tab=${tab}"><i class="bi bi-download me-1"></i>${d.file}</a></li>`;
+        html += `<li class="nav-item ms-auto"><a class="nav-link text-success" href="${API_BASE}/network/topology/nas_file_download/?school_id=${schoolId}&tab=${tab}"><i class="bi bi-download me-1"></i>${d.file}</a></li>`;
         html += '</ul>';
         if (tabsId) {
           document.getElementById(tabsId).innerHTML = html;
@@ -1539,7 +1539,7 @@ function nmsLoadPage(tab, schoolId, page, el) {
   const contentEl = document.getElementById(contentId);
   if (contentEl) contentEl.innerHTML = '<div class="text-center py-4"><span class="spinner-border spinner-border-sm me-1"></span>로딩 중...</div>';
 
-  fetch(`${API}/network/topology/nas_file_content/?school_id=${schoolId}&tab=${tab}&page=${page}`)
+  fetch(`${API_BASE}/network/topology/nas_file_content/?school_id=${schoolId}&tab=${tab}&page=${page}`)
     .then(r => r.json()).then(d => {
       if (d.error) { contentEl.innerHTML = `<div class="text-danger text-center py-4">${d.error}</div>`; return; }
 
@@ -1614,7 +1614,7 @@ function apLoad() {
   _apDoLoad(_apSchoolId);
 }
 function _apDoLoad(schoolId) {
-  fetch(`${API}/network/topology/ap_map_data/?school_id=${schoolId}`)
+  fetch(`${API_BASE}/network/topology/ap_map_data/?school_id=${schoolId}`)
     .then(r => r.json()).then(d => {
       _apData = d;
       document.getElementById('btn-ap-save').disabled = false;
@@ -1743,9 +1743,9 @@ function apSave() {
       items.push({ id: ap.id, pos_x: ap.pos_x, pos_y: ap.pos_y });
     });
   });
-  fetch(`${API}/network/topology/ap_map_save/`, {
+  fetch(`${API_BASE}/network/topology/ap_map_save/`, {
     method: 'POST',
-    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF},
+    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF_TOKEN},
     body: JSON.stringify({ items }),
   }).then(r => r.json()).then(d => {
     if (d.success) showToast(`AP위치도 저장 완료 (${d.updated}건)`);
@@ -1761,9 +1761,9 @@ function apUploadPlan(input) {
   fd.append('building', floor.building);
   fd.append('floor', floor.floor);
   fd.append('file', input.files[0]);
-  fetch(`${API}/network/topology/ap_map_upload_plan/`, {
+  fetch(`${API_BASE}/network/topology/ap_map_upload_plan/`, {
     method: 'POST',
-    headers: {'X-CSRFToken': CSRF},
+    headers: {'X-CSRFToken': CSRF_TOKEN},
     body: fd,
   }).then(r => r.json()).then(d => {
     if (d.success) {
@@ -1834,7 +1834,7 @@ function rkLoad() {
   _rkDoLoad(_rkSchoolId);
 }
 function _rkDoLoad(schoolId) {
-  fetch(`${API}/network/topology/rack_data/?school_id=${schoolId}`)
+  fetch(`${API_BASE}/network/topology/rack_data/?school_id=${schoolId}`)
     .then(r => r.json()).then(d => {
       _rkData = d;
       document.getElementById('btn-rk-save').disabled = false;
@@ -1927,9 +1927,9 @@ function rkSave() {
       items.push({ id: item.id, rack_unit: item.rack_unit, rack_size: item.rack_size || 1 });
     });
   });
-  fetch(`${API}/network/topology/rack_save/`, {
+  fetch(`${API_BASE}/network/topology/rack_save/`, {
     method: 'POST',
-    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF},
+    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF_TOKEN},
     body: JSON.stringify({ items }),
   }).then(r => r.json()).then(d => {
     if (d.success) showToast(`랙실장도 저장 완료 (${d.updated}건)`);
@@ -1974,7 +1974,7 @@ function pmLoad() {
   _pmDoLoad(_pmSchoolId);
 }
 function _pmDoLoad(schoolId) {
-  fetch(`${API}/network/topology/portmap_data/?school_id=${schoolId}`)
+  fetch(`${API_BASE}/network/topology/portmap_data/?school_id=${schoolId}`)
     .then(r => r.json()).then(d => {
       _pmData = d;
       document.getElementById('btn-pm-excel').disabled = false;
@@ -2099,9 +2099,9 @@ function pmSaveCurrent() {
     const field = el.dataset.field;
     ports[idx][field] = el.value;
   });
-  fetch(`${API}/network/topology/portmap_save/`, {
+  fetch(`${API_BASE}/network/topology/portmap_save/`, {
     method: 'POST',
-    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF},
+    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF_TOKEN},
     body: JSON.stringify({equipment_id: sw.id, ports: ports}),
   }).then(r => r.json()).then(d => {
     if (d.success) {
@@ -2114,7 +2114,7 @@ function pmSaveCurrent() {
 
 function pmExcel() {
   if (!_pmSchoolId) return;
-  window.location.href = `${API}/network/topology/portmap_excel/?school_id=${_pmSchoolId}`;
+  window.location.href = `${API_BASE}/network/topology/portmap_excel/?school_id=${_pmSchoolId}`;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2132,7 +2132,7 @@ function dgmLoad() {
   _dgmDoLoad(_dgmSchoolId);
 }
 function _dgmDoLoad(schoolId) {
-  fetch(`${API}/network/topology/diagram_data/?school_id=${schoolId}`)
+  fetch(`${API_BASE}/network/topology/diagram_data/?school_id=${schoolId}`)
     .then(r => r.json()).then(d => {
       if (d.error) { alert(d.error); return; }
       document.getElementById('dgm-title').textContent = d.school_name + ' — 네트워크 구성도' + (d.saved ? ' (저장됨)' : ' (자동생성)');
@@ -2224,7 +2224,7 @@ function dgmSave() {
   const edges = _cy.edges().map(e => ({
     source: e.data('source'), target: e.data('target'), label: e.data('label'),
   }));
-  fetch(`${API}/network/topology/diagram_save/`, {
+  fetch(`${API_BASE}/network/topology/diagram_save/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
     body: JSON.stringify({ school_id: _dgmSchoolId, layout: { nodes, edges } }),
@@ -2249,7 +2249,7 @@ function dgmDownloadPng() {
 
 function dgmDownloadPptx() {
   if (!_dgmSchoolId) return;
-  window.location.href = `${API}/network/topology/diagram_pptx/?school_id=${_dgmSchoolId}`;
+  window.location.href = `${API_BASE}/network/topology/diagram_pptx/?school_id=${_dgmSchoolId}`;
 }
 
 </script>
