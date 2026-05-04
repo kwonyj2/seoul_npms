@@ -157,17 +157,73 @@
       <div class="modal-header"><h6 class="modal-title"><i class="bi bi-plus-circle me-2"></i>장비 추가</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
       <div class="modal-body">
         <div class="row g-2">
-          <div class="col-4"><label class="form-label small">구분*</label><select id="add-category" class="form-select form-select-sm"><option value="스위치">스위치</option><option value="PoE">PoE</option><option value="AP">AP</option></select></div>
-          <div class="col-4"><label class="form-label small">모델명</label><input type="text" id="add-model" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">제조사</label><input type="text" id="add-manufacturer" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">건물</label><input type="text" id="add-building" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">층</label><input type="text" id="add-floor" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">설치장소</label><input type="text" id="add-location" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">장비ID</label><input type="text" id="add-device-id" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">망구분</label><input type="text" id="add-network" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">속도</label><input type="text" id="add-speed" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">계위</label><input type="text" id="add-tier" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">MGMT</label><input type="text" id="add-mgmt" class="form-control form-control-sm"></div>
+          <div class="col-4">
+            <label class="form-label small">구분*</label>
+            <select id="add-category" class="form-select form-select-sm" onchange="onCategoryChange('add')">
+              <option value="스위치">스위치</option><option value="PoE">PoE</option><option value="AP">AP</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <label class="form-label small">모델명</label>
+            <select id="add-model" class="form-select form-select-sm" onchange="onSelectOrOther(this,'add-model-other')">
+            </select>
+            <input type="text" id="add-model-other" class="form-control form-control-sm mt-1" placeholder="모델명 직접 입력" style="display:none;">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">제조사</label>
+            <select id="add-manufacturer" class="form-select form-select-sm" onchange="onSelectOrOther(this,'add-mfr-other')">
+            </select>
+            <input type="text" id="add-mfr-other" class="form-control form-control-sm mt-1" placeholder="제조사 직접 입력" style="display:none;">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">건물</label>
+            <select id="add-building" class="form-select form-select-sm" onchange="onSelectOrOther(this,'add-bldg-other');onBuildingChange('add')">
+            </select>
+            <input type="text" id="add-bldg-other" class="form-control form-control-sm mt-1" placeholder="건물명 직접 입력" style="display:none;">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">층</label>
+            <select id="add-floor" class="form-select form-select-sm" onchange="onSelectOrOther(this,'add-floor-other')">
+            </select>
+            <input type="text" id="add-floor-other" class="form-control form-control-sm mt-1" placeholder="층 직접 입력" style="display:none;">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">설치장소</label>
+            <select id="add-location" class="form-select form-select-sm" onchange="onSelectOrOther(this,'add-loc-other')">
+            </select>
+            <input type="text" id="add-loc-other" class="form-control form-control-sm mt-1" placeholder="장소 직접 입력" style="display:none;">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">망구분*</label>
+            <select id="add-network" class="form-select form-select-sm" onchange="onNetworkChange('add')">
+              <option value="">선택</option>
+              <option value="교사망">교사망</option><option value="학생망">학생망</option><option value="무선망">무선망</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <label class="form-label small">장비ID</label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text" id="add-devid-prefix" style="min-width:38px;"></span>
+              <input type="text" id="add-device-id" class="form-control form-control-sm" placeholder="숫자" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')">
+            </div>
+          </div>
+          <div class="col-4">
+            <label class="form-label small">속도</label>
+            <select id="add-speed" class="form-select form-select-sm" onchange="onSelectOrOther(this,'add-speed-other')">
+              <option value="">선택</option><option value="1G">1G</option><option value="10G">10G</option><option value="__other__">기타</option>
+            </select>
+            <input type="text" id="add-speed-other" class="form-control form-control-sm mt-1" placeholder="속도 직접 입력" style="display:none;">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">계위</label>
+            <input type="text" id="add-tier" class="form-control form-control-sm" placeholder="숫자" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">MGMT</label>
+            <select id="add-mgmt" class="form-select form-select-sm">
+              <option value="">선택</option><option value="Y">Y</option><option value="N">N</option>
+            </select>
+          </div>
         </div>
       </div>
       <div class="modal-footer"><button class="btn btn-primary" onclick="submitAddEquip()">추가</button></div>
@@ -183,17 +239,73 @@
       <div class="modal-body">
         <input type="hidden" id="edit-id">
         <div class="row g-2">
-          <div class="col-4"><label class="form-label small">구분</label><select id="edit-category" class="form-select form-select-sm"><option value="스위치">스위치</option><option value="PoE">PoE</option><option value="AP">AP</option></select></div>
-          <div class="col-4"><label class="form-label small">모델명</label><input type="text" id="edit-model" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">제조사</label><input type="text" id="edit-manufacturer" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">건물</label><input type="text" id="edit-building" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">층</label><input type="text" id="edit-floor" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">설치장소</label><input type="text" id="edit-location" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">장비ID</label><input type="text" id="edit-device-id" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">망구분</label><input type="text" id="edit-network" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">속도</label><input type="text" id="edit-speed" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">계위</label><input type="text" id="edit-tier" class="form-control form-control-sm"></div>
-          <div class="col-4"><label class="form-label small">MGMT</label><input type="text" id="edit-mgmt" class="form-control form-control-sm"></div>
+          <div class="col-4">
+            <label class="form-label small">구분</label>
+            <select id="edit-category" class="form-select form-select-sm" onchange="onCategoryChange('edit')">
+              <option value="스위치">스위치</option><option value="PoE">PoE</option><option value="AP">AP</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <label class="form-label small">모델명</label>
+            <select id="edit-model" class="form-select form-select-sm" onchange="onSelectOrOther(this,'edit-model-other')">
+            </select>
+            <input type="text" id="edit-model-other" class="form-control form-control-sm mt-1" placeholder="모델명 직접 입력" style="display:none;">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">제조사</label>
+            <select id="edit-manufacturer" class="form-select form-select-sm" onchange="onSelectOrOther(this,'edit-mfr-other')">
+            </select>
+            <input type="text" id="edit-mfr-other" class="form-control form-control-sm mt-1" placeholder="제조사 직접 입력" style="display:none;">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">건물</label>
+            <select id="edit-building" class="form-select form-select-sm" onchange="onSelectOrOther(this,'edit-bldg-other');onBuildingChange('edit')">
+            </select>
+            <input type="text" id="edit-bldg-other" class="form-control form-control-sm mt-1" placeholder="건물명 직접 입력" style="display:none;">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">층</label>
+            <select id="edit-floor" class="form-select form-select-sm" onchange="onSelectOrOther(this,'edit-floor-other')">
+            </select>
+            <input type="text" id="edit-floor-other" class="form-control form-control-sm mt-1" placeholder="층 직접 입력" style="display:none;">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">설치장소</label>
+            <select id="edit-location" class="form-select form-select-sm" onchange="onSelectOrOther(this,'edit-loc-other')">
+            </select>
+            <input type="text" id="edit-loc-other" class="form-control form-control-sm mt-1" placeholder="장소 직접 입력" style="display:none;">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">망구분</label>
+            <select id="edit-network" class="form-select form-select-sm" onchange="onNetworkChange('edit')">
+              <option value="">선택</option>
+              <option value="교사망">교사망</option><option value="학생망">학생망</option><option value="무선망">무선망</option>
+            </select>
+          </div>
+          <div class="col-4">
+            <label class="form-label small">장비ID</label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text" id="edit-devid-prefix" style="min-width:38px;"></span>
+              <input type="text" id="edit-device-id" class="form-control form-control-sm" placeholder="숫자" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')">
+            </div>
+          </div>
+          <div class="col-4">
+            <label class="form-label small">속도</label>
+            <select id="edit-speed" class="form-select form-select-sm" onchange="onSelectOrOther(this,'edit-speed-other')">
+              <option value="">선택</option><option value="1G">1G</option><option value="10G">10G</option><option value="__other__">기타</option>
+            </select>
+            <input type="text" id="edit-speed-other" class="form-control form-control-sm mt-1" placeholder="속도 직접 입력" style="display:none;">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">계위</label>
+            <input type="text" id="edit-tier" class="form-control form-control-sm" placeholder="숫자" inputmode="numeric" oninput="this.value=this.value.replace(/\D/g,'')">
+          </div>
+          <div class="col-4">
+            <label class="form-label small">MGMT</label>
+            <select id="edit-mgmt" class="form-select form-select-sm">
+              <option value="">선택</option><option value="Y">Y</option><option value="N">N</option>
+            </select>
+          </div>
         </div>
       </div>
       <div class="modal-footer"><button class="btn btn-primary" onclick="submitEditEquip()">저장</button></div>
@@ -460,10 +572,145 @@ function applyScanResult() {
   });
 }
 
+// ═══ 모달 공통: 선택+기타 처리 ═══
+const NET_PREFIX = {'교사망':'K','학생망':'H','무선망':'M'};
+
+function onSelectOrOther(sel, otherId) {
+  const otherEl = document.getElementById(otherId);
+  if (sel.value === '__other__') { otherEl.style.display=''; otherEl.focus(); }
+  else { otherEl.style.display='none'; otherEl.value=''; }
+}
+
+function getValOrOther(selId, otherId) {
+  const sel = document.getElementById(selId);
+  if (sel.tagName === 'INPUT') return sel.value;
+  return sel.value === '__other__' ? document.getElementById(otherId).value : sel.value;
+}
+
+function onNetworkChange(prefix) {
+  const net = document.getElementById(prefix+'-network').value;
+  const pfx = NET_PREFIX[net] || '';
+  document.getElementById(prefix+'-devid-prefix').textContent = pfx ? pfx+'#' : '';
+}
+
+function onCategoryChange(prefix) {
+  populateModelOptions(prefix);
+  populateManufacturerOptions(prefix);
+}
+
+function onBuildingChange(prefix) {
+  const bldg = getValOrOther(prefix+'-building', prefix+'-bldg-other');
+  populateFloorOptions(prefix, bldg);
+  populateLocationOptions(prefix, bldg);
+}
+
+// 장비 데이터에서 고유값 추출
+function _uniqueVals(field, filterFn) {
+  let list = _equipList;
+  if (filterFn) list = list.filter(filterFn);
+  const vals = [...new Set(list.map(e => e[field]).filter(Boolean))].sort();
+  return vals;
+}
+
+function _buildOptions(vals, selected) {
+  let html = '<option value="">선택</option>';
+  vals.forEach(v => html += `<option value="${v}"${v===selected?' selected':''}>${v}</option>`);
+  html += '<option value="__other__">기타 (직접입력)</option>';
+  return html;
+}
+
+function populateModelOptions(prefix, selected) {
+  const cat = document.getElementById(prefix+'-category').value;
+  const vals = _uniqueVals('model_name', e => e.category === cat);
+  document.getElementById(prefix+'-model').innerHTML = _buildOptions(vals, selected);
+  document.getElementById(prefix+'-model-other').style.display = 'none';
+  document.getElementById(prefix+'-model-other').value = '';
+}
+
+function populateManufacturerOptions(prefix, selected) {
+  const cat = document.getElementById(prefix+'-category').value;
+  const vals = _uniqueVals('manufacturer', e => e.category === cat);
+  document.getElementById(prefix+'-manufacturer').innerHTML = _buildOptions(vals, selected);
+  document.getElementById(prefix+'-mfr-other').style.display = 'none';
+  document.getElementById(prefix+'-mfr-other').value = '';
+}
+
+function populateBuildingOptions(prefix, selected) {
+  const vals = _uniqueVals('building');
+  document.getElementById(prefix+'-building').innerHTML = _buildOptions(vals, selected);
+  document.getElementById(prefix+'-bldg-other').style.display = 'none';
+  document.getElementById(prefix+'-bldg-other').value = '';
+}
+
+function populateFloorOptions(prefix, bldg, selected) {
+  const vals = _uniqueVals('floor', e => !bldg || e.building === bldg);
+  document.getElementById(prefix+'-floor').innerHTML = _buildOptions(vals, selected);
+  document.getElementById(prefix+'-floor-other').style.display = 'none';
+  document.getElementById(prefix+'-floor-other').value = '';
+}
+
+function populateLocationOptions(prefix, bldg, selected) {
+  const vals = _uniqueVals('install_location', e => !bldg || e.building === bldg);
+  document.getElementById(prefix+'-location').innerHTML = _buildOptions(vals, selected);
+  document.getElementById(prefix+'-loc-other').style.display = 'none';
+  document.getElementById(prefix+'-loc-other').value = '';
+}
+
+function _initModalSelects(prefix) {
+  populateModelOptions(prefix);
+  populateManufacturerOptions(prefix);
+  populateBuildingOptions(prefix);
+  populateFloorOptions(prefix);
+  populateLocationOptions(prefix);
+  onNetworkChange(prefix);
+}
+
+function _setSelectOrOther(selId, otherId, value) {
+  const sel = document.getElementById(selId);
+  const otherEl = document.getElementById(otherId);
+  if (!value) { sel.value = ''; otherEl.style.display = 'none'; otherEl.value = ''; return; }
+  // 선택지에 해당 값이 있으면 선택, 없으면 기타
+  const hasOption = [...sel.options].some(o => o.value === value);
+  if (hasOption) { sel.value = value; otherEl.style.display = 'none'; otherEl.value = ''; }
+  else { sel.value = '__other__'; otherEl.style.display = ''; otherEl.value = value; }
+}
+
+function _collectFormData(prefix) {
+  const net = document.getElementById(prefix+'-network').value;
+  const pfx = NET_PREFIX[net] || '';
+  const devNum = document.getElementById(prefix+'-device-id').value.replace(/\D/g,'');
+  const deviceId = pfx && devNum ? pfx+'#'+devNum : devNum;
+  return {
+    category: $v(prefix+'-category'),
+    model_name: getValOrOther(prefix+'-model', prefix+'-model-other'),
+    manufacturer: getValOrOther(prefix+'-manufacturer', prefix+'-mfr-other'),
+    building: getValOrOther(prefix+'-building', prefix+'-bldg-other'),
+    floor: getValOrOther(prefix+'-floor', prefix+'-floor-other'),
+    install_location: getValOrOther(prefix+'-location', prefix+'-loc-other'),
+    device_id: deviceId,
+    network_type: net,
+    speed: getValOrOther(prefix+'-speed', prefix+'-speed-other'),
+    tier: document.getElementById(prefix+'-tier').value.replace(/\D/g,''),
+    mgmt: $v(prefix+'-mgmt'),
+  };
+}
+
 // ═══ 장비 추가 ═══
-function showAddEquip() { new bootstrap.Modal(document.getElementById('addEquipModal')).show(); }
+function showAddEquip() {
+  _initModalSelects('add');
+  document.getElementById('add-category').value = _currentCat || '스위치';
+  onCategoryChange('add');
+  document.getElementById('add-network').value = '';
+  document.getElementById('add-device-id').value = '';
+  document.getElementById('add-tier').value = '';
+  document.getElementById('add-mgmt').value = '';
+  document.getElementById('add-speed').value = '';
+  document.getElementById('add-speed-other').style.display = 'none';
+  onNetworkChange('add');
+  new bootstrap.Modal(document.getElementById('addEquipModal')).show();
+}
 function submitAddEquip() {
-  const d = {category:$v('add-category'),model_name:$v('add-model'),manufacturer:$v('add-manufacturer'),building:$v('add-building'),floor:$v('add-floor'),install_location:$v('add-location'),device_id:$v('add-device-id'),network_type:$v('add-network'),speed:$v('add-speed'),tier:$v('add-tier'),mgmt:$v('add-mgmt')};
+  const d = _collectFormData('add');
   apiPost('equipment_add', d, ()=>bootstrap.Modal.getInstance(document.getElementById('addEquipModal')).hide());
 }
 
@@ -472,21 +719,42 @@ function showEditEquip(id) {
   const e = _equipList.find(x=>x.id===id);
   if(!e) return;
   document.getElementById('edit-id').value = id;
-  document.getElementById('edit-category').value = e.category||'';
-  document.getElementById('edit-model').value = e.model_name||'';
-  document.getElementById('edit-manufacturer').value = e.manufacturer||'';
-  document.getElementById('edit-building').value = e.building||'';
-  document.getElementById('edit-floor').value = e.floor||'';
-  document.getElementById('edit-location').value = e.install_location||'';
-  document.getElementById('edit-device-id').value = e.device_id||'';
+  document.getElementById('edit-category').value = e.category||'스위치';
+
+  // 셀렉트 옵션 생성
+  populateModelOptions('edit', e.model_name);
+  populateManufacturerOptions('edit', e.manufacturer);
+  populateBuildingOptions('edit', e.building);
+  populateFloorOptions('edit', e.building, e.floor);
+  populateLocationOptions('edit', e.building, e.install_location);
+
+  // 값이 옵션에 없으면 '기타'로 전환
+  _setSelectOrOther('edit-model','edit-model-other', e.model_name||'');
+  _setSelectOrOther('edit-manufacturer','edit-mfr-other', e.manufacturer||'');
+  _setSelectOrOther('edit-building','edit-bldg-other', e.building||'');
+  _setSelectOrOther('edit-floor','edit-floor-other', e.floor||'');
+  _setSelectOrOther('edit-location','edit-loc-other', e.install_location||'');
+
+  // 망구분 → 장비ID 분리
   document.getElementById('edit-network').value = e.network_type||'';
-  document.getElementById('edit-speed').value = e.speed||'';
+  onNetworkChange('edit');
+  const devId = e.device_id||'';
+  const devMatch = devId.match(/^[A-Z]#(.*)$/);
+  document.getElementById('edit-device-id').value = devMatch ? devMatch[1] : devId;
+
+  // 속도
+  const speedSel = document.getElementById('edit-speed');
+  if (['1G','10G',''].includes(e.speed||'')) { speedSel.value = e.speed||''; document.getElementById('edit-speed-other').style.display='none'; }
+  else { speedSel.value = '__other__'; document.getElementById('edit-speed-other').style.display=''; document.getElementById('edit-speed-other').value=e.speed; }
+
   document.getElementById('edit-tier').value = e.tier||'';
   document.getElementById('edit-mgmt').value = e.mgmt||'';
+
   new bootstrap.Modal(document.getElementById('editEquipModal')).show();
 }
 function submitEditEquip() {
-  const d = {equipment_id:parseInt(document.getElementById('edit-id').value),category:$v('edit-category'),model_name:$v('edit-model'),manufacturer:$v('edit-manufacturer'),building:$v('edit-building'),floor:$v('edit-floor'),install_location:$v('edit-location'),device_id:$v('edit-device-id'),network_type:$v('edit-network'),speed:$v('edit-speed'),tier:$v('edit-tier'),mgmt:$v('edit-mgmt')};
+  const d = _collectFormData('edit');
+  d.equipment_id = parseInt(document.getElementById('edit-id').value);
   apiPost('equipment_update', d, ()=>bootstrap.Modal.getInstance(document.getElementById('editEquipModal')).hide());
 }
 
