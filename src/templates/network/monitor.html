@@ -57,6 +57,11 @@
         <i class="bi bi-bezier2 me-1"></i>구성도
       </a>
     </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" onclick="switchTab('portmap',this);return false;">
+        <i class="bi bi-ethernet me-1"></i>선번장
+      </a>
+    </li>
   </ul>
 
   <!-- ── 모니터링 탭 ── -->
@@ -383,6 +388,41 @@
     </div>
   </div>
 
+  <!-- ── 선번장 탭 ── -->
+  <div id="tab-portmap" class="d-none">
+    <div class="card border-0 shadow-sm mb-2">
+      <div class="card-body py-2 px-3">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-3">
+            <select id="pm-center" class="form-select form-select-sm" onchange="pmLoadTypes()">
+              <option value="">지원청 선택</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <select id="pm-type" class="form-select form-select-sm" onchange="pmLoadSchools()">
+              <option value="">학제 선택</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <select id="pm-school" class="form-select form-select-sm">
+              <option value="">학교 선택</option>
+            </select>
+          </div>
+          <div class="col-md-3 d-flex gap-1">
+            <button class="btn btn-sm btn-primary flex-fill" onclick="pmLoad()"><i class="bi bi-search me-1"></i>조회</button>
+            <button class="btn btn-sm btn-success" onclick="pmExcel()" id="btn-pm-excel" disabled><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 스위치 선택 서브탭 -->
+    <div id="pm-switch-tabs" class="mb-2" style="display:none;"></div>
+    <!-- 포트맵 SVG -->
+    <div id="pm-content">
+      <div class="text-center text-muted py-5"><i class="bi bi-ethernet fs-3 d-block mb-2"></i>학교를 선택하면 스위치별 포트 연결 정보를 표시합니다.</div>
+    </div>
+  </div>
+
   <!-- ── 구성도 탭 ── -->
   <div id="tab-diagram" class="d-none">
     <div class="card border-0 shadow-sm mb-2">
@@ -555,7 +595,7 @@ setInterval(() => { loadSummary(); loadEvents(); }, 30000);
 function switchTab(name, el) {
   document.querySelectorAll('#nms-tabs .nav-link').forEach(a => a.classList.remove('active'));
   el.classList.add('active');
-  ['monitor','topology','assets','diagram'].forEach(t => {
+  ['monitor','topology','assets','diagram','portmap'].forEach(t => {
     document.getElementById('tab-' + t).classList.toggle('d-none', t !== name);
   });
   if (name === 'topology') { if (!topoNetwork) loadTopoSchools(); }
@@ -1388,6 +1428,188 @@ async function convertEquipment() {
   }
 }
 
+
+// ══════════════════════════════════════════════════════════
+// 선번장 (SVG 포트맵)
+// ══════════════════════════════════════════════════════════
+let _pmData = [];
+let _pmSchoolId = null;
+let _pmCurrentIdx = 0;
+
+(function initPmDropdowns() {
+  fetch(`${API}/schools/centers/`).then(r=>r.json()).then(d => {
+    const sel = document.getElementById('pm-center');
+    (d.results||d).forEach(c => sel.innerHTML += `<option value="${c.code}">${c.name}</option>`);
+  }).catch(()=>{});
+})();
+
+function pmLoadTypes() {
+  const sel = document.getElementById('pm-type');
+  sel.innerHTML = '<option value="">학제 선택</option>';
+  document.getElementById('pm-school').innerHTML = '<option value="">학교 선택</option>';
+  fetch(`${API}/schools/types/`).then(r=>r.json()).then(d => {
+    (d.results||d).forEach(t => sel.innerHTML += `<option value="${t.id}">${t.name}</option>`);
+  });
+}
+function pmLoadSchools() {
+  const center = document.getElementById('pm-center').value;
+  const stype = document.getElementById('pm-type').value;
+  const sel = document.getElementById('pm-school');
+  sel.innerHTML = '<option value="">학교 선택</option>';
+  if (!center) return;
+  let url = `${API}/schools/schools/filter/?center=${center}`;
+  if (stype) url += `&school_type=${stype}`;
+  fetch(url).then(r=>r.json()).then(d => {
+    (d.results||d).forEach(s => sel.innerHTML += `<option value="${s.id}">${s.name}</option>`);
+  });
+}
+
+function pmLoad() {
+  const schoolId = document.getElementById('pm-school').value;
+  if (!schoolId) { alert('학교를 선택하세요.'); return; }
+  _pmSchoolId = schoolId;
+  fetch(`${API}/network/topology/portmap_data/?school_id=${schoolId}`)
+    .then(r => r.json()).then(d => {
+      _pmData = d;
+      document.getElementById('btn-pm-excel').disabled = false;
+      if (!d.length) {
+        document.getElementById('pm-switch-tabs').style.display = 'none';
+        document.getElementById('pm-content').innerHTML = '<div class="text-center text-muted py-4">스위치/PoE 장비가 없습니다.</div>';
+        return;
+      }
+      // 스위치 서브탭
+      let tabs = '<ul class="nav nav-pills">';
+      d.forEach((sw, i) => {
+        const label = `${sw.device_id || sw.model_name || sw.category} <small class="text-muted">[${sw.network_type||''}]</small>`;
+        tabs += `<li class="nav-item"><a class="nav-link ${i===0?'active':''}" href="#" onclick="pmShowSwitch(${i},this);return false;" style="font-size:.82rem;">${label}</a></li>`;
+      });
+      tabs += '</ul>';
+      document.getElementById('pm-switch-tabs').innerHTML = tabs;
+      document.getElementById('pm-switch-tabs').style.display = '';
+      pmShowSwitch(0);
+    }).catch(() => {
+      document.getElementById('pm-content').innerHTML = '<div class="text-danger text-center py-4">로드 실패</div>';
+    });
+}
+
+function pmShowSwitch(idx, el) {
+  _pmCurrentIdx = idx;
+  if (el) {
+    document.querySelectorAll('#pm-switch-tabs .nav-link').forEach(a => a.classList.remove('active'));
+    el.classList.add('active');
+  }
+  const sw = _pmData[idx];
+  if (!sw) return;
+  renderPortMap(sw);
+}
+
+function renderPortMap(sw) {
+  const ports = sw.ports || [];
+  const pc = sw.port_count || 24;
+  const cols = Math.min(pc, 24);
+  const rows = Math.ceil(pc / cols);
+
+  const STATUS_COLOR = {up:'#198754', down:'#dee2e6', disabled:'#6c757d'};
+  const STATUS_BORDER = {up:'#0f5132', down:'#adb5bd', disabled:'#495057'};
+
+  let html = `<div class="card border-0 shadow-sm">`;
+  html += `<div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">`;
+  html += `<span class="fw-bold">${sw.model_name||sw.category} — ${sw.device_id||''} <small class="text-muted">[${sw.network_type||''}] ${sw.building||''} ${sw.floor||''}층 ${sw.install_location||''}</small></span>`;
+  html += `<button class="btn btn-sm btn-outline-primary" onclick="pmSaveCurrent()"><i class="bi bi-save me-1"></i>포트 저장</button>`;
+  html += `</div><div class="card-body">`;
+
+  // SVG 스위치 이미지
+  const portW = 32, portH = 28, gap = 4, padX = 40, padY = 50;
+  const svgW = padX * 2 + cols * (portW + gap);
+  const svgH = padY + rows * (portH + gap + 16) + 30;
+
+  html += `<div class="text-center mb-3"><svg width="${svgW}" height="${svgH}" style="background:#2d3436;border-radius:8px;">`;
+  // 스위치 케이스
+  html += `<rect x="10" y="10" width="${svgW-20}" height="${svgH-20}" rx="6" fill="#34495e" stroke="#576574" stroke-width="2"/>`;
+  // 모델명
+  html += `<text x="${svgW/2}" y="30" fill="#dfe6e9" font-size="11" text-anchor="middle" font-weight="bold">${sw.model_name||sw.category} (${pc}포트)</text>`;
+
+  ports.forEach((p, i) => {
+    const row = Math.floor(i / cols);
+    const col = i % cols;
+    const x = padX + col * (portW + gap);
+    const y = padY + row * (portH + gap + 16);
+    const fill = STATUS_COLOR[p.status] || STATUS_COLOR.down;
+    const stroke = STATUS_BORDER[p.status] || STATUS_BORDER.down;
+    const hasConn = p.connected_to ? true : false;
+
+    html += `<rect x="${x}" y="${y}" width="${portW}" height="${portH}" rx="3" fill="${fill}" stroke="${stroke}" stroke-width="1.5" style="cursor:pointer" onclick="pmEditPort(${i})"/>`;
+    html += `<text x="${x + portW/2}" y="${y + portH/2 + 4}" fill="${p.status==='down'&&!hasConn?'#6c757d':'#fff'}" font-size="9" text-anchor="middle" font-weight="bold">${p.port}</text>`;
+    // 포트 아래 연결 장비명
+    if (hasConn) {
+      const label = p.connected_to.length > 6 ? p.connected_to.substring(0,6)+'..' : p.connected_to;
+      html += `<text x="${x + portW/2}" y="${y + portH + 11}" fill="#b2bec3" font-size="7" text-anchor="middle">${label}</text>`;
+    }
+  });
+  html += `</svg></div>`;
+
+  // 포트 테이블
+  html += `<div class="table-responsive"><table class="table table-sm table-bordered" style="font-size:.8rem;" id="pm-port-table">`;
+  html += `<thead class="table-light"><tr><th style="width:50px">포트</th><th>연결 장비</th><th style="width:80px">VLAN</th><th style="width:90px">케이블</th><th style="width:70px">상태</th><th>비고</th></tr></thead><tbody>`;
+  ports.forEach((p, i) => {
+    const statusOpts = ['up','down','disabled'].map(s => `<option value="${s}"${p.status===s?' selected':''}>${{up:'활성',down:'비활성',disabled:'비사용'}[s]}</option>`).join('');
+    html += `<tr>
+      <td class="text-center fw-bold">${p.port}</td>
+      <td><input type="text" class="form-control form-control-sm border-0 pm-input" data-idx="${i}" data-field="connected_to" value="${p.connected_to||''}"></td>
+      <td><input type="text" class="form-control form-control-sm border-0 pm-input" data-idx="${i}" data-field="vlan" value="${p.vlan||''}"></td>
+      <td><select class="form-select form-select-sm border-0 pm-input" data-idx="${i}" data-field="cable">
+        <option value="">-</option><option value="Cat5e"${p.cable==='Cat5e'?' selected':''}>Cat5e</option><option value="Cat6"${p.cable==='Cat6'?' selected':''}>Cat6</option><option value="Cat6a"${p.cable==='Cat6a'?' selected':''}>Cat6a</option><option value="광케이블"${p.cable==='광케이블'?' selected':''}>광케이블</option>
+      </select></td>
+      <td><select class="form-select form-select-sm border-0 pm-input" data-idx="${i}" data-field="status">${statusOpts}</select></td>
+      <td><input type="text" class="form-control form-control-sm border-0 pm-input" data-idx="${i}" data-field="note" value="${p.note||''}"></td>
+    </tr>`;
+  });
+  html += `</tbody></table></div></div></div>`;
+  document.getElementById('pm-content').innerHTML = html;
+}
+
+function pmEditPort(idx) {
+  // SVG 포트 클릭 → 해당 테이블 행으로 스크롤 + 포커스
+  const table = document.getElementById('pm-port-table');
+  if (!table) return;
+  const row = table.tBodies[0].rows[idx];
+  if (row) {
+    row.scrollIntoView({behavior:'smooth', block:'center'});
+    row.style.background = '#fff3cd';
+    setTimeout(() => row.style.background = '', 1500);
+    const input = row.querySelector('input');
+    if (input) input.focus();
+  }
+}
+
+function pmSaveCurrent() {
+  const sw = _pmData[_pmCurrentIdx];
+  if (!sw) return;
+  // 테이블에서 데이터 수집
+  const inputs = document.querySelectorAll('.pm-input');
+  const ports = [...sw.ports];
+  inputs.forEach(el => {
+    const idx = parseInt(el.dataset.idx);
+    const field = el.dataset.field;
+    ports[idx][field] = el.value;
+  });
+  fetch(`${API}/network/topology/portmap_save/`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF},
+    body: JSON.stringify({equipment_id: sw.id, ports: ports}),
+  }).then(r => r.json()).then(d => {
+    if (d.success) {
+      showToast('선번장 저장 완료');
+      sw.ports = ports;
+      renderPortMap(sw);  // SVG 갱신
+    }
+  });
+}
+
+function pmExcel() {
+  if (!_pmSchoolId) return;
+  window.location.href = `${API}/network/topology/portmap_excel/?school_id=${_pmSchoolId}`;
+}
 
 // ══════════════════════════════════════════════════════════
 // 구성도 (Cytoscape.js)

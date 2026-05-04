@@ -273,6 +273,9 @@ class SchoolEquipment(models.Model):
     # 라벨링 중 추가된 장비 여부
     is_added         = models.BooleanField('현장추가', default=False,
                                             help_text='라벨링 점검 중 장비추가로 등록된 장비')
+    # 선번장 (포트별 연결 정보)
+    port_map         = models.JSONField('선번장', null=True, blank=True,
+                                         help_text='포트별 연결정보 [{"port":1,"connected_to":"AP1","vlan":"","cable":"Cat6","note":""}]')
     # 변경 이력 (원본 데이터 보존)
     original_data    = models.JSONField('원본 데이터', null=True, blank=True,
                                          help_text='라벨링 전 원본 장비 정보 (자동 저장)')

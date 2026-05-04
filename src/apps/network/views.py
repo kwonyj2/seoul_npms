@@ -526,6 +526,166 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(fname)}"
         return resp
 
+    # ── 선번장 ────────────────────────────────────────
+    @action(detail=False, methods=['get'], url_path='portmap_data')
+    def portmap_data(self, request):
+        """선번장 — 학교 스위치/PoE 장비별 포트맵 데이터"""
+        from apps.schools.models import SchoolEquipment
+        school_id = request.query_params.get('school_id')
+        if not school_id:
+            return Response({'error': 'school_id 필요'}, status=400)
+        equips = SchoolEquipment.objects.filter(
+            school_id=school_id,
+            category__in=['스위치', 'PoE', 'PoE스위치']
+        ).order_by('network_type', 'device_id', 'id')
+        result = []
+        for eq in equips:
+            # 포트 수 추정: 모델명에서 추출 또는 기본 24
+            port_count = 24
+            model = (eq.model_name or '').upper()
+            if '48' in model:
+                port_count = 48
+            elif '16' in model:
+                port_count = 16
+            elif '8' in model and '28' not in model:
+                port_count = 8
+            elif '28' in model:
+                port_count = 28
+            elif '52' in model:
+                port_count = 52
+
+            # 저장된 포트맵 또는 빈 배열
+            port_map = eq.port_map or []
+            # 포트 수에 맞게 패딩
+            existing = {p.get('port'): p for p in port_map if isinstance(p, dict)}
+            ports = []
+            for i in range(1, port_count + 1):
+                p = existing.get(i, {})
+                ports.append({
+                    'port': i,
+                    'connected_to': p.get('connected_to', ''),
+                    'vlan': p.get('vlan', ''),
+                    'cable': p.get('cable', ''),
+                    'note': p.get('note', ''),
+                    'status': p.get('status', 'down'),
+                })
+            result.append({
+                'id': eq.id,
+                'model_name': eq.model_name or '',
+                'device_id': eq.device_id or '',
+                'category': eq.category,
+                'network_type': eq.network_type or '',
+                'building': eq.building or '',
+                'floor': eq.floor or '',
+                'install_location': eq.install_location or '',
+                'port_count': port_count,
+                'ports': ports,
+            })
+        return Response(result)
+
+    @action(detail=False, methods=['post'], url_path='portmap_save')
+    def portmap_save(self, request):
+        """선번장 포트 연결정보 저장"""
+        from apps.schools.models import SchoolEquipment
+        equip_id = request.data.get('equipment_id')
+        ports = request.data.get('ports', [])
+        if not equip_id:
+            return Response({'error': 'equipment_id 필요'}, status=400)
+        try:
+            eq = SchoolEquipment.objects.get(pk=equip_id)
+        except SchoolEquipment.DoesNotExist:
+            return Response({'error': '장비 없음'}, status=404)
+        eq.port_map = ports
+        eq.save(update_fields=['port_map'])
+        return Response({'success': True})
+
+    @action(detail=False, methods=['get'], url_path='portmap_excel')
+    def portmap_excel(self, request):
+        """선번장 엑셀 다운로드"""
+        import io
+        from urllib.parse import quote
+        from django.http import HttpResponse
+        from apps.schools.models import School, SchoolEquipment
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+        except ImportError:
+            return HttpResponse('openpyxl 필요', status=500)
+
+        school_id = request.query_params.get('school_id')
+        if not school_id:
+            return HttpResponse('school_id 필요', status=400)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return HttpResponse('학교 없음', status=404)
+
+        equips = SchoolEquipment.objects.filter(
+            school=school, category__in=['스위치', 'PoE', 'PoE스위치']
+        ).order_by('network_type', 'device_id', 'id')
+
+        wb = openpyxl.Workbook()
+        hdr_fill = PatternFill('solid', fgColor='1F497D')
+        hdr_font = Font(bold=True, color='FFFFFF', size=10)
+        ctr = Alignment(horizontal='center', vertical='center')
+        thin = Border(left=Side('thin'), right=Side('thin'),
+                      top=Side('thin'), bottom=Side('thin'))
+
+        first = True
+        for eq in equips:
+            label = f'{eq.device_id or eq.model_name or eq.category}'[:31]
+            if first:
+                ws = wb.active
+                ws.title = label
+                first = False
+            else:
+                ws = wb.create_sheet(label)
+
+            ws.merge_cells('A1:G1')
+            title = f'{school.name} — {eq.model_name or eq.category} ({eq.device_id or ""}) [{eq.network_type or ""}]'
+            ws.cell(1, 1, title).font = Font(bold=True, size=12)
+            ws.cell(2, 1, f'위치: {eq.building or ""} {eq.floor or ""}층 {eq.install_location or ""}').font = Font(size=9, color='666666')
+
+            headers = ['포트', '연결 장비', 'VLAN', '케이블', '상태', '비고']
+            for ci, h in enumerate(headers, 1):
+                c = ws.cell(4, ci, h)
+                c.font, c.fill, c.alignment, c.border = hdr_font, hdr_fill, ctr, thin
+
+            port_map = eq.port_map or []
+            model = (eq.model_name or '').upper()
+            port_count = 48 if '48' in model else 52 if '52' in model else 28 if '28' in model else 16 if '16' in model else 8 if ('8' in model and '28' not in model) else 24
+            existing = {p.get('port'): p for p in port_map if isinstance(p, dict)}
+
+            STATUS_KO = {'up': '활성', 'down': '비활성', 'disabled': '비사용'}
+            for i in range(1, port_count + 1):
+                p = existing.get(i, {})
+                vals = [i, p.get('connected_to', ''), p.get('vlan', ''),
+                        p.get('cable', ''), STATUS_KO.get(p.get('status', 'down'), p.get('status', '')),
+                        p.get('note', '')]
+                for ci, v in enumerate(vals, 1):
+                    c = ws.cell(i + 4, ci, v)
+                    c.border = thin
+                    if ci == 1:
+                        c.alignment = ctr
+
+            col_widths = [8, 25, 10, 12, 10, 25]
+            for ci, w in enumerate(col_widths, 1):
+                ws.column_dimensions[get_column_letter(ci)].width = w
+
+        if first:  # 스위치 장비가 없는 경우
+            ws = wb.active
+            ws.cell(1, 1, '스위치/PoE 장비가 없습니다.')
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        fname = f'선번장_{school.name}.xlsx'
+        resp = HttpResponse(buf.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(fname)}"
+        return resp
+
     @action(detail=False, methods=['get'])
     def device_counts(self, request):
         """학교별 장비 수량 조회 (정기점검 보고서용) — SchoolEquipment 기준"""
