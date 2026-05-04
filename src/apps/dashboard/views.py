@@ -87,7 +87,7 @@ def get_dashboard_data():
         'user__name', 'user__role', 'current_page', 'last_active', 'ip_address'
     ).order_by('-last_active')[:50])
     for u in online_users:
-        u['last_active'] = u['last_active'].strftime('%H:%M') if u['last_active'] else ''
+        u['last_active'] = timezone.localtime(u['last_active']).strftime('%H:%M') if u['last_active'] else ''
         u['role_display'] = dict([
             ('superadmin','슈퍼관리자'),('admin','관리자'),
             ('customer','학교담당자'),('worker','현장기사'),('resident','상주인력'),
@@ -203,7 +203,7 @@ def dashboard_summary(request):
             'user__role':   u['user__role'],
             'role_display': ROLE_KR.get(u['user__role'], u['user__role']),
             'current_page': u['current_page'] or '접속중',
-            'last_active':  u['last_active'].strftime('%H:%M') if u['last_active'] else '',
+            'last_active':  timezone.localtime(u['last_active']).strftime('%H:%M') if u['last_active'] else '',
             'ip_address':   u['ip_address'] or '',
         })
 
