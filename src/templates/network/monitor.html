@@ -7,49 +7,11 @@
 {% block content %}
 <div class="container-fluid px-3 py-2">
 
-  <!-- KPI 요약 -->
-  <div class="row g-2 mb-3" id="nms-kpi">
-    <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center py-2">
-        <div class="small text-muted">전체 장비</div>
-        <div class="fw-bold fs-5" id="kpi-total">-</div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center py-2">
-        <div class="small text-success">정상</div>
-        <div class="fw-bold fs-5 text-success" id="kpi-up">-</div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center py-2 border-danger">
-        <div class="small text-danger">장애</div>
-        <div class="fw-bold fs-5 text-danger" id="kpi-down">-</div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center py-2">
-        <div class="small text-warning">경고</div>
-        <div class="fw-bold fs-5 text-warning" id="kpi-warning">-</div>
-      </div>
-    </div>
-  </div>
-
   <!-- 탭 -->
   <ul class="nav nav-tabs mb-2" id="nms-tabs">
     <li class="nav-item">
-      <a class="nav-link active" href="#" onclick="switchTab('monitor',this);return false;">
-        <i class="bi bi-activity me-1"></i>모니터링
-      </a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link" href="#" onclick="switchTab('topology',this);return false;">
+      <a class="nav-link active" href="#" onclick="switchTab('topology',this);return false;">
         <i class="bi bi-diagram-3 me-1"></i>토폴로지
-      </a>
-    </li>
-    <li class="nav-item">
-      <a class="nav-link" href="#" onclick="switchTab('assets',this);return false;">
-        <i class="bi bi-link-45deg me-1"></i>자산 연동
       </a>
     </li>
     <li class="nav-item">
@@ -74,55 +36,34 @@
     </li>
   </ul>
 
-  <!-- ── 모니터링 탭 ── -->
-  <div id="tab-monitor">
-    <div class="row g-2">
-      <!-- 장애 이벤트 -->
-      <div class="col-12 col-xl-5">
-        <div class="card border-0 shadow-sm">
-          <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between">
-            <span class="fw-semibold"><i class="bi bi-bell text-danger me-1"></i>미해결 이벤트</span>
-            <span class="live-dot"></span>
-          </div>
-          <div class="card-body p-0" id="events-list" style="max-height:400px;overflow-y:auto;">
-            <div class="text-center py-3 text-muted small">로딩 중...</div>
-          </div>
+  <!-- ── 공통 학교 선택 바 (토폴로지 제외 4개 탭 공용) ── -->
+  <div id="nms-school-bar" class="card border-0 shadow-sm mb-2" style="display:none;">
+    <div class="card-body py-2 px-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <select id="nms-center" class="form-select form-select-sm" onchange="nmsLoadSchoolsByCenter()">
+            <option value="">지원청 선택</option>
+          </select>
         </div>
-      </div>
-
-      <!-- 장비 목록 -->
-      <div class="col-12 col-xl-7">
-        <div class="card border-0 shadow-sm">
-          <div class="card-header py-2 bg-white border-bottom d-flex align-items-center gap-2">
-            <span class="fw-semibold"><i class="bi bi-hdd-network text-primary me-1"></i>장비 현황</span>
-            <input type="text" id="dev-search" class="form-control form-control-sm ms-auto"
-                   style="width:180px;" placeholder="학교명·IP 검색">
-          </div>
-          <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0">
-              <thead class="table-light sticky-top">
-                <tr>
-                  <th>장비명</th>
-                  <th>학교</th>
-                  <th style="width:105px;">IP</th>
-                  <th style="width:60px;">유형</th>
-                  <th style="width:60px;">상태</th>
-                  <th style="width:55px;">자산</th>
-                  <th style="width:75px;">마지막 응답</th>
-                </tr>
-              </thead>
-              <tbody id="device-tbody">
-                <tr><td colspan="7" class="text-center py-3 text-muted">로딩 중...</td></tr>
-              </tbody>
-            </table>
-          </div>
+        <div class="col-md-2">
+          <select id="nms-stype" class="form-select form-select-sm" onchange="nmsLoadSchoolsByCenter()">
+            <option value="">학제</option>
+          </select>
+        </div>
+        <div class="col-md-4 position-relative">
+          <input type="text" id="nms-school-q" class="form-control form-control-sm" placeholder="학교명 검색 (일부 입력 가능)" onkeyup="nmsSchoolSearch()" autocomplete="off">
+          <div id="nms-school-results" class="list-group position-absolute shadow" style="z-index:10;max-height:200px;overflow-y:auto;display:none;width:100%;"></div>
+        </div>
+        <div class="col-md-3 d-flex gap-1">
+          <button class="btn btn-sm btn-primary flex-fill" onclick="nmsLoadSelected()"><i class="bi bi-search me-1"></i>조회</button>
+          <span id="nms-school-badge" class="badge bg-info text-dark align-self-center d-none" style="font-size:.78rem;"></span>
         </div>
       </div>
     </div>
   </div>
 
   <!-- ── 토폴로지 탭 ── -->
-  <div id="tab-topology" class="d-none">
+  <div id="tab-topology">
     <div class="card border-0 shadow-sm">
       <div class="card-header py-2 bg-white border-bottom">
         <div class="d-flex justify-content-between align-items-center mb-2">
@@ -310,8 +251,8 @@
     </div>
   </div>
 
-  <!-- ── 자산 연동 탭 ── -->
-  <div id="tab-assets" class="d-none">
+  <!-- ── (자산연동 탭 제거됨) ── -->
+  <div id="tab-assets-removed" style="display:none;">
     <div class="row g-3">
 
       <!-- 자산↔NMS 연동 현황 -->
@@ -400,34 +341,12 @@
 
   <!-- ── AP위치도 탭 ── -->
   <div id="tab-apmap" class="d-none">
-    <div class="card border-0 shadow-sm mb-2">
-      <div class="card-body py-2 px-3">
-        <div class="row g-2 align-items-end">
-          <div class="col-md-3">
-            <select id="ap-center" class="form-select form-select-sm" onchange="apLoadTypes()">
-              <option value="">지원청 선택</option>
-            </select>
-          </div>
-          <div class="col-md-2">
-            <select id="ap-type" class="form-select form-select-sm" onchange="apLoadSchools()">
-              <option value="">학제 선택</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <select id="ap-school" class="form-select form-select-sm">
-              <option value="">학교 선택</option>
-            </select>
-          </div>
-          <div class="col-md-4 d-flex gap-1">
-            <button class="btn btn-sm btn-primary flex-fill" onclick="apLoad()"><i class="bi bi-search me-1"></i>조회</button>
-            <button class="btn btn-sm btn-success" onclick="apSave()" id="btn-ap-save" disabled><i class="bi bi-save me-1"></i>저장</button>
-            <button class="btn btn-sm btn-outline-info" onclick="apDownloadPng()" id="btn-ap-png" disabled><i class="bi bi-image me-1"></i>PNG</button>
-            <label class="btn btn-sm btn-outline-secondary mb-0" id="btn-ap-upload" style="display:none;">
-              <i class="bi bi-upload me-1"></i>도면<input type="file" accept="image/*" onchange="apUploadPlan(this)" style="display:none;">
-            </label>
-          </div>
-        </div>
-      </div>
+    <div class="mb-2 d-flex gap-1" id="ap-actions">
+      <button class="btn btn-sm btn-success" onclick="apSave()" id="btn-ap-save" disabled><i class="bi bi-save me-1"></i>저장</button>
+      <button class="btn btn-sm btn-outline-info" onclick="apDownloadPng()" id="btn-ap-png" disabled><i class="bi bi-image me-1"></i>PNG</button>
+      <label class="btn btn-sm btn-outline-secondary mb-0" id="btn-ap-upload">
+        <i class="bi bi-upload me-1"></i>도면<input type="file" accept="image/*" onchange="apUploadPlan(this)" style="display:none;">
+      </label>
     </div>
     <!-- 층 서브탭 -->
     <div id="ap-floor-tabs" class="mb-2" style="display:none;"></div>
@@ -438,31 +357,9 @@
 
   <!-- ── 랙실장도 탭 ── -->
   <div id="tab-rack" class="d-none">
-    <div class="card border-0 shadow-sm mb-2">
-      <div class="card-body py-2 px-3">
-        <div class="row g-2 align-items-end">
-          <div class="col-md-3">
-            <select id="rk-center" class="form-select form-select-sm" onchange="rkLoadTypes()">
-              <option value="">지원청 선택</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <select id="rk-type" class="form-select form-select-sm" onchange="rkLoadSchools()">
-              <option value="">학제 선택</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <select id="rk-school" class="form-select form-select-sm">
-              <option value="">학교 선택</option>
-            </select>
-          </div>
-          <div class="col-md-3 d-flex gap-1">
-            <button class="btn btn-sm btn-primary flex-fill" onclick="rkLoad()"><i class="bi bi-search me-1"></i>조회</button>
-            <button class="btn btn-sm btn-success" onclick="rkSave()" id="btn-rk-save" disabled><i class="bi bi-save me-1"></i>저장</button>
-            <button class="btn btn-sm btn-outline-info" onclick="rkDownloadPng()" id="btn-rk-png" disabled><i class="bi bi-image me-1"></i>PNG</button>
-          </div>
-        </div>
-      </div>
+    <div class="mb-2 d-flex gap-1">
+      <button class="btn btn-sm btn-success" onclick="rkSave()" id="btn-rk-save" disabled><i class="bi bi-save me-1"></i>저장</button>
+      <button class="btn btn-sm btn-outline-info" onclick="rkDownloadPng()" id="btn-rk-png" disabled><i class="bi bi-image me-1"></i>PNG</button>
     </div>
     <div id="rk-content">
       <div class="text-center text-muted py-5"><i class="bi bi-server fs-3 d-block mb-2"></i>학교를 선택하면 랙실장도를 표시합니다.</div>
@@ -471,30 +368,8 @@
 
   <!-- ── 선번장 탭 ── -->
   <div id="tab-portmap" class="d-none">
-    <div class="card border-0 shadow-sm mb-2">
-      <div class="card-body py-2 px-3">
-        <div class="row g-2 align-items-end">
-          <div class="col-md-3">
-            <select id="pm-center" class="form-select form-select-sm" onchange="pmLoadTypes()">
-              <option value="">지원청 선택</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <select id="pm-type" class="form-select form-select-sm" onchange="pmLoadSchools()">
-              <option value="">학제 선택</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <select id="pm-school" class="form-select form-select-sm">
-              <option value="">학교 선택</option>
-            </select>
-          </div>
-          <div class="col-md-3 d-flex gap-1">
-            <button class="btn btn-sm btn-primary flex-fill" onclick="pmLoad()"><i class="bi bi-search me-1"></i>조회</button>
-            <button class="btn btn-sm btn-success" onclick="pmExcel()" id="btn-pm-excel" disabled><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
-          </div>
-        </div>
-      </div>
+    <div class="mb-2 d-flex gap-1">
+      <button class="btn btn-sm btn-success" onclick="pmExcel()" id="btn-pm-excel" disabled><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
     </div>
     <!-- 스위치 선택 서브탭 -->
     <div id="pm-switch-tabs" class="mb-2" style="display:none;"></div>
@@ -506,32 +381,10 @@
 
   <!-- ── 구성도 탭 ── -->
   <div id="tab-diagram" class="d-none">
-    <div class="card border-0 shadow-sm mb-2">
-      <div class="card-body py-2 px-3">
-        <div class="row g-2 align-items-end">
-          <div class="col-md-3">
-            <select id="dgm-center" class="form-select form-select-sm" onchange="dgmLoadTypes()">
-              <option value="">지원청 선택</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <select id="dgm-type" class="form-select form-select-sm" onchange="dgmLoadSchools()">
-              <option value="">학제 선택</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <select id="dgm-school" class="form-select form-select-sm">
-              <option value="">학교 선택</option>
-            </select>
-          </div>
-          <div class="col-md-3 d-flex gap-1">
-            <button class="btn btn-sm btn-primary flex-fill" onclick="dgmLoad()"><i class="bi bi-search me-1"></i>조회</button>
-            <button class="btn btn-sm btn-success" onclick="dgmSave()" id="btn-dgm-save" disabled><i class="bi bi-save me-1"></i>저장</button>
-            <button class="btn btn-sm btn-outline-info" onclick="dgmDownloadPng()" id="btn-dgm-png" disabled><i class="bi bi-image me-1"></i>PNG</button>
-            <button class="btn btn-sm btn-outline-warning" onclick="dgmDownloadPptx()" id="btn-dgm-pptx" disabled><i class="bi bi-file-earmark-ppt me-1"></i>PPTX</button>
-          </div>
-        </div>
-      </div>
+    <div class="mb-2 d-flex gap-1" id="dgm-actions" style="display:none !important;">
+      <button class="btn btn-sm btn-success" onclick="dgmSave()" id="btn-dgm-save" disabled><i class="bi bi-save me-1"></i>저장</button>
+      <button class="btn btn-sm btn-outline-info" onclick="dgmDownloadPng()" id="btn-dgm-png" disabled><i class="bi bi-image me-1"></i>PNG</button>
+      <button class="btn btn-sm btn-outline-warning" onclick="dgmDownloadPptx()" id="btn-dgm-pptx" disabled><i class="bi bi-file-earmark-ppt me-1"></i>PPTX</button>
     </div>
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
@@ -678,11 +531,15 @@ setInterval(() => { loadSummary(); loadEvents(); }, 30000);
 function switchTab(name, el) {
   document.querySelectorAll('#nms-tabs .nav-link').forEach(a => a.classList.remove('active'));
   el.classList.add('active');
-  ['monitor','topology','assets','diagram','portmap','rack','apmap'].forEach(t => {
-    document.getElementById('tab-' + t).classList.toggle('d-none', t !== name);
+  ['topology','diagram','portmap','rack','apmap'].forEach(t => {
+    const el = document.getElementById('tab-' + t);
+    if (el) el.classList.toggle('d-none', t !== name);
   });
+  // 공통 학교 선택 바: 토폴로지 제외 4개 탭에서 표시
+  const bar = document.getElementById('nms-school-bar');
+  if (bar) bar.style.display = (name === 'topology') ? 'none' : '';
+  _currentNmsTab = name;
   if (name === 'topology') { if (!topoNetwork) loadTopoSchools(); }
-  if (name === 'assets') { loadAssetSync(); loadConvertSchools(); }
 }
 
 // ── 토폴로지 ─────────────────────────────────────────────────
@@ -1513,6 +1370,94 @@ async function convertEquipment() {
 
 
 // ══════════════════════════════════════════════════════════
+// 공통 학교 선택 바
+// ══════════════════════════════════════════════════════════
+let _nmsSelectedSchool = null;
+let _currentNmsTab = 'topology';
+
+(function initNmsSchoolBar() {
+  // 지원청 로드
+  fetch(`${API}/schools/centers/`).then(r=>r.json()).then(d => {
+    const sel = document.getElementById('nms-center');
+    (d.results||d).forEach(c => sel.innerHTML += `<option value="${c.code}">${c.name}</option>`);
+  }).catch(()=>{});
+  // 학제 로드
+  fetch(`${API}/schools/types/`).then(r=>r.json()).then(d => {
+    const sel = document.getElementById('nms-stype');
+    (d.results||d).forEach(t => sel.innerHTML += `<option value="${t.id}">${t.name}</option>`);
+  }).catch(()=>{});
+})();
+
+function nmsLoadSchoolsByCenter() {
+  // 지원청+학제 선택 시 학교 검색 결과 초기화
+  document.getElementById('nms-school-q').value = '';
+  document.getElementById('nms-school-results').style.display = 'none';
+}
+
+let _nmsSearchTimer = null;
+function nmsSchoolSearch() {
+  clearTimeout(_nmsSearchTimer);
+  _nmsSearchTimer = setTimeout(_doNmsSearch, 300);
+}
+
+function _doNmsSearch() {
+  const q = document.getElementById('nms-school-q').value.trim();
+  const center = document.getElementById('nms-center').value;
+  const stype = document.getElementById('nms-stype').value;
+  const resultsEl = document.getElementById('nms-school-results');
+  if (q.length < 1) { resultsEl.style.display = 'none'; return; }
+
+  let url = `${API}/schools/schools/search/?q=${encodeURIComponent(q)}`;
+  if (center) url += `&center=${center}`;
+  if (stype) url += `&school_type=${stype}`;
+
+  fetch(url).then(r=>r.json()).then(data => {
+    const list = data.results || data;
+    if (!list.length) {
+      resultsEl.innerHTML = '<div class="list-group-item small text-muted">검색 결과 없음</div>';
+      resultsEl.style.display = '';
+      return;
+    }
+    resultsEl.innerHTML = list.slice(0, 15).map(s =>
+      `<a href="#" class="list-group-item list-group-item-action small py-1" onclick="event.preventDefault();nmsPickSchool(${s.id},'${(s.name||'').replace(/'/g,"\\'")}')">
+        ${s.name} <span class="text-muted">(${s.support_center_name||s.center_name||''})</span></a>`
+    ).join('');
+    resultsEl.style.display = '';
+  }).catch(()=>{});
+}
+
+function nmsPickSchool(id, name) {
+  _nmsSelectedSchool = {id, name};
+  document.getElementById('nms-school-q').value = name;
+  document.getElementById('nms-school-results').style.display = 'none';
+  document.getElementById('nms-school-badge').textContent = name;
+  document.getElementById('nms-school-badge').classList.remove('d-none');
+  nmsLoadSelected();
+}
+
+function nmsLoadSelected() {
+  if (!_nmsSelectedSchool) {
+    // 검색어로 학교 찾기
+    const q = document.getElementById('nms-school-q').value.trim();
+    if (!q) { alert('학교를 선택하세요.'); return; }
+    _doNmsSearch();
+    return;
+  }
+  const id = _nmsSelectedSchool.id;
+  // 현재 활성 탭에 따라 해당 로드 함수 호출
+  if (_currentNmsTab === 'diagram') { _dgmSchoolId = id; dgmLoadDirect(id); }
+  else if (_currentNmsTab === 'portmap') { _pmSchoolId = id; pmLoadDirect(id); }
+  else if (_currentNmsTab === 'rack') { _rkSchoolId = id; rkLoadDirect(id); }
+  else if (_currentNmsTab === 'apmap') { _apSchoolId = id; apLoadDirect(id); }
+}
+
+// 외부 클릭 시 검색 결과 닫기
+document.addEventListener('click', function(e) {
+  const r = document.getElementById('nms-school-results');
+  if (r && !r.contains(e.target) && e.target.id !== 'nms-school-q') r.style.display = 'none';
+});
+
+// ══════════════════════════════════════════════════════════
 // AP위치도 (Leaflet.js 도면 + 마커)
 // ══════════════════════════════════════════════════════════
 let _apData = null;
@@ -1521,37 +1466,14 @@ let _apMap = null;
 let _apMarkers = [];
 let _apCurrentFloor = 0;
 
-(function initApDropdowns() {
-  fetch(`${API}/schools/centers/`).then(r=>r.json()).then(d => {
-    const sel = document.getElementById('ap-center');
-    (d.results||d).forEach(c => sel.innerHTML += `<option value="${c.code}">${c.name}</option>`);
-  }).catch(()=>{});
-})();
-function apLoadTypes() {
-  const sel = document.getElementById('ap-type');
-  sel.innerHTML = '<option value="">학제</option>';
-  document.getElementById('ap-school').innerHTML = '<option value="">학교</option>';
-  fetch(`${API}/schools/types/`).then(r=>r.json()).then(d => {
-    (d.results||d).forEach(t => sel.innerHTML += `<option value="${t.id}">${t.name}</option>`);
-  });
-}
-function apLoadSchools() {
-  const center = document.getElementById('ap-center').value;
-  const stype = document.getElementById('ap-type').value;
-  const sel = document.getElementById('ap-school');
-  sel.innerHTML = '<option value="">학교</option>';
-  if (!center) return;
-  let url = `${API}/schools/schools/filter/?center=${center}`;
-  if (stype) url += `&school_type=${stype}`;
-  fetch(url).then(r=>r.json()).then(d => {
-    (d.results||d).forEach(s => sel.innerHTML += `<option value="${s.id}">${s.name}</option>`);
-  });
-}
+// AP 개별 드롭다운 함수 제거 — 공통 학교 선택 바 사용
 
+function apLoadDirect(schoolId) { _apSchoolId = schoolId; _apDoLoad(schoolId); }
 function apLoad() {
-  const schoolId = document.getElementById('ap-school').value;
-  if (!schoolId) { alert('학교를 선택하세요.'); return; }
-  _apSchoolId = schoolId;
+  if (!_apSchoolId) { alert('학교를 선택하세요.'); return; }
+  _apDoLoad(_apSchoolId);
+}
+function _apDoLoad(schoolId) {
   fetch(`${API}/network/topology/ap_map_data/?school_id=${schoolId}`)
     .then(r => r.json()).then(d => {
       _apData = d;
@@ -1764,37 +1686,14 @@ function apDownloadPng() {
 let _rkData = [];
 let _rkSchoolId = null;
 
-(function initRkDropdowns() {
-  fetch(`${API}/schools/centers/`).then(r=>r.json()).then(d => {
-    const sel = document.getElementById('rk-center');
-    (d.results||d).forEach(c => sel.innerHTML += `<option value="${c.code}">${c.name}</option>`);
-  }).catch(()=>{});
-})();
-function rkLoadTypes() {
-  const sel = document.getElementById('rk-type');
-  sel.innerHTML = '<option value="">학제 선택</option>';
-  document.getElementById('rk-school').innerHTML = '<option value="">학교 선택</option>';
-  fetch(`${API}/schools/types/`).then(r=>r.json()).then(d => {
-    (d.results||d).forEach(t => sel.innerHTML += `<option value="${t.id}">${t.name}</option>`);
-  });
-}
-function rkLoadSchools() {
-  const center = document.getElementById('rk-center').value;
-  const stype = document.getElementById('rk-type').value;
-  const sel = document.getElementById('rk-school');
-  sel.innerHTML = '<option value="">학교 선택</option>';
-  if (!center) return;
-  let url = `${API}/schools/schools/filter/?center=${center}`;
-  if (stype) url += `&school_type=${stype}`;
-  fetch(url).then(r=>r.json()).then(d => {
-    (d.results||d).forEach(s => sel.innerHTML += `<option value="${s.id}">${s.name}</option>`);
-  });
-}
+// 랙실장도 개별 드롭다운 함수 제거 — 공통 학교 선택 바 사용
 
+function rkLoadDirect(schoolId) { _rkSchoolId = schoolId; _rkDoLoad(schoolId); }
 function rkLoad() {
-  const schoolId = document.getElementById('rk-school').value;
-  if (!schoolId) { alert('학교를 선택하세요.'); return; }
-  _rkSchoolId = schoolId;
+  if (!_rkSchoolId) { alert('학교를 선택하세요.'); return; }
+  _rkDoLoad(_rkSchoolId);
+}
+function _rkDoLoad(schoolId) {
   fetch(`${API}/network/topology/rack_data/?school_id=${schoolId}`)
     .then(r => r.json()).then(d => {
       _rkData = d;
@@ -1927,38 +1826,14 @@ let _pmData = [];
 let _pmSchoolId = null;
 let _pmCurrentIdx = 0;
 
-(function initPmDropdowns() {
-  fetch(`${API}/schools/centers/`).then(r=>r.json()).then(d => {
-    const sel = document.getElementById('pm-center');
-    (d.results||d).forEach(c => sel.innerHTML += `<option value="${c.code}">${c.name}</option>`);
-  }).catch(()=>{});
-})();
+// 선번장 개별 드롭다운 함수 제거 — 공통 학교 선택 바 사용
 
-function pmLoadTypes() {
-  const sel = document.getElementById('pm-type');
-  sel.innerHTML = '<option value="">학제 선택</option>';
-  document.getElementById('pm-school').innerHTML = '<option value="">학교 선택</option>';
-  fetch(`${API}/schools/types/`).then(r=>r.json()).then(d => {
-    (d.results||d).forEach(t => sel.innerHTML += `<option value="${t.id}">${t.name}</option>`);
-  });
-}
-function pmLoadSchools() {
-  const center = document.getElementById('pm-center').value;
-  const stype = document.getElementById('pm-type').value;
-  const sel = document.getElementById('pm-school');
-  sel.innerHTML = '<option value="">학교 선택</option>';
-  if (!center) return;
-  let url = `${API}/schools/schools/filter/?center=${center}`;
-  if (stype) url += `&school_type=${stype}`;
-  fetch(url).then(r=>r.json()).then(d => {
-    (d.results||d).forEach(s => sel.innerHTML += `<option value="${s.id}">${s.name}</option>`);
-  });
-}
-
+function pmLoadDirect(schoolId) { _pmSchoolId = schoolId; _pmDoLoad(schoolId); }
 function pmLoad() {
-  const schoolId = document.getElementById('pm-school').value;
-  if (!schoolId) { alert('학교를 선택하세요.'); return; }
-  _pmSchoolId = schoolId;
+  if (!_pmSchoolId) { alert('학교를 선택하세요.'); return; }
+  _pmDoLoad(_pmSchoolId);
+}
+function _pmDoLoad(schoolId) {
   fetch(`${API}/network/topology/portmap_data/?school_id=${schoolId}`)
     .then(r => r.json()).then(d => {
       _pmData = d;
@@ -2109,39 +1984,14 @@ let _cy = null;
 let _dgmSchoolId = null;
 
 // 초기화: 드롭다운 로드
-(function initDgmDropdowns() {
-  fetch(`${API}/schools/centers/`).then(r=>r.json()).then(d => {
-    const sel = document.getElementById('dgm-center');
-    (d.results||d).forEach(c => sel.innerHTML += `<option value="${c.code}">${c.name}</option>`);
-  }).catch(()=>{});
-})();
+// 구성도 개별 드롭다운 함수 제거 — 공통 학교 선택 바 사용
 
-function dgmLoadTypes() {
-  const sel = document.getElementById('dgm-type');
-  sel.innerHTML = '<option value="">학제 선택</option>';
-  document.getElementById('dgm-school').innerHTML = '<option value="">학교 선택</option>';
-  fetch(`${API}/schools/types/`).then(r=>r.json()).then(d => {
-    (d.results||d).forEach(t => sel.innerHTML += `<option value="${t.id}">${t.name}</option>`);
-  });
-}
-
-function dgmLoadSchools() {
-  const center = document.getElementById('dgm-center').value;
-  const stype = document.getElementById('dgm-type').value;
-  const sel = document.getElementById('dgm-school');
-  sel.innerHTML = '<option value="">학교 선택</option>';
-  if (!center) return;
-  let url = `${API}/schools/schools/filter/?center=${center}`;
-  if (stype) url += `&school_type=${stype}`;
-  fetch(url).then(r=>r.json()).then(d => {
-    (d.results||d).forEach(s => sel.innerHTML += `<option value="${s.id}">${s.name}</option>`);
-  });
-}
-
+function dgmLoadDirect(schoolId) { _dgmSchoolId = schoolId; _dgmDoLoad(schoolId); }
 function dgmLoad() {
-  const schoolId = document.getElementById('dgm-school').value;
-  if (!schoolId) { alert('학교를 선택하세요.'); return; }
-  _dgmSchoolId = schoolId;
+  if (!_dgmSchoolId) { alert('학교를 선택하세요.'); return; }
+  _dgmDoLoad(_dgmSchoolId);
+}
+function _dgmDoLoad(schoolId) {
   fetch(`${API}/network/topology/diagram_data/?school_id=${schoolId}`)
     .then(r => r.json()).then(d => {
       if (d.error) { alert(d.error); return; }
