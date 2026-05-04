@@ -1906,7 +1906,6 @@ function _dgmDoLoad(schoolId) {
   fetch(`${API_BASE}/network/topology/diagram_data/?school_id=${schoolId}`)
     .then(r => r.json()).then(d => {
       if (d.error) { alert(d.error); return; }
-      document.getElementById('dgm-title').textContent = d.school_name + ' — 네트워크 구성도' + (d.saved ? ' (저장됨)' : ' (자동생성)');
       renderDiagram(d.layout);
       document.getElementById('btn-dgm-save').disabled = false;
       document.getElementById('btn-dgm-png').disabled = false;
@@ -2002,8 +2001,7 @@ function dgmSave() {
   }).then(r => r.json()).then(d => {
     if (d.success) {
       showToast('구성도 저장 완료');
-      document.getElementById('dgm-title').textContent =
-        document.getElementById('dgm-title').textContent.replace('(자동생성)', '(저장됨)');
+      // 저장 완료
     }
   });
 }
