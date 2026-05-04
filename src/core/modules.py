@@ -135,6 +135,14 @@ MODULE_REGISTRY = {
         'min_role': 'admin',
         'color':    'warning',
     },
+    # ── 라벨링 ────────────────────────────────
+    'labeling': {
+        'label':    '라벨링 점검',
+        'icon':     'bi-qr-code',
+        'url':      '/npms/labeling/',
+        'min_role': 'worker',
+        'color':    'info',
+    },
     # ── 보고 ──────────────────────────────────
     'performance': {
         'label':    '성과보고서',
