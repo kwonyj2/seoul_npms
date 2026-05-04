@@ -837,6 +837,237 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(fname)}"
         return resp
 
+    # ── NAS 파일 기반 뷰어 ────────────────────────────
+    NAS_BASE = '/app/nas/media/npms/산출물/2025년 테크센터'
+    NAS_FOLDERS = {
+        'diagram':  '2025년 테크센터-네트워크 구성도',
+        'portmap':  '2025년 테크센터-네트워크 선번장',
+        'rack':     '2025년 테크센터-네트워크 통신랙실장도',
+        'apmap':    '2025년 테크센터-건물 정보',
+    }
+    NAS_PREFIXES = {
+        'diagram':  '2025년 테크센터-네트워크 구성도_',
+        'portmap':  '2025년 테크센터-네트워크 선번장_',
+        'rack':     '2025년 테크센터-네트워크 통신랙실장도_',
+        'apmap':    '2025년 테크센터-건물정보_',
+    }
+
+    @action(detail=False, methods=['get'], url_path='nas_file_info')
+    def nas_file_info(self, request):
+        """NAS 파일 슬라이드/시트/페이지 정보 조회"""
+        import os
+        from apps.schools.models import School
+        school_id = request.query_params.get('school_id')
+        tab = request.query_params.get('tab')  # diagram|portmap|rack|apmap
+        if not school_id or not tab:
+            return Response({'error': 'school_id와 tab 필요'}, status=400)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return Response({'error': '학교 없음'}, status=404)
+
+        folder = self.NAS_FOLDERS.get(tab)
+        prefix = self.NAS_PREFIXES.get(tab)
+        if not folder or not prefix:
+            return Response({'error': '잘못된 tab'}, status=400)
+
+        nas_dir = os.path.join(self.NAS_BASE, folder)
+        # 학교명으로 파일 찾기
+        school_name = school.name
+        found_file = None
+        if os.path.isdir(nas_dir):
+            for fname in os.listdir(nas_dir):
+                if school_name in fname:
+                    found_file = os.path.join(nas_dir, fname)
+                    break
+
+        if not found_file or not os.path.isfile(found_file):
+            return Response({'found': False, 'school_name': school_name, 'tab': tab})
+
+        ext = found_file.rsplit('.', 1)[-1].lower()
+        tabs_info = []
+
+        try:
+            if ext == 'pptx':
+                from pptx import Presentation
+                prs = Presentation(found_file)
+                for i, slide in enumerate(prs.slides):
+                    title = ''
+                    if slide.shapes.title:
+                        title = slide.shapes.title.text or ''
+                    if not title:
+                        title = f'슬라이드 {i+1}'
+                    tabs_info.append({'index': i, 'name': title})
+
+            elif ext in ('xlsx', 'xlsm'):
+                import openpyxl
+                wb = openpyxl.load_workbook(found_file, read_only=True, data_only=True)
+                for i, sheet_name in enumerate(wb.sheetnames):
+                    tabs_info.append({'index': i, 'name': sheet_name})
+                wb.close()
+
+            elif ext == 'pdf':
+                # PDF 페이지 수
+                try:
+                    import fitz  # PyMuPDF
+                    doc = fitz.open(found_file)
+                    for i in range(len(doc)):
+                        tabs_info.append({'index': i, 'name': f'페이지 {i+1}'})
+                    doc.close()
+                except ImportError:
+                    # PyMuPDF 없으면 페이지 수만 추정
+                    tabs_info.append({'index': 0, 'name': '전체'})
+        except Exception as e:
+            return Response({'found': True, 'error': str(e), 'file': os.path.basename(found_file)})
+
+        return Response({
+            'found': True,
+            'file': os.path.basename(found_file),
+            'ext': ext,
+            'school_name': school_name,
+            'tabs': tabs_info,
+        })
+
+    @action(detail=False, methods=['get'], url_path='nas_file_content')
+    def nas_file_content(self, request):
+        """NAS 파일 콘텐츠 — PPTX 슬라이드 이미지 / Excel 시트 데이터 / PDF 페이지 이미지"""
+        import os, io, base64
+        from apps.schools.models import School
+        from django.http import HttpResponse
+        school_id = request.query_params.get('school_id')
+        tab = request.query_params.get('tab')
+        page = int(request.query_params.get('page', 0))
+        if not school_id or not tab:
+            return Response({'error': 'school_id와 tab 필요'}, status=400)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return Response({'error': '학교 없음'}, status=404)
+
+        folder = self.NAS_FOLDERS.get(tab)
+        if not folder:
+            return Response({'error': '잘못된 tab'}, status=400)
+
+        nas_dir = os.path.join(self.NAS_BASE, folder)
+        found_file = None
+        if os.path.isdir(nas_dir):
+            for fname in os.listdir(nas_dir):
+                if school.name in fname:
+                    found_file = os.path.join(nas_dir, fname)
+                    break
+        if not found_file:
+            return Response({'error': '파일 없음'}, status=404)
+
+        ext = found_file.rsplit('.', 1)[-1].lower()
+
+        try:
+            if ext == 'pptx':
+                # PPTX 슬라이드 → 이미지 (python-pptx로 텍스트/도형 추출)
+                from pptx import Presentation
+                from pptx.util import Emu
+                prs = Presentation(found_file)
+                if page >= len(prs.slides):
+                    return Response({'error': '페이지 범위 초과'}, status=400)
+                slide = prs.slides[page]
+                # 슬라이드 내 텍스트+도형 정보 추출
+                shapes_data = []
+                for shape in slide.shapes:
+                    s = {
+                        'left': shape.left / 914400 if shape.left else 0,
+                        'top': shape.top / 914400 if shape.top else 0,
+                        'width': shape.width / 914400 if shape.width else 0,
+                        'height': shape.height / 914400 if shape.height else 0,
+                        'text': shape.text_frame.text if shape.has_text_frame else '',
+                        'type': shape.shape_type.__class__.__name__ if hasattr(shape, 'shape_type') else 'unknown',
+                    }
+                    if hasattr(shape, 'fill') and shape.fill and shape.fill.type is not None:
+                        try:
+                            s['fill_color'] = str(shape.fill.fore_color.rgb) if shape.fill.fore_color else ''
+                        except Exception:
+                            s['fill_color'] = ''
+                    shapes_data.append(s)
+                return Response({
+                    'type': 'pptx',
+                    'page': page,
+                    'slide_width': prs.slide_width / 914400,
+                    'slide_height': prs.slide_height / 914400,
+                    'shapes': shapes_data,
+                })
+
+            elif ext in ('xlsx', 'xlsm'):
+                import openpyxl
+                wb = openpyxl.load_workbook(found_file, read_only=True, data_only=True)
+                if page >= len(wb.sheetnames):
+                    wb.close()
+                    return Response({'error': '시트 범위 초과'}, status=400)
+                ws = wb[wb.sheetnames[page]]
+                rows = []
+                for row in ws.iter_rows(values_only=True):
+                    rows.append([str(c) if c is not None else '' for c in row])
+                wb.close()
+                return Response({
+                    'type': 'excel',
+                    'page': page,
+                    'sheet_name': wb.sheetnames[page] if page < len(wb.sheetnames) else '',
+                    'rows': rows[:500],  # 최대 500행
+                    'total_rows': len(rows),
+                })
+
+            elif ext == 'pdf':
+                try:
+                    import fitz
+                    doc = fitz.open(found_file)
+                    if page >= len(doc):
+                        doc.close()
+                        return Response({'error': '페이지 범위 초과'}, status=400)
+                    p = doc[page]
+                    pix = p.get_pixmap(dpi=150)
+                    img_bytes = pix.tobytes('png')
+                    doc.close()
+                    b64 = base64.b64encode(img_bytes).decode()
+                    return Response({'type': 'pdf', 'page': page, 'image': f'data:image/png;base64,{b64}'})
+                except ImportError:
+                    # PyMuPDF 없으면 다운로드 링크만
+                    from urllib.parse import quote
+                    fname = os.path.basename(found_file)
+                    url = f'/npms/media/npms/산출물/2025년 테크센터/{self.NAS_FOLDERS[tab]}/{quote(fname)}'
+                    return Response({'type': 'pdf_link', 'url': url})
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+    @action(detail=False, methods=['get'], url_path='nas_file_download')
+    def nas_file_download(self, request):
+        """NAS 파일 다운로드"""
+        import os
+        from urllib.parse import quote
+        from django.http import FileResponse
+        from apps.schools.models import School
+        school_id = request.query_params.get('school_id')
+        tab = request.query_params.get('tab')
+        if not school_id or not tab:
+            return Response({'error': 'school_id와 tab 필요'}, status=400)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return Response({'error': '학교 없음'}, status=404)
+
+        folder = self.NAS_FOLDERS.get(tab)
+        if not folder:
+            return Response({'error': '잘못된 tab'}, status=400)
+        nas_dir = os.path.join(self.NAS_BASE, folder)
+        found_file = None
+        if os.path.isdir(nas_dir):
+            for fname in os.listdir(nas_dir):
+                if school.name in fname:
+                    found_file = os.path.join(nas_dir, fname)
+                    break
+        if not found_file:
+            return Response({'error': '파일 없음'}, status=404)
+        fname = os.path.basename(found_file)
+        resp = FileResponse(open(found_file, 'rb'))
+        resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(fname)}"
+        return resp
+
     @action(detail=False, methods=['get'])
     def device_counts(self, request):
         """학교별 장비 수량 조회 (정기점검 보고서용) — SchoolEquipment 기준"""
