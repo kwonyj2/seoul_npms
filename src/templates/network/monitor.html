@@ -1388,9 +1388,6 @@ function _apDoLoad(schoolId) {
   fetch(`${API_BASE}/network/topology/ap_map_data/?school_id=${schoolId}`)
     .then(r => r.json()).then(d => {
       _apData = d;
-      document.getElementById('btn-ap-save').disabled = false;
-      document.getElementById('btn-ap-png').disabled = false;
-      document.getElementById('btn-ap-upload').style.display = '';
       const floors = d.floors || [];
       if (!floors.length) {
         document.getElementById('ap-floor-tabs').style.display = 'none';
@@ -1608,8 +1605,6 @@ function _rkDoLoad(schoolId) {
   fetch(`${API_BASE}/network/topology/rack_data/?school_id=${schoolId}`)
     .then(r => r.json()).then(d => {
       _rkData = d;
-      document.getElementById('btn-rk-save').disabled = false;
-      document.getElementById('btn-rk-png').disabled = false;
       if (!d.length) {
         document.getElementById('rk-content').innerHTML = '<div class="text-center text-muted py-4">스위치/PoE 장비가 없습니다.</div>';
         return;
@@ -1748,7 +1743,6 @@ function _pmDoLoad(schoolId) {
   fetch(`${API_BASE}/network/topology/portmap_data/?school_id=${schoolId}`)
     .then(r => r.json()).then(d => {
       _pmData = d;
-      document.getElementById('btn-pm-excel').disabled = false;
       if (!d.length) {
         document.getElementById('pm-switch-tabs').style.display = 'none';
         document.getElementById('pm-content').innerHTML = '<div class="text-center text-muted py-4">스위치/PoE 장비가 없습니다.</div>';
@@ -1907,10 +1901,7 @@ function _dgmDoLoad(schoolId) {
     .then(r => r.json()).then(d => {
       if (d.error) { alert(d.error); return; }
       renderDiagram(d.layout);
-      document.getElementById('btn-dgm-save').disabled = false;
-      document.getElementById('btn-dgm-png').disabled = false;
-      document.getElementById('btn-dgm-pptx').disabled = false;
-    }).catch(() => alert('구성도 로드 실패'));
+    }).catch(e => { console.error(e); alert('구성도 로드 실패: ' + e.message); });
 }
 
 const DGM_COLORS = {
