@@ -358,6 +358,9 @@
 }
 </style>
 <script>
+// ── 초기 로드 (토폴로지가 기본 탭) ──────────────────────────
+loadTopoSchools();
+
 // ── 탭 전환 ─────────────────────────────────────────────────
 function switchTab(name, el) {
   document.querySelectorAll('#nms-tabs .nav-link').forEach(a => a.classList.remove('active'));
