@@ -887,35 +887,55 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         ext = found_file.rsplit('.', 1)[-1].lower()
         tabs_info = []
 
+        import subprocess, tempfile, shutil, hashlib
         try:
-            if ext == 'pptx':
-                from pptx import Presentation
-                prs = Presentation(found_file)
-                for i, slide in enumerate(prs.slides):
-                    title = ''
-                    if slide.shapes.title:
-                        title = slide.shapes.title.text or ''
-                    if not title:
-                        title = f'슬라이드 {i+1}'
-                    tabs_info.append({'index': i, 'name': title})
-
-            elif ext in ('xlsx', 'xlsm'):
-                import openpyxl
-                wb = openpyxl.load_workbook(found_file, read_only=True, data_only=True)
-                for i, sheet_name in enumerate(wb.sheetnames):
-                    tabs_info.append({'index': i, 'name': sheet_name})
-                wb.close()
-
-            elif ext == 'pdf':
-                # PDF 페이지 수
-                try:
-                    import fitz  # PyMuPDF
-                    doc = fitz.open(found_file)
-                    for i in range(len(doc)):
-                        tabs_info.append({'index': i, 'name': f'페이지 {i+1}'})
+            if ext == 'pdf':
+                import fitz
+                doc = fitz.open(found_file)
+                for i in range(len(doc)):
+                    tabs_info.append({'index': i, 'name': f'페이지 {i+1}'})
+                doc.close()
+            else:
+                # PPTX/Excel → LibreOffice로 PDF 변환 후 페이지 수 확인
+                file_hash = hashlib.md5(found_file.encode() + str(os.path.getmtime(found_file)).encode()).hexdigest()[:12]
+                cache_dir = f'/tmp/nms_cache/{file_hash}'
+                pdf_path = os.path.join(cache_dir, 'converted.pdf')
+                if not os.path.exists(pdf_path):
+                    os.makedirs(cache_dir, exist_ok=True)
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        subprocess.run(
+                            ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', tmpdir, found_file],
+                            timeout=120, capture_output=True)
+                        for f in os.listdir(tmpdir):
+                            if f.endswith('.pdf'):
+                                shutil.copy2(os.path.join(tmpdir, f), pdf_path)
+                                break
+                if os.path.exists(pdf_path):
+                    import fitz
+                    doc = fitz.open(pdf_path)
+                    # PPTX는 슬라이드명, Excel은 시트명 추출
+                    if ext == 'pptx':
+                        try:
+                            from pptx import Presentation
+                            prs = Presentation(found_file)
+                            for i, slide in enumerate(prs.slides):
+                                title = slide.shapes.title.text if slide.shapes.title else ''
+                                tabs_info.append({'index': i, 'name': title or f'슬라이드 {i+1}'})
+                        except Exception:
+                            for i in range(len(doc)):
+                                tabs_info.append({'index': i, 'name': f'슬라이드 {i+1}'})
+                    elif ext in ('xlsx', 'xlsm'):
+                        try:
+                            import openpyxl
+                            wb = openpyxl.load_workbook(found_file, read_only=True, data_only=True)
+                            for i, sname in enumerate(wb.sheetnames):
+                                tabs_info.append({'index': i, 'name': sname})
+                            wb.close()
+                        except Exception:
+                            for i in range(len(doc)):
+                                tabs_info.append({'index': i, 'name': f'시트 {i+1}'})
                     doc.close()
-                except ImportError:
-                    # PyMuPDF 없으면 페이지 수만 추정
+                else:
                     tabs_info.append({'index': 0, 'name': '전체'})
         except Exception as e:
             return Response({'found': True, 'error': str(e), 'file': os.path.basename(found_file)})
@@ -930,10 +950,9 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='nas_file_content')
     def nas_file_content(self, request):
-        """NAS 파일 콘텐츠 — PPTX 슬라이드 이미지 / Excel 시트 데이터 / PDF 페이지 이미지"""
-        import os, io, base64
+        """NAS 파일 → LibreOffice로 PDF 변환 → 페이지별 이미지 반환"""
+        import os, subprocess, base64, hashlib, tempfile, shutil
         from apps.schools.models import School
-        from django.http import HttpResponse
         school_id = request.query_params.get('school_id')
         tab = request.query_params.get('tab')
         page = int(request.query_params.get('page', 0))
@@ -961,77 +980,72 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         ext = found_file.rsplit('.', 1)[-1].lower()
 
         try:
-            if ext == 'pptx':
-                # PPTX 슬라이드 → 이미지 (python-pptx로 텍스트/도형 추출)
-                from pptx import Presentation
-                from pptx.util import Emu
-                prs = Presentation(found_file)
-                if page >= len(prs.slides):
-                    return Response({'error': '페이지 범위 초과'}, status=400)
-                slide = prs.slides[page]
-                # 슬라이드 내 텍스트+도형 정보 추출
-                shapes_data = []
-                for shape in slide.shapes:
-                    s = {
-                        'left': shape.left / 914400 if shape.left else 0,
-                        'top': shape.top / 914400 if shape.top else 0,
-                        'width': shape.width / 914400 if shape.width else 0,
-                        'height': shape.height / 914400 if shape.height else 0,
-                        'text': shape.text_frame.text if shape.has_text_frame else '',
-                        'type': shape.shape_type.__class__.__name__ if hasattr(shape, 'shape_type') else 'unknown',
-                    }
-                    if hasattr(shape, 'fill') and shape.fill and shape.fill.type is not None:
-                        try:
-                            s['fill_color'] = str(shape.fill.fore_color.rgb) if shape.fill.fore_color else ''
-                        except Exception:
-                            s['fill_color'] = ''
-                    shapes_data.append(s)
-                return Response({
-                    'type': 'pptx',
-                    'page': page,
-                    'slide_width': prs.slide_width / 914400,
-                    'slide_height': prs.slide_height / 914400,
-                    'shapes': shapes_data,
-                })
+            # 캐시 디렉토리: 파일 해시 기반
+            file_hash = hashlib.md5(found_file.encode() + str(os.path.getmtime(found_file)).encode()).hexdigest()[:12]
+            cache_dir = f'/tmp/nms_cache/{file_hash}'
 
-            elif ext in ('xlsx', 'xlsm'):
-                import openpyxl
-                wb = openpyxl.load_workbook(found_file, read_only=True, data_only=True)
-                if page >= len(wb.sheetnames):
-                    wb.close()
-                    return Response({'error': '시트 범위 초과'}, status=400)
-                ws = wb[wb.sheetnames[page]]
-                rows = []
-                for row in ws.iter_rows(values_only=True):
-                    rows.append([str(c) if c is not None else '' for c in row])
-                wb.close()
-                return Response({
-                    'type': 'excel',
-                    'page': page,
-                    'sheet_name': wb.sheetnames[page] if page < len(wb.sheetnames) else '',
-                    'rows': rows[:500],  # 최대 500행
-                    'total_rows': len(rows),
-                })
-
-            elif ext == 'pdf':
-                try:
-                    import fitz
-                    doc = fitz.open(found_file)
-                    if page >= len(doc):
-                        doc.close()
-                        return Response({'error': '페이지 범위 초과'}, status=400)
-                    p = doc[page]
-                    pix = p.get_pixmap(dpi=150)
-                    img_bytes = pix.tobytes('png')
+            if ext == 'pdf':
+                # PDF → PyMuPDF로 직접 이미지 변환
+                import fitz
+                doc = fitz.open(found_file)
+                if page >= len(doc):
                     doc.close()
-                    b64 = base64.b64encode(img_bytes).decode()
-                    return Response({'type': 'pdf', 'page': page, 'image': f'data:image/png;base64,{b64}'})
-                except ImportError:
-                    # PyMuPDF 없으면 다운로드 링크만
-                    from urllib.parse import quote
-                    fname = os.path.basename(found_file)
-                    url = f'/npms/media/npms/산출물/2025년 테크센터/{self.NAS_FOLDERS[tab]}/{quote(fname)}'
-                    return Response({'type': 'pdf_link', 'url': url})
+                    return Response({'error': '페이지 범위 초과'}, status=400)
+                p = doc[page]
+                pix = p.get_pixmap(dpi=150)
+                img_bytes = pix.tobytes('png')
+                doc.close()
+                b64 = base64.b64encode(img_bytes).decode()
+                return Response({'type': 'image', 'page': page, 'image': f'data:image/png;base64,{b64}'})
+
+            # PPTX/Excel → LibreOffice로 PDF 변환 → PDF → 이미지
+            # 캐시된 이미지 확인
+            cached_img = os.path.join(cache_dir, f'page_{page}.png')
+            if os.path.exists(cached_img):
+                with open(cached_img, 'rb') as f:
+                    b64 = base64.b64encode(f.read()).decode()
+                return Response({'type': 'image', 'page': page, 'image': f'data:image/png;base64,{b64}'})
+
+            # LibreOffice로 PDF 변환
+            os.makedirs(cache_dir, exist_ok=True)
+            pdf_path = os.path.join(cache_dir, 'converted.pdf')
+            if not os.path.exists(pdf_path):
+                # LibreOffice 변환
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    cmd = [
+                        'libreoffice', '--headless', '--convert-to', 'pdf',
+                        '--outdir', tmpdir, found_file
+                    ]
+                    subprocess.run(cmd, timeout=120, capture_output=True)
+                    # 변환된 PDF 찾기
+                    for f in os.listdir(tmpdir):
+                        if f.endswith('.pdf'):
+                            shutil.copy2(os.path.join(tmpdir, f), pdf_path)
+                            break
+
+            if not os.path.exists(pdf_path):
+                return Response({'error': 'LibreOffice 변환 실패'}, status=500)
+
+            # PDF → 이미지 (PyMuPDF)
+            import fitz
+            doc = fitz.open(pdf_path)
+            if page >= len(doc):
+                doc.close()
+                return Response({'error': '페이지 범위 초과'}, status=400)
+            p = doc[page]
+            pix = p.get_pixmap(dpi=200)
+            img_bytes = pix.tobytes('png')
+            doc.close()
+
+            # 캐시 저장
+            with open(cached_img, 'wb') as f:
+                f.write(img_bytes)
+
+            b64 = base64.b64encode(img_bytes).decode()
+            return Response({'type': 'image', 'page': page, 'image': f'data:image/png;base64,{b64}'})
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
         except Exception as e:
             return Response({'error': str(e)}, status=500)
 

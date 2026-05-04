@@ -1273,58 +1273,21 @@ function nmsLoadPage(tab, schoolId, page, el) {
   }
   const contentId = _getContentId(tab);
   const contentEl = document.getElementById(contentId);
-  if (contentEl) contentEl.innerHTML = '<div class="text-center py-4"><span class="spinner-border spinner-border-sm me-1"></span>로딩 중...</div>';
+  if (contentEl) contentEl.innerHTML = '<div class="text-center py-5"><span class="spinner-border spinner-border-sm me-2"></span>원본 파일을 이미지로 변환 중... (최초 조회 시 시간이 걸릴 수 있습니다)</div>';
 
   fetch(`${API_BASE}/network/topology/nas_file_content/?school_id=${schoolId}&tab=${tab}&page=${page}`)
     .then(r => r.json()).then(d => {
       if (d.error) { contentEl.innerHTML = `<div class="text-danger text-center py-4">${d.error}</div>`; return; }
-
-      if (d.type === 'pptx') {
-        renderPptxSlide(contentEl, d);
-      } else if (d.type === 'excel') {
-        renderExcelSheet(contentEl, d);
-      } else if (d.type === 'pdf') {
-        contentEl.innerHTML = `<div class="text-center"><img src="${d.image}" style="max-width:100%;border:1px solid #dee2e6;border-radius:4px;"></div>`;
-      } else if (d.type === 'pdf_link') {
-        contentEl.innerHTML = `<div class="text-center py-4"><a href="${d.url}" class="btn btn-primary" target="_blank"><i class="bi bi-file-pdf me-1"></i>PDF 다운로드</a></div>`;
+      if (d.type === 'image' && d.image) {
+        contentEl.innerHTML = `<div class="text-center" style="background:#f8f9fa;padding:10px;border-radius:6px;">
+          <img src="${d.image}" style="max-width:100%;border:1px solid #dee2e6;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.1);" onclick="window.open(this.src,'_blank')" title="클릭하면 원본 크기로 보기" class="cursor-pointer">
+        </div>`;
+      } else {
+        contentEl.innerHTML = '<div class="text-muted text-center py-4">표시할 수 없는 형식</div>';
       }
     }).catch(() => {
       contentEl.innerHTML = '<div class="text-danger text-center py-4">콘텐츠 로드 실패</div>';
     });
-}
-
-function renderPptxSlide(el, d) {
-  const scaleX = 800 / (d.slide_width || 13.33);
-  const scaleY = 450 / (d.slide_height || 7.5);
-  const scale = Math.min(scaleX, scaleY);
-  let html = `<div style="position:relative;width:${d.slide_width*scale}px;height:${d.slide_height*scale}px;background:#fff;border:1px solid #dee2e6;margin:0 auto;overflow:hidden;border-radius:4px;">`;
-  (d.shapes || []).forEach(s => {
-    const left = s.left * scale, top = s.top * scale, w = s.width * scale, h = s.height * scale;
-    if (w < 2 || h < 2) return;
-    const bg = s.fill_color ? `#${s.fill_color}` : 'rgba(0,0,0,0.05)';
-    const textColor = s.fill_color && parseInt(s.fill_color, 16) < 0x808080 ? '#fff' : '#333';
-    html += `<div style="position:absolute;left:${left}px;top:${top}px;width:${w}px;height:${h}px;background:${bg};border:1px solid #ccc;border-radius:3px;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:2px;">
-      <span style="font-size:${Math.max(7, Math.min(11, w/15))}px;color:${textColor};text-align:center;word-break:break-all;line-height:1.2;">${(s.text||'').replace(/\n/g,'<br>')}</span></div>`;
-  });
-  html += '</div>';
-  el.innerHTML = html;
-}
-
-function renderExcelSheet(el, d) {
-  const rows = d.rows || [];
-  if (!rows.length) { el.innerHTML = '<div class="text-muted text-center py-4">빈 시트</div>'; return; }
-  let html = `<div class="small text-muted mb-1">${d.sheet_name} — ${d.total_rows}행</div>`;
-  html += '<div class="table-responsive" style="max-height:550px;overflow:auto;">';
-  html += '<table class="table table-sm table-bordered mb-0" style="font-size:.75rem;">';
-  rows.forEach((row, ri) => {
-    html += ri === 0 ? '<thead class="table-light sticky-top"><tr>' : '<tr>';
-    row.forEach(cell => {
-      html += ri === 0 ? `<th class="text-nowrap">${cell}</th>` : `<td>${cell}</td>`;
-    });
-    html += ri === 0 ? '</tr></thead><tbody>' : '</tr>';
-  });
-  html += '</tbody></table></div>';
-  el.innerHTML = html;
 }
 
 // 외부 클릭 시 검색 결과 닫기
