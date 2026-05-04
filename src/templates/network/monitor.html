@@ -59,8 +59,16 @@
           <input type="text" id="nms-school-q" class="form-control form-control-sm" placeholder="학교명 검색" onkeyup="nmsSchoolSearch()" autocomplete="off">
           <div id="nms-school-results" class="list-group position-absolute shadow" style="z-index:10;max-height:200px;overflow-y:auto;display:none;width:100%;"></div>
         </div>
-        <div class="col-md-3 d-flex gap-1">
-          <button class="btn btn-sm btn-primary flex-fill" onclick="nmsLoadSelected()"><i class="bi bi-search me-1"></i>조회</button>
+        <div class="col-md-3 d-flex gap-1 flex-wrap">
+          <button class="btn btn-sm btn-primary" onclick="nmsLoadSelected()"><i class="bi bi-search me-1"></i>조회</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="nmsReset()"><i class="bi bi-x-lg me-1"></i>초기화</button>
+          <!-- 탭별 액션 버튼 (JS에서 표시/숨김) -->
+          <button class="btn btn-sm btn-success d-none" id="nms-btn-excel" onclick="pmExcel()"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+          <button class="btn btn-sm btn-success d-none" id="nms-btn-save" onclick="nmsTabSave()"><i class="bi bi-save me-1"></i>저장</button>
+          <button class="btn btn-sm btn-outline-info d-none" id="nms-btn-png" onclick="nmsTabPng()"><i class="bi bi-image me-1"></i>PNG</button>
+          <label class="btn btn-sm btn-outline-secondary d-none mb-0" id="nms-btn-plan">
+            <i class="bi bi-upload me-1"></i>도면<input type="file" accept="image/*" onchange="apUploadPlan(this)" style="display:none;">
+          </label>
           <span id="nms-school-badge" class="badge bg-info text-dark align-self-center d-none" style="font-size:.78rem;"></span>
         </div>
       </div>
@@ -258,13 +266,6 @@
 
   <!-- ── AP위치도 탭 ── -->
   <div id="tab-apmap" class="d-none">
-    <div class="mb-2 d-flex gap-1" id="ap-actions">
-      <button class="btn btn-sm btn-success" onclick="apSave()" id="btn-ap-save" disabled><i class="bi bi-save me-1"></i>저장</button>
-      <button class="btn btn-sm btn-outline-info" onclick="apDownloadPng()" id="btn-ap-png" disabled><i class="bi bi-image me-1"></i>PNG</button>
-      <label class="btn btn-sm btn-outline-secondary mb-0" id="btn-ap-upload">
-        <i class="bi bi-upload me-1"></i>도면<input type="file" accept="image/*" onchange="apUploadPlan(this)" style="display:none;">
-      </label>
-    </div>
     <!-- 층 서브탭 -->
     <div id="ap-floor-tabs" class="mb-2" style="display:none;"></div>
     <div id="ap-content">
@@ -274,10 +275,6 @@
 
   <!-- ── 랙실장도 탭 ── -->
   <div id="tab-rack" class="d-none">
-    <div class="mb-2 d-flex gap-1">
-      <button class="btn btn-sm btn-success" onclick="rkSave()" id="btn-rk-save" disabled><i class="bi bi-save me-1"></i>저장</button>
-      <button class="btn btn-sm btn-outline-info" onclick="rkDownloadPng()" id="btn-rk-png" disabled><i class="bi bi-image me-1"></i>PNG</button>
-    </div>
     <div id="nas-tabs-rack" class="mb-2" style="display:none;"></div>
     <div id="rk-content">
       <div class="text-center text-muted py-5"><i class="bi bi-server fs-3 d-block mb-2"></i>학교를 선택하면 랙실장도를 표시합니다.</div>
@@ -286,9 +283,6 @@
 
   <!-- ── 선번장 탭 ── -->
   <div id="tab-portmap" class="d-none">
-    <div class="mb-2 d-flex gap-1">
-      <button class="btn btn-sm btn-success" onclick="pmExcel()" id="btn-pm-excel" disabled><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
-    </div>
     <!-- 스위치 선택 서브탭 -->
     <div id="pm-switch-tabs" class="mb-2" style="display:none;"></div>
     <!-- 포트맵 SVG -->
@@ -299,14 +293,9 @@
 
   <!-- ── 구성도 탭 ── -->
   <div id="tab-diagram" class="d-none">
-    <div class="mb-2 d-flex gap-1" id="dgm-actions" style="display:none !important;">
-      <button class="btn btn-sm btn-success" onclick="dgmSave()" id="btn-dgm-save" disabled><i class="bi bi-save me-1"></i>저장</button>
-      <button class="btn btn-sm btn-outline-info" onclick="dgmDownloadPng()" id="btn-dgm-png" disabled><i class="bi bi-image me-1"></i>PNG</button>
-      <button class="btn btn-sm btn-outline-warning" onclick="dgmDownloadPptx()" id="btn-dgm-pptx" disabled><i class="bi bi-file-earmark-ppt me-1"></i>PPTX</button>
-    </div>
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-        <span class="fw-bold small" id="dgm-title">학교를 선택하세요</span>
+        <span class="fw-bold small" id="dgm-title"></span>
         <div>
           <span class="badge bg-danger me-1"><i class="bi bi-shield-fill me-1"></i>방화벽</span>
           <span class="badge bg-primary me-1"><i class="bi bi-hdd-rack-fill me-1"></i>스위치</span>
@@ -373,6 +362,7 @@ function switchTab(name, el) {
   const bar = document.getElementById('nms-school-bar');
   if (bar) bar.style.display = (name === 'topology') ? 'none' : '';
   _currentNmsTab = name;
+  _nmsUpdateButtons();
   if (name === 'topology') { if (!topoNetwork) loadTopoSchools(); }
 }
 
@@ -1168,6 +1158,7 @@ function nmsOnSchoolSelect() {
     _nmsSelectedSchool = {id: schoolId, name: schoolName};
     document.getElementById('nms-school-badge').textContent = schoolName;
     document.getElementById('nms-school-badge').classList.remove('d-none');
+    _nmsUpdateButtons();
   }
 }
 
@@ -1197,12 +1188,68 @@ function _doNmsSearch() {
   }).catch(()=>{});
 }
 
+function nmsReset() {
+  _nmsSelectedSchool = null;
+  document.getElementById('nms-center').value = '';
+  document.getElementById('nms-stype').innerHTML = '<option value="">학제 선택</option>';
+  document.getElementById('nms-school-sel').innerHTML = '<option value="">학교 선택</option>';
+  document.getElementById('nms-school-q').value = '';
+  document.getElementById('nms-school-results').style.display = 'none';
+  document.getElementById('nms-school-badge').classList.add('d-none');
+  // 각 탭 콘텐츠 초기화
+  ['dgm-canvas','pm-content','rk-content','ap-content'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
+  ['nas-tabs-diagram','nas-tabs-rack','pm-switch-tabs','ap-floor-tabs'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.innerHTML = ''; el.style.display = 'none'; }
+  });
+  _nmsUpdateButtons();
+}
+
+function _nmsUpdateButtons() {
+  const tab = _currentNmsTab;
+  const has = !!_nmsSelectedSchool;
+  // 모든 탭별 버튼 숨기기
+  document.getElementById('nms-btn-excel').classList.add('d-none');
+  document.getElementById('nms-btn-save').classList.add('d-none');
+  document.getElementById('nms-btn-png').classList.add('d-none');
+  document.getElementById('nms-btn-plan').classList.add('d-none');
+  if (!has) return;
+  if (tab === 'portmap') {
+    document.getElementById('nms-btn-excel').classList.remove('d-none');
+  } else if (tab === 'rack') {
+    document.getElementById('nms-btn-save').classList.remove('d-none');
+    document.getElementById('nms-btn-png').classList.remove('d-none');
+  } else if (tab === 'apmap') {
+    document.getElementById('nms-btn-save').classList.remove('d-none');
+    document.getElementById('nms-btn-png').classList.remove('d-none');
+    document.getElementById('nms-btn-plan').classList.remove('d-none');
+  } else if (tab === 'diagram') {
+    document.getElementById('nms-btn-save').classList.remove('d-none');
+    document.getElementById('nms-btn-png').classList.remove('d-none');
+  }
+}
+
+function nmsTabSave() {
+  if (_currentNmsTab === 'diagram') dgmSave();
+  else if (_currentNmsTab === 'rack') rkSave();
+  else if (_currentNmsTab === 'apmap') apSave();
+}
+function nmsTabPng() {
+  if (_currentNmsTab === 'diagram') dgmDownloadPng();
+  else if (_currentNmsTab === 'rack') rkDownloadPng();
+  else if (_currentNmsTab === 'apmap') apDownloadPng();
+}
+
 function nmsPickSchool(id, name) {
   _nmsSelectedSchool = {id, name};
   document.getElementById('nms-school-q').value = name;
   document.getElementById('nms-school-results').style.display = 'none';
   document.getElementById('nms-school-badge').textContent = name;
   document.getElementById('nms-school-badge').classList.remove('d-none');
+  _nmsUpdateButtons();
   nmsLoadSelected();
 }
 
