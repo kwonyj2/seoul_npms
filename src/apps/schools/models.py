@@ -276,6 +276,11 @@ class SchoolEquipment(models.Model):
     # 선번장 (포트별 연결 정보)
     port_map         = models.JSONField('선번장', null=True, blank=True,
                                          help_text='포트별 연결정보 [{"port":1,"connected_to":"AP1","vlan":"","cable":"Cat6","note":""}]')
+    # 랙실장도 (U 위치)
+    rack_unit        = models.PositiveSmallIntegerField('랙 위치(U)', null=True, blank=True,
+                                                         help_text='랙 내 설치 위치 (1U~42U)')
+    rack_size        = models.PositiveSmallIntegerField('장비 높이(U)', default=1,
+                                                         help_text='장비가 차지하는 U 수 (기본 1U)')
     # 변경 이력 (원본 데이터 보존)
     original_data    = models.JSONField('원본 데이터', null=True, blank=True,
                                          help_text='라벨링 전 원본 장비 정보 (자동 저장)')

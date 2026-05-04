@@ -288,6 +288,62 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
             pass
         return response
 
+    # ── 랙실장도 ────────────────────────────────────────
+    @action(detail=False, methods=['get'], url_path='rack_data')
+    def rack_data(self, request):
+        """랙실장도 — 학교 장비의 랙 배치 데이터"""
+        from apps.schools.models import SchoolEquipment
+        school_id = request.query_params.get('school_id')
+        if not school_id:
+            return Response({'error': 'school_id 필요'}, status=400)
+        equips = SchoolEquipment.objects.filter(
+            school_id=school_id,
+            category__in=['스위치', 'PoE', 'PoE스위치']
+        ).order_by('network_type', 'device_id', 'id')
+        # 건물/층별 그룹화 (랙 위치별)
+        racks = {}
+        for eq in equips:
+            rack_key = f'{eq.building or "본관"}_{eq.floor or "1"}_{eq.install_location or "통신실"}'
+            if rack_key not in racks:
+                racks[rack_key] = {
+                    'key': rack_key,
+                    'building': eq.building or '본관',
+                    'floor': eq.floor or '1',
+                    'location': eq.install_location or '통신실',
+                    'items': [],
+                }
+            TYPE_COLOR = {'스위치': '#0d6efd', 'PoE': '#6f42c1', 'PoE스위치': '#6f42c1'}
+            racks[rack_key]['items'].append({
+                'id': eq.id,
+                'model_name': eq.model_name or eq.category,
+                'category': eq.category,
+                'device_id': eq.device_id or '',
+                'network_type': eq.network_type or '',
+                'asset_tag': eq.asset_tag or '',
+                'rack_unit': eq.rack_unit,
+                'rack_size': eq.rack_size or 1,
+                'color': TYPE_COLOR.get(eq.category, '#0d6efd'),
+            })
+        return Response(list(racks.values()))
+
+    @action(detail=False, methods=['post'], url_path='rack_save')
+    def rack_save(self, request):
+        """랙실장도 배치 저장 (장비별 U 위치)"""
+        from apps.schools.models import SchoolEquipment
+        items = request.data.get('items', [])
+        if not items:
+            return Response({'error': 'items 필요'}, status=400)
+        updated = 0
+        for item in items:
+            eid = item.get('id')
+            rack_unit = item.get('rack_unit')
+            rack_size = item.get('rack_size', 1)
+            if eid:
+                SchoolEquipment.objects.filter(pk=eid).update(
+                    rack_unit=rack_unit, rack_size=rack_size)
+                updated += 1
+        return Response({'success': True, 'updated': updated})
+
     # ── 구성도 (Cytoscape.js) ────────────────────────────
     @action(detail=False, methods=['get'], url_path='diagram_data')
     def diagram_data(self, request):
