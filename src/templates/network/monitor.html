@@ -380,10 +380,14 @@ function switchTab(name, el) {
 let topoNetwork = null;
 let _topoTree = [];   // tree API 결과 캐시
 
+let _topoLoaded = false;
 async function loadTopoSchools() {
+  if (_topoLoaded) return;
+  _topoLoaded = true;
   try {
     _topoTree = await apiGet(`${API_BASE}/schools/schools/tree/`, {});
     const sel = document.getElementById('topo-center');
+    sel.innerHTML = '<option value="">교육지원청 선택</option>';
     _topoTree.forEach(c => {
       const o = document.createElement('option');
       o.value = c.id; o.textContent = c.name;
