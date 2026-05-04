@@ -588,6 +588,91 @@ class SchoolViewSet(viewsets.ModelViewSet):
         )
         return Response({'success': True, 'path': fpath, 'changed': changed_count})
 
+    @action(detail=False, methods=['get'], url_path='labeling_tree_stats')
+    def labeling_tree_stats(self, request):
+        """드릴다운 통계: 지원청+학제별 학교 목록 또는 개별 학교 장비 통계"""
+        from .models import SchoolEquipment, LabelingCompletion, SchoolType
+
+        center = request.query_params.get('center')       # 지원청 code
+        school_type = request.query_params.get('school_type')  # 학제 id
+        school_id = request.query_params.get('school_id')  # 개별 학교
+
+        # ── 3단계: 개별 학교 장비 통계 ──
+        if school_id:
+            try:
+                school = School.objects.select_related('support_center', 'school_type').get(pk=school_id)
+            except School.DoesNotExist:
+                return Response({'error': '학교를 찾을 수 없습니다.'}, status=404)
+            eq_qs = SchoolEquipment.objects.filter(school=school)
+            total = eq_qs.count()
+            tagged = eq_qs.filter(asset_tag__gt='').exclude(asset_tag='장비없음').count()
+            no_equip = eq_qs.filter(asset_tag='장비없음').count()
+            added = eq_qs.filter(is_added=True).count()
+            original = total - added
+            changed = eq_qs.filter(original_data__isnull=False).count()
+            cats = {}
+            for cat_key, cat_filter in [('스위치', ['스위치']), ('PoE', ['PoE', 'PoE스위치']), ('AP', ['AP'])]:
+                cat_qs = eq_qs.filter(category__in=cat_filter)
+                cats[cat_key] = {
+                    'total': cat_qs.count(),
+                    'tagged': cat_qs.filter(asset_tag__gt='').exclude(asset_tag='장비없음').count(),
+                    'no_equip': cat_qs.filter(asset_tag='장비없음').count(),
+                    'added': cat_qs.filter(is_added=True).count(),
+                }
+            completed = LabelingCompletion.objects.filter(school=school).exists()
+            return Response({
+                'level': 'school',
+                'school_name': school.name,
+                'center_name': school.support_center.name if school.support_center else '',
+                'school_type_name': school.school_type.name if school.school_type else '',
+                'total': total, 'tagged': tagged, 'no_equip': no_equip,
+                'added': added, 'original': original, 'delta': added - no_equip,
+                'changed': changed, 'completed': completed,
+                'categories': cats,
+            })
+
+        # ── 2단계: 지원청+학제별 학교 목록 통계 ──
+        if center and school_type:
+            schools_qs = School.objects.filter(
+                is_active=True, support_center__code=center, school_type_id=school_type
+            ).select_related('support_center', 'school_type').order_by('name')
+            result = []
+            for s in schools_qs:
+                eq_qs = SchoolEquipment.objects.filter(school=s)
+                total = eq_qs.count()
+                tagged = eq_qs.filter(asset_tag__gt='').exclude(asset_tag='장비없음').count()
+                no_equip = eq_qs.filter(asset_tag='장비없음').count()
+                added = eq_qs.filter(is_added=True).count()
+                completed = LabelingCompletion.objects.filter(school=s).exists()
+                result.append({
+                    'id': s.id, 'name': s.name,
+                    'total': total, 'tagged': tagged,
+                    'no_equip': no_equip, 'added': added,
+                    'original': total - added, 'delta': added - no_equip,
+                    'completed': completed,
+                })
+            return Response({'level': 'schools', 'rows': result})
+
+        # ── 1단계 (트리 데이터): 지원청별 학제 트리 ──
+        from django.db.models import Count
+        centers = SupportCenter.objects.filter(is_active=True).order_by('id')
+        tree = []
+        for ctr in centers:
+            types = (
+                School.objects.filter(is_active=True, support_center=ctr)
+                .values('school_type__id', 'school_type__name')
+                .annotate(cnt=Count('id'))
+                .order_by('school_type__id')
+            )
+            children = [{'type_id': t['school_type__id'], 'type_name': t['school_type__name'],
+                         'count': t['cnt']} for t in types if t['school_type__id']]
+            tree.append({
+                'code': ctr.code, 'name': ctr.name,
+                'school_count': sum(c['count'] for c in children),
+                'children': children,
+            })
+        return Response({'level': 'tree', 'tree': tree})
+
     @action(detail=False, methods=['get'], url_path='labeling_stats')
     def labeling_stats(self, request):
         """전체 지원청별 라벨링 통계"""

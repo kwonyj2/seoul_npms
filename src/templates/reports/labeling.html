@@ -18,6 +18,16 @@
 .school-row { cursor:pointer; }
 .school-row:hover { background:#e9ecef !important; }
 .school-row.active { background:#cfe2ff !important; }
+/* 트리 */
+.tree-center { cursor:pointer; padding:6px 10px; font-weight:600; font-size:.85rem; border-bottom:1px solid #eee; }
+.tree-center:hover { background:#f0f4ff; }
+.tree-center.open { background:#e8f0fe; }
+.tree-type { cursor:pointer; padding:4px 10px 4px 24px; font-size:.82rem; border-bottom:1px solid #f5f5f5; }
+.tree-type:hover { background:#f0f4ff; }
+.tree-type.active { background:#cfe2ff; font-weight:600; }
+.tree-school { cursor:pointer; padding:3px 10px 3px 40px; font-size:.78rem; border-bottom:1px solid #fafafa; }
+.tree-school:hover { background:#f0f4ff; }
+.tree-school.active { background:#cfe2ff; font-weight:600; }
 </style>
 {% endblock %}
 
@@ -39,7 +49,20 @@
 <!-- ═══ 1. 통계 탭 ═══ -->
 <div class="tab-pane fade show active" id="tab-stat">
   <div id="stat-global"></div>
-  <div id="stat-school" class="mt-3"></div>
+  <!-- 드릴다운: 트리(좌) + 상세(우) -->
+  <div class="row mt-3">
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white py-2 fw-bold small"><i class="bi bi-diagram-3 me-1"></i>학교 트리</div>
+        <div class="card-body p-0" style="max-height:calc(100vh - 400px);overflow-y:auto;" id="stat-tree"></div>
+      </div>
+    </div>
+    <div class="col-md-9">
+      <div id="stat-detail">
+        <div class="text-center text-muted py-5"><i class="bi bi-hand-index fs-3 d-block mb-2"></i>좌측 트리에서 지원청 → 학제 → 학교를 선택하세요.</div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ═══ 2. 리스트 탭 ═══ -->
@@ -437,7 +460,194 @@ async function loadGlobalStats() {
     html += `<td>${totals.sw.tg}/${totals.sw.t}</td><td>${totals.poe.tg}/${totals.poe.t}</td><td>${totals.ap.tg}/${totals.ap.t}</td>`;
     html += `<td>${totals.changed}</td></tr></tbody></table></div>`;
     document.getElementById('stat-global').innerHTML = html;
+    loadStatTree();
   } catch(e) { document.getElementById('stat-global').innerHTML = '<div class="text-danger">통계 로드 실패</div>'; }
+}
+
+// ═══ 드릴다운 트리 ═══
+let _treeDataStat = [];
+let _openCenters = {};
+let _openTypes = {};
+let _selectedTreeNode = null;
+
+async function loadStatTree() {
+  try {
+    const d = await fetch(`${BASE}/api/schools/schools/labeling_tree_stats/`).then(r=>r.json());
+    _treeDataStat = d.tree || [];
+    renderStatTree();
+  } catch(e) {}
+}
+
+function renderStatTree() {
+  let html = '';
+  _treeDataStat.forEach(c => {
+    const isOpen = _openCenters[c.code];
+    html += `<div class="tree-center ${isOpen?'open':''}" onclick="toggleCenter('${c.code}')">
+      <i class="bi bi-${isOpen?'chevron-down':'chevron-right'} me-1" style="font-size:.7rem;"></i>${c.name}
+      <span class="badge bg-secondary float-end">${c.school_count}</span></div>`;
+    if (isOpen) {
+      (c.children||[]).forEach(t => {
+        const tKey = c.code+'_'+t.type_id;
+        const isTypeOpen = _openTypes[tKey];
+        const isTypeActive = _selectedTreeNode === tKey;
+        html += `<div class="tree-type ${isTypeActive?'active':''}" onclick="selectType('${c.code}',${t.type_id},'${t.type_name}','${c.name}')">
+          <i class="bi bi-${isTypeOpen?'chevron-down':'chevron-right'} me-1" style="font-size:.6rem;"></i>${t.type_name}
+          <span class="badge bg-light text-dark float-end">${t.count}</span></div>`;
+        if (isTypeOpen && _treeSchools && _treeSchools[tKey]) {
+          _treeSchools[tKey].forEach(s => {
+            const sActive = _selectedTreeNode === 'S'+s.id;
+            html += `<div class="tree-school ${sActive?'active':''}" onclick="event.stopPropagation();selectTreeSchool(${s.id},'${s.name.replace(/'/g,"\\'")}','${c.name}')">
+              <i class="bi bi-building me-1"></i>${s.name}
+              ${s.completed?'<i class="bi bi-check-circle-fill text-success float-end" style="font-size:.7rem;"></i>':''}
+            </div>`;
+          });
+        }
+      });
+    }
+  });
+  document.getElementById('stat-tree').innerHTML = html || '<div class="text-muted small p-3">데이터 없음</div>';
+}
+
+let _treeSchools = {};
+
+function toggleCenter(code) {
+  _openCenters[code] = !_openCenters[code];
+  renderStatTree();
+}
+
+async function selectType(centerCode, typeId, typeName, centerName) {
+  const tKey = centerCode+'_'+typeId;
+  if (_openTypes[tKey]) {
+    _openTypes[tKey] = false;
+    _selectedTreeNode = null;
+    renderStatTree();
+    return;
+  }
+  _openTypes[tKey] = true;
+  _selectedTreeNode = tKey;
+  // 학교 목록 로드
+  try {
+    const d = await fetch(`${BASE}/api/schools/schools/labeling_tree_stats/?center=${centerCode}&school_type=${typeId}`).then(r=>r.json());
+    _treeSchools[tKey] = d.rows || [];
+    renderStatTree();
+    renderTypeDetail(centerName, typeName, d.rows || []);
+  } catch(e) {}
+}
+
+async function selectTreeSchool(schoolId, name, centerName) {
+  _selectedTreeNode = 'S'+schoolId;
+  renderStatTree();
+  try {
+    const d = await fetch(`${BASE}/api/schools/schools/labeling_tree_stats/?school_id=${schoolId}`).then(r=>r.json());
+    renderSchoolDetail(d);
+  } catch(e) { document.getElementById('stat-detail').innerHTML='<div class="text-danger">로드 실패</div>'; }
+}
+
+function _deltaHtml(v) {
+  return v > 0 ? `<span class="text-primary fw-bold">+${v}</span>` : v < 0 ? `<span class="text-danger fw-bold">${v}</span>` : '0';
+}
+
+// ── 2단계: 학제별 학교 목록 통계 표 ──
+function renderTypeDetail(centerName, typeName, rows) {
+  let html = `<div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="fw-bold mb-0"><i class="bi bi-building me-1"></i>${centerName} — ${typeName} (${rows.length}개교)</h6>
+    <button class="btn btn-sm btn-outline-success" onclick="downloadTypeExcel()"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+  </div>`;
+  html += '<div class="table-responsive"><table class="table table-sm table-bordered text-center" style="font-size:.82rem;"><thead class="table-light"><tr>';
+  html += '<th>#</th><th>학교명</th><th>원래</th><th class="text-primary">추가</th><th class="text-danger">없음</th><th>증감</th><th>현재</th><th>부착</th><th>미부착</th><th>진행률</th><th>상태</th>';
+  html += '</tr></thead><tbody>';
+  let tot = {original:0,added:0,no_equip:0,delta:0,total:0,tagged:0};
+  rows.forEach((s,i) => {
+    const pct = s.total ? Math.round(s.tagged/s.total*100) : 0;
+    const untagged = s.total - s.tagged - (s.no_equip||0);
+    tot.original+=s.original; tot.added+=s.added; tot.no_equip+=s.no_equip; tot.delta+=s.delta; tot.total+=s.total; tot.tagged+=s.tagged;
+    html += `<tr class="school-row" onclick="selectTreeSchool(${s.id},'${s.name.replace(/'/g,"\\'")}','${centerName}')">
+      <td>${i+1}</td><td class="text-start fw-bold">${s.name}</td>
+      <td>${s.original}</td><td class="text-primary">${s.added}</td><td class="text-danger">${s.no_equip}</td><td>${_deltaHtml(s.delta)}</td><td class="fw-bold">${s.total}</td>
+      <td class="text-success">${s.tagged}</td><td class="text-danger">${untagged>0?untagged:0}</td>
+      <td><span class="badge ${pct===100?'bg-success':pct>0?'bg-warning':'bg-secondary'}">${pct}%</span></td>
+      <td>${s.completed?'<span class="badge bg-success">완료</span>':'<span class="badge bg-secondary">진행중</span>'}</td>
+    </tr>`;
+  });
+  const tPct = tot.total ? Math.round(tot.tagged/tot.total*100) : 0;
+  html += `<tr class="table-light fw-bold"><td></td><td>합계</td>
+    <td>${tot.original}</td><td class="text-primary">${tot.added}</td><td class="text-danger">${tot.no_equip}</td><td>${_deltaHtml(tot.delta)}</td><td>${tot.total}</td>
+    <td class="text-success">${tot.tagged}</td><td class="text-danger">${tot.total-tot.tagged-(tot.no_equip||0)>0?tot.total-tot.tagged-(tot.no_equip||0):0}</td>
+    <td><span class="badge ${tPct===100?'bg-success':'bg-primary'}">${tPct}%</span></td><td></td>
+  </tr></tbody></table></div>`;
+  document.getElementById('stat-detail').innerHTML = html;
+}
+
+// ── 3단계: 개별 학교 장비 상세 통계 ──
+function renderSchoolDetail(d) {
+  let html = `<div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="fw-bold mb-0"><i class="bi bi-building me-1"></i>${d.center_name} — ${d.school_name}
+      ${d.completed?'<span class="badge bg-success ms-2">완료</span>':'<span class="badge bg-secondary ms-2">진행중</span>'}</h6>
+    <button class="btn btn-sm btn-outline-success" onclick="downloadSchoolExcel()" id="btn-dl-school"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+  </div>`;
+  // 요약 카드
+  html += '<div class="row g-2 mb-3">';
+  const cards = [
+    {label:'원래장비', val:d.original, color:'#6c757d'},
+    {label:'추가(+)', val:d.added, color:'#0d6efd'},
+    {label:'없음(-)', val:d.no_equip, color:'#dc3545'},
+    {label:'증감', val:_deltaHtml(d.delta), color:'#0dcaf0', raw:true},
+    {label:'현재장비', val:d.total, color:'#212529'},
+    {label:'부착', val:d.tagged, color:'#198754'},
+    {label:'미부착', val:d.total-d.tagged-(d.no_equip||0), color:'#ffc107'},
+  ];
+  cards.forEach(c => {
+    html += `<div class="col"><div class="card stat-card p-2 text-center" style="border-color:${c.color}">
+      <div class="small text-muted">${c.label}</div>
+      <div class="fs-5 fw-bold">${c.raw?c.val:c.val}</div></div></div>`;
+  });
+  html += '</div>';
+  // 구분별 표
+  html += '<div class="table-responsive"><table class="table table-sm table-bordered text-center" style="font-size:.82rem;"><thead class="table-light"><tr>';
+  html += '<th>구분</th><th>전체</th><th>부착</th><th>미부착</th><th class="text-primary">추가</th><th class="text-danger">없음</th><th>진행률</th>';
+  html += '</tr></thead><tbody>';
+  ['스위치','PoE','AP'].forEach(cat => {
+    const c = d.categories[cat] || {total:0,tagged:0,no_equip:0,added:0};
+    const untagged = c.total - c.tagged - (c.no_equip||0);
+    const pct = c.total ? Math.round(c.tagged/c.total*100) : 0;
+    html += `<tr><td class="fw-bold">${cat}</td><td>${c.total}</td><td class="text-success">${c.tagged}</td>
+      <td class="text-danger">${untagged>0?untagged:0}</td><td class="text-primary">${c.added||0}</td><td class="text-danger">${c.no_equip||0}</td>
+      <td><span class="badge ${pct===100?'bg-success':pct>0?'bg-warning':'bg-secondary'}">${pct}%</span></td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  html += `<div class="small text-muted">변경 건수: ${d.changed||0}건</div>`;
+  document.getElementById('stat-detail').innerHTML = html;
+  // 엑셀 버튼에 school_id 저장
+  document.getElementById('btn-dl-school').dataset.schoolId = '';
+  // school_name에서 school_id를 역추적
+  _currentStatSchoolId = null;
+  // _treeSchools에서 찾기
+  for (const key in _treeSchools) {
+    const found = (_treeSchools[key]||[]).find(s => s.name === d.school_name);
+    if (found) { _currentStatSchoolId = found.id; break; }
+  }
+}
+
+let _currentStatSchoolId = null;
+let _currentStatCenter = null;
+let _currentStatType = null;
+
+function downloadSchoolExcel() {
+  if (_currentStatSchoolId) {
+    window.location.href = `${BASE}/api/schools/schools/${_currentStatSchoolId}/equipment_excel/`;
+  }
+}
+function downloadTypeExcel() {
+  // 현재 선택된 지원청+학제의 전체 엑셀
+  const node = _selectedTreeNode;
+  if (!node || node.startsWith('S')) return;
+  const parts = node.split('_');
+  if (parts.length === 2) {
+    const params = new URLSearchParams();
+    params.set('center', parts[0]);
+    params.set('school_type', parts[1]);
+    window.location.href = `${BASE}/api/schools/schools/labeling_excel_all/?${params}`;
+  }
 }
 
 function loadSchoolStats(id, name) {
