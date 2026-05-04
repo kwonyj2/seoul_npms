@@ -369,7 +369,9 @@ function renderEquipment(list) {
       <td class="small">${e.speed||''}</td><td class="small">${e.tier||''}</td><td class="small">${e.mgmt||''}</td>
       <td>${tagHtml}</td><td class="text-center">${exist}</td>
       <td class="text-center text-nowrap">
-        <i class="bi bi-qr-code-scan scan-btn" onclick="startScan(${e.id})" title="스캔"></i>
+        ${isTagged
+          ? `<i class="bi bi-arrow-repeat scan-btn text-primary" onclick="rescanTag(${e.id},'${(e.asset_tag||'').replace(/'/g,"\\'")}')" title="재스캔 (관리번호 수정)" style="font-size:.95rem;"></i>`
+          : `<i class="bi bi-qr-code-scan scan-btn" onclick="startScan(${e.id})" title="스캔"></i>`}
         ${isNo ? `<i class="bi bi-arrow-counterclockwise scan-btn text-secondary ms-1" onclick="clearTag(${e.id})" title="미부여로 되돌리기" style="font-size:.95rem;"></i>` : `<i class="bi bi-x-circle scan-btn text-warning ms-1" onclick="markNoEquip(${e.id})" title="장비없음" style="font-size:.95rem;"></i>`}
         <i class="bi bi-pencil scan-btn text-info ms-1" onclick="showEditEquip(${e.id})" title="수정" style="font-size:.95rem;"></i>
       </td></tr>`;
@@ -386,6 +388,12 @@ function markNoEquip(id) {
 function clearTag(id) {
   if (!confirm('이 장비를 "미부여"로 되돌리시겠습니까?')) return;
   apiPost(`equipment_tag`, { equipment_id: id, asset_tag: '' });
+}
+
+// ═══ 재스캔 (관리번호 수정) ═══
+function rescanTag(equipId, currentTag) {
+  if (!confirm(`현재 관리번호: ${currentTag}\n\n잘못 스캔된 관리번호를 수정하시겠습니까?\n재스캔하여 새 관리번호로 교체합니다.`)) return;
+  startScan(equipId);
 }
 
 // ═══ QR 스캔 ═══
