@@ -67,6 +67,11 @@
         <i class="bi bi-server me-1"></i>랙실장도
       </a>
     </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#" onclick="switchTab('apmap',this);return false;">
+        <i class="bi bi-wifi me-1"></i>AP위치도
+      </a>
+    </li>
   </ul>
 
   <!-- ── 모니터링 탭 ── -->
@@ -393,6 +398,44 @@
     </div>
   </div>
 
+  <!-- ── AP위치도 탭 ── -->
+  <div id="tab-apmap" class="d-none">
+    <div class="card border-0 shadow-sm mb-2">
+      <div class="card-body py-2 px-3">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-3">
+            <select id="ap-center" class="form-select form-select-sm" onchange="apLoadTypes()">
+              <option value="">지원청 선택</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <select id="ap-type" class="form-select form-select-sm" onchange="apLoadSchools()">
+              <option value="">학제 선택</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <select id="ap-school" class="form-select form-select-sm">
+              <option value="">학교 선택</option>
+            </select>
+          </div>
+          <div class="col-md-4 d-flex gap-1">
+            <button class="btn btn-sm btn-primary flex-fill" onclick="apLoad()"><i class="bi bi-search me-1"></i>조회</button>
+            <button class="btn btn-sm btn-success" onclick="apSave()" id="btn-ap-save" disabled><i class="bi bi-save me-1"></i>저장</button>
+            <button class="btn btn-sm btn-outline-info" onclick="apDownloadPng()" id="btn-ap-png" disabled><i class="bi bi-image me-1"></i>PNG</button>
+            <label class="btn btn-sm btn-outline-secondary mb-0" id="btn-ap-upload" style="display:none;">
+              <i class="bi bi-upload me-1"></i>도면<input type="file" accept="image/*" onchange="apUploadPlan(this)" style="display:none;">
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 층 서브탭 -->
+    <div id="ap-floor-tabs" class="mb-2" style="display:none;"></div>
+    <div id="ap-content">
+      <div class="text-center text-muted py-5"><i class="bi bi-wifi fs-3 d-block mb-2"></i>학교를 선택하면 건물/층별 AP 배치도를 표시합니다.</div>
+    </div>
+  </div>
+
   <!-- ── 랙실장도 탭 ── -->
   <div id="tab-rack" class="d-none">
     <div class="card border-0 shadow-sm mb-2">
@@ -512,6 +555,8 @@
 <link rel="stylesheet" href="{% static 'css/vis-network.min.css' %}">
 <script src="{% static 'js/vis-network.min.js' %}"></script>
 <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 /* ── 토폴로지 필터 버튼 ── */
 .topo-filter-label {
@@ -633,7 +678,7 @@ setInterval(() => { loadSummary(); loadEvents(); }, 30000);
 function switchTab(name, el) {
   document.querySelectorAll('#nms-tabs .nav-link').forEach(a => a.classList.remove('active'));
   el.classList.add('active');
-  ['monitor','topology','assets','diagram','portmap','rack'].forEach(t => {
+  ['monitor','topology','assets','diagram','portmap','rack','apmap'].forEach(t => {
     document.getElementById('tab-' + t).classList.toggle('d-none', t !== name);
   });
   if (name === 'topology') { if (!topoNetwork) loadTopoSchools(); }
@@ -1466,6 +1511,252 @@ async function convertEquipment() {
   }
 }
 
+
+// ══════════════════════════════════════════════════════════
+// AP위치도 (Leaflet.js 도면 + 마커)
+// ══════════════════════════════════════════════════════════
+let _apData = null;
+let _apSchoolId = null;
+let _apMap = null;
+let _apMarkers = [];
+let _apCurrentFloor = 0;
+
+(function initApDropdowns() {
+  fetch(`${API}/schools/centers/`).then(r=>r.json()).then(d => {
+    const sel = document.getElementById('ap-center');
+    (d.results||d).forEach(c => sel.innerHTML += `<option value="${c.code}">${c.name}</option>`);
+  }).catch(()=>{});
+})();
+function apLoadTypes() {
+  const sel = document.getElementById('ap-type');
+  sel.innerHTML = '<option value="">학제</option>';
+  document.getElementById('ap-school').innerHTML = '<option value="">학교</option>';
+  fetch(`${API}/schools/types/`).then(r=>r.json()).then(d => {
+    (d.results||d).forEach(t => sel.innerHTML += `<option value="${t.id}">${t.name}</option>`);
+  });
+}
+function apLoadSchools() {
+  const center = document.getElementById('ap-center').value;
+  const stype = document.getElementById('ap-type').value;
+  const sel = document.getElementById('ap-school');
+  sel.innerHTML = '<option value="">학교</option>';
+  if (!center) return;
+  let url = `${API}/schools/schools/filter/?center=${center}`;
+  if (stype) url += `&school_type=${stype}`;
+  fetch(url).then(r=>r.json()).then(d => {
+    (d.results||d).forEach(s => sel.innerHTML += `<option value="${s.id}">${s.name}</option>`);
+  });
+}
+
+function apLoad() {
+  const schoolId = document.getElementById('ap-school').value;
+  if (!schoolId) { alert('학교를 선택하세요.'); return; }
+  _apSchoolId = schoolId;
+  fetch(`${API}/network/topology/ap_map_data/?school_id=${schoolId}`)
+    .then(r => r.json()).then(d => {
+      _apData = d;
+      document.getElementById('btn-ap-save').disabled = false;
+      document.getElementById('btn-ap-png').disabled = false;
+      document.getElementById('btn-ap-upload').style.display = '';
+      const floors = d.floors || [];
+      if (!floors.length) {
+        document.getElementById('ap-floor-tabs').style.display = 'none';
+        document.getElementById('ap-content').innerHTML = '<div class="text-center text-muted py-4">AP 장비가 없습니다.</div>';
+        return;
+      }
+      // 층 서브탭
+      let tabs = '<ul class="nav nav-pills">';
+      floors.forEach((f, i) => {
+        tabs += `<li class="nav-item"><a class="nav-link ${i===0?'active':''}" href="#" onclick="apShowFloor(${i},this);return false;" style="font-size:.82rem;">${f.building} ${f.floor}층</a></li>`;
+      });
+      tabs += '</ul>';
+      document.getElementById('ap-floor-tabs').innerHTML = tabs;
+      document.getElementById('ap-floor-tabs').style.display = '';
+      apShowFloor(0);
+    }).catch(() => {
+      document.getElementById('ap-content').innerHTML = '<div class="text-danger text-center py-4">로드 실패</div>';
+    });
+}
+
+function apShowFloor(idx, el) {
+  _apCurrentFloor = idx;
+  if (el) {
+    document.querySelectorAll('#ap-floor-tabs .nav-link').forEach(a => a.classList.remove('active'));
+    el.classList.add('active');
+  }
+  const floor = _apData.floors[idx];
+  if (!floor) return;
+
+  let html = '<div class="card border-0 shadow-sm"><div class="card-header bg-white py-2 d-flex justify-content-between">';
+  html += `<span class="fw-bold small"><i class="bi bi-wifi me-1"></i>${_apData.school_name} — ${floor.building} ${floor.floor}층 (AP ${floor.aps.length}대)</span>`;
+  html += `<span class="small text-muted">${floor.plan_image ? '도면 적용됨' : '도면 없음 — 그리드 모드'}</span>`;
+  html += '</div>';
+  html += '<div id="ap-map-container" style="height:550px;background:#f0f0f0;position:relative;"></div>';
+  // AP 목록 테이블
+  html += '<div class="card-footer bg-white small">';
+  html += '<table class="table table-sm mb-0" style="font-size:.8rem;"><thead class="table-light"><tr>';
+  html += '<th>#</th><th>모델</th><th>장비ID</th><th>설치장소</th><th>관리번호</th><th>위치</th></tr></thead><tbody>';
+  floor.aps.forEach((ap, i) => {
+    const posText = (ap.pos_x !== null && ap.pos_y !== null) ? `(${ap.pos_x.toFixed(1)}%, ${ap.pos_y.toFixed(1)}%)` : '미배치';
+    html += `<tr><td>${i+1}</td><td>${ap.model_name}</td><td>${ap.device_id}</td><td>${ap.install_location}</td><td>${ap.asset_tag||'-'}</td><td>${posText}</td></tr>`;
+  });
+  html += '</tbody></table></div></div>';
+  document.getElementById('ap-content').innerHTML = html;
+
+  // Leaflet 지도 초기화
+  setTimeout(() => initApMap(floor), 100);
+}
+
+function initApMap(floor) {
+  const container = document.getElementById('ap-map-container');
+  if (!container) return;
+  if (_apMap) { _apMap.remove(); _apMap = null; }
+
+  const W = 1000, H = 700;
+  _apMap = L.map('ap-map-container', {
+    crs: L.CRS.Simple,
+    minZoom: -2,
+    maxZoom: 3,
+    zoomSnap: 0.25,
+  });
+
+  const bounds = [[0, 0], [H, W]];
+
+  if (floor.plan_image) {
+    L.imageOverlay(floor.plan_image, bounds).addTo(_apMap);
+  } else {
+    // 그리드 배경 (도면 없을 때)
+    const gridSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+      <rect width="100%" height="100%" fill="#f8f9fa"/>
+      <defs><pattern id="g" width="50" height="50" patternUnits="userSpaceOnUse">
+        <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#dee2e6" stroke-width="0.5"/>
+      </pattern></defs>
+      <rect width="100%" height="100%" fill="url(#g)"/>
+      <text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#adb5bd" font-size="16">${floor.building} ${floor.floor}층 — 도면을 업로드하세요</text>
+    </svg>`;
+    const svgUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(gridSvg)));
+    L.imageOverlay(svgUrl, bounds).addTo(_apMap);
+  }
+  _apMap.fitBounds(bounds);
+
+  // AP 마커 배치
+  _apMarkers = [];
+  const apIcon = L.divIcon({
+    className: '',
+    html: '<div style="background:#198754;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);"><i class="bi bi-wifi"></i></div>',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+
+  floor.aps.forEach((ap, i) => {
+    let lat, lng;
+    if (ap.pos_x !== null && ap.pos_y !== null) {
+      lng = ap.pos_x / 100 * W;
+      lat = H - (ap.pos_y / 100 * H);
+    } else {
+      // 미배치: 자동 배치 (좌→우, 상→하)
+      lng = 80 + (i % 8) * 110;
+      lat = H - 80 - Math.floor(i / 8) * 100;
+    }
+    const marker = L.marker([lat, lng], { icon: apIcon, draggable: true })
+      .addTo(_apMap)
+      .bindTooltip(`${ap.model_name}<br>${ap.device_id}<br>${ap.install_location}`, {direction: 'top'});
+
+    marker._apId = ap.id;
+    marker._apIdx = i;
+    marker.on('dragend', function(e) {
+      const pos = e.target.getLatLng();
+      ap.pos_x = Math.max(0, Math.min(100, pos.lng / W * 100));
+      ap.pos_y = Math.max(0, Math.min(100, (H - pos.lat) / H * 100));
+    });
+    _apMarkers.push(marker);
+  });
+}
+
+function apSave() {
+  if (!_apData) return;
+  const items = [];
+  _apData.floors.forEach(f => {
+    f.aps.forEach(ap => {
+      items.push({ id: ap.id, pos_x: ap.pos_x, pos_y: ap.pos_y });
+    });
+  });
+  fetch(`${API}/network/topology/ap_map_save/`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF},
+    body: JSON.stringify({ items }),
+  }).then(r => r.json()).then(d => {
+    if (d.success) showToast(`AP위치도 저장 완료 (${d.updated}건)`);
+  });
+}
+
+function apUploadPlan(input) {
+  if (!input.files[0] || !_apSchoolId || !_apData) return;
+  const floor = _apData.floors[_apCurrentFloor];
+  if (!floor) return;
+  const fd = new FormData();
+  fd.append('school_id', _apSchoolId);
+  fd.append('building', floor.building);
+  fd.append('floor', floor.floor);
+  fd.append('file', input.files[0]);
+  fetch(`${API}/network/topology/ap_map_upload_plan/`, {
+    method: 'POST',
+    headers: {'X-CSRFToken': CSRF},
+    body: fd,
+  }).then(r => r.json()).then(d => {
+    if (d.success) {
+      floor.plan_image = d.plan_image;
+      showToast('도면 업로드 완료');
+      apShowFloor(_apCurrentFloor);
+    }
+  });
+  input.value = '';
+}
+
+function apDownloadPng() {
+  // Leaflet 지도를 canvas로 캡처하기 위해 html2canvas 대안: leaflet-image 또는 간단한 SVG 스냅샷
+  // 간단한 방식: 현재 보이는 AP 정보를 SVG로 직접 생성
+  if (!_apData) return;
+  const floor = _apData.floors[_apCurrentFloor];
+  if (!floor) return;
+  const W = 800, H = 560;
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">`;
+  svg += `<rect width="100%" height="100%" fill="#f8f9fa"/>`;
+  svg += `<text x="${W/2}" y="25" text-anchor="middle" fill="#1F497D" font-size="16" font-weight="bold">${_apData.school_name} — ${floor.building} ${floor.floor}층 AP위치도</text>`;
+  // 그리드
+  for (let x = 0; x < W; x += 50) svg += `<line x1="${x}" y1="35" x2="${x}" y2="${H}" stroke="#eee" stroke-width="0.5"/>`;
+  for (let y = 35; y < H; y += 50) svg += `<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="#eee" stroke-width="0.5"/>`;
+  // AP 마커
+  floor.aps.forEach((ap, i) => {
+    let x, y;
+    if (ap.pos_x !== null && ap.pos_y !== null) {
+      x = ap.pos_x / 100 * W;
+      y = 35 + ap.pos_y / 100 * (H - 35);
+    } else {
+      x = 60 + (i % 8) * 90;
+      y = 80 + Math.floor(i / 8) * 80;
+    }
+    svg += `<circle cx="${x}" cy="${y}" r="12" fill="#198754" stroke="#fff" stroke-width="2"/>`;
+    svg += `<text x="${x}" y="${y+4}" text-anchor="middle" fill="#fff" font-size="8" font-weight="bold">AP</text>`;
+    svg += `<text x="${x}" y="${y+24}" text-anchor="middle" fill="#333" font-size="7">${ap.device_id||ap.model_name}</text>`;
+  });
+  svg += '</svg>';
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W * 2; canvas.height = H * 2;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
+  const img = new Image();
+  img.onload = function() {
+    ctx.drawImage(img, 0, 0);
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    const name = document.getElementById('ap-school').selectedOptions[0]?.text || 'ap';
+    a.download = `AP위치도_${name}_${floor.building}_${floor.floor}층.png`;
+    a.click();
+  };
+  img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
 
 // ══════════════════════════════════════════════════════════
 // 랙실장도 (SVG 42U 랙)

@@ -281,6 +281,9 @@ class SchoolEquipment(models.Model):
                                                          help_text='랙 내 설치 위치 (1U~42U)')
     rack_size        = models.PositiveSmallIntegerField('장비 높이(U)', default=1,
                                                          help_text='장비가 차지하는 U 수 (기본 1U)')
+    # AP위치도 (도면 위 좌표, 0~100% 비율)
+    ap_pos_x         = models.FloatField('AP 위치 X(%)', null=True, blank=True)
+    ap_pos_y         = models.FloatField('AP 위치 Y(%)', null=True, blank=True)
     # 변경 이력 (원본 데이터 보존)
     original_data    = models.JSONField('원본 데이터', null=True, blank=True,
                                          help_text='라벨링 전 원본 장비 정보 (자동 저장)')

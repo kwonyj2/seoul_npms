@@ -288,6 +288,101 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
             pass
         return response
 
+    # ── AP위치도 ────────────────────────────────────────
+    @action(detail=False, methods=['get'], url_path='ap_map_data')
+    def ap_map_data(self, request):
+        """AP위치도 — 학교 건물/층별 AP 배치 데이터 + 도면 경로"""
+        from apps.schools.models import SchoolEquipment, School
+        import os
+        school_id = request.query_params.get('school_id')
+        if not school_id:
+            return Response({'error': 'school_id 필요'}, status=400)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return Response({'error': '학교 없음'}, status=404)
+
+        aps = SchoolEquipment.objects.filter(
+            school_id=school_id, category='AP'
+        ).order_by('building', 'floor', 'id')
+
+        # 건물/층별 그룹화
+        floors = {}
+        for ap in aps:
+            fkey = f'{ap.building or "본관"}_{ap.floor or "1"}'
+            if fkey not in floors:
+                bldg = ap.building or '본관'
+                flr = ap.floor or '1'
+                # 도면 이미지 경로 확인 (NAS)
+                plan_dir = f'/app/nas/media/npms/도면/{school.name}'
+                plan_file = ''
+                for ext in ['png', 'jpg', 'jpeg', 'gif']:
+                    candidate = os.path.join(plan_dir, f'{bldg}_{flr}층.{ext}')
+                    if os.path.exists(candidate):
+                        plan_file = f'/npms/media/npms/도면/{school.name}/{bldg}_{flr}층.{ext}'
+                        break
+                floors[fkey] = {
+                    'key': fkey,
+                    'building': bldg,
+                    'floor': flr,
+                    'plan_image': plan_file,
+                    'aps': [],
+                }
+            floors[fkey]['aps'].append({
+                'id': ap.id,
+                'model_name': ap.model_name or 'AP',
+                'device_id': ap.device_id or '',
+                'install_location': ap.install_location or '',
+                'network_type': ap.network_type or '',
+                'asset_tag': ap.asset_tag or '',
+                'pos_x': ap.ap_pos_x,
+                'pos_y': ap.ap_pos_y,
+            })
+        return Response({'school_name': school.name, 'floors': list(floors.values())})
+
+    @action(detail=False, methods=['post'], url_path='ap_map_save')
+    def ap_map_save(self, request):
+        """AP위치도 좌표 저장"""
+        from apps.schools.models import SchoolEquipment
+        items = request.data.get('items', [])
+        if not items:
+            return Response({'error': 'items 필요'}, status=400)
+        updated = 0
+        for item in items:
+            eid = item.get('id')
+            if eid:
+                SchoolEquipment.objects.filter(pk=eid).update(
+                    ap_pos_x=item.get('pos_x'), ap_pos_y=item.get('pos_y'))
+                updated += 1
+        return Response({'success': True, 'updated': updated})
+
+    @action(detail=False, methods=['post'], url_path='ap_map_upload_plan')
+    def ap_map_upload_plan(self, request):
+        """AP위치도 — 건물/층 도면 이미지 업로드"""
+        from apps.schools.models import School
+        import os
+        school_id = request.data.get('school_id')
+        building = request.data.get('building', '본관')
+        floor = request.data.get('floor', '1')
+        file = request.FILES.get('file')
+        if not school_id or not file:
+            return Response({'error': 'school_id와 file 필요'}, status=400)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return Response({'error': '학교 없음'}, status=404)
+
+        plan_dir = f'/app/nas/media/npms/도면/{school.name}'
+        os.makedirs(plan_dir, exist_ok=True)
+        ext = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else 'png'
+        fname = f'{building}_{floor}층.{ext}'
+        fpath = os.path.join(plan_dir, fname)
+        with open(fpath, 'wb') as f:
+            for chunk in file.chunks():
+                f.write(chunk)
+        url = f'/npms/media/npms/도면/{school.name}/{fname}'
+        return Response({'success': True, 'plan_image': url})
+
     # ── 랙실장도 ────────────────────────────────────────
     @action(detail=False, methods=['get'], url_path='rack_data')
     def rack_data(self, request):
