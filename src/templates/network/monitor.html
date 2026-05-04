@@ -1279,8 +1279,8 @@ function nmsLoadPage(tab, schoolId, page, el) {
     .then(r => r.json()).then(d => {
       if (d.error) { contentEl.innerHTML = `<div class="text-danger text-center py-4">${d.error}</div>`; return; }
       if (d.type === 'image' && d.image) {
-        contentEl.innerHTML = `<div class="text-center" style="background:#f8f9fa;padding:10px;border-radius:6px;">
-          <img src="${d.image}" style="max-width:100%;border:1px solid #dee2e6;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.1);" onclick="window.open(this.src,'_blank')" title="클릭하면 원본 크기로 보기" class="cursor-pointer">
+        contentEl.innerHTML = `<div class="text-center" style="background:#f8f9fa;padding:8px;border-radius:6px;max-height:calc(100vh - 200px);overflow:auto;">
+          <img src="${d.image}" style="max-width:100%;max-height:calc(100vh - 220px);object-fit:contain;border:1px solid #dee2e6;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.1);cursor:pointer;" onclick="window.open(this.src,'_blank')" title="클릭하면 원본 크기로 보기">
         </div>`;
       } else {
         contentEl.innerHTML = '<div class="text-muted text-center py-4">표시할 수 없는 형식</div>';
