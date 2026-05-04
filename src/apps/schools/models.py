@@ -266,6 +266,10 @@ class SchoolEquipment(models.Model):
                                           null=True, blank=True, verbose_name='부여자',
                                           related_name='tagged_equipment')
     tag_photo        = models.CharField('스티커 사진 경로', max_length=500, blank=True)
+    # 제조번호 (바코드 스캔)
+    serial_number    = models.CharField('제조번호', max_length=100, blank=True,
+                                         help_text='장비 S/N 바코드 스캔 (스위치/PoE만 해당)')
+    serial_scanned_at = models.DateTimeField('제조번호 스캔일시', null=True, blank=True)
     # 라벨링 중 추가된 장비 여부
     is_added         = models.BooleanField('현장추가', default=False,
                                             help_text='라벨링 점검 중 장비추가로 등록된 장비')

@@ -383,6 +383,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
             'building', 'floor', 'install_location', 'device_id', 'network_type',
             'speed', 'tier', 'origin', 'mgmt', 'install_year',
             'asset_tag', 'tagged_at', 'tagged_by__name', 'tag_photo',
+            'serial_number', 'serial_scanned_at',
         ))
         return Response(data)
 
@@ -414,9 +415,16 @@ class SchoolViewSet(viewsets.ModelViewSet):
         equip.asset_tag = asset_tag
         equip.tagged_at = timezone.now() if asset_tag else None
         equip.tagged_by = request.user if asset_tag else None
-        equip.save(update_fields=['asset_tag', 'tagged_at', 'tagged_by', 'updated_at']
-                   if hasattr(equip, 'updated_at') else ['asset_tag', 'tagged_at', 'tagged_by'])
-        return Response({'success': True, 'asset_tag': asset_tag, 'equipment_id': equip.id})
+        update_fields = ['asset_tag', 'tagged_at', 'tagged_by']
+        # 제조번호 (스위치/PoE만)
+        serial = request.data.get('serial_number', '').strip()
+        if serial and equip.category in ('스위치', 'PoE', 'PoE스위치'):
+            equip.serial_number = serial
+            equip.serial_scanned_at = timezone.now()
+            update_fields += ['serial_number', 'serial_scanned_at']
+        equip.save(update_fields=update_fields)
+        return Response({'success': True, 'asset_tag': asset_tag,
+                         'serial_number': equip.serial_number, 'equipment_id': equip.id})
 
     @action(detail=True, methods=['post'], url_path='equipment_add')
     def equipment_add(self, request, pk=None):
@@ -525,9 +533,9 @@ class SchoolViewSet(viewsets.ModelViewSet):
         thin = Border(left=Side('thin'), right=Side('thin'), top=Side('thin'), bottom=Side('thin'))
         green = PatternFill('solid', fgColor='C6EFCE')
 
-        ws.merge_cells('A1:N1')
+        ws.merge_cells('A1:O1')
         ws.cell(1, 1, f'{school.name} — 라벨링 결과').font = Font(bold=True, size=13)
-        headers = ['#','구분','모델명','제조사','건물','층','설치장소','망구분','장비ID','속도','계위','MGMT','관리번호','유무']
+        headers = ['#','구분','모델명','제조사','건물','층','설치장소','망구분','장비ID','속도','계위','MGMT','관리번호','제조번호','유무']
         for ci, h in enumerate(headers, 1):
             c = ws.cell(3, ci, h)
             c.font, c.fill, c.alignment, c.border = hdr_font, hdr_fill, ctr, thin
@@ -536,7 +544,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
             vals = [ri, eq.category, eq.model_name, eq.manufacturer,
                     eq.building or '', eq.floor or '', eq.install_location, eq.network_type,
                     eq.device_id, eq.speed or '', eq.tier or '', eq.mgmt or '',
-                    eq.asset_tag or '미부여', exist]
+                    eq.asset_tag or '미부여', eq.serial_number or '', exist]
             for ci, v in enumerate(vals, 1):
                 c = ws.cell(ri+3, ci, v)
                 c.border = thin
@@ -545,7 +553,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
 
         # ── 시트2: 변경 전 (original_data) ──
         ws2 = wb.create_sheet('변경 전')
-        ws2.merge_cells('A1:N1')
+        ws2.merge_cells('A1:O1')
         ws2.cell(1, 1, f'{school.name} — 변경 전 원본').font = Font(bold=True, size=13)
         for ci, h in enumerate(headers, 1):
             c = ws2.cell(3, ci, h)
@@ -559,19 +567,19 @@ class SchoolViewSet(viewsets.ModelViewSet):
                         orig.get('manufacturer',''), orig.get('building',''), orig.get('floor',''),
                         orig.get('install_location',''), orig.get('network_type',''),
                         orig.get('device_id',''), orig.get('speed',''), orig.get('tier',''), orig.get('mgmt',''),
-                        '', '-']
+                        '', '', '-']
             else:
                 vals = [ri, eq.category, eq.model_name, eq.manufacturer,
                         eq.building or '', eq.floor or '', eq.install_location, eq.network_type,
                         eq.device_id, eq.speed or '', eq.tier or '', eq.mgmt or '',
-                        '', '-']
+                        '', '', '-']
             for ci, v in enumerate(vals, 1):
                 c = ws2.cell(ri+3, ci, v)
                 c.border = thin
                 if orig:
                     c.fill = PatternFill('solid', fgColor='FFF3CD')
 
-        col_widths = [5, 8, 18, 12, 10, 6, 20, 10, 14, 6, 6, 6, 20, 6]
+        col_widths = [5, 8, 18, 12, 10, 6, 20, 10, 14, 6, 6, 6, 20, 18, 6]
         for ws_ in [ws, ws2]:
             for ci, w in enumerate(col_widths, 1):
                 ws_.column_dimensions[get_column_letter(ci)].width = w
@@ -621,7 +629,11 @@ class SchoolViewSet(viewsets.ModelViewSet):
                     'tagged': cat_qs.filter(asset_tag__gt='').exclude(asset_tag='장비없음').count(),
                     'no_equip': cat_qs.filter(asset_tag='장비없음').count(),
                     'added': cat_qs.filter(is_added=True).count(),
+                    'sn_scanned': cat_qs.filter(serial_number__gt='').count() if cat_key != 'AP' else 0,
                 }
+            # S/N 통계 (스위치/PoE만)
+            sn_target = eq_qs.filter(category__in=['스위치', 'PoE', 'PoE스위치']).count()
+            sn_scanned = eq_qs.filter(category__in=['스위치', 'PoE', 'PoE스위치'], serial_number__gt='').count()
             completed = LabelingCompletion.objects.filter(school=school).exists()
             return Response({
                 'level': 'school',
@@ -631,6 +643,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
                 'total': total, 'tagged': tagged, 'no_equip': no_equip,
                 'added': added, 'original': original, 'delta': added - no_equip,
                 'changed': changed, 'completed': completed,
+                'sn_target': sn_target, 'sn_scanned': sn_scanned,
                 'categories': cats,
             })
 
@@ -703,6 +716,10 @@ class SchoolViewSet(viewsets.ModelViewSet):
             added = eq_qs.filter(is_added=True).count()          # 현장 추가 (+)
             no_equip = eq_qs.filter(asset_tag='장비없음').count()  # 장비없음 (-)
             original = total - added                               # 원래 장비
+            # S/N 통계 (스위치/PoE만)
+            sn_qs = eq_qs.filter(category__in=['스위치', 'PoE', 'PoE스위치'])
+            sn_target = sn_qs.count()
+            sn_scanned = sn_qs.filter(serial_number__gt='').count()
             result.append({
                 'center_name': ctr.name, 'center_code': ctr.code,
                 'school_count': schools.count(), 'completed_count': completed,
@@ -710,6 +727,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
                 'categories': cats, 'changed': changed,
                 'original': original, 'added': added,
                 'no_equip': no_equip, 'delta': added - no_equip,
+                'sn_target': sn_target, 'sn_scanned': sn_scanned,
             })
         return Response(result)
 
@@ -763,13 +781,13 @@ class SchoolViewSet(viewsets.ModelViewSet):
         red_font = Font(color='CC0000', bold=True)
 
         headers = ['#', '지원청', '학교명', '구분', '모델명', '제조사',
-                   '건물', '층', '설치장소', '망구분', '장비ID', '속도', '계위', 'MGMT', '관리번호', '유무']
-        col_widths = [5, 10, 14, 8, 18, 12, 10, 6, 20, 10, 14, 6, 6, 6, 20, 6]
+                   '건물', '층', '설치장소', '망구분', '장비ID', '속도', '계위', 'MGMT', '관리번호', '제조번호', '유무']
+        col_widths = [5, 10, 14, 8, 18, 12, 10, 6, 20, 10, 14, 6, 6, 6, 20, 18, 6]
 
         # ── 시트1: 변경 후 (현재) ──
         ws1 = wb.active
         ws1.title = '라벨링 결과(변경후)'
-        ws1.merge_cells('A1:P1')
+        ws1.merge_cells('A1:Q1')
         ws1.cell(1, 1, '전체 학교 라벨링 결과 — 변경 후').font = Font(bold=True, size=13)
         for ci, h in enumerate(headers, 1):
             c = ws1.cell(3, ci, h)
@@ -777,7 +795,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
 
         # ── 시트2: 변경 전 ──
         ws2 = wb.create_sheet('라벨링 원본(변경전)')
-        ws2.merge_cells('A1:P1')
+        ws2.merge_cells('A1:Q1')
         ws2.cell(1, 1, '전체 학교 라벨링 결과 — 변경 전 원본').font = Font(bold=True, size=13)
         for ci, h in enumerate(headers, 1):
             c = ws2.cell(3, ci, h)
@@ -818,11 +836,11 @@ class SchoolViewSet(viewsets.ModelViewSet):
                      eq.building or '', eq.floor or '',
                      eq.install_location or '', eq.network_type or '',
                      eq.device_id or '', eq.speed or '', eq.tier or '', eq.mgmt or '',
-                     eq.asset_tag or '미부여', exist]
+                     eq.asset_tag or '미부여', eq.serial_number or '', exist]
             for ci, v in enumerate(vals1, 1):
                 c = ws1.cell(row1, ci, v)
                 c.border = thin
-                c.alignment = ctr_align if ci in (1, 4, 16) else left_align
+                c.alignment = ctr_align if ci in (1, 4, 17) else left_align
                 if eq.asset_tag and eq.asset_tag != '장비없음' and ci == 15:
                     c.fill = green
 
@@ -837,18 +855,18 @@ class SchoolViewSet(viewsets.ModelViewSet):
                          orig.get('network_type', ''),
                          orig.get('device_id', ''), orig.get('speed', ''),
                          orig.get('tier', ''), orig.get('mgmt', ''),
-                         '', '-']
+                         '', '', '-']
             else:
                 vals2 = [seq, center_name, eq.school.name, eq.category,
                          eq.model_name or '', eq.manufacturer or '',
                          eq.building or '', eq.floor or '',
                          eq.install_location or '', eq.network_type or '',
                          eq.device_id or '', eq.speed or '', eq.tier or '', eq.mgmt or '',
-                         '', '-']
+                         '', '', '-']
             for ci, v in enumerate(vals2, 1):
                 c = ws2.cell(row1, ci, v)
                 c.border = thin
-                c.alignment = ctr_align if ci in (1, 4, 16) else left_align
+                c.alignment = ctr_align if ci in (1, 4, 17) else left_align
                 if orig:
                     c.fill = yellow
 
@@ -887,8 +905,8 @@ class SchoolViewSet(viewsets.ModelViewSet):
 
         # 필터 추가
         if row1 > 4:
-            ws1.auto_filter.ref = f'A3:P{row1-1}'
-            ws2.auto_filter.ref = f'A3:P{row1-1}'
+            ws1.auto_filter.ref = f'A3:Q{row1-1}'
+            ws2.auto_filter.ref = f'A3:Q{row1-1}'
         if row3 > 4:
             ws3.auto_filter.ref = f'A3:N{row3-1}'
 
@@ -1213,13 +1231,13 @@ class SchoolViewSet(viewsets.ModelViewSet):
         thin = Border(left=Side('thin'), right=Side('thin'), top=Side('thin'), bottom=Side('thin'))
         green = PatternFill('solid', fgColor='C6EFCE')
 
-        ws.merge_cells('A1:L1')
+        ws.merge_cells('A1:O1')
         c = ws.cell(1, 1, f'{school.name} — 장비 라벨링 현황')
         c.font = Font(bold=True, size=13)
         c.alignment = ctr
 
         headers = ['#', '구분', '모델명', '제조사', '건물', '층', '설치장소',
-                   '망구분', '장비ID', '속도', '계위', 'MGMT', '관리번호', '부여일시']
+                   '망구분', '장비ID', '속도', '계위', 'MGMT', '관리번호', '제조번호', '부여일시']
         for ci, h in enumerate(headers, 1):
             c = ws.cell(3, ci, h)
             c.font, c.fill, c.alignment, c.border = hdr_font, hdr_fill, ctr, thin
@@ -1230,7 +1248,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
                 eq.building or '', eq.floor or '',
                 eq.install_location or '', eq.network_type or '',
                 eq.device_id or '', eq.speed or '', eq.tier or '', eq.mgmt or '',
-                eq.asset_tag or '미부여',
+                eq.asset_tag or '미부여', eq.serial_number or '',
                 eq.tagged_at.strftime('%Y-%m-%d %H:%M') if eq.tagged_at else '',
             ]
             for ci, v in enumerate(vals, 1):
@@ -1240,7 +1258,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
                 if eq.asset_tag and ci == 13:
                     c.fill = green
 
-        col_widths = [5, 8, 18, 12, 10, 6, 20, 10, 14, 6, 6, 6, 20, 16]
+        col_widths = [5, 8, 18, 12, 10, 6, 20, 10, 14, 6, 6, 6, 20, 18, 16]
         for ci, w in enumerate(col_widths, 1):
             ws.column_dimensions[get_column_letter(ci)].width = w
 

@@ -171,7 +171,7 @@
               <th style="width:28px;">#</th><th>구분</th><th>모델명</th><th>제조사</th>
               <th>건물/층</th><th>설치장소</th><th>망구분</th><th>장비ID</th>
               <th>속도</th><th>계위</th><th>MGMT</th>
-              <th style="width:130px;">관리번호</th><th style="width:35px;">유무</th>
+              <th style="width:130px;">관리번호</th><th style="width:120px;">제조번호</th><th style="width:35px;">유무</th>
               <th style="width:70px;">액션</th>
             </tr>
           </thead>
@@ -184,24 +184,44 @@
 </div>
 </div>
 
-<!-- QR 스캔 모달 -->
+<!-- 통합 스캔 모달 (QR 관리번호 + 바코드 제조번호) -->
 <div class="modal fade" id="scanModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h6 class="modal-title"><i class="bi bi-qr-code-scan me-2"></i>관리번호 스캔</h6>
+        <h6 class="modal-title"><i class="bi bi-qr-code-scan me-2"></i>라벨링 스캔</h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body text-center">
-        <div id="scan-status" class="mb-2 text-muted">카메라 로딩 중...</div>
-        <video id="qr-video" autoplay playsinline></video>
-        <canvas id="qr-canvas" style="display:none;"></canvas>
+      <div class="modal-body">
+        <!-- 스캔 단계 표시 -->
+        <div class="d-flex justify-content-center mb-2">
+          <span class="badge bg-primary me-2" id="step-tag-badge">① 관리번호 (QR)</span>
+          <span class="badge bg-secondary" id="step-sn-badge">② 제조번호 (바코드)</span>
+        </div>
+        <div id="scan-status" class="text-center mb-2 text-muted small">카메라 로딩 중...</div>
+        <div id="scan-reader" style="width:100%;max-width:400px;margin:0 auto;"></div>
+        <!-- 스캔 결과 -->
         <div id="scan-result" class="mt-3" style="display:none;">
-          <div class="alert alert-success">
-            <strong>판독 결과:</strong> <span id="scan-tag"></span>
+          <div class="row g-2">
+            <div class="col-12">
+              <div class="input-group input-group-sm">
+                <span class="input-group-text" style="width:80px;">관리번호</span>
+                <input type="text" id="scan-tag" class="form-control" readonly>
+                <button class="btn btn-outline-primary" onclick="rescanStep('tag')" title="재스캔"><i class="bi bi-arrow-clockwise"></i></button>
+              </div>
+            </div>
+            <div class="col-12" id="scan-sn-row">
+              <div class="input-group input-group-sm">
+                <span class="input-group-text" style="width:80px;">제조번호</span>
+                <input type="text" id="scan-sn" class="form-control" readonly>
+                <button class="btn btn-outline-primary" onclick="rescanStep('sn')" title="재스캔"><i class="bi bi-arrow-clockwise"></i></button>
+              </div>
+            </div>
           </div>
-          <button class="btn btn-primary" onclick="applyScanResult()"><i class="bi bi-check-lg me-1"></i>적용</button>
-          <button class="btn btn-outline-secondary" onclick="rescan()"><i class="bi bi-arrow-clockwise me-1"></i>재스캔</button>
+          <div class="text-center mt-3">
+            <button class="btn btn-primary" onclick="applyScanResult()"><i class="bi bi-check-lg me-1"></i>적용</button>
+            <button class="btn btn-outline-secondary" onclick="rescanAll()"><i class="bi bi-arrow-clockwise me-1"></i>전체 재스캔</button>
+          </div>
         </div>
       </div>
     </div>
@@ -373,7 +393,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 const BASE = '/npms';
 const CSRF = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
@@ -468,8 +488,8 @@ async function loadGlobalStats() {
     html += '<th>지원청</th><th>학교수</th><th>완료</th>';
     html += '<th>원장</th><th class="text-primary">추가(+)</th><th class="text-danger">없음(-)</th><th>증감</th><th>현재장비</th>';
     html += '<th>부착</th><th>미부착</th><th>진행률</th>';
-    html += '<th>스위치</th><th>PoE</th><th>AP</th><th>변경</th></tr></thead><tbody>';
-    let totals = {schools:0,completed:0,total:0,tagged:0,changed:0,original:0,added:0,no_equip:0,delta:0,sw:{t:0,tg:0},poe:{t:0,tg:0},ap:{t:0,tg:0}};
+    html += '<th>스위치</th><th>PoE</th><th>AP</th><th>S/N</th><th>변경</th></tr></thead><tbody>';
+    let totals = {schools:0,completed:0,total:0,tagged:0,changed:0,original:0,added:0,no_equip:0,delta:0,sn_target:0,sn_scanned:0,sw:{t:0,tg:0},poe:{t:0,tg:0},ap:{t:0,tg:0}};
     data.forEach(c => {
       const pct = c.total ? Math.round(c.tagged/c.total*100) : 0;
       const sw = c.categories['스위치']||{total:0,tagged:0};
@@ -483,11 +503,13 @@ async function loadGlobalStats() {
       totals.sw.t+=sw.total; totals.sw.tg+=sw.tagged;
       totals.poe.t+=poe.total; totals.poe.tg+=poe.tagged;
       totals.ap.t+=ap.total; totals.ap.tg+=ap.tagged;
+      totals.sn_target+=(c.sn_target||0); totals.sn_scanned+=(c.sn_scanned||0);
       html += `<tr><td class="fw-bold">${c.center_name}</td><td>${c.school_count}</td><td>${c.completed_count}</td>`;
       html += `<td>${c.original||0}</td><td class="text-primary">${c.added||0}</td><td class="text-danger">${c.no_equip||0}</td><td>${deltaStr}</td><td class="fw-bold">${c.total}</td>`;
       html += `<td class="text-success">${c.tagged}</td><td class="text-danger">${c.total-c.tagged}</td>`;
       html += `<td><span class="badge ${pct===100?'bg-success':pct>0?'bg-warning':'bg-secondary'}">${pct}%</span></td>`;
       html += `<td>${sw.tagged}/${sw.total}</td><td>${poe.tagged}/${poe.total}</td><td>${ap.tagged}/${ap.total}</td>`;
+      html += `<td>${c.sn_scanned||0}/${c.sn_target||0}</td>`;
       html += `<td>${c.changed||0}</td></tr>`;
     });
     const tPct = totals.total ? Math.round(totals.tagged/totals.total*100) : 0;
@@ -497,6 +519,7 @@ async function loadGlobalStats() {
     html += `<td class="text-success">${totals.tagged}</td><td class="text-danger">${totals.total-totals.tagged}</td>`;
     html += `<td><span class="badge ${tPct===100?'bg-success':'bg-primary'}">${tPct}%</span></td>`;
     html += `<td>${totals.sw.tg}/${totals.sw.t}</td><td>${totals.poe.tg}/${totals.poe.t}</td><td>${totals.ap.tg}/${totals.ap.t}</td>`;
+    html += `<td>${totals.sn_scanned}/${totals.sn_target}</td>`;
     html += `<td>${totals.changed}</td></tr></tbody></table></div>`;
     document.getElementById('stat-global').innerHTML = html;
   } catch(e) { document.getElementById('stat-global').innerHTML = '<div class="text-danger">통계 로드 실패</div>'; }
@@ -809,19 +832,23 @@ function filterCat(el) {
 }
 function renderEquipment(list) {
   const tbody = document.getElementById('equip-body');
-  if (!list.length) { tbody.innerHTML = '<tr><td colspan="14" class="text-center text-muted py-3">해당 장비 없음</td></tr>'; document.getElementById('equip-summary').textContent=''; return; }
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="15" class="text-center text-muted py-3">해당 장비 없음</td></tr>'; document.getElementById('equip-summary').textContent=''; return; }
   const tagged = list.filter(e => e.asset_tag && e.asset_tag!=='장비없음').length;
-  document.getElementById('equip-summary').textContent = `총 ${list.length}대 | 부착 ${tagged} | 미부착 ${list.length-tagged}`;
+  const snScanned = list.filter(e => e.serial_number && (e.category==='스위치'||e.category==='PoE'||e.category==='PoE스위치')).length;
+  const snTarget = list.filter(e => e.category==='스위치'||e.category==='PoE'||e.category==='PoE스위치').length;
+  document.getElementById('equip-summary').textContent = `총 ${list.length}대 | 부착 ${tagged} | 미부착 ${list.length-tagged} | S/N ${snScanned}/${snTarget}`;
   tbody.innerHTML = list.map((e,i) => {
     const isTagged = e.asset_tag && e.asset_tag !== '장비없음';
     const isNo = e.asset_tag === '장비없음';
     const cls = isNo ? 'no-equip' : isTagged ? 'tagged' : '';
     const tagHtml = isTagged ? `<span class="badge bg-success tag-badge">${e.asset_tag}</span>` : isNo ? '<span class="badge bg-warning tag-badge">장비없음</span>' : '<span class="badge bg-secondary tag-badge">미부여</span>';
+    const isSNTarget = e.category==='스위치'||e.category==='PoE'||e.category==='PoE스위치';
+    const snHtml = isSNTarget ? (e.serial_number ? `<span class="badge bg-info text-dark tag-badge">${e.serial_number}</span>` : '<span class="badge bg-secondary tag-badge">미스캔</span>') : '<span class="text-muted">-</span>';
     const exist = isTagged ? '<span class="text-success fw-bold">유</span>' : isNo ? '<span class="text-warning fw-bold">무</span>' : '-';
     return `<tr class="equip-row ${cls}"><td>${i+1}</td><td>${e.category}</td><td class="small">${e.model_name||''}</td><td class="small">${e.manufacturer||''}</td>
       <td class="small">${[e.building,e.floor].filter(Boolean).join('/')||''}</td><td class="small">${e.install_location||''}</td><td class="small">${e.network_type||''}</td><td class="small">${e.device_id||''}</td>
       <td class="small">${e.speed||''}</td><td class="small">${e.tier||''}</td><td class="small">${e.mgmt||''}</td>
-      <td>${tagHtml}</td><td class="text-center">${exist}</td>
+      <td>${tagHtml}</td><td>${snHtml}</td><td class="text-center">${exist}</td>
       <td class="text-center text-nowrap">
         ${isTagged
           ? `<i class="bi bi-arrow-repeat scan-btn text-primary" onclick="rescanTag(${e.id},'${(e.asset_tag||'').replace(/'/g,"\\'")}')" title="재스캔 (관리번호 수정)" style="font-size:.95rem;"></i>`
@@ -850,63 +877,127 @@ function rescanTag(equipId, currentTag) {
   startScan(equipId);
 }
 
-// ═══ QR 스캔 ═══
+// ═══ 통합 스캔 (html5-qrcode 기반) ═══
+let _html5Qr = null;
+let _scanStep = 'tag'; // 'tag' = 관리번호(QR), 'sn' = 제조번호(바코드)
+let _scanNeedSN = false; // 스위치/PoE만 제조번호 스캔
+
 function startScan(equipId) {
   _scanEquipId = equipId;
+  // 해당 장비가 스위치/PoE인지 확인
+  const eq = _equipList.find(e => e.id === equipId);
+  _scanNeedSN = eq && (eq.category==='스위치'||eq.category==='PoE'||eq.category==='PoE스위치');
+  _scanStep = 'tag';
+  document.getElementById('scan-tag').value = '';
+  document.getElementById('scan-sn').value = '';
   document.getElementById('scan-result').style.display = 'none';
-  document.getElementById('scan-status').textContent = '카메라 로딩 중...';
-  document.getElementById('qr-video').style.display = '';
+  document.getElementById('scan-sn-row').style.display = _scanNeedSN ? '' : 'none';
+  updateScanStepUI();
   new bootstrap.Modal(document.getElementById('scanModal')).show();
-
-  if (!navigator.mediaDevices?.getUserMedia) {
-    document.getElementById('scan-status').textContent = '카메라를 지원하지 않습니다. HTTPS 환경에서 접속해 주세요.';
-    return;
-  }
-  navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment', width:{ideal:1280} } })
-    .then(stream => {
-      _videoStream = stream;
-      const video = document.getElementById('qr-video');
-      video.srcObject = stream; video.play();
-      document.getElementById('scan-status').textContent = 'QR코드를 카메라에 비춰주세요';
-      _scanInterval = setInterval(scanFrame, 300);
-    }).catch(err => {
-      document.getElementById('scan-status').innerHTML =
-        `<div class="alert alert-warning small mb-0">카메라 접근 실패: ${err.message}<br>
-        <strong>HTTPS</strong> 환경(https://)에서 접속해야 카메라를 사용할 수 있습니다.<br>
-        모바일: 브라우저 설정 → 사이트 권한 → 카메라 허용</div>`;
-    });
+  document.getElementById('scanModal').addEventListener('shown.bs.modal', initScanner, {once:true});
   document.getElementById('scanModal').addEventListener('hidden.bs.modal', stopScan, {once:true});
 }
-function scanFrame() {
-  const video = document.getElementById('qr-video');
-  const canvas = document.getElementById('qr-canvas');
-  if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
-  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0);
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const code = jsQR(imageData.data, canvas.width, canvas.height);
-  if (code?.data) {
-    clearInterval(_scanInterval);
-    const match = code.data.match(/\d{4}-[A-Z]{2}-\d{6}/);
-    document.getElementById('scan-tag').textContent = match ? match[0] : code.data;
-    document.getElementById('scan-result').style.display = '';
-    document.getElementById('scan-status').textContent = '판독 완료!';
-    _capturedPhoto = canvas.toDataURL('image/jpeg', 0.8);
+
+function updateScanStepUI() {
+  const tagBadge = document.getElementById('step-tag-badge');
+  const snBadge = document.getElementById('step-sn-badge');
+  tagBadge.className = 'badge me-2 ' + (_scanStep==='tag'?'bg-primary':'bg-success');
+  tagBadge.textContent = document.getElementById('scan-tag').value ? '① 관리번호 ✓' : '① 관리번호 (QR)';
+  snBadge.style.display = _scanNeedSN ? '' : 'none';
+  if (_scanNeedSN) {
+    snBadge.className = 'badge ' + (_scanStep==='sn'?'bg-primary': document.getElementById('scan-sn').value?'bg-success':'bg-secondary');
+    snBadge.textContent = document.getElementById('scan-sn').value ? '② 제조번호 ✓' : '② 제조번호 (바코드)';
+  }
+  const statusMsg = _scanStep==='tag' ? '관리번호 QR코드를 스캔하세요' : '제조번호 바코드를 스캔하세요';
+  document.getElementById('scan-status').textContent = statusMsg;
+}
+
+function initScanner() {
+  const readerId = 'scan-reader';
+  if (_html5Qr) { try { _html5Qr.clear(); } catch(e){} }
+  _html5Qr = new Html5Qrcode(readerId);
+  const config = {
+    fps: 10,
+    qrbox: { width: 250, height: 150 },
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.QR_CODE,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.EAN_13,
+    ]
+  };
+  _html5Qr.start(
+    { facingMode: 'environment' },
+    config,
+    onScanSuccess,
+    () => {} // ignore errors
+  ).catch(err => {
+    document.getElementById('scan-status').innerHTML =
+      `<div class="alert alert-warning small mb-0">카메라 접근 실패: ${err}<br>
+      <strong>HTTPS</strong> 환경에서 접속해야 카메라를 사용할 수 있습니다.</div>`;
+  });
+}
+
+function onScanSuccess(decodedText) {
+  if (_scanStep === 'tag') {
+    const match = decodedText.match(/\d{4}-[A-Z]{2}-\d{6}/);
+    document.getElementById('scan-tag').value = match ? match[0] : decodedText;
+    if (_scanNeedSN) {
+      _scanStep = 'sn';
+      updateScanStepUI();
+    } else {
+      scanComplete();
+    }
+  } else if (_scanStep === 'sn') {
+    document.getElementById('scan-sn').value = decodedText;
+    scanComplete();
   }
 }
-function stopScan() { clearInterval(_scanInterval); if(_videoStream){_videoStream.getTracks().forEach(t=>t.stop());_videoStream=null;} }
-function rescan() { document.getElementById('scan-result').style.display='none'; document.getElementById('scan-status').textContent='QR코드를 카메라에 비춰주세요'; _scanInterval=setInterval(scanFrame,300); }
+
+function scanComplete() {
+  try { _html5Qr.pause(true); } catch(e){}
+  document.getElementById('scan-result').style.display = '';
+  document.getElementById('scan-status').textContent = '스캔 완료!';
+  updateScanStepUI();
+}
+
+function rescanStep(step) {
+  _scanStep = step;
+  if (step === 'tag') document.getElementById('scan-tag').value = '';
+  else document.getElementById('scan-sn').value = '';
+  document.getElementById('scan-result').style.display = 'none';
+  updateScanStepUI();
+  try { _html5Qr.resume(); } catch(e){ initScanner(); }
+}
+
+function rescanAll() {
+  document.getElementById('scan-tag').value = '';
+  document.getElementById('scan-sn').value = '';
+  _scanStep = 'tag';
+  document.getElementById('scan-result').style.display = 'none';
+  updateScanStepUI();
+  try { _html5Qr.resume(); } catch(e){ initScanner(); }
+}
+
+function stopScan() {
+  if (_html5Qr) {
+    try { _html5Qr.stop(); } catch(e){}
+    try { _html5Qr.clear(); } catch(e){}
+    _html5Qr = null;
+  }
+}
 
 function applyScanResult() {
-  const tag = document.getElementById('scan-tag').textContent;
+  const tag = document.getElementById('scan-tag').value;
   if (!tag) return;
+  const sn = document.getElementById('scan-sn').value;
+  const body = { equipment_id: _scanEquipId, asset_tag: tag };
+  if (sn) body.serial_number = sn;
   fetch(`${BASE}/api/schools/schools/${_currentSchool.id}/equipment_tag/`, {
     method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},
-    body: JSON.stringify({equipment_id:_scanEquipId, asset_tag:tag})
+    body: JSON.stringify(body)
   }).then(r=>r.json()).then(res => {
     if (res.success) {
-      if (_capturedPhoto) fetch(`${BASE}/api/schools/schools/${_currentSchool.id}/equipment_photo/`, {method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({equipment_id:_scanEquipId,asset_tag:tag,photo:_capturedPhoto})}).catch(()=>{});
       fetch(`${BASE}/api/workforce/schedules/auto_register/`, {method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':CSRF},body:JSON.stringify({school_id:_currentSchool.id,work_type:'라벨링점검',note:`${_currentSchool.name} - ${tag}`})}).catch(()=>{});
       bootstrap.Modal.getInstance(document.getElementById('scanModal'))?.hide();
       stopScan(); loadEquipment(_currentSchool.id); loadSchoolStats(_currentSchool.id, _currentSchool.name); loadGlobalStats();
