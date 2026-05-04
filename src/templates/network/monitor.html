@@ -39,29 +39,29 @@
   <!-- ── 공통 학교 선택 바 (토폴로지 제외 4개 탭 공용) ── -->
   <div id="nms-school-bar" class="card border-0 shadow-sm mb-2" style="display:none;">
     <div class="card-body py-1 px-3">
-      <div class="d-flex gap-1 align-items-center flex-nowrap">
-        <select id="nms-center" class="form-select form-select-sm" style="width:110px;flex-shrink:0;" onchange="nmsOnCenter()">
+      <div class="d-flex gap-1 align-items-center">
+        <select id="nms-center" class="form-select form-select-sm flex-fill" onchange="nmsOnCenter()">
           <option value="">지원청</option>
         </select>
-        <select id="nms-stype" class="form-select form-select-sm" style="width:90px;flex-shrink:0;" onchange="nmsOnType()">
+        <select id="nms-stype" class="form-select form-select-sm flex-fill" onchange="nmsOnType()">
           <option value="">학제</option>
         </select>
-        <select id="nms-school-sel" class="form-select form-select-sm" style="width:130px;flex-shrink:0;" onchange="nmsOnSchoolSelect()">
+        <select id="nms-school-sel" class="form-select form-select-sm flex-fill" onchange="nmsOnSchoolSelect()">
           <option value="">학교</option>
         </select>
-        <div class="position-relative" style="width:150px;flex-shrink:0;">
-          <input type="text" id="nms-school-q" class="form-control form-control-sm" placeholder="학교 검색" onkeyup="nmsSchoolSearch()" autocomplete="off">
-          <div id="nms-school-results" class="list-group position-absolute shadow" style="z-index:10;max-height:200px;overflow-y:auto;display:none;width:250px;"></div>
+        <div class="position-relative flex-fill">
+          <input type="text" id="nms-school-q" class="form-control form-control-sm" placeholder="학교명 검색" onkeyup="nmsSchoolSearch()" autocomplete="off">
+          <div id="nms-school-results" class="list-group position-absolute shadow" style="z-index:10;max-height:200px;overflow-y:auto;display:none;width:100%;min-width:250px;"></div>
         </div>
-        <button class="btn btn-sm btn-primary" onclick="nmsLoadSelected()" style="flex-shrink:0;"><i class="bi bi-search"></i></button>
-        <button class="btn btn-sm btn-outline-secondary" onclick="nmsReset()" style="flex-shrink:0;"><i class="bi bi-x-lg"></i></button>
-        <button class="btn btn-sm btn-success d-none" id="nms-btn-excel" onclick="pmExcel()" style="flex-shrink:0;"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
-        <button class="btn btn-sm btn-success d-none" id="nms-btn-save" onclick="nmsTabSave()" style="flex-shrink:0;"><i class="bi bi-save me-1"></i>저장</button>
-        <button class="btn btn-sm btn-outline-info d-none" id="nms-btn-png" onclick="nmsTabPng()" style="flex-shrink:0;"><i class="bi bi-image me-1"></i>PNG</button>
-        <label class="btn btn-sm btn-outline-secondary d-none mb-0" id="nms-btn-plan" style="flex-shrink:0;">
+        <button class="btn btn-sm btn-primary flex-shrink-0" onclick="nmsLoadSelected()"><i class="bi bi-search"></i></button>
+        <button class="btn btn-sm btn-outline-secondary flex-shrink-0" onclick="nmsReset()"><i class="bi bi-x-lg"></i></button>
+        <button class="btn btn-sm btn-success d-none flex-shrink-0" id="nms-btn-excel" onclick="pmExcel()"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+        <button class="btn btn-sm btn-success d-none flex-shrink-0" id="nms-btn-save" onclick="nmsTabSave()"><i class="bi bi-save me-1"></i>저장</button>
+        <button class="btn btn-sm btn-outline-info d-none flex-shrink-0" id="nms-btn-png" onclick="nmsTabPng()"><i class="bi bi-image me-1"></i>PNG</button>
+        <label class="btn btn-sm btn-outline-secondary d-none mb-0 flex-shrink-0" id="nms-btn-plan">
           <i class="bi bi-upload me-1"></i>도면<input type="file" accept="image/*" onchange="apUploadPlan(this)" style="display:none;">
         </label>
-        <span id="nms-school-badge" class="badge bg-info text-dark d-none" style="font-size:.72rem;flex-shrink:0;"></span>
+        <span id="nms-school-badge" class="badge bg-info text-dark d-none flex-shrink-0" style="font-size:.72rem;"></span>
       </div>
     </div>
   </div>
