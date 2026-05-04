@@ -440,6 +440,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
             asset_tag=request.data.get('asset_tag', ''),
             tagged_at=timezone.now() if request.data.get('asset_tag') else None,
             tagged_by=request.user if request.data.get('asset_tag') else None,
+            is_added=True,
         )
         return Response({'success': True, 'equipment_id': equip.id}, status=201)
 
@@ -608,15 +609,19 @@ class SchoolViewSet(viewsets.ModelViewSet):
                 cats[cat_key] = {'total': cat_qs.count(), 'tagged': cat_qs.filter(asset_tag__gt='').count()}
             # 완료 학교 수
             completed = LabelingCompletion.objects.filter(school_id__in=school_ids).count()
-            # 추가/삭감 (original_data가 있는 건 = 변경됨)
+            # 정보 변경된 장비 (original_data가 있는 건)
             changed = eq_qs.filter(original_data__isnull=False).count()
-            # 장비 추가된 건 (install_year가 없고 asset_tag가 있는 건)
-            added = eq_qs.filter(install_year__isnull=True, asset_tag__gt='').count()
+            # 장비 증감
+            added = eq_qs.filter(is_added=True).count()          # 현장 추가 (+)
+            no_equip = eq_qs.filter(asset_tag='장비없음').count()  # 장비없음 (-)
+            original = total - added                               # 원래 장비
             result.append({
                 'center_name': ctr.name, 'center_code': ctr.code,
                 'school_count': schools.count(), 'completed_count': completed,
                 'total': total, 'tagged': tagged,
-                'categories': cats, 'changed': changed, 'added': added,
+                'categories': cats, 'changed': changed,
+                'original': original, 'added': added,
+                'no_equip': no_equip, 'delta': added - no_equip,
             })
         return Response(result)
 

@@ -266,6 +266,9 @@ class SchoolEquipment(models.Model):
                                           null=True, blank=True, verbose_name='부여자',
                                           related_name='tagged_equipment')
     tag_photo        = models.CharField('스티커 사진 경로', max_length=500, blank=True)
+    # 라벨링 중 추가된 장비 여부
+    is_added         = models.BooleanField('현장추가', default=False,
+                                            help_text='라벨링 점검 중 장비추가로 등록된 장비')
     # 변경 이력 (원본 데이터 보존)
     original_data    = models.JSONField('원본 데이터', null=True, blank=True,
                                          help_text='라벨링 전 원본 장비 정보 (자동 저장)')
