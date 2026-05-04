@@ -1749,10 +1749,12 @@ function _pmDoLoad(schoolId) {
         return;
       }
       // 스위치 서브탭
-      let tabs = '<ul class="nav nav-pills">';
+      const src = d[0]?.source || 'db';
+      let tabs = src === 'nas' ? '<div class="small text-success mb-1"><i class="bi bi-file-earmark-excel me-1"></i>NAS 선번장 파일에서 로드됨</div>' : '';
+      tabs += '<ul class="nav nav-pills flex-wrap">';
       d.forEach((sw, i) => {
         const label = `${sw.device_id || sw.model_name || sw.category} <small class="text-muted">[${sw.network_type||''}]</small>`;
-        tabs += `<li class="nav-item"><a class="nav-link ${i===0?'active':''}" href="#" onclick="pmShowSwitch(${i},this);return false;" style="font-size:.82rem;">${label}</a></li>`;
+        tabs += `<li class="nav-item"><a class="nav-link ${i===0?'active':''}" href="#" onclick="pmShowSwitch(${i},this);return false;" style="font-size:.78rem;padding:.25rem .5rem;">${label}</a></li>`;
       });
       tabs += '</ul>';
       document.getElementById('pm-switch-tabs').innerHTML = tabs;
@@ -1785,36 +1787,56 @@ function renderPortMap(sw) {
 
   let html = `<div class="card border-0 shadow-sm">`;
   html += `<div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">`;
-  html += `<span class="fw-bold">${sw.model_name||sw.category} — ${sw.device_id||''} <small class="text-muted">[${sw.network_type||''}] ${sw.building||''} ${sw.floor||''}층 ${sw.install_location||''}</small></span>`;
-  html += `<button class="btn btn-sm btn-outline-primary" onclick="pmSaveCurrent()"><i class="bi bi-save me-1"></i>포트 저장</button>`;
+  const mfr = sw.manufacturer ? ` / ${sw.manufacturer}` : '';
+  const sheet = sw.sheet ? ` <span class="badge bg-light text-dark border">${sw.sheet}</span>` : '';
+  html += `<span class="fw-bold">${sw.model_name||sw.category} — ${sw.device_id||''} <small class="text-muted">[${sw.network_type||''}]${mfr} ${sw.install_location||''}${sheet}</small></span>`;
+  if (sw.source !== 'nas') {
+    html += `<button class="btn btn-sm btn-outline-primary" onclick="pmSaveCurrent()"><i class="bi bi-save me-1"></i>포트 저장</button>`;
+  }
   html += `</div><div class="card-body">`;
 
-  // SVG 스위치 이미지
-  const portW = 32, portH = 28, gap = 4, padX = 40, padY = 50;
-  const svgW = padX * 2 + cols * (portW + gap);
-  const svgH = padY + rows * (portH + gap + 16) + 30;
+  // SVG 스위치 이미지 — 홀수/짝수 2행 배치 (실제 스위치 전면)
+  const oddPorts = ports.filter(p => p.port % 2 === 1);
+  const evenPorts = ports.filter(p => p.port % 2 === 0);
+  const halfCols = Math.max(oddPorts.length, evenPorts.length);
+  const portW = 34, portH = 26, gap = 3, padX = 40, padY = 45;
+  const svgW = Math.max(padX * 2 + halfCols * (portW + gap), 400);
+  const rowH = portH + 18; // 포트 + 연결장비 텍스트
+  const svgH = padY + rowH * 2 + 40;
 
   html += `<div class="text-center mb-3"><svg width="${svgW}" height="${svgH}" style="background:#2d3436;border-radius:8px;">`;
-  // 스위치 케이스
   html += `<rect x="10" y="10" width="${svgW-20}" height="${svgH-20}" rx="6" fill="#34495e" stroke="#576574" stroke-width="2"/>`;
-  // 모델명
-  html += `<text x="${svgW/2}" y="30" fill="#dfe6e9" font-size="11" text-anchor="middle" font-weight="bold">${sw.model_name||sw.category} (${pc}포트)</text>`;
+  const title = `${sw.device_id||''} ${sw.model_name||sw.category} (${pc}포트)`;
+  html += `<text x="${svgW/2}" y="30" fill="#dfe6e9" font-size="11" text-anchor="middle" font-weight="bold">${title}</text>`;
 
-  ports.forEach((p, i) => {
-    const row = Math.floor(i / cols);
-    const col = i % cols;
-    const x = padX + col * (portW + gap);
-    const y = padY + row * (portH + gap + 16);
+  // 홀수 포트 행 (상단)
+  oddPorts.forEach((p, i) => {
+    const x = padX + i * (portW + gap);
+    const y = padY;
     const fill = STATUS_COLOR[p.status] || STATUS_COLOR.down;
     const stroke = STATUS_BORDER[p.status] || STATUS_BORDER.down;
     const hasConn = p.connected_to ? true : false;
-
-    html += `<rect x="${x}" y="${y}" width="${portW}" height="${portH}" rx="3" fill="${fill}" stroke="${stroke}" stroke-width="1.5" style="cursor:pointer" onclick="pmEditPort(${i})"/>`;
-    html += `<text x="${x + portW/2}" y="${y + portH/2 + 4}" fill="${p.status==='down'&&!hasConn?'#6c757d':'#fff'}" font-size="9" text-anchor="middle" font-weight="bold">${p.port}</text>`;
-    // 포트 아래 연결 장비명
+    const pidx = ports.indexOf(p);
+    html += `<rect x="${x}" y="${y}" width="${portW}" height="${portH}" rx="3" fill="${fill}" stroke="${stroke}" stroke-width="1.5" style="cursor:pointer" onclick="pmEditPort(${pidx})"/>`;
+    html += `<text x="${x+portW/2}" y="${y+portH/2+4}" fill="${p.status==='down'&&!hasConn?'#6c757d':'#fff'}" font-size="9" text-anchor="middle" font-weight="bold">${p.port}</text>`;
     if (hasConn) {
-      const label = p.connected_to.length > 6 ? p.connected_to.substring(0,6)+'..' : p.connected_to;
-      html += `<text x="${x + portW/2}" y="${y + portH + 11}" fill="#b2bec3" font-size="7" text-anchor="middle">${label}</text>`;
+      const label = p.connected_to.length > 8 ? p.connected_to.substring(0,8)+'..' : p.connected_to;
+      html += `<text x="${x+portW/2}" y="${y+portH+11}" fill="#74b9ff" font-size="7" text-anchor="middle">${label}</text>`;
+    }
+  });
+  // 짝수 포트 행 (하단)
+  evenPorts.forEach((p, i) => {
+    const x = padX + i * (portW + gap);
+    const y = padY + rowH;
+    const fill = STATUS_COLOR[p.status] || STATUS_COLOR.down;
+    const stroke = STATUS_BORDER[p.status] || STATUS_BORDER.down;
+    const hasConn = p.connected_to ? true : false;
+    const pidx = ports.indexOf(p);
+    html += `<rect x="${x}" y="${y}" width="${portW}" height="${portH}" rx="3" fill="${fill}" stroke="${stroke}" stroke-width="1.5" style="cursor:pointer" onclick="pmEditPort(${pidx})"/>`;
+    html += `<text x="${x+portW/2}" y="${y+portH/2+4}" fill="${p.status==='down'&&!hasConn?'#6c757d':'#fff'}" font-size="9" text-anchor="middle" font-weight="bold">${p.port}</text>`;
+    if (hasConn) {
+      const label = p.connected_to.length > 8 ? p.connected_to.substring(0,8)+'..' : p.connected_to;
+      html += `<text x="${x+portW/2}" y="${y+portH+11}" fill="#74b9ff" font-size="7" text-anchor="middle">${label}</text>`;
     }
   });
   html += `</svg></div>`;

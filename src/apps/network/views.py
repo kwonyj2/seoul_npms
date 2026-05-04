@@ -680,59 +680,201 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
     # ── 선번장 ────────────────────────────────────────
     @action(detail=False, methods=['get'], url_path='portmap_data')
     def portmap_data(self, request):
-        """선번장 — 학교 스위치/PoE 장비별 포트맵 데이터"""
-        from apps.schools.models import SchoolEquipment
+        """선번장 — NAS 파일 파싱 우선, DB 폴백"""
+        import os
+        from apps.schools.models import School, SchoolEquipment
         school_id = request.query_params.get('school_id')
         if not school_id:
             return Response({'error': 'school_id 필요'}, status=400)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return Response({'error': '학교 없음'}, status=404)
+
+        # NAS 파일 파싱 시도
+        nas_result = self._parse_nas_portmap(school.name)
+        if nas_result:
+            return Response(nas_result)
+
+        # NAS 파일 없으면 DB 기반 폴백
+        return Response(self._db_portmap(school_id))
+
+    def _parse_nas_portmap(self, school_name):
+        """NAS 선번장 파일 파싱 — xlsx/xlsm 양식 A/B 자동 감지"""
+        import os
+        folder = os.path.join(self.NAS_BASE, self.NAS_FOLDERS['portmap'])
+        if not os.path.isdir(folder):
+            return None
+        found_file = None
+        for fname in os.listdir(folder):
+            if school_name in fname:
+                found_file = os.path.join(folder, fname)
+                break
+        if not found_file:
+            return None
+
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(found_file, read_only=True, data_only=True)
+        except Exception:
+            return None
+
+        ext = found_file.rsplit('.', 1)[-1].lower()
+        result = []
+
+        for sname in wb.sheetnames:
+            if sname in ('장비스펙', 'FDF', 'FDF현황'):
+                continue
+            ws = wb[sname]
+            if not ws.max_row:
+                continue
+
+            # 양식 자동 감지: xlsm(67열,기준행C3) vs xlsx(66열,기준행A1)
+            is_type_b = ext == 'xlsm'
+            if not is_type_b:
+                # xlsx도 양식B일 수 있음 — C3에 '허' 가 있는지 확인
+                for r in range(1, min(10, ws.max_row + 1)):
+                    v = ws.cell(r, 3).value
+                    if v and '허' in str(v):
+                        is_type_b = True
+                        break
+
+            if is_type_b:
+                switches = self._parse_type_b(ws, sname)
+            else:
+                switches = self._parse_type_a(ws, sname)
+            result.extend(switches)
+
+        wb.close()
+        return result if result else None
+
+    def _parse_type_b(self, ws, sname):
+        """양식 B (xlsm 스타일): 67열, 19행 간격, C열 시작"""
+        PORT_COLS_B = [3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 53, 57]
+        switches = []
+        for r in range(1, ws.max_row + 1):
+            v = ws.cell(r, 3).value
+            if not (v and '허' in str(v) and 'I' in str(v)):
+                continue
+            base = r
+            hub_id = str(ws.cell(base, 7).value or '').strip()
+            model = str(ws.cell(base, 19).value or '').strip()
+            location = str(ws.cell(base, 31).value or '').strip()
+            net_type = str(ws.cell(base + 2, 7).value or '').strip()
+            mfr = str(ws.cell(base + 2, 31).value or '').strip()
+            if not hub_id:
+                continue
+
+            ports = []
+            for col in PORT_COLS_B:
+                # 홀수
+                pnum = ws.cell(base + 6, col).value
+                conn = str(ws.cell(base + 8, col).value or '').strip()
+                cable = str(ws.cell(base + 7, col).value or '').strip()
+                if pnum and str(pnum).strip():
+                    pn = int(pnum) if str(pnum).strip().isdigit() else 0
+                    if pn > 0:
+                        ports.append({'port': pn, 'connected_to': conn if conn != '/' else '',
+                                      'cable': cable, 'vlan': '', 'note': '', 'status': 'up' if conn and conn != '/' else 'down'})
+                # 짝수
+                pnum2 = ws.cell(base + 11, col).value
+                conn2 = str(ws.cell(base + 13, col).value or '').strip()
+                cable2 = str(ws.cell(base + 12, col).value or '').strip()
+                if pnum2 and str(pnum2).strip():
+                    pn2 = int(pnum2) if str(pnum2).strip().isdigit() else 0
+                    if pn2 > 0:
+                        ports.append({'port': pn2, 'connected_to': conn2 if conn2 != '/' else '',
+                                      'cable': cable2, 'vlan': '', 'note': '', 'status': 'up' if conn2 and conn2 != '/' else 'down'})
+            ports.sort(key=lambda p: p['port'])
+            switches.append({
+                'id': 0, 'model_name': model, 'device_id': hub_id,
+                'category': 'PoE' if 'P' in hub_id.upper() and '#' in hub_id else '스위치',
+                'network_type': net_type, 'manufacturer': mfr,
+                'building': '', 'floor': '', 'install_location': location,
+                'port_count': len(ports), 'ports': ports, 'sheet': sname,
+                'source': 'nas',
+            })
+        return switches
+
+    def _parse_type_a(self, ws, sname):
+        """양식 A (xlsx 스타일): 66열, 10행 간격, A열 시작"""
+        PORT_COLS_A = [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49, 52, 55, 58]
+        switches = []
+        for r in range(1, ws.max_row + 1):
+            v = ws.cell(r, 1).value
+            if not (v and str(v).strip() == '망구분'):
+                continue
+            base = r
+            net_type = str(ws.cell(base, 4).value or '').strip()
+            model = str(ws.cell(base, 13).value or '').strip()
+            location = str(ws.cell(base, 22).value or '').strip()
+            poe = str(ws.cell(base, 31).value or '').strip()
+            hub_id = str(ws.cell(base + 1, 4).value or '').strip()  # ID 행
+            mfr = str(ws.cell(base + 1, 13).value or '').strip()
+            speed = str(ws.cell(base + 1, 31).value or '').strip()
+            if not hub_id and not model:
+                continue
+
+            ports = []
+            for col in PORT_COLS_A:
+                # 홀수 (base+2)
+                pnum = ws.cell(base + 2, col).value
+                cable = str(ws.cell(base + 3, col).value or '').strip()
+                conn = str(ws.cell(base + 4, col).value or '').strip()
+                if pnum and str(pnum).strip().isdigit():
+                    pn = int(pnum)
+                    ports.append({'port': pn, 'connected_to': conn if conn and conn != '/' else '',
+                                  'cable': cable, 'vlan': '', 'note': '', 'status': 'up' if conn and conn != '/' else 'down'})
+                # 짝수 (base+5)
+                pnum2 = ws.cell(base + 5, col).value
+                cable2 = str(ws.cell(base + 6, col).value or '').strip()
+                conn2 = str(ws.cell(base + 7, col).value or '').strip()
+                if pnum2 and str(pnum2).strip().isdigit():
+                    pn2 = int(pnum2)
+                    ports.append({'port': pn2, 'connected_to': conn2 if conn2 and conn2 != '/' else '',
+                                  'cable': cable2, 'vlan': '', 'note': '', 'status': 'up' if conn2 and conn2 != '/' else 'down'})
+            ports.sort(key=lambda p: p['port'])
+            switches.append({
+                'id': 0, 'model_name': model, 'device_id': hub_id or model,
+                'category': 'PoE' if poe and poe not in ('N', '없음', '') else '스위치',
+                'network_type': net_type, 'manufacturer': mfr,
+                'building': '', 'floor': '', 'install_location': location,
+                'port_count': len(ports), 'ports': ports, 'sheet': sname,
+                'source': 'nas',
+            })
+        return switches
+
+    def _db_portmap(self, school_id):
+        """DB 기반 포트맵 (폴백)"""
+        from apps.schools.models import SchoolEquipment
         equips = SchoolEquipment.objects.filter(
-            school_id=school_id,
-            category__in=['스위치', 'PoE', 'PoE스위치']
+            school_id=school_id, category__in=['스위치', 'PoE', 'PoE스위치']
         ).order_by('network_type', 'device_id', 'id')
         result = []
         for eq in equips:
-            # 포트 수 추정: 모델명에서 추출 또는 기본 24
             port_count = 24
             model = (eq.model_name or '').upper()
-            if '48' in model:
-                port_count = 48
-            elif '16' in model:
-                port_count = 16
-            elif '8' in model and '28' not in model:
-                port_count = 8
-            elif '28' in model:
-                port_count = 28
-            elif '52' in model:
-                port_count = 52
-
-            # 저장된 포트맵 또는 빈 배열
+            if '48' in model: port_count = 48
+            elif '16' in model: port_count = 16
+            elif '8' in model and '28' not in model: port_count = 8
+            elif '28' in model: port_count = 28
+            elif '52' in model: port_count = 52
             port_map = eq.port_map or []
-            # 포트 수에 맞게 패딩
             existing = {p.get('port'): p for p in port_map if isinstance(p, dict)}
             ports = []
             for i in range(1, port_count + 1):
                 p = existing.get(i, {})
-                ports.append({
-                    'port': i,
-                    'connected_to': p.get('connected_to', ''),
-                    'vlan': p.get('vlan', ''),
-                    'cable': p.get('cable', ''),
-                    'note': p.get('note', ''),
-                    'status': p.get('status', 'down'),
-                })
+                ports.append({'port': i, 'connected_to': p.get('connected_to', ''),
+                              'vlan': p.get('vlan', ''), 'cable': p.get('cable', ''),
+                              'note': p.get('note', ''), 'status': p.get('status', 'down')})
             result.append({
-                'id': eq.id,
-                'model_name': eq.model_name or '',
-                'device_id': eq.device_id or '',
-                'category': eq.category,
-                'network_type': eq.network_type or '',
-                'building': eq.building or '',
-                'floor': eq.floor or '',
+                'id': eq.id, 'model_name': eq.model_name or '', 'device_id': eq.device_id or '',
+                'category': eq.category, 'network_type': eq.network_type or '',
+                'building': eq.building or '', 'floor': eq.floor or '',
                 'install_location': eq.install_location or '',
-                'port_count': port_count,
-                'ports': ports,
+                'port_count': port_count, 'ports': ports, 'source': 'db',
             })
-        return Response(result)
+        return result
 
     @action(detail=False, methods=['post'], url_path='portmap_save')
     def portmap_save(self, request):
