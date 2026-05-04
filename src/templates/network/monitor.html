@@ -52,6 +52,7 @@
           <button class="btn btn-sm btn-outline-secondary" onclick="nmsReset()"><i class="bi bi-x-lg"></i></button>
           <button class="btn btn-sm btn-success d-none" id="nms-btn-excel" onclick="pmExcel()"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
           <button class="btn btn-sm btn-success d-none" id="nms-btn-save" onclick="nmsTabSave()"><i class="bi bi-save me-1"></i>저장</button>
+          <button class="btn btn-sm btn-outline-dark d-none" id="nms-btn-mode" onclick="nmsToggleMode()"><i class="bi bi-pencil-square me-1"></i>편집</button>
           <button class="btn btn-sm btn-outline-info d-none" id="nms-btn-png" onclick="nmsTabPng()"><i class="bi bi-image me-1"></i>PNG</button>
           <label class="btn btn-sm btn-outline-secondary d-none mb-0" id="nms-btn-plan"><i class="bi bi-upload me-1"></i>도면<input type="file" accept="image/*" onchange="apUploadPlan(this)" style="display:none;"></label>
           <span id="nms-school-badge" class="badge bg-info text-dark d-none align-self-center" style="font-size:.72rem;"></span>
@@ -1165,6 +1166,7 @@ function _doNmsSearch() {
 
 function nmsReset() {
   _nmsSelectedSchool = null;
+  _nmsEditMode = false;
   document.getElementById('nms-center').value = '';
   document.getElementById('nms-stype').innerHTML = '<option value="">학제 선택</option>';
   document.getElementById('nms-school-sel').innerHTML = '<option value="">학교 선택</option>';
@@ -1183,6 +1185,8 @@ function nmsReset() {
   _nmsUpdateButtons();
 }
 
+let _nmsEditMode = false;
+
 function _nmsUpdateButtons() {
   const tab = _currentNmsTab;
   const has = !!_nmsSelectedSchool;
@@ -1191,19 +1195,49 @@ function _nmsUpdateButtons() {
   document.getElementById('nms-btn-save').classList.add('d-none');
   document.getElementById('nms-btn-png').classList.add('d-none');
   document.getElementById('nms-btn-plan').classList.add('d-none');
+  document.getElementById('nms-btn-mode').classList.add('d-none');
   if (!has) return;
-  if (tab === 'portmap') {
-    document.getElementById('nms-btn-excel').classList.remove('d-none');
-  } else if (tab === 'rack') {
+  // 보기/편집 토글 버튼 항상 표시
+  document.getElementById('nms-btn-mode').classList.remove('d-none');
+  _updateModeButton();
+  if (_nmsEditMode) {
+    // 편집 모드: 저장/PNG/엑셀/도면 버튼 표시
+    if (tab === 'portmap') {
+      document.getElementById('nms-btn-excel').classList.remove('d-none');
+    }
     document.getElementById('nms-btn-save').classList.remove('d-none');
     document.getElementById('nms-btn-png').classList.remove('d-none');
-  } else if (tab === 'apmap') {
-    document.getElementById('nms-btn-save').classList.remove('d-none');
-    document.getElementById('nms-btn-png').classList.remove('d-none');
-    document.getElementById('nms-btn-plan').classList.remove('d-none');
-  } else if (tab === 'diagram') {
-    document.getElementById('nms-btn-save').classList.remove('d-none');
-    document.getElementById('nms-btn-png').classList.remove('d-none');
+    if (tab === 'apmap') {
+      document.getElementById('nms-btn-plan').classList.remove('d-none');
+    }
+  }
+}
+
+function _updateModeButton() {
+  const btn = document.getElementById('nms-btn-mode');
+  if (_nmsEditMode) {
+    btn.innerHTML = '<i class="bi bi-eye me-1"></i>보기';
+    btn.className = 'btn btn-sm btn-dark';
+  } else {
+    btn.innerHTML = '<i class="bi bi-pencil-square me-1"></i>편집';
+    btn.className = 'btn btn-sm btn-outline-dark';
+  }
+}
+
+function nmsToggleMode() {
+  _nmsEditMode = !_nmsEditMode;
+  _nmsUpdateButtons();
+  if (!_nmsSelectedSchool) return;
+  const id = _nmsSelectedSchool.id;
+  if (_nmsEditMode) {
+    // 편집 모드: DB 기반 편집기 로드
+    if (_currentNmsTab === 'diagram') { _dgmSchoolId = id; dgmLoadDirect(id); }
+    else if (_currentNmsTab === 'portmap') { _pmSchoolId = id; pmLoadDirect(id); }
+    else if (_currentNmsTab === 'rack') { _rkSchoolId = id; rkLoadDirect(id); }
+    else if (_currentNmsTab === 'apmap') { _apSchoolId = id; apLoadDirect(id); }
+  } else {
+    // 보기 모드: NAS 파일 이미지 로드
+    nmsLoadNasFile(id, _currentNmsTab);
   }
 }
 
@@ -1236,8 +1270,17 @@ function nmsLoadSelected() {
     return;
   }
   const id = _nmsSelectedSchool.id;
-  // NAS 파일 기반으로 로드
-  nmsLoadNasFile(id, _currentNmsTab);
+  _nmsUpdateButtons();
+  if (_nmsEditMode) {
+    // 편집 모드: DB 기반 편집기
+    if (_currentNmsTab === 'diagram') { _dgmSchoolId = id; dgmLoadDirect(id); }
+    else if (_currentNmsTab === 'portmap') { _pmSchoolId = id; pmLoadDirect(id); }
+    else if (_currentNmsTab === 'rack') { _rkSchoolId = id; rkLoadDirect(id); }
+    else if (_currentNmsTab === 'apmap') { _apSchoolId = id; apLoadDirect(id); }
+  } else {
+    // 보기 모드: NAS 파일 이미지
+    nmsLoadNasFile(id, _currentNmsTab);
+  }
 }
 
 let _nasFileCache = {};
