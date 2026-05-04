@@ -288,6 +288,244 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
             pass
         return response
 
+    # ── 구성도 (Cytoscape.js) ────────────────────────────
+    @action(detail=False, methods=['get'], url_path='diagram_data')
+    def diagram_data(self, request):
+        """구성도용 장비 데이터 — SchoolEquipment 기반 자동 생성"""
+        from apps.schools.models import SchoolEquipment, School
+        school_id = request.query_params.get('school_id')
+        if not school_id:
+            return Response({'error': 'school_id가 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return Response({'error': '학교를 찾을 수 없습니다.'}, status=404)
+
+        # 저장된 배치 데이터가 있으면 반환
+        topo = NetworkTopology.objects.filter(school_id=school_id).order_by('-updated_at').first()
+        if topo and topo.topology_data.get('diagram_layout'):
+            return Response({
+                'school_name': school.name,
+                'layout': topo.topology_data['diagram_layout'],
+                'saved': True,
+            })
+
+        # 없으면 SchoolEquipment 기반 자동 생성
+        equips = SchoolEquipment.objects.filter(school_id=school_id).order_by('network_type', 'category', 'id')
+        # 장비 유형별 분류
+        TYPE_MAP = {'스위치': 'switch', 'PoE': 'poe_switch', 'PoE스위치': 'poe_switch',
+                    'AP': 'ap', '무선AP': 'ap'}
+        nodes = []
+        # 방화벽 노드 (인터넷 연결용, 항상 추가)
+        nodes.append({
+            'id': 'internet', 'label': 'Internet', 'type': 'internet',
+            'x': 400, 'y': 30, 'network_type': '',
+        })
+        nodes.append({
+            'id': 'firewall', 'label': '방화벽\n(Secui)', 'type': 'firewall',
+            'x': 400, 'y': 120, 'network_type': '',
+        })
+
+        # 망구분별 그룹화
+        net_groups = {}
+        for eq in equips:
+            net = eq.network_type or '기타'
+            net_groups.setdefault(net, []).append(eq)
+
+        edges = [{'source': 'internet', 'target': 'firewall', 'label': ''}]
+        y_offset = 220
+        NET_X = {'교사망': 150, '학생망': 400, '무선망': 650}
+
+        for net_name, net_equips in net_groups.items():
+            base_x = NET_X.get(net_name, 400)
+            # 코어 스위치 (첫 번째 스위치를 코어로)
+            core = None
+            for eq in net_equips:
+                if eq.category in ('스위치', 'PoE', 'PoE스위치'):
+                    core = eq
+                    break
+
+            if core:
+                core_id = f'eq_{core.id}'
+                tier_label = f'L{core.tier}' if core.tier else ''
+                nodes.append({
+                    'id': core_id,
+                    'label': f'{core.model_name or core.category}\n{core.device_id or ""}\n{tier_label}'.strip(),
+                    'type': TYPE_MAP.get(core.category, 'switch'),
+                    'x': base_x, 'y': y_offset,
+                    'network_type': net_name,
+                    'equip_id': core.id,
+                })
+                edges.append({'source': 'firewall', 'target': core_id, 'label': net_name})
+
+                # 나머지 장비는 코어에 연결
+                sub_y = y_offset + 110
+                sub_x = base_x - 80
+                for i, eq in enumerate(net_equips):
+                    if eq.id == core.id:
+                        continue
+                    eq_id = f'eq_{eq.id}'
+                    nodes.append({
+                        'id': eq_id,
+                        'label': f'{eq.model_name or eq.category}\n{eq.device_id or ""}'.strip(),
+                        'type': TYPE_MAP.get(eq.category, 'switch'),
+                        'x': sub_x + (i % 4) * 120,
+                        'y': sub_y + (i // 4) * 100,
+                        'network_type': net_name,
+                        'equip_id': eq.id,
+                    })
+                    edges.append({'source': core_id, 'target': eq_id, 'label': ''})
+
+        return Response({
+            'school_name': school.name,
+            'layout': {'nodes': nodes, 'edges': edges},
+            'saved': False,
+        })
+
+    @action(detail=False, methods=['post'], url_path='diagram_save')
+    def diagram_save(self, request):
+        """구성도 배치 저장 (Cytoscape.js에서 드래그한 위치)"""
+        from apps.schools.models import School
+        school_id = request.data.get('school_id')
+        layout = request.data.get('layout', {})
+        if not school_id or not layout:
+            return Response({'error': 'school_id와 layout이 필요합니다.'}, status=400)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return Response({'error': '학교를 찾을 수 없습니다.'}, status=404)
+
+        topo, _ = NetworkTopology.objects.get_or_create(
+            school=school,
+            defaults={'topology_data': {}}
+        )
+        data = topo.topology_data or {}
+        data['diagram_layout'] = layout
+        topo.topology_data = data
+        topo.save(update_fields=['topology_data', 'updated_at'])
+        return Response({'success': True})
+
+    @action(detail=False, methods=['get'], url_path='diagram_pptx')
+    def diagram_pptx(self, request):
+        """구성도 PPTX 다운로드"""
+        import io
+        from urllib.parse import quote
+        from django.http import HttpResponse
+        from apps.schools.models import School
+        try:
+            from pptx import Presentation
+            from pptx.util import Inches, Pt, Emu
+            from pptx.dml.color import RGBColor
+            from pptx.enum.text import PP_ALIGN
+        except ImportError:
+            return HttpResponse('python-pptx 필요', status=500)
+
+        school_id = request.query_params.get('school_id')
+        if not school_id:
+            return HttpResponse('school_id 필요', status=400)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return HttpResponse('학교 없음', status=404)
+
+        # 구성도 데이터 로드
+        topo = NetworkTopology.objects.filter(school_id=school_id).order_by('-updated_at').first()
+        layout = None
+        if topo and topo.topology_data.get('diagram_layout'):
+            layout = topo.topology_data['diagram_layout']
+
+        if not layout:
+            # 자동 생성 데이터 사용
+            from django.test import RequestFactory
+            factory = RequestFactory()
+            fake_req = factory.get(f'/?school_id={school_id}')
+            fake_req.user = request.user
+            resp = self.diagram_data(fake_req)
+            layout = resp.data.get('layout', {})
+
+        nodes = layout.get('nodes', [])
+        edges = layout.get('edges', [])
+
+        prs = Presentation()
+        prs.slide_width = Inches(13.33)
+        prs.slide_height = Inches(7.5)
+        slide = prs.slides.add_slide(prs.slide_layouts[6])  # 빈 슬라이드
+
+        # 제목
+        txBox = slide.shapes.add_textbox(Inches(0.3), Inches(0.2), Inches(5), Inches(0.5))
+        tf = txBox.text_frame
+        p = tf.paragraphs[0]
+        p.text = f'{school.name} — 네트워크 구성도'
+        p.font.size = Pt(20)
+        p.font.bold = True
+        p.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
+
+        # 노드 색상
+        TYPE_COLORS = {
+            'internet':   RGBColor(0x6C, 0x75, 0x7D),
+            'firewall':   RGBColor(0xDC, 0x35, 0x45),
+            'switch':     RGBColor(0x0D, 0x6E, 0xFD),
+            'poe_switch': RGBColor(0x6F, 0x42, 0xC1),
+            'ap':         RGBColor(0x19, 0x87, 0x54),
+        }
+
+        # 좌표 스케일 (Cytoscape px → PPTX Inches)
+        if nodes:
+            max_x = max(n.get('x', 0) for n in nodes) or 800
+            max_y = max(n.get('y', 0) for n in nodes) or 600
+        else:
+            max_x, max_y = 800, 600
+        scale_x = 11.0 / max(max_x, 1)
+        scale_y = 5.5 / max(max_y, 1)
+
+        node_positions = {}
+        for n in nodes:
+            nx = n.get('x', 0) * scale_x + 1.0
+            ny = n.get('y', 0) * scale_y + 1.2
+            w, h = 1.3, 0.7
+            node_positions[n['id']] = (nx + w/2, ny + h/2)
+
+            color = TYPE_COLORS.get(n.get('type', ''), RGBColor(0x6C, 0x75, 0x7D))
+            shape = slide.shapes.add_shape(
+                1,  # MSO_SHAPE.ROUNDED_RECTANGLE
+                Emu(int(nx * 914400)), Emu(int(ny * 914400)),
+                Emu(int(w * 914400)), Emu(int(h * 914400))
+            )
+            shape.fill.solid()
+            shape.fill.fore_color.rgb = color
+            shape.line.color.rgb = color
+            tf = shape.text_frame
+            tf.word_wrap = True
+            for line in (n.get('label', '') or '').split('\n'):
+                p = tf.add_paragraph() if tf.paragraphs[0].text else tf.paragraphs[0]
+                p.text = line.strip()
+                p.font.size = Pt(8)
+                p.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+                p.alignment = PP_ALIGN.CENTER
+
+        # 엣지 (직선 커넥터)
+        for e in edges:
+            src = node_positions.get(e.get('source'))
+            tgt = node_positions.get(e.get('target'))
+            if not src or not tgt:
+                continue
+            connector = slide.shapes.add_connector(
+                1,  # MSO_CONNECTOR.STRAIGHT
+                Emu(int(src[0] * 914400)), Emu(int(src[1] * 914400)),
+                Emu(int(tgt[0] * 914400)), Emu(int(tgt[1] * 914400))
+            )
+            connector.line.color.rgb = RGBColor(0x99, 0x99, 0x99)
+            connector.line.width = Pt(1.5)
+
+        buf = io.BytesIO()
+        prs.save(buf)
+        buf.seek(0)
+        fname = f'구성도_{school.name}.pptx'
+        resp = HttpResponse(buf.read(),
+            content_type='application/vnd.openxmlformats-officedocument.presentationml.presentation')
+        resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(fname)}"
+        return resp
+
     @action(detail=False, methods=['get'])
     def device_counts(self, request):
         """학교별 장비 수량 조회 (정기점검 보고서용) — SchoolEquipment 기준"""
