@@ -687,7 +687,7 @@ def sec_settings(request):
         checks.append({
             'item': 'HTTPS(SSL/TLS)',
             'status': 'pass' if getattr(settings, 'SESSION_COOKIE_SECURE', False) else 'fail',
-            'detail': 'TLS 1.2/1.3 적용 (자체서명)' if getattr(settings, 'SESSION_COOKIE_SECURE', False) else '⚠ 미적용',
+            'detail': "TLS 1.2/1.3 적용 (Let's Encrypt)" if getattr(settings, 'SESSION_COOKIE_SECURE', False) else '⚠ 미적용',
         })
         checks.append({
             'item': 'CSRF 보호', 'status': 'pass',
