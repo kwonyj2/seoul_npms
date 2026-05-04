@@ -1748,139 +1748,153 @@ function _pmDoLoad(schoolId) {
         document.getElementById('pm-content').innerHTML = '<div class="text-center text-muted py-4">스위치/PoE 장비가 없습니다.</div>';
         return;
       }
-      // 스위치 서브탭
-      const src = d[0]?.source || 'db';
-      let tabs = src === 'nas' ? '<div class="small text-success mb-1"><i class="bi bi-file-earmark-excel me-1"></i>NAS 선번장 파일에서 로드됨</div>' : '';
-      tabs += '<ul class="nav nav-pills flex-wrap">';
-      d.forEach((sw, i) => {
-        const label = `${sw.device_id || sw.model_name || sw.category} <small class="text-muted">[${sw.network_type||''}]</small>`;
-        tabs += `<li class="nav-item"><a class="nav-link ${i===0?'active':''}" href="#" onclick="pmShowSwitch(${i},this);return false;" style="font-size:.78rem;padding:.25rem .5rem;">${label}</a></li>`;
-      });
-      tabs += '</ul>';
-      document.getElementById('pm-switch-tabs').innerHTML = tabs;
-      document.getElementById('pm-switch-tabs').style.display = '';
-      pmShowSwitch(0);
+      // 망구분별 트리 + SVG + 표 3분할 레이아웃 렌더링
+      _pmRenderFull(d);
     }).catch(() => {
       document.getElementById('pm-content').innerHTML = '<div class="text-danger text-center py-4">로드 실패</div>';
     });
 }
 
-function pmShowSwitch(idx, el) {
-  _pmCurrentIdx = idx;
-  if (el) {
-    document.querySelectorAll('#pm-switch-tabs .nav-link').forEach(a => a.classList.remove('active'));
-    el.classList.add('active');
+function _pmRenderFull(d) {
+  // 망구분별 그룹화
+  const groups = {};
+  d.forEach((sw, i) => {
+    const net = sw.network_type || '기타망';
+    if (!groups[net]) groups[net] = [];
+    groups[net].push({...sw, _idx: i});
+  });
+  const src = d[0]?.source || 'db';
+
+  // 좌측 트리 HTML
+  let treeHtml = '';
+  if (src === 'nas') treeHtml += '<div class="small text-success mb-1"><i class="bi bi-file-earmark-excel me-1"></i>NAS 로드</div>';
+  for (const [net, sws] of Object.entries(groups)) {
+    treeHtml += `<div class="fw-bold small text-muted mt-1 mb-0 px-2" style="font-size:.75rem;"><i class="bi bi-hdd-network me-1"></i>${net} (${sws.length})</div>`;
+    sws.forEach(sw => {
+      treeHtml += `<div class="pm-tree-item px-2 py-1" data-idx="${sw._idx}" onclick="pmSelectSwitch(${sw._idx},this)" style="cursor:pointer;font-size:.72rem;border-left:3px solid transparent;">
+        <i class="bi bi-ethernet me-1"></i>${sw.device_id||sw.model_name}
+        <small class="text-muted">${sw.model_name||''}</small>
+      </div>`;
+    });
   }
-  const sw = _pmData[idx];
-  if (!sw) return;
-  renderPortMap(sw);
+
+  // 전체 레이아웃
+  document.getElementById('pm-switch-tabs').style.display = 'none';
+  let html = `<div class="row g-1" style="height:calc(100vh - 200px);">`;
+  // 좌측 트리
+  html += `<div class="col-md-2 col-lg-2" style="overflow-y:auto;max-height:calc(100vh - 200px);">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body p-1">${treeHtml}</div></div></div>`;
+  // 중앙 SVG + 우측 표
+  html += `<div class="col-md-10 col-lg-10" id="pm-detail">
+    <div class="text-center text-muted py-5"><i class="bi bi-hand-index fs-3 d-block mb-2"></i>좌측에서 스위치를 선택하세요</div></div>`;
+  html += `</div>`;
+  document.getElementById('pm-content').innerHTML = html;
+
+  // 첫 번째 스위치 자동 선택
+  if (d.length > 0) pmSelectSwitch(0, document.querySelector('.pm-tree-item'));
+}
+
+function pmSelectSwitch(idx, el) {
+  _pmCurrentIdx = idx;
+  document.querySelectorAll('.pm-tree-item').forEach(e => {
+    e.style.borderLeftColor = 'transparent';
+    e.style.background = '';
+  });
+  if (el) {
+    el.style.borderLeftColor = '#0d6efd';
+    el.style.background = '#e8f0fe';
+  }
+  renderPortMap(_pmData[idx]);
+}
+
+function pmShowSwitch(idx, el) { pmSelectSwitch(idx, el); }
+
+function _cableColor(cable) {
+  const c = (cable||'').toUpperCase().replace(/\./g,'').replace(/\s/g,'');
+  if (c.includes('C6') || c.includes('CAT6')) return {fill:'#198754', border:'#0f5132', text:'#fff'};
+  if (c.includes('C5E') || c.includes('CAT5E') || c.includes('5E')) return {fill:'#ffc107', border:'#b38600', text:'#333'};
+  if (c.includes('C5') || c.includes('CAT5')) return {fill:'#dc3545', border:'#a71d2a', text:'#fff'};
+  if (c.includes('UTP')) return {fill:'#6f42c1', border:'#4a2d8a', text:'#fff'};
+  if (c.includes('SM') || c.includes('광')) return {fill:'#0dcaf0', border:'#0aa2c0', text:'#333'};
+  return null; // 케이블 없음
 }
 
 function renderPortMap(sw) {
   const ports = sw.ports || [];
   const pc = sw.port_count || 24;
 
-  // 활성 기준: 연결장비 있거나 케이블 종류가 있으면 활성
+  // 활성 기준: 케이블이 있으면 활성
   ports.forEach(p => {
-    if ((p.connected_to && p.connected_to !== '/') || (p.cable && p.cable !== '-' && p.cable !== '')) {
-      p.status = 'up';
-    }
+    p.status = (p.cable && p.cable.trim() && p.cable !== '-') ? 'up' : 'down';
   });
 
-  // 포트 색상: 케이블 종류 기준 (C5=붉은색, C5e=노랑, C6=녹색, 없으면 회색)
-  const CABLE_COLOR = {};
-  function _portColor(p) {
-    const c = (p.cable||'').toUpperCase().replace(/\./g,'').replace(/\s/g,'');
-    if (c.includes('C6') || c.includes('CAT6')) return {fill:'#198754', border:'#0f5132'}; // 녹색
-    if (c.includes('C5E') || c.includes('CAT5E') || c.includes('5.E')) return {fill:'#ffc107', border:'#b38600'}; // 노랑
-    if (c.includes('C5') || c.includes('CAT5')) return {fill:'#dc3545', border:'#a71d2a'}; // 붉은색
-    if (c.includes('UTP')) return {fill:'#6f42c1', border:'#4a2d8a'}; // 보라 (UTP)
-    if (c.includes('SM') || c.includes('광')) return {fill:'#0dcaf0', border:'#0aa2c0'}; // 하늘 (광)
-    if (p.status === 'up') return {fill:'#198754', border:'#0f5132'};
-    return {fill:'#dee2e6', border:'#adb5bd'}; // 비활성
-  }
-
-  const mfr = sw.manufacturer ? ` / ${sw.manufacturer}` : '';
-  const sheet = sw.sheet ? ` <span class="badge bg-light text-dark border">${sw.sheet}</span>` : '';
   const connCount = ports.filter(p => p.status === 'up').length;
+  const mfr = sw.manufacturer ? ` / ${sw.manufacturer}` : '';
 
-  let html = `<div class="card border-0 shadow-sm">`;
-  html += `<div class="card-header bg-white py-1 d-flex justify-content-between align-items-center">`;
-  html += `<span class="fw-bold small">${sw.device_id||''} ${sw.model_name||sw.category} <small class="text-muted">[${sw.network_type||''}]${mfr} ${sw.install_location||''}${sheet}</small> <span class="badge bg-success">${connCount}/${pc}</span></span>`;
-  if (sw.source !== 'nas') {
-    html += `<button class="btn btn-sm btn-outline-primary" onclick="pmSaveCurrent()"><i class="bi bi-save me-1"></i>저장</button>`;
-  }
-  html += `</div><div class="card-body py-2">`;
+  let html = `<div class="row g-1" style="height:calc(100vh - 210px);">`;
 
-  // 좌우 배치: SVG(좌) + 테이블(우)
-  html += `<div class="row g-2">`;
+  // ── 중앙: SVG 스위치 ──
+  html += `<div class="col-md-6 d-flex flex-column">`;
+  html += `<div class="small fw-bold mb-1">${sw.device_id||''} ${sw.model_name||''} <span class="text-muted">[${sw.network_type||''}]${mfr}</span> <span class="badge bg-success">${connCount}/${pc}</span></div>`;
+  html += `<div class="small text-muted mb-1">${sw.install_location||''}</div>`;
 
-  // ── 좌측: SVG 스위치 이미지 ──
-  html += `<div class="col-md-5">`;
   const oddPorts = ports.filter(p => p.port % 2 === 1);
   const evenPorts = ports.filter(p => p.port % 2 === 0);
   const halfCols = Math.max(oddPorts.length, evenPorts.length);
-  const portW = 28, portH = 22, gap = 2, padX = 30, padY = 38;
-  const svgW = Math.max(padX * 2 + halfCols * (portW + gap), 300);
+  const portW = 30, portH = 24, gap = 2, padX = 25, padY = 15;
+  const svgW = Math.max(padX * 2 + halfCols * (portW + gap), 250);
   const rowH = portH + 16;
-  const svgH = padY + rowH * 2 + 30;
+  const svgH = padY + rowH * 2 + 22;
 
-  html += `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="background:#2d3436;border-radius:6px;">`;
-  html += `<rect x="8" y="8" width="${svgW-16}" height="${svgH-16}" rx="5" fill="#34495e" stroke="#576574" stroke-width="1.5"/>`;
-  html += `<text x="${svgW/2}" y="26" fill="#dfe6e9" font-size="10" text-anchor="middle" font-weight="bold">${sw.device_id||''} ${sw.model_name||''} (${pc}P)</text>`;
+  html += `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="background:#2d3436;border-radius:6px;flex:1;">`;
+  html += `<rect x="5" y="5" width="${svgW-10}" height="${svgH-10}" rx="4" fill="#34495e" stroke="#576574" stroke-width="1"/>`;
 
-  function drawPortRow(portList, yPos) {
+  function drawRow(portList, yPos) {
     portList.forEach((p, i) => {
       const x = padX + i * (portW + gap);
-      const pc = _portColor(p);
-      const isActive = p.status === 'up';
+      const cc = _cableColor(p.cable);
+      const fill = cc ? cc.fill : '#ffffff';
+      const border = cc ? cc.border : '#bbb';
+      const txtColor = cc ? cc.text : '#333';
       const pidx = ports.indexOf(p);
-      html += `<rect x="${x}" y="${yPos}" width="${portW}" height="${portH}" rx="2" fill="${pc.fill}" stroke="${pc.border}" stroke-width="1" style="cursor:pointer" onclick="pmEditPort(${pidx})"/>`;
-      const txtColor = (pc.fill === '#dee2e6' || pc.fill === '#ffc107') ? '#333' : '#fff';
-      html += `<text x="${x+portW/2}" y="${yPos+portH/2+3}" fill="${txtColor}" font-size="8" text-anchor="middle" font-weight="bold">${p.port}</text>`;
+      html += `<rect x="${x}" y="${yPos}" width="${portW}" height="${portH}" rx="2" fill="${fill}" stroke="${border}" stroke-width="1" style="cursor:pointer" onclick="pmEditPort(${pidx})"/>`;
+      html += `<text x="${x+portW/2}" y="${yPos+portH/2+4}" fill="${txtColor}" font-size="8" text-anchor="middle" font-weight="bold">${p.port}</text>`;
       if (p.connected_to) {
         const lbl = p.connected_to.length > 7 ? p.connected_to.substring(0,7)+'..' : p.connected_to;
-        html += `<text x="${x+portW/2}" y="${yPos+portH+10}" fill="#dfe6e9" font-size="6" text-anchor="middle">${lbl}</text>`;
+        html += `<text x="${x+portW/2}" y="${yPos+portH+10}" fill="#dfe6e9" font-size="5.5" text-anchor="middle">${lbl}</text>`;
       }
     });
   }
-  drawPortRow(oddPorts, padY);
-  drawPortRow(evenPorts, padY + rowH);
-  // 범례
-  const legY = padY + rowH * 2 + 8;
-  html += `<text x="${padX}" y="${legY}" fill="#b2bec3" font-size="7">`;
-  html += `<tspan fill="#dc3545">■</tspan> C5 `;
-  html += `<tspan fill="#ffc107">■</tspan> C5e `;
-  html += `<tspan fill="#198754">■</tspan> C6 `;
-  html += `<tspan fill="#6f42c1">■</tspan> UTP `;
-  html += `<tspan fill="#0dcaf0">■</tspan> 광 `;
-  html += `<tspan fill="#dee2e6">■</tspan> 비활성`;
+  drawRow(oddPorts, padY);
+  drawRow(evenPorts, padY + rowH);
+  const ly = padY + rowH * 2 + 5;
+  html += `<text x="${padX}" y="${ly}" fill="#b2bec3" font-size="6.5">`;
+  html += `<tspan fill="#dc3545">■</tspan>C5 <tspan fill="#ffc107">■</tspan>C5e <tspan fill="#198754">■</tspan>C6 <tspan fill="#6f42c1">■</tspan>UTP <tspan fill="#0dcaf0">■</tspan>광 <tspan fill="#fff">□</tspan>미연결`;
   html += `</text>`;
   html += `</svg></div>`;
 
-  // ── 우측: 포트 연결정보 테이블 ──
-  html += `<div class="col-md-7">`;
-  html += `<div class="table-responsive" style="max-height:calc(100vh - 280px);overflow-y:auto;">`;
-  html += `<table class="table table-sm table-bordered mb-0" style="font-size:.65rem;line-height:1;" id="pm-port-table">`;
-  html += `<thead class="table-light sticky-top"><tr><th style="width:22px">P</th><th style="width:33%">연결장비</th><th style="width:33%">케이블</th><th style="width:22px">S</th></tr></thead><tbody>`;
+  // ── 우측: 표 ──
+  html += `<div class="col-md-6" style="overflow-y:auto;max-height:calc(100vh - 210px);">`;
+  html += `<table class="table table-sm table-bordered mb-0" style="font-size:.62rem;line-height:1;" id="pm-port-table">`;
+  html += `<thead class="table-light sticky-top"><tr><th style="width:20px;padding:1px;">P</th><th style="padding:1px 2px;">연결장비</th><th style="width:40px;padding:1px;">케이블</th><th style="width:18px;padding:1px;">S</th></tr></thead><tbody>`;
   ports.forEach((p, i) => {
-    const cableColor = p.cable ? {C5:'#dc3545',C6:'#198754'}[p.cable.replace(/\./g,'').replace(/e$/i,'').toUpperCase()] || (p.cable.toUpperCase().includes('5E')||p.cable.toUpperCase().includes('5.E')?'#b38600':'#333') : '';
+    const cc = _cableColor(p.cable);
+    const cblStyle = cc ? `color:${cc.fill};font-weight:700;` : '';
     const bg = p.status === 'up' ? 'background:#f0faf0;' : '';
     html += `<tr style="${bg}">
-      <td class="text-center fw-bold" style="padding:1px;">${p.port}</td>
-      <td style="padding:1px 3px;"><input type="text" class="form-control border-0 pm-input" style="font-size:.63rem;height:18px;padding:0 2px;" data-idx="${i}" data-field="connected_to" value="${p.connected_to||''}"></td>
-      <td class="text-center" style="padding:1px;color:${cableColor};font-weight:600;">${p.cable||'-'}</td>
-      <td class="text-center" style="padding:1px;">${p.status==='up'?'<span style="color:#198754">●</span>':'<span style="color:#ccc">○</span>'}</td>
+      <td class="text-center fw-bold" style="padding:0 1px;">${p.port}</td>
+      <td style="padding:0 2px;"><input type="text" class="form-control border-0 pm-input" style="font-size:.6rem;height:16px;padding:0 2px;" data-idx="${i}" data-field="connected_to" value="${p.connected_to||''}"></td>
+      <td class="text-center" style="padding:0 1px;${cblStyle}font-size:.58rem;">${p.cable||''}</td>
+      <td class="text-center" style="padding:0;">${p.status==='up'?'<span style="color:#198754;font-size:.6rem;">●</span>':'<span style="color:#ddd;font-size:.6rem;">○</span>'}</td>
     </tr>`;
   });
-  html += `</tbody></table></div></div>`;
+  html += `</tbody></table></div>`;
 
-  html += `</div></div></div>`;
-  document.getElementById('pm-content').innerHTML = html;
+  html += `</div>`;
+  document.getElementById('pm-detail').innerHTML = html;
 }
 
 function pmEditPort(idx) {
-  // SVG 포트 클릭 → 해당 테이블 행으로 스크롤 + 포커스
   const table = document.getElementById('pm-port-table');
   if (!table) return;
   const row = table.tBodies[0].rows[idx];
@@ -1896,7 +1910,6 @@ function pmEditPort(idx) {
 function pmSaveCurrent() {
   const sw = _pmData[_pmCurrentIdx];
   if (!sw) return;
-  // 테이블에서 데이터 수집
   const inputs = document.querySelectorAll('.pm-input');
   const ports = [...sw.ports];
   inputs.forEach(el => {
@@ -1912,7 +1925,7 @@ function pmSaveCurrent() {
     if (d.success) {
       showToast('선번장 저장 완료');
       sw.ports = ports;
-      renderPortMap(sw);  // SVG 갱신
+      renderPortMap(sw);
     }
   });
 }
