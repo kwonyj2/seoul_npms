@@ -525,26 +525,27 @@ class SchoolViewSet(viewsets.ModelViewSet):
         thin = Border(left=Side('thin'), right=Side('thin'), top=Side('thin'), bottom=Side('thin'))
         green = PatternFill('solid', fgColor='C6EFCE')
 
-        ws.merge_cells('A1:J1')
+        ws.merge_cells('A1:N1')
         ws.cell(1, 1, f'{school.name} — 라벨링 결과').font = Font(bold=True, size=13)
-        headers = ['#','구분','모델명','제조사','건물/층','설치장소','망구분','장비ID','관리번호','유무']
+        headers = ['#','구분','모델명','제조사','건물','층','설치장소','망구분','장비ID','속도','계위','MGMT','관리번호','유무']
         for ci, h in enumerate(headers, 1):
             c = ws.cell(3, ci, h)
             c.font, c.fill, c.alignment, c.border = hdr_font, hdr_fill, ctr, thin
         for ri, eq in enumerate(qs, 1):
             exist = '유' if (eq.asset_tag and eq.asset_tag != '장비없음') else ('무' if eq.asset_tag == '장비없음' else '-')
             vals = [ri, eq.category, eq.model_name, eq.manufacturer,
-                    f'{eq.building}/{eq.floor}', eq.install_location, eq.network_type,
-                    eq.device_id, eq.asset_tag or '미부여', exist]
+                    eq.building or '', eq.floor or '', eq.install_location, eq.network_type,
+                    eq.device_id, eq.speed or '', eq.tier or '', eq.mgmt or '',
+                    eq.asset_tag or '미부여', exist]
             for ci, v in enumerate(vals, 1):
                 c = ws.cell(ri+3, ci, v)
                 c.border = thin
-                if eq.asset_tag and eq.asset_tag != '장비없음' and ci == 9:
+                if eq.asset_tag and eq.asset_tag != '장비없음' and ci == 13:
                     c.fill = green
 
         # ── 시트2: 변경 전 (original_data) ──
         ws2 = wb.create_sheet('변경 전')
-        ws2.merge_cells('A1:J1')
+        ws2.merge_cells('A1:N1')
         ws2.cell(1, 1, f'{school.name} — 변경 전 원본').font = Font(bold=True, size=13)
         for ci, h in enumerate(headers, 1):
             c = ws2.cell(3, ci, h)
@@ -555,20 +556,22 @@ class SchoolViewSet(viewsets.ModelViewSet):
             if orig:
                 changed_count += 1
                 vals = [ri, orig.get('category',''), orig.get('model_name',''),
-                        orig.get('manufacturer',''), f"{orig.get('building','')}/{orig.get('floor','')}",
+                        orig.get('manufacturer',''), orig.get('building',''), orig.get('floor',''),
                         orig.get('install_location',''), orig.get('network_type',''),
-                        orig.get('device_id',''), '', '-']
+                        orig.get('device_id',''), orig.get('speed',''), orig.get('tier',''), orig.get('mgmt',''),
+                        '', '-']
             else:
                 vals = [ri, eq.category, eq.model_name, eq.manufacturer,
-                        f'{eq.building}/{eq.floor}', eq.install_location, eq.network_type,
-                        eq.device_id, '', '-']
+                        eq.building or '', eq.floor or '', eq.install_location, eq.network_type,
+                        eq.device_id, eq.speed or '', eq.tier or '', eq.mgmt or '',
+                        '', '-']
             for ci, v in enumerate(vals, 1):
                 c = ws2.cell(ri+3, ci, v)
                 c.border = thin
                 if orig:
                     c.fill = PatternFill('solid', fgColor='FFF3CD')
 
-        col_widths = [5, 8, 18, 12, 12, 20, 10, 14, 20, 6]
+        col_widths = [5, 8, 18, 12, 10, 6, 20, 10, 14, 6, 6, 6, 20, 6]
         for ws_ in [ws, ws2]:
             for ci, w in enumerate(col_widths, 1):
                 ws_.column_dimensions[get_column_letter(ci)].width = w
@@ -760,13 +763,13 @@ class SchoolViewSet(viewsets.ModelViewSet):
         red_font = Font(color='CC0000', bold=True)
 
         headers = ['#', '지원청', '학교명', '구분', '모델명', '제조사',
-                   '건물/층', '설치장소', '망구분', '장비ID', '관리번호', '유무']
-        col_widths = [5, 10, 14, 8, 18, 12, 12, 20, 10, 14, 20, 6]
+                   '건물', '층', '설치장소', '망구분', '장비ID', '속도', '계위', 'MGMT', '관리번호', '유무']
+        col_widths = [5, 10, 14, 8, 18, 12, 10, 6, 20, 10, 14, 6, 6, 6, 20, 6]
 
         # ── 시트1: 변경 후 (현재) ──
         ws1 = wb.active
         ws1.title = '라벨링 결과(변경후)'
-        ws1.merge_cells('A1:L1')
+        ws1.merge_cells('A1:P1')
         ws1.cell(1, 1, '전체 학교 라벨링 결과 — 변경 후').font = Font(bold=True, size=13)
         for ci, h in enumerate(headers, 1):
             c = ws1.cell(3, ci, h)
@@ -774,7 +777,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
 
         # ── 시트2: 변경 전 ──
         ws2 = wb.create_sheet('라벨링 원본(변경전)')
-        ws2.merge_cells('A1:L1')
+        ws2.merge_cells('A1:P1')
         ws2.cell(1, 1, '전체 학교 라벨링 결과 — 변경 전 원본').font = Font(bold=True, size=13)
         for ci, h in enumerate(headers, 1):
             c = ws2.cell(3, ci, h)
@@ -785,9 +788,9 @@ class SchoolViewSet(viewsets.ModelViewSet):
         ws3.merge_cells('A1:M1')
         ws3.cell(1, 1, '라벨링 변경 내역 (변경 전 → 후 비교)').font = Font(bold=True, size=13)
         chg_headers = ['#', '지원청', '학교명', '구분', '변경항목', '변경 전', '변경 후',
-                       '관리번호', '모델명(현재)', '건물/층(현재)', '설치장소(현재)',
+                       '관리번호', '모델명(현재)', '건물(현재)', '층(현재)', '설치장소(현재)',
                        '망구분(현재)', '장비ID(현재)']
-        chg_widths = [5, 10, 14, 8, 12, 20, 20, 20, 18, 12, 20, 10, 14]
+        chg_widths = [5, 10, 14, 8, 12, 20, 20, 20, 18, 10, 6, 20, 10, 14]
         for ci, h in enumerate(chg_headers, 1):
             c = ws3.cell(3, ci, h)
             c.font, c.fill, c.alignment, c.border = hdr_font, hdr_fill, ctr_align, thin
@@ -812,14 +815,15 @@ class SchoolViewSet(viewsets.ModelViewSet):
             # 시트1: 변경 후
             vals1 = [seq, center_name, eq.school.name, eq.category,
                      eq.model_name or '', eq.manufacturer or '',
-                     f'{eq.building or ""}/{eq.floor or ""}',
+                     eq.building or '', eq.floor or '',
                      eq.install_location or '', eq.network_type or '',
-                     eq.device_id or '', eq.asset_tag or '미부여', exist]
+                     eq.device_id or '', eq.speed or '', eq.tier or '', eq.mgmt or '',
+                     eq.asset_tag or '미부여', exist]
             for ci, v in enumerate(vals1, 1):
                 c = ws1.cell(row1, ci, v)
                 c.border = thin
-                c.alignment = ctr_align if ci in (1, 4, 12) else left_align
-                if eq.asset_tag and eq.asset_tag != '장비없음' and ci == 11:
+                c.alignment = ctr_align if ci in (1, 4, 16) else left_align
+                if eq.asset_tag and eq.asset_tag != '장비없음' and ci == 15:
                     c.fill = green
 
             # 시트2: 변경 전
@@ -828,20 +832,23 @@ class SchoolViewSet(viewsets.ModelViewSet):
                 vals2 = [seq, center_name, eq.school.name,
                          orig.get('category', ''), orig.get('model_name', ''),
                          orig.get('manufacturer', ''),
-                         f"{orig.get('building', '')}/{orig.get('floor', '')}",
+                         orig.get('building', ''), orig.get('floor', ''),
                          orig.get('install_location', ''),
                          orig.get('network_type', ''),
-                         orig.get('device_id', ''), '', '-']
+                         orig.get('device_id', ''), orig.get('speed', ''),
+                         orig.get('tier', ''), orig.get('mgmt', ''),
+                         '', '-']
             else:
                 vals2 = [seq, center_name, eq.school.name, eq.category,
                          eq.model_name or '', eq.manufacturer or '',
-                         f'{eq.building or ""}/{eq.floor or ""}',
+                         eq.building or '', eq.floor or '',
                          eq.install_location or '', eq.network_type or '',
-                         eq.device_id or '', '', '-']
+                         eq.device_id or '', eq.speed or '', eq.tier or '', eq.mgmt or '',
+                         '', '-']
             for ci, v in enumerate(vals2, 1):
                 c = ws2.cell(row1, ci, v)
                 c.border = thin
-                c.alignment = ctr_align if ci in (1, 4, 12) else left_align
+                c.alignment = ctr_align if ci in (1, 4, 16) else left_align
                 if orig:
                     c.fill = yellow
 
@@ -856,7 +863,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
                                     eq.category, label, old_val, new_val,
                                     eq.asset_tag or '미부여',
                                     eq.model_name or '',
-                                    f'{eq.building or ""}/{eq.floor or ""}',
+                                    eq.building or '', eq.floor or '',
                                     eq.install_location or '',
                                     eq.network_type or '', eq.device_id or '']
                         for ci, v in enumerate(chg_vals, 1):
@@ -880,10 +887,10 @@ class SchoolViewSet(viewsets.ModelViewSet):
 
         # 필터 추가
         if row1 > 4:
-            ws1.auto_filter.ref = f'A3:L{row1-1}'
-            ws2.auto_filter.ref = f'A3:L{row1-1}'
+            ws1.auto_filter.ref = f'A3:P{row1-1}'
+            ws2.auto_filter.ref = f'A3:P{row1-1}'
         if row3 > 4:
-            ws3.auto_filter.ref = f'A3:M{row3-1}'
+            ws3.auto_filter.ref = f'A3:N{row3-1}'
 
         buf = io.BytesIO()
         wb.save(buf)
@@ -1206,32 +1213,34 @@ class SchoolViewSet(viewsets.ModelViewSet):
         thin = Border(left=Side('thin'), right=Side('thin'), top=Side('thin'), bottom=Side('thin'))
         green = PatternFill('solid', fgColor='C6EFCE')
 
-        ws.merge_cells('A1:H1')
+        ws.merge_cells('A1:L1')
         c = ws.cell(1, 1, f'{school.name} — 장비 라벨링 현황')
         c.font = Font(bold=True, size=13)
         c.alignment = ctr
 
-        headers = ['#', '구분', '모델명', '건물/층', '설치장소', '망구분', '관리번호', '부여일시']
+        headers = ['#', '구분', '모델명', '제조사', '건물', '층', '설치장소',
+                   '망구분', '장비ID', '속도', '계위', 'MGMT', '관리번호', '부여일시']
         for ci, h in enumerate(headers, 1):
             c = ws.cell(3, ci, h)
             c.font, c.fill, c.alignment, c.border = hdr_font, hdr_fill, ctr, thin
 
         for ri, eq in enumerate(qs, 1):
             vals = [
-                ri, eq.category, eq.model_name or '',
-                f'{eq.building or ""}/{eq.floor or ""}',
+                ri, eq.category, eq.model_name or '', eq.manufacturer or '',
+                eq.building or '', eq.floor or '',
                 eq.install_location or '', eq.network_type or '',
+                eq.device_id or '', eq.speed or '', eq.tier or '', eq.mgmt or '',
                 eq.asset_tag or '미부여',
                 eq.tagged_at.strftime('%Y-%m-%d %H:%M') if eq.tagged_at else '',
             ]
             for ci, v in enumerate(vals, 1):
                 c = ws.cell(ri + 3, ci, v)
                 c.border = thin
-                c.alignment = ctr if ci in (1, 2, 6) else Alignment(vertical='center')
-                if eq.asset_tag and ci == 7:
+                c.alignment = ctr if ci in (1, 2, 8) else Alignment(vertical='center')
+                if eq.asset_tag and ci == 13:
                     c.fill = green
 
-        col_widths = [5, 8, 18, 12, 20, 10, 20, 16]
+        col_widths = [5, 8, 18, 12, 10, 6, 20, 10, 14, 6, 6, 6, 20, 16]
         for ci, w in enumerate(col_widths, 1):
             ws.column_dimensions[get_column_letter(ci)].width = w
 
