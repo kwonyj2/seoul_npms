@@ -659,12 +659,16 @@ class SchoolViewSet(viewsets.ModelViewSet):
                 tagged = eq_qs.filter(asset_tag__gt='').exclude(asset_tag='장비없음').count()
                 no_equip = eq_qs.filter(asset_tag='장비없음').count()
                 added = eq_qs.filter(is_added=True).count()
+                sn_qs = eq_qs.filter(category__in=['스위치', 'PoE', 'PoE스위치'])
+                sn_target = sn_qs.count()
+                sn_scanned = sn_qs.filter(serial_number__gt='').count()
                 completed = LabelingCompletion.objects.filter(school=s).exists()
                 result.append({
                     'id': s.id, 'name': s.name,
                     'total': total, 'tagged': tagged,
                     'no_equip': no_equip, 'added': added,
                     'original': total - added, 'delta': added - no_equip,
+                    'sn_target': sn_target, 'sn_scanned': sn_scanned,
                     'completed': completed,
                 })
             return Response({'level': 'schools', 'rows': result})

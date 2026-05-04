@@ -615,18 +615,20 @@ function renderTypeDetail(centerName, typeName, rows) {
     <button class="btn btn-sm btn-outline-success" onclick="downloadTypeExcel()"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
   </div>`;
   html += '<div class="table-responsive"><table class="table table-sm table-bordered text-center" style="font-size:.82rem;"><thead class="table-light"><tr>';
-  html += '<th>#</th><th>학교명</th><th>원장</th><th class="text-primary">추가</th><th class="text-danger">없음</th><th>증감</th><th>현재</th><th>부착</th><th>미부착</th><th>진행률</th><th>상태</th>';
+  html += '<th>#</th><th>학교명</th><th>원장</th><th class="text-primary">추가</th><th class="text-danger">없음</th><th>증감</th><th>현재</th><th>부착</th><th>미부착</th><th>진행률</th><th>S/N</th><th>상태</th>';
   html += '</tr></thead><tbody>';
-  let tot = {original:0,added:0,no_equip:0,delta:0,total:0,tagged:0};
+  let tot = {original:0,added:0,no_equip:0,delta:0,total:0,tagged:0,sn_target:0,sn_scanned:0};
   rows.forEach((s,i) => {
     const pct = s.total ? Math.round(s.tagged/s.total*100) : 0;
     const untagged = s.total - s.tagged - (s.no_equip||0);
     tot.original+=s.original; tot.added+=s.added; tot.no_equip+=s.no_equip; tot.delta+=s.delta; tot.total+=s.total; tot.tagged+=s.tagged;
+    tot.sn_target+=(s.sn_target||0); tot.sn_scanned+=(s.sn_scanned||0);
     html += `<tr class="school-row" onclick="selectTreeSchool(${s.id},'${s.name.replace(/'/g,"\\'")}','${centerName}')">
       <td>${i+1}</td><td class="text-start fw-bold">${s.name}</td>
       <td>${s.original}</td><td class="text-primary">${s.added}</td><td class="text-danger">${s.no_equip}</td><td>${_deltaHtml(s.delta)}</td><td class="fw-bold">${s.total}</td>
       <td class="text-success">${s.tagged}</td><td class="text-danger">${untagged>0?untagged:0}</td>
       <td><span class="badge ${pct===100?'bg-success':pct>0?'bg-warning':'bg-secondary'}">${pct}%</span></td>
+      <td>${s.sn_scanned||0}/${s.sn_target||0}</td>
       <td>${s.completed?'<span class="badge bg-success">완료</span>':'<span class="badge bg-secondary">진행중</span>'}</td>
     </tr>`;
   });
@@ -634,7 +636,8 @@ function renderTypeDetail(centerName, typeName, rows) {
   html += `<tr class="table-light fw-bold"><td></td><td>합계</td>
     <td>${tot.original}</td><td class="text-primary">${tot.added}</td><td class="text-danger">${tot.no_equip}</td><td>${_deltaHtml(tot.delta)}</td><td>${tot.total}</td>
     <td class="text-success">${tot.tagged}</td><td class="text-danger">${tot.total-tot.tagged-(tot.no_equip||0)>0?tot.total-tot.tagged-(tot.no_equip||0):0}</td>
-    <td><span class="badge ${tPct===100?'bg-success':'bg-primary'}">${tPct}%</span></td><td></td>
+    <td><span class="badge ${tPct===100?'bg-success':'bg-primary'}">${tPct}%</span></td>
+    <td>${tot.sn_scanned}/${tot.sn_target}</td><td></td>
   </tr></tbody></table></div>`;
   document.getElementById('stat-detail').innerHTML = html;
 }
@@ -656,6 +659,7 @@ function renderSchoolDetail(d) {
     {label:'현재장비', val:d.total, color:'#212529'},
     {label:'부착', val:d.tagged, color:'#198754'},
     {label:'미부착', val:d.total-d.tagged-(d.no_equip||0), color:'#ffc107'},
+    {label:'S/N', val:`${d.sn_scanned||0}/${d.sn_target||0}`, color:'#6610f2', raw:true},
   ];
   cards.forEach(c => {
     html += `<div class="col"><div class="card stat-card p-2 text-center" style="border-color:${c.color}">
@@ -665,15 +669,16 @@ function renderSchoolDetail(d) {
   html += '</div>';
   // 구분별 표
   html += '<div class="table-responsive"><table class="table table-sm table-bordered text-center" style="font-size:.82rem;"><thead class="table-light"><tr>';
-  html += '<th>구분</th><th>전체</th><th>부착</th><th>미부착</th><th class="text-primary">추가</th><th class="text-danger">없음</th><th>진행률</th>';
+  html += '<th>구분</th><th>전체</th><th>부착</th><th>미부착</th><th class="text-primary">추가</th><th class="text-danger">없음</th><th>진행률</th><th>S/N</th>';
   html += '</tr></thead><tbody>';
   ['스위치','PoE','AP'].forEach(cat => {
-    const c = d.categories[cat] || {total:0,tagged:0,no_equip:0,added:0};
+    const c = d.categories[cat] || {total:0,tagged:0,no_equip:0,added:0,sn_scanned:0};
     const untagged = c.total - c.tagged - (c.no_equip||0);
     const pct = c.total ? Math.round(c.tagged/c.total*100) : 0;
+    const snCol = cat!=='AP' ? `${c.sn_scanned||0}/${c.total}` : '-';
     html += `<tr><td class="fw-bold">${cat}</td><td>${c.total}</td><td class="text-success">${c.tagged}</td>
       <td class="text-danger">${untagged>0?untagged:0}</td><td class="text-primary">${c.added||0}</td><td class="text-danger">${c.no_equip||0}</td>
-      <td><span class="badge ${pct===100?'bg-success':pct>0?'bg-warning':'bg-secondary'}">${pct}%</span></td></tr>`;
+      <td><span class="badge ${pct===100?'bg-success':pct>0?'bg-warning':'bg-secondary'}">${pct}%</span></td><td>${snCol}</td></tr>`;
   });
   html += '</tbody></table></div>';
   html += `<div class="small text-muted">변경 건수: ${d.changed||0}건</div>`;
