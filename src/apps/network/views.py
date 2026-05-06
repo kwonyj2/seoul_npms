@@ -1002,13 +1002,19 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
             location = ' / '.join(filter(None, [sw.get('building'), sw.get('floor'), sw.get('install_location')])) or '-'
 
             # SVG 포트맵
+            # 포트 status 기본값: 케이블 있으면 활성, 없으면 미연결
+            for p in ports:
+                if not p.get('status'):
+                    p['status'] = 'up' if p.get('cable', '').strip() else 'none'
+
             odd_ports = [p for p in ports if p.get('port', 0) % 2 == 1]
             even_ports = [p for p in ports if p.get('port', 0) % 2 == 0]
             half_cols = max(len(odd_ports), len(even_ports), 1)
             pw, ph, gap, px, py = 28, 22, 2, 20, 18
             svg_w = max(px * 2 + half_cols * (pw + gap), 220)
-            row_h = ph + 14
-            svg_h = py + row_h * 2 + 22
+            led_r, led_gap = 3, 5
+            row_h = ph + led_r * 2 + led_gap + 10
+            svg_h = py + row_h * 2 + 30
 
             def svg_row(port_list, y):
                 s = ''
@@ -1020,6 +1026,11 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
                     txt_c = cs['text'] if cs else '#546e7a'
                     s += f'<rect x="{x}" y="{y}" width="{pw}" height="{ph}" rx="2" fill="{fill}" stroke="{border}" stroke-width="1"/>'
                     s += f'<text x="{x+pw//2}" y="{y+ph//2+4}" fill="{txt_c}" font-size="7" text-anchor="middle" font-weight="bold">{p.get("port","")}</text>'
+                    # LED
+                    led_y = y + ph + led_gap
+                    st = p.get('status', '')
+                    led_c = '#4caf50' if st == 'up' else '#f44336' if st == 'down' else '#bdbdbd'
+                    s += f'<circle cx="{x+pw//2}" cy="{led_y}" r="{led_r}" fill="{led_c}" stroke="#fff" stroke-width=".5"/>'
                 return s
 
             svg = f'<svg width="{svg_w}" height="{svg_h}" xmlns="http://www.w3.org/2000/svg">'
@@ -1028,13 +1039,18 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
             svg += f'<text x="{svg_w//2}" y="{py-4}" fill="#455a64" font-size="7" text-anchor="middle" font-weight="600">{sw.get("device_id","")} {sw.get("model_name","")}</text>'
             svg += svg_row(odd_ports, py)
             svg += svg_row(even_ports, py + row_h)
-            # 범례
+            # 케이블 범례
             ly = py + row_h * 2 + 8
             legend = ''
             for key, cs in cable_colors.items():
-                legend += f'<tspan fill="{cs["bg"]}">■</tspan>{cs["label"]} '
-            legend += '<tspan fill="#fff" stroke="#bbb" stroke-width=".3">□</tspan>미연결'
+                legend += f'<tspan fill="{cs["bg"]}">&#9632;</tspan>{cs["label"]} '
+            legend += '<tspan fill="#ccc">&#9633;</tspan>미연결'
             svg += f'<text x="{px}" y="{ly}" fill="#607d8b" font-size="6">{legend}</text>'
+            # LED 범례
+            ly2 = ly + 10
+            svg += f'<text x="{px}" y="{ly2}" fill="#607d8b" font-size="6">'
+            svg += '<tspan fill="#4caf50">&#9679;</tspan>활성 <tspan fill="#f44336">&#9679;</tspan>비활성 <tspan fill="#bdbdbd">&#9679;</tspan>미연결'
+            svg += '</text>'
             svg += '</svg>'
 
             # 포트 표
@@ -1042,7 +1058,6 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
             for p in ports:
                 cs = get_cable_style(p.get('cable'))
                 cable_display = cs['label'] if cs else '-'
-                cable_bg = f'background:{cs["bg"]};color:{cs["text"]};' if cs else ''
                 cable_dot = f'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:{cs["bg"]};margin-right:3px;"></span>' if cs else ''
                 status = p.get('status', '')
                 status_label = '활성' if status == 'up' else '비활성' if status == 'down' else '미연결'
