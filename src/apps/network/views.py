@@ -1109,7 +1109,7 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
 @page {{ size: A4 landscape; margin: 12mm 10mm; }}
 body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt; color: #333; margin: 0; }}
 .page {{ width: 100%; }}
-.header {{ border-bottom: 2px solid #1565c0; padding-bottom: 4px; margin-bottom: 8px; overflow: hidden; }}
+.header {{ border-bottom: 2px solid #1565c0; padding-bottom: 2px; margin-bottom: 4px; overflow: hidden; }}
 .school-name {{ font-size: 12pt; font-weight: 800; color: #1565c0; }}
 .title {{ font-size: 10pt; font-weight: 600; color: #455a64; margin-left: 12px; }}
 .page-num {{ float: right; font-size: 8pt; color: #90a4ae; }}
@@ -1117,8 +1117,9 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
 .left-panel {{ float: left; width: 46%; padding-right: 10px; }}
 .right-panel {{ float: right; width: 52%; }}
 .info-table {{ width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 7.5pt; }}
-.info-table th {{ background: #f5f7fa; color: #546e7a; font-weight: 600; text-align: left; padding: 4px 8px; border: 1px solid #dee2e6; width: 65px; height: 5.6mm; }}
-.info-table td {{ padding: 4px 8px; border: 1px solid #dee2e6; height: 5.6mm; }}
+.info-table {{ border-collapse: collapse; }}
+.info-table th {{ background: #f5f7fa; color: #546e7a; font-weight: 600; font-size: 6.5pt; text-align: left; padding: 0 6px; border: 0.5px solid #dee2e6; width: 60px; height: 5mm; line-height: 5mm; }}
+.info-table td {{ padding: 0 6px; border: 0.5px solid #dee2e6; height: 5mm; line-height: 5mm; font-size: 6.5pt; }}
 .info-table td.bold {{ font-weight: 700; color: #1565c0; }}
 .badge-y {{ background: #1565c0; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 7pt; font-weight: 700; }}
 .badge-n {{ background: #90a4ae; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 7pt; }}
@@ -1126,10 +1127,11 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
 .svg-box {{ text-align: center; margin-top: 6px; }}
 .svg-box svg {{ width: 100%; height: auto; }}
 .port-table {{ width: 100%; border-collapse: collapse; font-size: 7pt; }}
-.port-table thead th {{ background: linear-gradient(135deg, #37474f, #546e7a); color: #eceff1; font-weight: 600; padding: 3px 4px; text-align: center; height: 5.6mm; }}
+.port-table {{ border-collapse: collapse; }}
+.port-table thead th {{ background: #37474f; color: #eceff1; font-weight: 600; font-size: 6.5pt; padding: 0 3px; text-align: center; height: 5mm; line-height: 5mm; }}
 .port-table tbody tr:nth-child(even) {{ background: #f8fafc; }}
 .port-table tbody tr:nth-child(odd) {{ background: #fff; }}
-.port-table tbody td {{ border-bottom: 1px solid #eceff1; font-size: 7pt; height: 5.6mm; padding: 1px 4px; }}
+.port-table tbody td {{ border-bottom: 0.5px solid #eceff1; font-size: 6.5pt; height: 5mm; line-height: 5mm; padding: 0 3px; }}
 </style></head><body>{pages_html}</body></html>'''
 
         pdf = weasyprint.HTML(string=html).write_pdf()
