@@ -680,7 +680,7 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
     # ── 선번장 ────────────────────────────────────────
     @action(detail=False, methods=['get'], url_path='portmap_data')
     def portmap_data(self, request):
-        """선번장 — NAS 파일 파싱 우선, DB 폴백"""
+        """선번장 — DB 우선 (사전 파싱 캐시), NAS 실시간 파싱 폴백"""
         import os
         from apps.schools.models import School, SchoolEquipment
         school_id = request.query_params.get('school_id')
@@ -691,13 +691,17 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         except School.DoesNotExist:
             return Response({'error': '학교 없음'}, status=404)
 
-        # NAS 파일 파싱 시도
+        # 1순위: DB에 port_map이 있으면 즉시 반환 (사전 파싱 결과)
+        db_result = self._db_portmap(school_id)
+        if db_result:
+            return Response(db_result)
+
+        # 2순위: DB 없으면 NAS 실시간 파싱 (최초 1회만 느림)
         nas_result = self._parse_nas_portmap(school.name)
         if nas_result:
             return Response(nas_result)
 
-        # NAS 파일 없으면 DB 기반 폴백
-        return Response(self._db_portmap(school_id))
+        return Response([])
 
     @staticmethod
     def _detect_cable_by_color(ws, row, col, cable_labels=None):

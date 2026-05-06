@@ -524,3 +524,235 @@ def _old_bulk_analyze_deprecated(image_dir: str = None):
     progress['finished'] = True
     cache.set(BULK_DIAGRAM_KEY, progress, timeout=7200)
     logger.info(f'일괄 분석 완료: 성공 {progress["ok"]}, 스킵 {progress["skip"]}, 실패 {progress["fail"]}')
+
+
+# ── 선번장 NAS 사전 파싱 → DB 저장 ─────────────────────────
+
+def _detect_cable_by_color(ws, row, col, cable_labels=None):
+    """셀 배경색으로 실제 연결 케이블 감지"""
+    if cable_labels is None:
+        cable_labels = ['C6', 'C5.e', 'C5']
+    for offset, label in enumerate(cable_labels):
+        c = ws.cell(row, col + offset)
+        if c.fill and c.fill.patternType == 'solid':
+            fg = c.fill.fgColor
+            if fg and fg.rgb and fg.rgb != '00000000':
+                return label
+    return ''
+
+
+def _parse_portmap_type_b(ws, sname):
+    """양식 B (xlsm): 67열, 19행 간격, C열 시작"""
+    PORT_COLS = [3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 53, 57]
+    UPLINK_COLS = [53, 57]
+    switches = []
+    for r in range(1, ws.max_row + 1):
+        v = ws.cell(r, 3).value
+        if not (v and '허' in str(v) and 'I' in str(v)):
+            continue
+        base = r
+        hub_id = str(ws.cell(base, 7).value or '').strip()
+        model = str(ws.cell(base, 19).value or '').strip()
+        location = str(ws.cell(base, 31).value or '').strip()
+        net_type = str(ws.cell(base + 2, 7).value or '').strip()
+        mfr = str(ws.cell(base + 2, 31).value or '').strip()
+        if not hub_id:
+            continue
+        ports = []
+        for col in PORT_COLS:
+            labels = ['UTP', 'SM', 'MM'] if col in UPLINK_COLS else ['C6', 'C5.e', 'C5']
+            pnum = ws.cell(base + 6, col).value
+            conn = str(ws.cell(base + 8, col).value or '').strip()
+            cable = _detect_cable_by_color(ws, base + 7, col, labels)
+            if pnum and str(pnum).strip().isdigit() and int(pnum) > 0:
+                ports.append({'port': int(pnum), 'connected_to': conn if conn != '/' else '', 'cable': cable, 'vlan': '', 'note': ''})
+            pnum2 = ws.cell(base + 11, col).value
+            conn2 = str(ws.cell(base + 13, col).value or '').strip()
+            cable2 = _detect_cable_by_color(ws, base + 12, col, labels)
+            if pnum2 and str(pnum2).strip().isdigit() and int(pnum2) > 0:
+                ports.append({'port': int(pnum2), 'connected_to': conn2 if conn2 != '/' else '', 'cable': cable2, 'vlan': '', 'note': ''})
+        ports.sort(key=lambda p: p['port'])
+        switches.append({
+            'device_id': hub_id, 'model_name': model, 'network_type': net_type,
+            'manufacturer': mfr, 'install_location': location,
+            'category': 'PoE' if 'P' in hub_id.upper() and '#' in hub_id else '스위치',
+            'port_count': len(ports), 'ports': ports, 'sheet': sname,
+        })
+    return switches
+
+
+def _parse_portmap_type_a(ws, sname):
+    """양식 A (xlsx): 66열, 10행 간격, A열 시작"""
+    PORT_COLS = [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49, 52, 55, 58]
+    UPLINK_COLS = [55, 58]
+    switches = []
+    for r in range(1, ws.max_row + 1):
+        v = ws.cell(r, 1).value
+        if not (v and str(v).strip() == '망구분'):
+            continue
+        base = r
+        net_type = str(ws.cell(base, 4).value or '').strip()
+        model = str(ws.cell(base, 13).value or '').strip()
+        location = str(ws.cell(base, 22).value or '').strip()
+        poe = str(ws.cell(base, 31).value or '').strip()
+        hub_id = str(ws.cell(base + 1, 4).value or '').strip()
+        mfr = str(ws.cell(base + 1, 13).value or '').strip()
+        if not hub_id and not model:
+            continue
+        ports = []
+        for col in PORT_COLS:
+            labels = ['UTP', 'SM', 'MM'] if col in UPLINK_COLS else ['C6', 'C5.e', 'C5']
+            pnum = ws.cell(base + 2, col).value
+            cable = _detect_cable_by_color(ws, base + 3, col, labels)
+            conn = str(ws.cell(base + 4, col).value or '').strip()
+            if pnum and str(pnum).strip().isdigit():
+                ports.append({'port': int(pnum), 'connected_to': conn if conn and conn != '/' else '', 'cable': cable, 'vlan': '', 'note': ''})
+            pnum2 = ws.cell(base + 5, col).value
+            cable2 = _detect_cable_by_color(ws, base + 6, col, labels)
+            conn2 = str(ws.cell(base + 7, col).value or '').strip()
+            if pnum2 and str(pnum2).strip().isdigit():
+                ports.append({'port': int(pnum2), 'connected_to': conn2 if conn2 and conn2 != '/' else '', 'cable': cable2, 'vlan': '', 'note': ''})
+        ports.sort(key=lambda p: p['port'])
+        switches.append({
+            'device_id': hub_id or model, 'model_name': model, 'network_type': net_type,
+            'manufacturer': mfr, 'install_location': location,
+            'category': 'PoE' if poe and poe not in ('N', '없음', '') else '스위치',
+            'port_count': len(ports), 'ports': ports, 'sheet': sname,
+        })
+    return switches
+
+
+def _parse_nas_portmap_file(filepath):
+    """NAS 선번장 파일 1개 파싱 → 스위치 목록 반환"""
+    import openpyxl
+    try:
+        wb = openpyxl.load_workbook(filepath, data_only=True)
+    except Exception:
+        return None
+
+    ext = filepath.rsplit('.', 1)[-1].lower()
+    result = []
+    for sname in wb.sheetnames:
+        if sname in ('장비스펙', 'FDF', 'FDF현황'):
+            continue
+        ws = wb[sname]
+        if not ws.max_row:
+            continue
+        is_type_b = ext == 'xlsm'
+        if not is_type_b:
+            for r in range(1, min(10, ws.max_row + 1)):
+                v = ws.cell(r, 3).value
+                if v and '허' in str(v):
+                    is_type_b = True
+                    break
+        if is_type_b:
+            result.extend(_parse_portmap_type_b(ws, sname))
+        else:
+            result.extend(_parse_portmap_type_a(ws, sname))
+    wb.close()
+    return result if result else None
+
+
+@celery_app.task
+def sync_nas_portmap():
+    """NAS 선번장 파일 사전 파싱 → SchoolEquipment.port_map에 저장
+
+    - mtime 비교로 변경된 파일만 재파싱
+    - 매일 새벽 자동 실행 (CELERY_BEAT_SCHEDULE)
+    """
+    from apps.schools.models import School, SchoolEquipment
+    from django.utils import timezone
+
+    NAS_BASE = os.environ.get('NAS_ARTIFACT_ROOT', '/app/nas/media/npms/산출물')
+    portmap_folder = os.path.join(NAS_BASE, '2025년 테크센터', '2025년 테크센터-네트워크 선번장')
+    if not os.path.isdir(portmap_folder):
+        logger.warning(f'선번장 폴더 없음: {portmap_folder}')
+        return {'error': '폴더 없음'}
+
+    school_map = {s.name: s for s in School.objects.all()}
+    stats = {'total': 0, 'parsed': 0, 'skipped': 0, 'failed': 0}
+
+    files = [f for f in os.listdir(portmap_folder)
+             if (f.endswith('.xlsx') or f.endswith('.xlsm')) and not f.startswith('~')]
+
+    for fname in files:
+        stats['total'] += 1
+        filepath = os.path.join(portmap_folder, fname)
+
+        # 파일명에서 학교명 추출
+        school_name = fname.rsplit('.', 1)[0]
+        if '_' in school_name:
+            school_name = school_name.rsplit('_', 1)[-1]
+        school_name = school_name.strip()
+
+        school = school_map.get(school_name)
+        if not school:
+            # 서울 접두어 시도
+            for variant in (school_name, '서울' + school_name, school_name.replace('서울', '', 1)):
+                if variant in school_map:
+                    school = school_map[variant]
+                    break
+        if not school:
+            stats['skipped'] += 1
+            continue
+
+        # mtime 비교: 기존 장비의 port_map이 있고, 파일 미변경이면 스킵
+        file_mtime = os.path.getmtime(filepath)
+        existing = SchoolEquipment.objects.filter(
+            school=school, category__in=['스위치', 'PoE', 'PoE스위치'],
+            port_map__isnull=False,
+        ).first()
+        if existing and existing.port_map:
+            # port_map에 _mtime 메타가 있으면 비교
+            if isinstance(existing.port_map, list) and len(existing.port_map) > 0:
+                meta = existing.port_map[0] if isinstance(existing.port_map[0], dict) else {}
+                saved_mtime = meta.get('_file_mtime', 0)
+                if abs(saved_mtime - file_mtime) < 1:
+                    stats['skipped'] += 1
+                    continue
+
+        # 파싱 실행
+        try:
+            switches = _parse_nas_portmap_file(filepath)
+        except Exception as e:
+            logger.error(f'[{school_name}] 선번장 파싱 오류: {e}')
+            stats['failed'] += 1
+            continue
+
+        if not switches:
+            stats['skipped'] += 1
+            continue
+
+        # DB 저장: SchoolEquipment에 매칭 또는 생성
+        for sw in switches:
+            device_id = sw['device_id']
+            eq, created = SchoolEquipment.objects.get_or_create(
+                school=school,
+                device_id=device_id,
+                defaults={
+                    'category': sw['category'],
+                    'model_name': sw['model_name'],
+                    'network_type': sw['network_type'],
+                    'manufacturer': sw['manufacturer'],
+                    'install_location': sw['install_location'],
+                }
+            )
+            # port_map 저장 (첫 포트에 _file_mtime 메타 추가)
+            ports = sw['ports']
+            if ports:
+                ports[0]['_file_mtime'] = file_mtime
+            eq.port_map = ports
+            if not eq.model_name and sw['model_name']:
+                eq.model_name = sw['model_name']
+            if not eq.network_type and sw['network_type']:
+                eq.network_type = sw['network_type']
+            if not eq.manufacturer and sw['manufacturer']:
+                eq.manufacturer = sw['manufacturer']
+            if not eq.install_location and sw['install_location']:
+                eq.install_location = sw['install_location']
+            eq.save()
+
+        stats['parsed'] += 1
+
+    logger.info(f'선번장 사전 파싱 완료: 총 {stats["total"]}, 파싱 {stats["parsed"]}, 스킵 {stats["skipped"]}, 실패 {stats["failed"]}')
+    return stats
