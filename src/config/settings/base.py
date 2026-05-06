@@ -201,10 +201,15 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.network.tasks.sync_nas_portmap',
         'schedule': crontab(hour=3, minute=30),
     },
-    # NAS 휴지통 30일 이상 파일 자동 영구 삭제 (매일 새벽 4시)
+    # NAS 랙실장도 사전 파싱 → DB 저장 (매일 새벽 4시)
+    'sync-nas-rack': {
+        'task': 'apps.network.tasks.sync_nas_rack',
+        'schedule': crontab(hour=4, minute=0),
+    },
+    # NAS 휴지통 30일 이상 파일 자동 영구 삭제 (매일 새벽 4시 30분)
     'purge-old-trash': {
         'task': 'apps.nas.tasks.purge_old_trash',
-        'schedule': crontab(hour=4, minute=0),
+        'schedule': crontab(hour=4, minute=30),
     },
     # WBS 진척 스냅샷 (매주 월요일 새벽 1시)
     'wbs-progress-snapshot': {

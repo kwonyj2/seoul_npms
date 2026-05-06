@@ -781,3 +781,270 @@ def sync_nas_portmap():
 
     logger.info(f'선번장 사전 파싱 완료: 총 {stats["total"]}, 파싱 {stats["parsed"]}, 스킵 {stats["skipped"]}, 실패 {stats["failed"]}')
     return stats
+
+
+# ── 랙실장도 NAS 사전 파싱 → DB 저장 ────────────────────────
+
+def _parse_rack_file(filepath):
+    """NAS 랙실장도 파일 1개 파싱 → 랙 목록 반환"""
+    import openpyxl, re
+
+    def detect_type(name):
+        nl = (name or '').upper()
+        if '패치' in name: return 'patch'
+        if 'FDF' in nl or 'OFD' in nl: return 'fdf'
+        if '방화벽' in name or 'FW/' in nl or 'FW#' in nl or 'NGF' in nl or '200E' in nl: return 'firewall'
+        if 'UPS' in nl: return 'ups'
+        if '서버' in name or 'SERVER' in nl: return 'server'
+        if 'P#' in name or 'POE' in nl: return 'poe'
+        return 'switch'
+
+    def split_id(name):
+        if not name: return '', name or ''
+        m = re.match(r'^([KHMPGFB][#B]\S*)\s+(.+)$', name.strip())
+        if m: return m.group(1), m.group(2).strip('() ')
+        m2 = re.match(r'^(IP#\S*)\s+(.+)$', name.strip())
+        if m2: return m2.group(1), m2.group(2).strip('() ')
+        return '', name
+
+    def is_location(text):
+        if not text: return False
+        return any(k in text for k in ['서버', '전산', '층', 'EPS', '교무', '복도', '실장도', '통신랙', '통신렉'])
+
+    try:
+        wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+    except Exception as e:
+        logger.warning(f'랙 파일 로드 실패: {filepath} — {e}')
+        return None
+
+    # 학교명 시트 우선
+    ws = None
+    for sname in wb.sheetnames:
+        if '랙' in sname or '렉' in sname:
+            ws = wb[sname]; break
+    if not ws:
+        for sname in wb.sheetnames:
+            if '포트맵' not in sname and '층' not in sname:
+                ws = wb[sname]; break
+    if not ws:
+        ws = wb[wb.sheetnames[0]]
+
+    # 통신랙 이름 열 수집
+    rack_name_cols = {}
+    for r in range(1, 8):
+        for c in range(1, min((ws.max_column or 30) + 1, 40)):
+            try:
+                v = ws.cell(r, c).value
+            except Exception:
+                continue
+            if v and '통신' in str(v) and ('랙' in str(v) or '렉' in str(v)):
+                vs = str(v).strip()
+                if '실장도' in vs:
+                    continue
+                rack_name_cols[c] = vs
+
+    rack_positions = []
+    if rack_name_cols:
+        for eq_col, rname in sorted(rack_name_cols.items()):
+            u_col = eq_col - 1
+            has_u = False
+            for r in range(3, 15):
+                try:
+                    v = ws.cell(r, u_col).value
+                except Exception:
+                    continue
+                if v and str(v).strip() == '1':
+                    has_u = True; break
+            if not has_u:
+                for alt_c in [c2 for c2 in [eq_col - 2, eq_col + 1] if c2 >= 1]:
+                    for r in range(3, 15):
+                        try:
+                            v = ws.cell(r, alt_c).value
+                        except Exception:
+                            continue
+                        if v and str(v).strip() == '1':
+                            u_col = alt_c; has_u = True; break
+                    if has_u: break
+            if has_u:
+                location = ''
+                for r in [1, 2]:
+                    for cc in [eq_col, eq_col - 1, eq_col + 1, u_col]:
+                        if cc < 1: continue
+                        try:
+                            v = ws.cell(r, cc).value
+                        except Exception:
+                            continue
+                        if v:
+                            vs = str(v).strip()
+                            if vs and not ('통신' in vs and ('랙' in vs or '렉' in vs)) and '실장도' not in vs and len(vs) > 2:
+                                if any(k in vs for k in ['서버', '전산', '층', 'EPS']):
+                                    location = vs; break
+                    if location: break
+                rack_positions.append((u_col, eq_col, rname, location))
+    else:
+        for r in range(3, 15):
+            for c in [1, 2]:
+                try:
+                    v = ws.cell(r, c).value
+                except Exception:
+                    continue
+                if v and str(v).strip() == '1':
+                    eq_c = c + 1
+                    loc = ''
+                    for rr in range(1, r):
+                        for cc in range(1, 15):
+                            try:
+                                vv = ws.cell(rr, cc).value
+                            except Exception:
+                                continue
+                            if vv:
+                                vvs = str(vv).strip()
+                                if any(k in vvs for k in ['서버', '전산', '층', 'EPS']) and '실장도' not in vvs:
+                                    loc = vvs
+                    rname = '통신랙'
+                    for rr in range(1, r):
+                        try:
+                            vv = ws.cell(rr, eq_c).value
+                        except Exception:
+                            continue
+                        if vv and ('렉' in str(vv) or '랙' in str(vv)) and '실장도' not in str(vv):
+                            rname = str(vv).strip()
+                    rack_positions.append((c, eq_c, rname, loc))
+                    for alt_c in range(c + 6, min((ws.max_column or 30) + 1, 40), 6):
+                        try:
+                            alt_v = ws.cell(r, alt_c).value
+                        except Exception:
+                            continue
+                        if alt_v and str(alt_v).strip() == '1':
+                            rack_positions.append((alt_c, alt_c + 1, '통신랙', ''))
+                    break
+            if rack_positions: break
+
+    if not rack_positions:
+        wb.close()
+        return None
+
+    racks = []
+    for u_col, eq_col, rack_name, location in rack_positions:
+        u1_row = None
+        for r in range(3, 15):
+            try:
+                v = ws.cell(r, u_col).value
+            except Exception:
+                continue
+            if v and str(v).strip() == '1':
+                u1_row = r; break
+        if not u1_row: continue
+
+        items = []
+        for r in range(max(3, u1_row - 5), u1_row):
+            try:
+                v = ws.cell(r, eq_col).value
+                u_v = ws.cell(r, u_col).value
+            except Exception:
+                continue
+            if v and not u_v:
+                vs = str(v).strip()
+                if not vs or len(vs) <= 1 or is_location(vs) or vs == rack_name or vs == location:
+                    continue
+                dev_id, dev_name = split_id(vs)
+                items.append({'u': 0, 'name': vs, 'device_id': dev_id, 'model': dev_name, 'type': detect_type(vs)})
+
+        current_u = 0
+        for r in range(u1_row, (ws.max_row or 40) + 1):
+            try:
+                u_v = ws.cell(r, u_col).value
+                eq_v = ws.cell(r, eq_col).value
+            except Exception:
+                continue
+            if u_v and str(u_v).strip().isdigit():
+                current_u = int(u_v)
+            if eq_v:
+                name = str(eq_v).strip()
+                if name and name != rack_name and name != location and not is_location(name):
+                    dev_id, dev_name = split_id(name)
+                    items.append({'u': current_u, 'name': name, 'device_id': dev_id, 'model': dev_name, 'type': detect_type(name)})
+
+        if items:
+            racks.append({
+                'rack_name': rack_name.replace('렉', '랙'),
+                'location': location,
+                'items': items,
+                'source': 'nas',
+            })
+
+    wb.close()
+    return racks if racks else None
+
+
+@celery_app.task
+def sync_nas_rack():
+    """NAS 랙실장도 파일 사전 파싱 → School.rack_data에 저장
+
+    - mtime 비교로 변경된 파일만 재파싱
+    - 매일 새벽 자동 실행 (CELERY_BEAT_SCHEDULE)
+    """
+    from apps.schools.models import School
+
+    NAS_BASE = os.environ.get('NAS_ARTIFACT_ROOT', '/app/nas/media/npms/산출물')
+    rack_folder = os.path.join(NAS_BASE, '2025년 테크센터', '2025년 테크센터-네트워크 통신랙실장도')
+    if not os.path.isdir(rack_folder):
+        logger.warning(f'랙실장도 폴더 없음: {rack_folder}')
+        return {'error': '폴더 없음'}
+
+    school_map = {s.name: s for s in School.objects.all()}
+    stats = {'total': 0, 'parsed': 0, 'skipped': 0, 'failed': 0}
+
+    files = [f for f in os.listdir(rack_folder)
+             if (f.endswith('.xlsx') or f.endswith('.xlsm')) and not f.startswith('~')]
+
+    for fname in files:
+        stats['total'] += 1
+        filepath = os.path.join(rack_folder, fname)
+
+        school_name = fname.rsplit('.', 1)[0]
+        if '_' in school_name:
+            school_name = school_name.rsplit('_', 1)[-1]
+        school_name = school_name.strip()
+
+        school = school_map.get(school_name)
+        if not school:
+            for variant in (school_name, '서울' + school_name, school_name.replace('서울', '', 1)):
+                if variant in school_map:
+                    school = school_map[variant]; break
+        if not school:
+            stats['skipped'] += 1
+            continue
+
+        # mtime 비교
+        file_mtime = os.path.getmtime(filepath)
+        if school.rack_data and isinstance(school.rack_data, list) and len(school.rack_data) > 0:
+            saved_mtime = school.rack_data[0].get('_file_mtime', 0) if isinstance(school.rack_data[0], dict) else 0
+            if abs(saved_mtime - file_mtime) < 1:
+                stats['skipped'] += 1
+                continue
+
+        try:
+            racks = _parse_rack_file(filepath)
+        except Exception as e:
+            logger.error(f'[{school_name}] 랙실장도 파싱 오류: {e}')
+            stats['failed'] += 1
+            continue
+
+        if not racks:
+            stats['skipped'] += 1
+            continue
+
+        # mtime 메타 추가
+        if racks[0]:
+            racks[0]['_file_mtime'] = file_mtime
+
+        school.rack_data = racks
+        school.save(update_fields=['rack_data'])
+        stats['parsed'] += 1
+
+        if (stats['parsed'] + stats['skipped'] + stats['failed']) % 100 == 0:
+            logger.info(f'랙실장도 파싱 진행: {stats["parsed"] + stats["skipped"] + stats["failed"]}/{stats["total"]}')
+
+    logger.info(f'랙실장도 사전 파싱 완료: 총 {stats["total"]}, 파싱 {stats["parsed"]}, 스킵 {stats["skipped"]}, 실패 {stats["failed"]}')
+    return stats

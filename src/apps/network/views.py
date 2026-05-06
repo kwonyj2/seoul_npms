@@ -397,12 +397,16 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         except School.DoesNotExist:
             return Response({'error': '학교 없음'}, status=404)
 
-        # NAS 파싱 시도
+        # 1순위: DB에 rack_data가 있으면 즉시 반환
+        if school.rack_data and isinstance(school.rack_data, list) and len(school.rack_data) > 0:
+            return Response(school.rack_data)
+
+        # 2순위: NAS 실시간 파싱
         nas_result = self._parse_nas_rack(school.name)
         if nas_result:
             return Response(nas_result)
 
-        # DB 폴백
+        # 3순위: DB SchoolEquipment 폴백
         return Response(self._db_rack(school_id))
 
     def _parse_nas_rack(self, school_name):
@@ -659,10 +663,13 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='rack_save')
     def rack_save(self, request):
-        """랙실장도 저장 — SchoolEquipment에 rack_unit/rack_size 업데이트"""
-        from apps.schools.models import School, SchoolEquipment
+        """랙실장도 저장 — School.rack_data에 JSON 저장"""
+        from apps.schools.models import School
         school_id = request.data.get('school_id')
+        rack_idx = request.data.get('rack_idx', 0)
         items = request.data.get('items', [])
+        rack_name = request.data.get('rack_name', '')
+        location = request.data.get('location', '')
         if not school_id:
             return Response({'error': 'school_id 필요'}, status=400)
         try:
@@ -670,16 +677,19 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         except School.DoesNotExist:
             return Response({'error': '학교 없음'}, status=404)
 
-        updated = 0
-        for item in items:
-            dev_id = item.get('device_id', '').strip()
-            if not dev_id:
-                continue
-            eqs = SchoolEquipment.objects.filter(school=school, device_id=dev_id)
-            if eqs.exists():
-                eqs.update(rack_unit=item.get('u') or None, rack_size=1)
-                updated += 1
-        return Response({'success': True, 'updated': updated})
+        rack_data = school.rack_data if school.rack_data and isinstance(school.rack_data, list) else []
+        rack_entry = {
+            'rack_name': rack_name,
+            'location': location,
+            'items': items,
+            'source': 'edited',
+        }
+        while len(rack_data) <= rack_idx:
+            rack_data.append({})
+        rack_data[rack_idx] = rack_entry
+        school.rack_data = rack_data
+        school.save(update_fields=['rack_data'])
+        return Response({'success': True})
 
     # ── 구성도 (Cytoscape.js) ────────────────────────────
     @action(detail=False, methods=['get'], url_path='diagram_data')

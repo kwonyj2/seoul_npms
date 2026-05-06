@@ -82,6 +82,8 @@ class School(models.Model):
     service_start_date = models.DateField('서비스 시작일', null=True, blank=True,
         help_text='통계 집계 시작일 (미입력 시 항상 집계)')
     nas_folder_created = models.BooleanField('NAS폴더생성', default=False)
+    rack_data          = models.JSONField('랙실장도', null=True, blank=True,
+                                          help_text='NAS 파싱 랙실장도 데이터 [{rack_name, location, items:[{u,name,device_id,model,type}]}]')
     created_at     = models.DateTimeField('등록일시', auto_now_add=True)
     updated_at     = models.DateTimeField('수정일시', auto_now=True)
 
