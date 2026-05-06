@@ -1692,8 +1692,9 @@ function rkSelectRack(rackIdx) {
   const rack = _rkData[rackIdx];
   if (!rack) return;
   const items = rack.items || [];
-  const maxU = Math.max(...items.map(i => i.u || 0), 20);
-  const totalU = Math.max(maxU + 2, 20);
+  const maxU = Math.max(...items.map(i => i.u || 0), 0);
+  // 랙 크기 자동 판별: maxU 기준
+  const totalU = maxU <= 12 ? 12 : maxU <= 20 ? 20 : maxU <= 29 ? 29 : 42;
 
   let html = `<div class="row g-1" style="height:calc(100vh - 210px);">`;
 
@@ -1712,7 +1713,7 @@ function rkSelectRack(rackIdx) {
       <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">랙 이름</td><td class="fw-bold" style="padding:3px 8px;">${rack.rack_name||'-'}</td></tr>
       <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">운영장소</td><td style="padding:3px 8px;">${rack.location||'-'}</td></tr>
       <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">장비 수</td><td style="padding:3px 8px;"><span class="badge bg-primary">${rackItems.length}</span> (랙외부: ${extItems.length})</td></tr>
-      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">랙 크기</td><td style="padding:3px 8px;">${totalU}U</td></tr>
+      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">랙 크기</td><td style="padding:3px 8px;">${totalU}U ${totalU<=12?'(소형)':totalU<=20?'(중형)':totalU<=29?'(대형)':'(특대형)'}</td></tr>
     </tbody></table>`;
 
   // SVG 랙 이미지
@@ -1726,9 +1727,9 @@ function rkSelectRack(rackIdx) {
   html += `<rect width="${svgW}" height="${svgH}" rx="8" fill="url(#rk-bg)"/>`;
   html += `<rect x="${padX-3}" y="${padY-3}" width="${rackW+6}" height="${totalU*uH+6}" rx="4" fill="#f0f4f8" stroke="#b0bec5" stroke-width="1"/>`;
 
-  // U 슬롯 (하단=1U, 상단=maxU)
+  // U 슬롯 (상단=1U, 하단=maxU — 엑셀 순서)
   for (let u = 1; u <= totalU; u++) {
-    const y = padY + (totalU - u) * uH;
+    const y = padY + (u - 1) * uH;
     html += `<rect x="${padX}" y="${y}" width="${rackW}" height="${uH-1}" rx="1" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="0.3"/>`;
     html += `<text x="${padX-4}" y="${y+uH/2+3}" fill="#90a4ae" font-size="6" text-anchor="end">${u}</text>`;
   }
@@ -1739,7 +1740,7 @@ function rkSelectRack(rackIdx) {
     const ts = _rkTypeStyle(item.type);
     const u = item.u;
     const size = 1;
-    const y = padY + (totalU - u) * uH;
+    const y = padY + (u - 1) * uH;
     const h = size * uH - 1;
     html += `<rect x="${padX+1}" y="${y}" width="${rackW-2}" height="${h}" rx="2" fill="${ts.bg}" opacity="0.9" stroke="#fff" stroke-width="0.5"/>`;
     const lbl = item.name.length > 35 ? item.name.substring(0,35)+'..' : item.name;
@@ -1779,30 +1780,41 @@ function rkSelectRack(rackIdx) {
   html += `<table class="table table-sm mb-0" id="rk-item-table" style="font-size:.7rem;line-height:1.3;table-layout:fixed;width:100%;border:1px solid #e2e8f0;">
     <colgroup><col style="width:36px;"><col style="width:50%;"><col style="width:25%;"><col style="width:25%;"></colgroup><tbody>`;
 
-  // U번호 역순(상단→하단)으로 표시
+  // U번호 순서 (U1→maxU, 엑셀과 동일)
   const typeLabels = {switch:'스위치',poe:'PoE',firewall:'방화벽',fdf:'FDF/OFD',patch:'패치판넬',server:'서버',ups:'UPS',external:'랙외부'};
-  // U별 맵
+  const typeOpts = Object.entries(typeLabels).filter(([k])=>k!=='external').map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
   const uMap = {};
   rackItems.forEach(item => { if (item.u) uMap[item.u] = item; });
-  for (let u = totalU; u >= 1; u--) {
+  for (let u = 1; u <= totalU; u++) {
     const item = uMap[u];
     const stripe = u % 2 === 0 ? '#ffffff' : '#f8fafc';
     if (item) {
       const ts = _rkTypeStyle(item.type);
       html += `<tr style="background:${stripe};">
         <td class="text-center fw-bold" style="padding:3px 4px;color:#37474f;border-bottom:1px solid #eceff1;">${u}</td>
-        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;">
-          <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${ts.bg};margin-right:4px;vertical-align:middle;"></span>${item.name}
+        <td style="padding:2px 4px;border-bottom:1px solid #eceff1;">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${ts.bg};margin-right:4px;vertical-align:middle;"></span>
+          <input type="text" class="form-control border-0 rk-name-input d-inline" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;width:calc(100% - 16px);" data-u="${u}" value="${item.name}">
         </td>
-        <td class="text-center" style="padding:3px 4px;border-bottom:1px solid #eceff1;color:${ts.bg};font-weight:600;">${typeLabels[item.type]||item.type}</td>
-        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;"><input type="text" class="form-control border-0" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;" value=""></td>
+        <td class="text-center" style="padding:2px 3px;border-bottom:1px solid #eceff1;">
+          <select class="form-select border-0 rk-type-sel" style="font-size:.63rem;height:20px;padding:0 2px;background:transparent;text-align-last:center;" data-u="${u}">
+            ${typeOpts.replace(`value="${item.type}"`, `value="${item.type}" selected`)}
+          </select>
+        </td>
+        <td style="padding:2px 4px;border-bottom:1px solid #eceff1;"><input type="text" class="form-control border-0 rk-note-input" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;" data-u="${u}" value="${item.note||''}"></td>
       </tr>`;
     } else {
       html += `<tr style="background:${stripe};">
         <td class="text-center" style="padding:3px 4px;color:#ccc;border-bottom:1px solid #eceff1;">${u}</td>
-        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;color:#ddd;">-</td>
-        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;"></td>
-        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;"></td>
+        <td style="padding:2px 4px;border-bottom:1px solid #eceff1;">
+          <input type="text" class="form-control border-0 rk-name-input" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;color:#aaa;" data-u="${u}" value="" placeholder="장비 입력">
+        </td>
+        <td style="padding:2px 3px;border-bottom:1px solid #eceff1;">
+          <select class="form-select border-0 rk-type-sel" style="font-size:.63rem;height:20px;padding:0 2px;background:transparent;text-align-last:center;" data-u="${u}">
+            <option value="">-</option>${typeOpts}
+          </select>
+        </td>
+        <td style="padding:2px 4px;border-bottom:1px solid #eceff1;"><input type="text" class="form-control border-0 rk-note-input" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;" data-u="${u}" value=""></td>
       </tr>`;
     }
   }
