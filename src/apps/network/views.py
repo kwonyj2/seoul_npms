@@ -837,7 +837,7 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         html = f'''<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <style>
-@page {{ size: A4 portrait; margin: 10mm 8mm; }}
+@page {{ size: A4 landscape; margin: 10mm 8mm; }}
 body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 7pt; color: #333; margin: 0; }}
 .page {{ width: 100%; }}
 .header {{ border-bottom: 2px solid #1565c0; padding-bottom: 2px; margin-bottom: 4px; overflow: hidden; }}
@@ -845,19 +845,19 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 7pt
 .title {{ font-size: 9pt; font-weight: 600; color: #455a64; margin-left: 10px; }}
 .page-num {{ float: right; font-size: 7pt; color: #90a4ae; }}
 .content {{ overflow: hidden; }}
-.left-panel {{ float: left; width: 42%; padding-right: 8px; }}
-.right-panel {{ float: right; width: 56%; }}
+.left-panel {{ float: left; width: 46%; padding-right: 8px; }}
+.right-panel {{ float: right; width: 52%; }}
 .info-table {{ width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 7pt; }}
-.info-table th {{ background: #f5f7fa; color: #546e7a; font-weight: 600; text-align: left; padding: 2px 6px; border: 0.5px solid #dee2e6; width: 55px; }}
-.info-table td {{ padding: 2px 6px; border: 0.5px solid #dee2e6; }}
+.info-table th {{ background: #f5f7fa; color: #546e7a; font-weight: 600; text-align: left; padding: 3px 6px; border: 0.5px solid #dee2e6; width: 55px; height: 5mm; }}
+.info-table td {{ padding: 3px 6px; border: 0.5px solid #dee2e6; height: 5mm; }}
 .info-table td.bold {{ font-weight: 700; color: #1565c0; }}
 .svg-box {{ text-align: center; margin-top: 4px; }}
 .svg-box svg {{ width: 100%; height: auto; }}
 .rack-table {{ border-collapse: collapse; font-size: 6.5pt; }}
-.rack-table thead th {{ background: #37474f; color: #eceff1; font-weight: 600; padding: 2px 3px; text-align: center; }}
+.rack-table thead th {{ background: #37474f; color: #eceff1; font-weight: 600; padding: 0 3px; text-align: center; height: 5mm; line-height: 5mm; }}
 .rack-table tbody tr:nth-child(even) {{ background: #f8fafc; }}
 .rack-table tbody tr:nth-child(odd) {{ background: #fff; }}
-.rack-table tbody td {{ border-bottom: 0.3px solid #eceff1; }}
+.rack-table tbody td {{ border-bottom: 0.3px solid #eceff1; height: 5mm; line-height: 5mm; padding: 0 3px; }}
 </style></head><body>{pages_html}</body></html>'''
 
         pdf = weasyprint.HTML(string=html).write_pdf()
