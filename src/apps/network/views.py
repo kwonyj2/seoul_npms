@@ -943,6 +943,187 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         eq.save(update_fields=['port_map'])
         return Response({'success': True})
 
+    @action(detail=False, methods=['get'], url_path='portmap_pdf')
+    def portmap_pdf(self, request):
+        """선번장 PDF 다운로드 — 가로 방향, 스위치별 1페이지"""
+        from urllib.parse import quote
+        from django.http import HttpResponse
+        from apps.schools.models import School, SchoolEquipment
+        import weasyprint
+
+        school_id = request.query_params.get('school_id')
+        if not school_id:
+            return HttpResponse('school_id 필요', status=400)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return HttpResponse('학교 없음', status=404)
+
+        # 데이터 수집: DB port_map 우선, 없으면 NAS 파싱
+        has_portmap = SchoolEquipment.objects.filter(
+            school=school, category__in=['스위치', 'PoE', 'PoE스위치'],
+            port_map__isnull=False,
+        ).exclude(port_map=[]).exists()
+
+        if has_portmap:
+            switches = self._db_portmap(school_id)
+        else:
+            switches = self._parse_nas_portmap(school.name) or self._db_portmap(school_id)
+
+        if not switches:
+            return HttpResponse('선번장 데이터 없음', status=404)
+
+        # 케이블 색상 매핑
+        cable_colors = {
+            'C6': {'bg': '#198754', 'text': '#fff', 'label': 'Cat6'},
+            'C5.e': {'bg': '#ffc107', 'text': '#333', 'label': 'Cat5E'},
+            'C5': {'bg': '#e63946', 'text': '#fff', 'label': 'Cat5'},
+            'UTP': {'bg': '#6f42c1', 'text': '#fff', 'label': 'UTP'},
+            'SM': {'bg': '#0dcaf0', 'text': '#333', 'label': 'SM'},
+            'MM': {'bg': '#ff6b00', 'text': '#fff', 'label': 'MM'},
+        }
+        def get_cable_style(cable):
+            c = (cable or '').upper().replace('.', '').replace(' ', '')
+            if 'C6' in c or 'CAT6' in c: return cable_colors['C6']
+            if 'C5E' in c or 'CAT5E' in c or '5E' in c: return cable_colors['C5.e']
+            if 'C5' in c or 'CAT5' in c: return cable_colors['C5']
+            if 'UTP' in c: return cable_colors['UTP']
+            if 'SM' in c: return cable_colors['SM']
+            if 'MM' in c: return cable_colors['MM']
+            return None
+
+        # HTML 생성
+        pages_html = ''
+        for idx, sw in enumerate(switches):
+            ports = sw.get('ports', [])
+            pc = sw.get('port_count', len(ports)) or len(ports)
+            conn_count = sum(1 for p in ports if p.get('cable', '').strip())
+            poe = 'Y' if sw.get('category') in ('PoE', 'PoE스위치') or 'P#' in (sw.get('device_id') or '').upper() else 'N'
+            location = ' / '.join(filter(None, [sw.get('building'), sw.get('floor'), sw.get('install_location')])) or '-'
+
+            # SVG 포트맵
+            odd_ports = [p for p in ports if p.get('port', 0) % 2 == 1]
+            even_ports = [p for p in ports if p.get('port', 0) % 2 == 0]
+            half_cols = max(len(odd_ports), len(even_ports), 1)
+            pw, ph, gap, px, py = 28, 22, 2, 20, 18
+            svg_w = max(px * 2 + half_cols * (pw + gap), 220)
+            row_h = ph + 14
+            svg_h = py + row_h * 2 + 22
+
+            def svg_row(port_list, y):
+                s = ''
+                for i, p in enumerate(port_list):
+                    x = px + i * (pw + gap)
+                    cs = get_cable_style(p.get('cable'))
+                    fill = cs['bg'] if cs else '#fff'
+                    border = '#b0bec5' if not cs else fill
+                    txt_c = cs['text'] if cs else '#546e7a'
+                    s += f'<rect x="{x}" y="{y}" width="{pw}" height="{ph}" rx="2" fill="{fill}" stroke="{border}" stroke-width="1"/>'
+                    s += f'<text x="{x+pw//2}" y="{y+ph//2+4}" fill="{txt_c}" font-size="7" text-anchor="middle" font-weight="bold">{p.get("port","")}</text>'
+                return s
+
+            svg = f'<svg width="{svg_w}" height="{svg_h}" xmlns="http://www.w3.org/2000/svg">'
+            svg += f'<rect width="{svg_w}" height="{svg_h}" rx="6" fill="#e8edf2"/>'
+            svg += f'<rect x="4" y="4" width="{svg_w-8}" height="{svg_h-8}" rx="4" fill="#f0f4f8" stroke="#b0bec5" stroke-width="1"/>'
+            svg += f'<text x="{svg_w//2}" y="{py-4}" fill="#455a64" font-size="7" text-anchor="middle" font-weight="600">{sw.get("device_id","")} {sw.get("model_name","")}</text>'
+            svg += svg_row(odd_ports, py)
+            svg += svg_row(even_ports, py + row_h)
+            # 범례
+            ly = py + row_h * 2 + 8
+            legend = ''
+            for key, cs in cable_colors.items():
+                legend += f'<tspan fill="{cs["bg"]}">■</tspan>{cs["label"]} '
+            legend += '<tspan fill="#fff" stroke="#bbb" stroke-width=".3">□</tspan>미연결'
+            svg += f'<text x="{px}" y="{ly}" fill="#607d8b" font-size="6">{legend}</text>'
+            svg += '</svg>'
+
+            # 포트 표
+            port_rows = ''
+            for p in ports:
+                cs = get_cable_style(p.get('cable'))
+                cable_display = cs['label'] if cs else '-'
+                cable_bg = f'background:{cs["bg"]};color:{cs["text"]};' if cs else ''
+                cable_dot = f'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:{cs["bg"]};margin-right:3px;"></span>' if cs else ''
+                status = p.get('status', '')
+                status_label = '활성' if status == 'up' else '비활성' if status == 'down' else '미연결'
+                status_color = '#198754' if status == 'up' else '#dc3545' if status == 'down' else '#999'
+                port_rows += f'''<tr>
+                    <td style="text-align:center;font-weight:700;padding:2px 4px;">{p.get('port','')}</td>
+                    <td style="padding:2px 6px;">{p.get('connected_to','') or ''}</td>
+                    <td style="text-align:center;padding:2px 4px;">{cable_dot}{cable_display}</td>
+                    <td style="text-align:center;padding:2px 4px;color:{status_color};font-weight:600;">{status_label}</td>
+                </tr>'''
+
+            page_break = 'page-break-before:always;' if idx > 0 else ''
+            pages_html += f'''
+            <div class="page" style="{page_break}">
+                <div class="header">
+                    <span class="school-name">{school.name}</span>
+                    <span class="title">네트워크 선번장</span>
+                    <span class="page-num">{idx+1} / {len(switches)}</span>
+                </div>
+                <div class="content">
+                    <div class="left-panel">
+                        <table class="info-table">
+                            <tr><th>스위치ID</th><td class="bold">{sw.get('device_id','') or '-'}</td></tr>
+                            <tr><th>망구분</th><td>{sw.get('network_type','') or '-'}</td></tr>
+                            <tr><th>모델명</th><td>{sw.get('model_name','') or '-'}</td></tr>
+                            <tr><th>제조사</th><td>{sw.get('manufacturer','') or '-'}</td></tr>
+                            <tr><th>운영장소</th><td>{location}</td></tr>
+                            <tr><th>PoE</th><td>{'<span class="badge-y">Y</span>' if poe=='Y' else '<span class="badge-n">N</span>'}</td></tr>
+                            <tr><th>포트현황</th><td><span class="badge-conn">{conn_count}</span> / {pc} 연결</td></tr>
+                        </table>
+                        <div class="svg-box">{svg}</div>
+                    </div>
+                    <div class="right-panel">
+                        <table class="port-table">
+                            <thead><tr>
+                                <th style="width:36px;">Port</th>
+                                <th>연결장비</th>
+                                <th style="width:60px;">케이블</th>
+                                <th style="width:56px;">점검상태</th>
+                            </tr></thead>
+                            <tbody>{port_rows}</tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>'''
+
+        html = f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+@page {{ size: A4 landscape; margin: 12mm 10mm; }}
+body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt; color: #333; margin: 0; }}
+.page {{ width: 100%; }}
+.header {{ display: flex; align-items: center; border-bottom: 2px solid #1565c0; padding-bottom: 4px; margin-bottom: 8px; }}
+.school-name {{ font-size: 12pt; font-weight: 800; color: #1565c0; }}
+.title {{ font-size: 10pt; font-weight: 600; color: #455a64; margin-left: 12px; }}
+.page-num {{ margin-left: auto; font-size: 8pt; color: #90a4ae; }}
+.content {{ display: flex; gap: 10px; }}
+.left-panel {{ width: 38%; display: flex; flex-direction: column; }}
+.right-panel {{ width: 62%; }}
+.info-table {{ width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 7.5pt; }}
+.info-table th {{ background: #f5f7fa; color: #546e7a; font-weight: 600; text-align: left; padding: 3px 8px; border: 1px solid #dee2e6; width: 65px; }}
+.info-table td {{ padding: 3px 8px; border: 1px solid #dee2e6; }}
+.info-table td.bold {{ font-weight: 700; color: #1565c0; }}
+.badge-y {{ background: #1565c0; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 7pt; font-weight: 700; }}
+.badge-n {{ background: #90a4ae; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 7pt; }}
+.badge-conn {{ background: #198754; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 7pt; font-weight: 700; }}
+.svg-box {{ text-align: center; margin-top: 4px; }}
+.svg-box svg {{ max-width: 100%; }}
+.port-table {{ width: 100%; border-collapse: collapse; font-size: 7pt; }}
+.port-table thead th {{ background: linear-gradient(135deg, #37474f, #546e7a); color: #eceff1; font-weight: 600; padding: 4px; text-align: center; }}
+.port-table tbody tr:nth-child(even) {{ background: #f8fafc; }}
+.port-table tbody tr:nth-child(odd) {{ background: #fff; }}
+.port-table tbody td {{ border-bottom: 1px solid #eceff1; font-size: 7pt; }}
+</style></head><body>{pages_html}</body></html>'''
+
+        pdf = weasyprint.HTML(string=html).write_pdf()
+        filename = f'선번장_{school.name}.pdf'
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(filename)}"
+        return response
+
     @action(detail=False, methods=['get'], url_path='portmap_excel')
     def portmap_excel(self, request):
         """선번장 엑셀 다운로드"""

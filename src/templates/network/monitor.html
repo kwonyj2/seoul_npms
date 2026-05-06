@@ -51,6 +51,7 @@
           <button class="btn btn-sm btn-primary" onclick="nmsLoadSelected()"><i class="bi bi-search"></i></button>
           <button class="btn btn-sm btn-outline-secondary" onclick="nmsReset()"><i class="bi bi-x-lg"></i></button>
           <button class="btn btn-sm btn-success d-none" id="nms-btn-excel" onclick="pmExcel()"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+          <button class="btn btn-sm btn-danger d-none" id="nms-btn-pdf" onclick="pmPdf()"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</button>
           <button class="btn btn-sm btn-success d-none" id="nms-btn-save" onclick="nmsTabSave()"><i class="bi bi-save me-1"></i>저장</button>
           <button class="btn btn-sm btn-outline-dark d-none" id="nms-btn-mode" onclick="nmsToggleMode()"><i class="bi bi-pencil-square me-1"></i>편집</button>
           <button class="btn btn-sm btn-outline-info d-none" id="nms-btn-png" onclick="nmsTabPng()"><i class="bi bi-image me-1"></i>PNG</button>
@@ -1192,6 +1193,7 @@ function _nmsUpdateButtons() {
   const has = !!_nmsSelectedSchool;
   // 모든 탭별 버튼 숨기기
   document.getElementById('nms-btn-excel').classList.add('d-none');
+  document.getElementById('nms-btn-pdf').classList.add('d-none');
   document.getElementById('nms-btn-save').classList.add('d-none');
   document.getElementById('nms-btn-png').classList.add('d-none');
   document.getElementById('nms-btn-plan').classList.add('d-none');
@@ -1200,6 +1202,10 @@ function _nmsUpdateButtons() {
   // 보기/편집 토글 버튼 항상 표시
   document.getElementById('nms-btn-mode').classList.remove('d-none');
   _updateModeButton();
+  // 선번장: PDF 버튼은 항상 표시 (보기/편집 무관)
+  if (tab === 'portmap') {
+    document.getElementById('nms-btn-pdf').classList.remove('d-none');
+  }
   if (_nmsEditMode) {
     // 편집 모드: 저장/PNG/엑셀/도면 버튼 표시
     if (tab === 'portmap') {
@@ -2099,6 +2105,11 @@ function pmSaveCurrent() {
       renderPortMap(sw);
     }
   });
+}
+
+function pmPdf() {
+  if (!_nmsSelectedSchool) return;
+  window.location.href = `${API_BASE}/network/topology/portmap_pdf/?school_id=${_nmsSelectedSchool.id}`;
 }
 
 function pmExcel() {
