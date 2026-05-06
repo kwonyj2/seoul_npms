@@ -1014,7 +1014,7 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
             svg_w = max(px * 2 + half_cols * (pw + gap), 220)
             led_r, led_gap = 3, 5
             row_h = ph + led_r * 2 + led_gap + 10
-            svg_h = py + row_h * 2 + 30
+            svg_h = py + row_h * 2 + 18
 
             def svg_row(port_list, y):
                 s = ''
@@ -1039,16 +1039,14 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
             svg += f'<text x="{svg_w//2}" y="{py-4}" fill="#455a64" font-size="7" text-anchor="middle" font-weight="600">{sw.get("device_id","")} {sw.get("model_name","")}</text>'
             svg += svg_row(odd_ports, py)
             svg += svg_row(even_ports, py + row_h)
-            # 케이블 범례
+            # 범례 1줄: 좌측 케이블 + 우측 LED
             ly = py + row_h * 2 + 8
             legend = ''
             for key, cs in cable_colors.items():
                 legend += f'<tspan fill="{cs["bg"]}">&#9632;</tspan>{cs["label"]} '
             legend += '<tspan fill="#ccc">&#9633;</tspan>미연결'
             svg += f'<text x="{px}" y="{ly}" fill="#607d8b" font-size="6">{legend}</text>'
-            # LED 범례
-            ly2 = ly + 10
-            svg += f'<text x="{px}" y="{ly2}" fill="#607d8b" font-size="6">'
+            svg += f'<text x="{svg_w - 110}" y="{ly}" fill="#607d8b" font-size="6">'
             svg += '<tspan fill="#4caf50">&#9679;</tspan>활성 <tspan fill="#f44336">&#9679;</tspan>비활성 <tspan fill="#bdbdbd">&#9679;</tspan>미연결'
             svg += '</text>'
             svg += '</svg>'
@@ -1119,8 +1117,8 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
 .left-panel {{ float: left; width: 46%; padding-right: 10px; }}
 .right-panel {{ float: right; width: 52%; }}
 .info-table {{ width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 7.5pt; }}
-.info-table th {{ background: #f5f7fa; color: #546e7a; font-weight: 600; text-align: left; padding: 3px 8px; border: 1px solid #dee2e6; width: 65px; }}
-.info-table td {{ padding: 3px 8px; border: 1px solid #dee2e6; }}
+.info-table th {{ background: #f5f7fa; color: #546e7a; font-weight: 600; text-align: left; padding: 4px 8px; border: 1px solid #dee2e6; width: 65px; height: 5.6mm; }}
+.info-table td {{ padding: 4px 8px; border: 1px solid #dee2e6; height: 5.6mm; }}
 .info-table td.bold {{ font-weight: 700; color: #1565c0; }}
 .badge-y {{ background: #1565c0; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 7pt; font-weight: 700; }}
 .badge-n {{ background: #90a4ae; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 7pt; }}
@@ -1128,10 +1126,10 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
 .svg-box {{ text-align: center; margin-top: 6px; }}
 .svg-box svg {{ width: 100%; height: auto; }}
 .port-table {{ width: 100%; border-collapse: collapse; font-size: 7pt; }}
-.port-table thead th {{ background: linear-gradient(135deg, #37474f, #546e7a); color: #eceff1; font-weight: 600; padding: 4px; text-align: center; }}
+.port-table thead th {{ background: linear-gradient(135deg, #37474f, #546e7a); color: #eceff1; font-weight: 600; padding: 3px 4px; text-align: center; height: 5.6mm; }}
 .port-table tbody tr:nth-child(even) {{ background: #f8fafc; }}
 .port-table tbody tr:nth-child(odd) {{ background: #fff; }}
-.port-table tbody td {{ border-bottom: 1px solid #eceff1; font-size: 7pt; }}
+.port-table tbody td {{ border-bottom: 1px solid #eceff1; font-size: 7pt; height: 5.6mm; padding: 1px 4px; }}
 </style></head><body>{pages_html}</body></html>'''
 
         pdf = weasyprint.HTML(string=html).write_pdf()
