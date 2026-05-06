@@ -1603,7 +1603,11 @@ let _rkSchoolId = null;
 
 // 랙실장도 개별 드롭다운 함수 제거 — 공통 학교 선택 바 사용
 
-function rkLoadDirect(schoolId) { _rkSchoolId = schoolId; _rkDoLoad(schoolId); }
+function rkLoadDirect(schoolId) {
+  _rkSchoolId = schoolId;
+  document.getElementById('nas-tabs-rack').style.display = 'none';
+  _rkDoLoad(schoolId);
+}
 function rkLoad() {
   if (!_rkSchoolId) { alert('학교를 선택하세요.'); return; }
   _rkDoLoad(_rkSchoolId);
@@ -1639,51 +1643,56 @@ let _rkCurrentRack = 0;
 function _rkRenderFull(data) {
   const src = data[0]?.source || 'db';
 
-  // 좌측 트리
-  let treeHtml = '';
+  // NAS 로드 헤더 (고정)
+  let nasHeader = '';
   if (src === 'nas') {
-    treeHtml += `<div class="d-flex align-items-center px-2 py-1 mb-1" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:6px;flex-shrink:0;">
+    nasHeader = `<div class="d-flex align-items-center px-2 py-1 mb-1" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:6px;flex-shrink:0;">
       <i class="bi bi-file-earmark-spreadsheet text-success me-1"></i>
       <span style="font-size:.7rem;font-weight:600;color:#2e7d32;">NAS 파일 로드</span></div>`;
   }
+
+  // 트리 (접기/펼치기)
+  let treeHtml = '';
   data.forEach((rack, ri) => {
-    const itemCount = rack.items ? rack.items.length : 0;
+    const rackItems = (rack.items||[]).filter(i => i.type !== 'external');
+    const extItems = (rack.items||[]).filter(i => i.type === 'external');
     treeHtml += `<div class="rk-tree-group" style="margin-bottom:2px;">
       <div class="d-flex align-items-center px-2 py-1" style="cursor:pointer;border-radius:4px;background:#f5f5f5;transition:background .15s;"
-           onclick="rkSelectRack(${ri})"
+           onclick="rkSelectRack(${ri});this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none';this.querySelector('.rk-caret').classList.toggle('bi-caret-right-fill');this.querySelector('.rk-caret').classList.toggle('bi-caret-down-fill')"
            onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background='#f5f5f5'">
+        <i class="bi bi-caret-down-fill rk-caret me-1" style="font-size:.6rem;color:#90a4ae;"></i>
         <i class="bi bi-server me-1" style="color:#1565c0;font-size:.75rem;"></i>
         <span style="font-size:.72rem;font-weight:600;color:#37474f;">${rack.rack_name||'통신랙'}</span>
-        <span class="badge rounded-pill ms-auto" style="font-size:.55rem;background:#1565c0;color:#fff;">${itemCount}</span>
+        <span class="badge rounded-pill ms-auto" style="font-size:.55rem;background:#1565c0;color:#fff;">${rackItems.length}</span>
       </div>`;
-    // 랙 내 장비 목록
     treeHtml += `<div class="rk-tree-items">`;
-    (rack.items||[]).forEach((item, ii) => {
+    rackItems.forEach((item, ii) => {
       const ts = _rkTypeStyle(item.type);
-      treeHtml += `<div class="rk-tree-item d-flex align-items-center px-2 py-1" data-rack="${ri}" data-idx="${ii}"
-            style="cursor:pointer;font-size:.68rem;margin-left:8px;border-left:3px solid transparent;border-radius:0 4px 4px 0;transition:all .15s;"
+      treeHtml += `<div class="rk-tree-item d-flex align-items-center px-2 py-1"
+            style="cursor:pointer;font-size:.68rem;margin-left:12px;border-left:3px solid transparent;border-radius:0 4px 4px 0;transition:all .15s;"
             onmouseover="this.style.background='#e8eaf6'" onmouseout="this.style.background=''">
         <i class="bi ${ts.icon} me-1" style="color:${ts.bg};font-size:.65rem;"></i>
-        <span style="color:#37474f;">${item.u ? 'U'+item.u+' ' : ''}</span>
-        <span class="fw-semibold" style="color:#455a64;">${item.name}</span>
+        <span style="color:#78909c;font-size:.6rem;min-width:22px;">${item.u ? 'U'+item.u : ''}</span>
+        <span class="fw-semibold" style="color:#455a64;font-size:.65rem;">${item.name}</span>
       </div>`;
     });
+    if (extItems.length) {
+      treeHtml += `<div class="px-2 py-1" style="font-size:.6rem;color:#856404;margin-left:12px;"><i class="bi bi-box-arrow-up-right me-1"></i>랙외부 ${extItems.length}개</div>`;
+    }
     treeHtml += `</div></div>`;
   });
 
   let html = `<div class="row g-1" style="height:calc(100vh - 200px);">`;
-  // 좌측 트리
   html += `<div class="col-md-2 col-lg-2 d-flex flex-column" style="max-height:calc(100vh - 200px);">
     <div class="card border-0 shadow-sm h-100 d-flex flex-column"><div class="card-body p-1 d-flex flex-column" style="overflow:hidden;">
+      ${nasHeader}
       <div style="overflow-y:auto;flex:1;">${treeHtml}</div>
     </div></div></div>`;
-  // 중앙+우측
   html += `<div class="col-md-10 col-lg-10" id="rk-detail">
     <div class="text-center text-muted py-5"><i class="bi bi-server fs-2 d-block mb-2" style="color:#90a4ae;"></i><span style="font-size:.85rem;">좌측에서 랙을 선택하세요</span></div></div>`;
   html += `</div>`;
   document.getElementById('rk-content').innerHTML = html;
 
-  // 첫 번째 랙 자동 선택
   if (data.length > 0) rkSelectRack(0);
 }
 
@@ -1793,11 +1802,11 @@ function rkSelectRack(rackIdx) {
       html += `<tr style="background:${stripe};">
         <td class="text-center fw-bold" style="padding:3px 4px;color:#37474f;border-bottom:1px solid #eceff1;">${u}</td>
         <td style="padding:2px 4px;border-bottom:1px solid #eceff1;">
-          <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${ts.bg};margin-right:4px;vertical-align:middle;"></span>
+          <span class="rk-type-dot" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${ts.bg};margin-right:4px;vertical-align:middle;"></span>
           <input type="text" class="form-control border-0 rk-name-input d-inline" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;width:calc(100% - 16px);" data-u="${u}" value="${item.name}">
         </td>
         <td class="text-center" style="padding:2px 3px;border-bottom:1px solid #eceff1;">
-          <select class="form-select border-0 rk-type-sel" style="font-size:.63rem;height:20px;padding:0 2px;background:transparent;text-align-last:center;" data-u="${u}">
+          <select class="form-select border-0 rk-type-sel" style="font-size:.63rem;height:20px;padding:0 2px;background:transparent;text-align-last:center;" data-u="${u}" onchange="rkTypeChange(this)">
             ${typeOpts.replace(`value="${item.type}"`, `value="${item.type}" selected`)}
           </select>
         </td>
@@ -1810,7 +1819,7 @@ function rkSelectRack(rackIdx) {
           <input type="text" class="form-control border-0 rk-name-input" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;color:#aaa;" data-u="${u}" value="" placeholder="장비 입력">
         </td>
         <td style="padding:2px 3px;border-bottom:1px solid #eceff1;">
-          <select class="form-select border-0 rk-type-sel" style="font-size:.63rem;height:20px;padding:0 2px;background:transparent;text-align-last:center;" data-u="${u}">
+          <select class="form-select border-0 rk-type-sel" style="font-size:.63rem;height:20px;padding:0 2px;background:transparent;text-align-last:center;" data-u="${u}" onchange="rkTypeChange(this)">
             <option value="">-</option>${typeOpts}
           </select>
         </td>
@@ -1838,6 +1847,28 @@ function rkSelectRack(rackIdx) {
   html += `</tbody></table></div></div>`;
   html += `</div>`;
   document.getElementById('rk-detail').innerHTML = html;
+}
+
+function rkTypeChange(sel) {
+  const val = sel.value;
+  const ts = val ? _rkTypeStyle(val) : null;
+  // 같은 행의 장비명 셀에 도트 업데이트
+  const row = sel.closest('tr');
+  if (row) {
+    const nameTd = row.cells[1];
+    let dot = nameTd.querySelector('.rk-type-dot');
+    if (ts) {
+      if (!dot) {
+        dot = document.createElement('span');
+        dot.className = 'rk-type-dot';
+        dot.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle;';
+        nameTd.insertBefore(dot, nameTd.firstChild);
+      }
+      dot.style.background = ts.bg;
+    } else if (dot) {
+      dot.remove();
+    }
+  }
 }
 
 function rkEditItem(rackIdx, itemId) {
