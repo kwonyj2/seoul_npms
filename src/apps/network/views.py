@@ -1430,13 +1430,13 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
     NAS_FOLDERS = {
         'diagram':  '2025년 테크센터-네트워크 구성도',
         'portmap':  '2025년 테크센터-네트워크 선번장',
-        'rack':     '2025년 테크센터-네트워크 통신랙실장도',
+        'rack':     '2025년 테크센터-네트워크 통신랙 실장도',
         'apmap':    '2025년 테크센터-건물 정보',
     }
     NAS_PREFIXES = {
         'diagram':  '2025년 테크센터-네트워크 구성도_',
         'portmap':  '2025년 테크센터-네트워크 선번장_',
-        'rack':     '2025년 테크센터-네트워크 통신랙실장도_',
+        'rack':     '2025년 테크센터-네트워크 통신랙 실장도_',
         'apmap':    '2025년 테크센터-건물정보_',
     }
 
