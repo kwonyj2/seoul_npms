@@ -848,11 +848,11 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 7pt
 .left-panel {{ float: left; width: 46%; padding-right: 8px; }}
 .right-panel {{ float: right; width: 52%; }}
 .info-table {{ width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 7pt; }}
-.info-table th {{ background: #f5f7fa; color: #546e7a; font-weight: 600; text-align: left; padding: 3px 6px; border: 0.5px solid #dee2e6; width: 55px; height: 5mm; }}
-.info-table td {{ padding: 3px 6px; border: 0.5px solid #dee2e6; height: 5mm; }}
+.info-table th {{ background: #f5f7fa; color: #546e7a; font-weight: 600; text-align: left; padding: 1px 5px; border: 0.5px solid #dee2e6; width: 50px; height: 4mm; font-size: 6.5pt; }}
+.info-table td {{ padding: 1px 5px; border: 0.5px solid #dee2e6; height: 4mm; font-size: 6.5pt; }}
 .info-table td.bold {{ font-weight: 700; color: #1565c0; }}
-.svg-box {{ text-align: center; margin-top: 4px; }}
-.svg-box svg {{ width: 100%; height: auto; }}
+.svg-box {{ text-align: center; margin-top: 2px; }}
+.svg-box svg {{ width: 100%; max-height: 145mm; }}
 .rack-table {{ border-collapse: collapse; font-size: 6.5pt; }}
 .rack-table thead th {{ background: #37474f; color: #eceff1; font-weight: 600; padding: 0 3px; text-align: center; height: 5mm; line-height: 5mm; }}
 .rack-table tbody tr:nth-child(even) {{ background: #f8fafc; }}
