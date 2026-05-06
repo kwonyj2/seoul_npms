@@ -25,6 +25,11 @@
       </a>
     </li>
     <li class="nav-item">
+      <a class="nav-link" href="#" onclick="switchTab('portmap_topo',this);return false;">
+        <i class="bi bi-share me-1"></i>선번장 구성도
+      </a>
+    </li>
+    <li class="nav-item">
       <a class="nav-link" href="#" onclick="switchTab('rack',this);return false;">
         <i class="bi bi-server me-1"></i>랙실장도
       </a>
@@ -260,6 +265,13 @@
     </div>
   </div>
 
+  <!-- ── 선번장 구성도 탭 ── -->
+  <div id="tab-portmap_topo" class="d-none">
+    <div id="pt-content" style="height:calc(100vh - 200px);background:#f8f9fa;border-radius:8px;position:relative;">
+      <div class="text-center text-muted py-5"><i class="bi bi-share fs-3 d-block mb-2"></i>학교를 선택하면 선번장 기반 네트워크 구성도를 생성합니다.</div>
+    </div>
+  </div>
+
   <!-- ── 랙실장도 탭 ── -->
   <div id="tab-rack" class="d-none">
     <div id="nas-tabs-rack" class="mb-2" style="display:none;"></div>
@@ -331,7 +343,7 @@ loadTopoSchools();
 function switchTab(name, el) {
   document.querySelectorAll('#nms-tabs .nav-link').forEach(a => a.classList.remove('active'));
   el.classList.add('active');
-  ['topology','diagram','portmap','rack','apmap'].forEach(t => {
+  ['topology','diagram','portmap','portmap_topo','rack','apmap'].forEach(t => {
     const el = document.getElementById('tab-' + t);
     if (el) el.classList.toggle('d-none', t !== name);
   });
@@ -1239,11 +1251,13 @@ function nmsToggleMode() {
     // 편집 모드: DB 기반 편집기 로드
     if (_currentNmsTab === 'diagram') { _dgmSchoolId = id; dgmLoadDirect(id); }
     else if (_currentNmsTab === 'portmap') { _pmSchoolId = id; pmLoadDirect(id); }
+    else if (_currentNmsTab === 'portmap_topo') { ptLoadDirect(id); }
     else if (_currentNmsTab === 'rack') { _rkSchoolId = id; rkLoadDirect(id); }
     else if (_currentNmsTab === 'apmap') { _apSchoolId = id; apLoadDirect(id); }
   } else {
-    // 보기 모드: NAS 파일 이미지 로드
-    nmsLoadNasFile(id, _currentNmsTab);
+    // 보기 모드: NAS 파일 이미지 로드 (선번장 구성도는 항상 직접 로드)
+    if (_currentNmsTab === 'portmap_topo') { ptLoadDirect(id); }
+    else { nmsLoadNasFile(id, _currentNmsTab); }
   }
 }
 
@@ -2361,6 +2375,175 @@ function rkPdf() {
 function pmExcel() {
   if (!_pmSchoolId) return;
   window.location.href = `${API_BASE}/network/topology/portmap_excel/?school_id=${_pmSchoolId}`;
+}
+
+// ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// 선번장 구성도 (Cytoscape.js — 포트 연결 기반)
+
+let _ptCy = null;
+const _PT_NET_COLORS = {
+  '교사망': '#1565c0', '학생망': '#2e7d32', '무선망': '#e65100',
+  '기타': '#6a1b9a', '공통': '#546e7a', 'FDF': '#198754', 'PoE': '#6f42c1',
+};
+const _PT_CABLE_COLORS = {
+  'C6': '#198754', 'C5.e': '#ffc107', 'C5': '#e63946',
+  'UTP': '#6f42c1', 'SM': '#0dcaf0', 'MM': '#ff6b00',
+};
+
+function _ptMakeSvgNode(node) {
+  const ports = node.port_colors || [];
+  const pc = Math.max(ports.length, node.port_count || 8, 4);
+  const half = Math.ceil(pc / 2);
+  const pw = 6, ph = 5, gap = 1, px = 4, py = 14;
+  const w = Math.max(px * 2 + half * (pw + gap), 60);
+  const rowH = ph + 2;
+  const h = py + rowH * 2 + 18;
+  const netColor = _PT_NET_COLORS[node.group] || '#546e7a';
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">`;
+  svg += `<rect width="${w}" height="${h}" rx="4" fill="#fff" stroke="${netColor}" stroke-width="1.5"/>`;
+  svg += `<rect x="1" y="1" width="${w-2}" height="12" rx="3" fill="${netColor}"/>`;
+  svg += `<text x="${w/2}" y="9" fill="#fff" font-size="6" text-anchor="middle" font-weight="700">${node.id}</text>`;
+
+  // 포트 그리기
+  const oddPorts = ports.filter((_, i) => i % 2 === 0);
+  const evenPorts = ports.filter((_, i) => i % 2 === 1);
+  function drawRow(list, y) {
+    list.forEach((cable, i) => {
+      const x = px + i * (pw + gap);
+      const cc = _PT_CABLE_COLORS[(cable||'').toUpperCase().replace('.','').replace(' ','')] || null;
+      let fill = '#fff', stroke = '#ccc';
+      if (cc) { fill = cc; stroke = cc; }
+      else if (cable) {
+        for (const [k, v] of Object.entries(_PT_CABLE_COLORS)) {
+          if ((cable||'').toUpperCase().includes(k.replace('.','').toUpperCase())) { fill = v; stroke = v; break; }
+        }
+      }
+      svg += `<rect x="${x}" y="${y}" width="${pw}" height="${ph}" rx="1" fill="${fill}" stroke="${stroke}" stroke-width="0.5"/>`;
+    });
+  }
+  drawRow(oddPorts, py);
+  drawRow(evenPorts, py + rowH);
+
+  // 모델명
+  const model = (node.model || '').length > 12 ? node.model.substring(0,12)+'..' : (node.model || '');
+  svg += `<text x="${w/2}" y="${py + rowH * 2 + 8}" fill="#455a64" font-size="4.5" text-anchor="middle">${model}</text>`;
+  svg += `<text x="${w/2}" y="${py + rowH * 2 + 14}" fill="${netColor}" font-size="4" text-anchor="middle" font-weight="600">[${node.group}]</text>`;
+  svg += `</svg>`;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+function ptLoadDirect(schoolId) {
+  document.getElementById('pt-content').innerHTML = '<div class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm me-2"></div>구성도 생성 중...</div>';
+
+  fetch(`${API_BASE}/network/topology/portmap_topo/?school_id=${schoolId}`)
+    .then(r => r.json()).then(data => {
+      if (!data.nodes || !data.nodes.length) {
+        document.getElementById('pt-content').innerHTML = '<div class="text-center text-muted py-5">선번장 연결 데이터가 없습니다.</div>';
+        return;
+      }
+      _ptRender(data);
+    }).catch(() => {
+      document.getElementById('pt-content').innerHTML = '<div class="text-danger text-center py-4">로드 실패</div>';
+    });
+}
+
+function _ptRender(data) {
+  const container = document.getElementById('pt-content');
+  // 범례 HTML
+  let legendHtml = '<div style="position:absolute;bottom:8px;left:8px;background:rgba(255,255,255,.95);border-radius:6px;padding:6px 10px;font-size:.65rem;z-index:10;border:1px solid #e0e0e0;">';
+  legendHtml += '<b style="color:#37474f;">케이블</b> ';
+  for (const [k, c] of Object.entries(_PT_CABLE_COLORS)) {
+    const label = k === 'C5.e' ? 'Cat5E' : k === 'C5' ? 'Cat5' : k === 'C6' ? 'Cat6' : k;
+    legendHtml += `<span style="color:${c};font-weight:700;">━</span>${label} `;
+  }
+  legendHtml += '&nbsp;&nbsp;<b style="color:#37474f;">망구분</b> ';
+  for (const [k, c] of Object.entries(_PT_NET_COLORS)) {
+    if (k === '공통') continue;
+    legendHtml += `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${c};margin:0 2px;vertical-align:middle;"></span>${k} `;
+  }
+  legendHtml += '</div>';
+  container.innerHTML = `<div id="pt-cy" style="width:100%;height:100%;"></div>${legendHtml}`;
+
+  const elements = [];
+
+  // 그룹(compound) 노드
+  data.groups.forEach(g => {
+    elements.push({
+      group: 'nodes',
+      data: { id: 'group_' + g, label: g },
+      classes: 'group',
+    });
+  });
+
+  // 노드
+  data.nodes.forEach(n => {
+    const svgUrl = _ptMakeSvgNode(n);
+    const w = Math.max(60, Math.ceil((n.port_count || 8) / 2) * 7 + 8);
+    const h = 50;
+    elements.push({
+      group: 'nodes',
+      data: {
+        id: n.id, label: n.id, parent: 'group_' + n.group,
+        model: n.model, net: n.group, level: n.level,
+        svgUrl: svgUrl, nodeW: w, nodeH: h,
+      },
+    });
+  });
+
+  // 엣지
+  data.edges.forEach(e => {
+    const cable = e.cable || '';
+    let color = '#999';
+    for (const [k, c] of Object.entries(_PT_CABLE_COLORS)) {
+      if ((cable).toUpperCase().replace('.','').includes(k.replace('.','').toUpperCase())) { color = c; break; }
+    }
+    elements.push({
+      group: 'edges',
+      data: {
+        source: e.from, target: e.to,
+        label: `${e.from_port}↔${e.to_port}`,
+        cable: cable, color: color,
+      },
+    });
+  });
+
+  if (_ptCy) _ptCy.destroy();
+  _ptCy = cytoscape({
+    container: document.getElementById('pt-cy'),
+    elements: elements,
+    style: [
+      { selector: 'node.group', style: {
+        'background-color': '#f5f5f5', 'background-opacity': 0.6,
+        'border-color': '#bdbdbd', 'border-width': 1,
+        'label': 'data(label)', 'text-valign': 'top', 'text-halign': 'center',
+        'font-size': 11, 'font-weight': 'bold', 'color': '#455a64',
+        'padding': 15, 'shape': 'roundrectangle',
+      }},
+      { selector: 'node:child', style: {
+        'background-image': 'data(svgUrl)', 'background-fit': 'contain',
+        'background-color': '#fff', 'background-opacity': 0,
+        'width': 'data(nodeW)', 'height': 'data(nodeH)',
+        'label': '', 'border-width': 0,
+      }},
+      { selector: 'edge', style: {
+        'line-color': 'data(color)', 'width': 2,
+        'target-arrow-shape': 'none',
+        'curve-style': 'bezier',
+        'label': 'data(label)', 'font-size': 6, 'color': '#78909c',
+        'text-rotation': 'autorotate', 'text-margin-y': -6,
+      }},
+    ],
+    layout: {
+      name: 'cose',
+      animate: false,
+      nodeRepulsion: 8000,
+      idealEdgeLength: 80,
+      nodeOverlap: 20,
+      padding: 30,
+    },
+  });
 }
 
 // ══════════════════════════════════════════════════════════

@@ -866,6 +866,127 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 7pt
         response['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(filename)}"
         return response
 
+    @action(detail=False, methods=['get'], url_path='portmap_topo')
+    def portmap_topo(self, request):
+        """선번장 기반 네트워크 구성도 — 포트 연결관계 자동 추출"""
+        import re
+        from apps.schools.models import School, SchoolEquipment
+        school_id = request.query_params.get('school_id')
+        if not school_id:
+            return Response({'error': 'school_id 필요'}, status=400)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return Response({'error': '학교 없음'}, status=404)
+
+        # 선번장 데이터 가져오기 (DB 우선 → NAS 폴백)
+        has_portmap = SchoolEquipment.objects.filter(
+            school=school, category__in=['스위치', 'PoE', 'PoE스위치'],
+            port_map__isnull=False,
+        ).exclude(port_map=[]).exists()
+        if has_portmap:
+            switches = self._db_portmap(school_id)
+        else:
+            switches = self._parse_nas_portmap(school.name) or []
+
+        if not switches:
+            return Response({'nodes': [], 'edges': [], 'groups': []})
+
+        # 노드 수집
+        node_map = {}
+        for sw in switches:
+            did = sw.get('device_id', '')
+            if not did:
+                continue
+            net = sw.get('network_type', '') or '기타망'
+            node_map[did] = {
+                'id': did,
+                'model': sw.get('model_name', ''),
+                'net': net,
+                'category': sw.get('category', 'switch'),
+                'port_count': sw.get('port_count', 0),
+                'ports': sw.get('ports', []),
+            }
+
+        # 엣지 수집 (connected_to 파싱)
+        edges = []
+        edge_set = set()
+        for sw in switches:
+            src = sw.get('device_id', '')
+            if not src:
+                continue
+            for p in sw.get('ports', []):
+                conn = (p.get('connected_to') or '').strip()
+                if not conn or conn == '/':
+                    continue
+                m = re.match(r'^([A-Za-z#]+\d*[#]?\w*)/(\d+)$', conn)
+                if m:
+                    tgt = m.group(1)
+                    tgt_port = int(m.group(2))
+                    src_port = p.get('port', 0)
+                    cable = p.get('cable', '')
+                    edge_key = tuple(sorted([f'{src}:{src_port}', f'{tgt}:{tgt_port}']))
+                    if edge_key not in edge_set:
+                        edge_set.add(edge_key)
+                        edges.append({
+                            'from': src, 'from_port': src_port,
+                            'to': tgt, 'to_port': tgt_port,
+                            'cable': cable,
+                        })
+                    # 대상 노드가 없으면 추가 (FDF, PoE 등)
+                    if tgt not in node_map:
+                        ntype = '기타'
+                        if 'F#' in tgt or 'FDF' in tgt:
+                            ntype = 'FDF'
+                        elif 'P#' in tgt:
+                            ntype = 'PoE'
+                        node_map[tgt] = {
+                            'id': tgt, 'model': '', 'net': ntype,
+                            'category': ntype.lower(), 'port_count': 0, 'ports': [],
+                        }
+
+        # 계위 판별: 연결 수 기반
+        conn_count = {}
+        for e in edges:
+            conn_count[e['from']] = conn_count.get(e['from'], 0) + 1
+            conn_count[e['to']] = conn_count.get(e['to'], 0) + 1
+
+        nodes = []
+        for did, info in node_map.items():
+            cnt = conn_count.get(did, 0)
+            level = 1 if cnt >= 5 else 2 if cnt >= 2 else 3
+            # 망구분 그룹
+            net = info['net']
+            group = '교사망' if '교사' in net else '학생망' if '학생' in net else '무선망' if '무선' in net else '기타'
+            if 'F#' in did or 'FDF' in did:
+                group = '공통'
+            elif 'P#' in did:
+                group = '무선망'
+            elif 'BB' in did:
+                group = '무선망'
+
+            # SVG 스위치 이미지 데이터
+            port_colors = []
+            for p in info.get('ports', []):
+                cable = p.get('cable', '')
+                port_colors.append(cable)
+
+            nodes.append({
+                'id': did,
+                'model': info['model'],
+                'net': info['net'],
+                'group': group,
+                'level': level,
+                'conn_count': cnt,
+                'port_count': info['port_count'],
+                'port_colors': port_colors[:28],  # SVG용 최대 28포트
+            })
+
+        # 망구분 그룹 목록
+        groups = sorted(set(n['group'] for n in nodes))
+
+        return Response({'nodes': nodes, 'edges': edges, 'groups': groups})
+
     # ── 구성도 (Cytoscape.js) ────────────────────────────
     @action(detail=False, methods=['get'], url_path='diagram_data')
     def diagram_data(self, request):
