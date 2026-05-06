@@ -691,6 +691,181 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         school.save(update_fields=['rack_data'])
         return Response({'success': True})
 
+    @action(detail=False, methods=['get'], url_path='rack_pdf')
+    def rack_pdf(self, request):
+        """랙실장도 PDF — 세로 A4, 랙별 1페이지"""
+        from urllib.parse import quote
+        from django.http import HttpResponse
+        from apps.schools.models import School
+        import weasyprint
+
+        school_id = request.query_params.get('school_id')
+        if not school_id:
+            return HttpResponse('school_id 필요', status=400)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return HttpResponse('학교 없음', status=404)
+
+        # 데이터: DB 우선 → NAS 폴백
+        racks = None
+        if school.rack_data and isinstance(school.rack_data, list) and len(school.rack_data) > 0:
+            racks = school.rack_data
+        if not racks:
+            racks = self._parse_nas_rack(school.name)
+        if not racks:
+            return HttpResponse('랙실장도 데이터 없음', status=404)
+
+        type_colors = {
+            'switch': {'bg': '#0d6efd', 'text': '#fff', 'label': '스위치'},
+            'poe': {'bg': '#6f42c1', 'text': '#fff', 'label': 'PoE'},
+            'firewall': {'bg': '#dc3545', 'text': '#fff', 'label': '방화벽'},
+            'fdf': {'bg': '#198754', 'text': '#fff', 'label': 'FDF'},
+            'patch': {'bg': '#6c757d', 'text': '#fff', 'label': '패치판넬'},
+            'server': {'bg': '#0dcaf0', 'text': '#333', 'label': '서버'},
+            'ups': {'bg': '#ffc107', 'text': '#333', 'label': 'UPS'},
+            'external': {'bg': '#e9ecef', 'text': '#333', 'label': '랙외부'},
+        }
+        def tc(t):
+            return type_colors.get(t, type_colors['switch'])
+
+        pages_html = ''
+        for idx, rack in enumerate(racks):
+            items = rack.get('items', [])
+            rack_name = (rack.get('rack_name', '') or '통신랙').replace('렉', '랙')
+            location = rack.get('location', '') or '-'
+            rack_items = [i for i in items if i.get('type') != 'external']
+            ext_items = [i for i in items if i.get('type') == 'external']
+            max_u = max((i.get('u', 0) for i in rack_items), default=0)
+            total_u = max_u if max_u <= 12 else 20 if max_u <= 20 else 29 if max_u <= 29 else 42
+            if total_u == 0:
+                total_u = 12
+
+            # SVG
+            uh, rw, px, py = 10, 200, 22, 8
+            sw = rw + px * 2
+            sh = py * 2 + total_u * uh + 14
+
+            svg = f'<svg width="{sw}" height="{sh}" xmlns="http://www.w3.org/2000/svg">'
+            svg += f'<rect width="{sw}" height="{sh}" rx="4" fill="#eceff1"/>'
+            svg += f'<rect x="{px-2}" y="{py-2}" width="{rw+4}" height="{total_u*uh+4}" rx="3" fill="#455a64" stroke="#263238" stroke-width="1"/>'
+            for u in range(1, total_u + 1):
+                y = py + (u - 1) * uh
+                svg += f'<rect x="{px}" y="{y}" width="{rw}" height="{uh-1}" rx="1" fill="#eceff1" stroke="#b0bec5" stroke-width="0.2"/>'
+                svg += f'<text x="{px-3}" y="{y+uh//2+2}" fill="#78909c" font-size="4.5" text-anchor="end">{u}</text>'
+            u_map = {}
+            for i in rack_items:
+                if i.get('u'):
+                    u_map[i['u']] = i
+            for u, item in u_map.items():
+                t = tc(item.get('type', 'switch'))
+                y = py + (u - 1) * uh
+                h = uh - 1
+                svg += f'<rect x="{px+1}" y="{y}" width="{rw-2}" height="{h}" rx="1" fill="{t["bg"]}" stroke="rgba(255,255,255,.3)" stroke-width="0.3"/>'
+                did = item.get('device_id', '')
+                mdl = item.get('model', item.get('name', ''))
+                lbl = f'{did} {mdl}'.strip()
+                lbl = lbl[:28] + '..' if len(lbl) > 28 else lbl
+                svg += f'<text x="{px+rw//2}" y="{y+h//2+2}" fill="{t["text"]}" font-size="4.5" text-anchor="middle" font-weight="600">{lbl}</text>'
+            ly = py + total_u * uh + 8
+            svg += f'<text x="{px}" y="{ly}" fill="#607d8b" font-size="4">'
+            for k, t in type_colors.items():
+                if k == 'external':
+                    continue
+                svg += f'<tspan fill="{t["bg"]}">&#9632;</tspan>{t["label"]} '
+            svg += '</text></svg>'
+
+            # 포트 표
+            rows_html = ''
+            for u in range(1, total_u + 1):
+                item = u_map.get(u)
+                if item:
+                    t = tc(item.get('type', 'switch'))
+                    rows_html += f'''<tr>
+                        <td style="text-align:center;font-weight:700;padding:1px 3px;">{u}</td>
+                        <td style="padding:1px 3px;color:#1565c0;font-weight:600;">{item.get('device_id','')}</td>
+                        <td style="padding:1px 3px;">{item.get('model', item.get('name',''))}</td>
+                        <td style="text-align:center;padding:1px 3px;"><span style="display:inline-block;width:6px;height:6px;border-radius:2px;background:{t['bg']};margin-right:2px;"></span>{t['label']}</td>
+                    </tr>'''
+                else:
+                    rows_html += f'''<tr>
+                        <td style="text-align:center;padding:1px 3px;color:#ccc;">{u}</td>
+                        <td style="padding:1px 3px;"></td><td style="padding:1px 3px;color:#ddd;">-</td><td style="padding:1px 3px;"></td>
+                    </tr>'''
+            if ext_items:
+                rows_html += '<tr><td colspan="4" style="text-align:center;background:#fff3cd;font-weight:700;padding:2px;color:#856404;font-size:6pt;">랙 외부 장비</td></tr>'
+                for item in ext_items:
+                    t = tc(item.get('type', 'switch'))
+                    rows_html += f'''<tr style="background:#fffbeb;">
+                        <td style="text-align:center;padding:1px 3px;color:#999;">-</td>
+                        <td style="padding:1px 3px;color:#1565c0;font-weight:600;">{item.get('device_id','')}</td>
+                        <td style="padding:1px 3px;">{item.get('model', item.get('name',''))}</td>
+                        <td style="text-align:center;padding:1px 3px;"><span style="display:inline-block;width:6px;height:6px;border-radius:2px;background:{t['bg']};margin-right:2px;"></span>{t['label']}</td>
+                    </tr>'''
+
+            size_label = '소형' if total_u <= 12 else '중형' if total_u <= 20 else '대형' if total_u <= 29 else '특대형'
+            page_break = 'page-break-before:always;' if idx > 0 else ''
+            pages_html += f'''
+            <div class="page" style="{page_break}">
+                <div class="header">
+                    <span class="school-name">{school.name}</span>
+                    <span class="title">네트워크 랙실장도</span>
+                    <span class="page-num">{idx+1} / {len(racks)}</span>
+                </div>
+                <div class="content">
+                    <div class="left-panel">
+                        <table class="info-table">
+                            <tr><th>랙 이름</th><td class="bold">{rack_name}</td></tr>
+                            <tr><th>운영장소</th><td>{location}</td></tr>
+                            <tr><th>장비 수</th><td>{len(rack_items)}개 (랙외부: {len(ext_items)})</td></tr>
+                            <tr><th>랙 크기</th><td>{total_u}U ({size_label})</td></tr>
+                        </table>
+                        <div class="svg-box">{svg}</div>
+                    </div>
+                    <div class="right-panel">
+                        <table class="rack-table" style="table-layout:fixed;width:100%;">
+                            <colgroup><col style="width:24px;"><col style="width:50px;"><col><col style="width:52px;"></colgroup>
+                            <thead><tr>
+                                <th>U</th><th>장비ID</th><th>장비명</th><th>유형</th>
+                            </tr></thead>
+                            <tbody>{rows_html}</tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>'''
+
+        html = f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+@page {{ size: A4 portrait; margin: 10mm 8mm; }}
+body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 7pt; color: #333; margin: 0; }}
+.page {{ width: 100%; }}
+.header {{ border-bottom: 2px solid #1565c0; padding-bottom: 2px; margin-bottom: 4px; overflow: hidden; }}
+.school-name {{ font-size: 11pt; font-weight: 800; color: #1565c0; }}
+.title {{ font-size: 9pt; font-weight: 600; color: #455a64; margin-left: 10px; }}
+.page-num {{ float: right; font-size: 7pt; color: #90a4ae; }}
+.content {{ overflow: hidden; }}
+.left-panel {{ float: left; width: 42%; padding-right: 8px; }}
+.right-panel {{ float: right; width: 56%; }}
+.info-table {{ width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 7pt; }}
+.info-table th {{ background: #f5f7fa; color: #546e7a; font-weight: 600; text-align: left; padding: 2px 6px; border: 0.5px solid #dee2e6; width: 55px; }}
+.info-table td {{ padding: 2px 6px; border: 0.5px solid #dee2e6; }}
+.info-table td.bold {{ font-weight: 700; color: #1565c0; }}
+.svg-box {{ text-align: center; margin-top: 4px; }}
+.svg-box svg {{ width: 100%; height: auto; }}
+.rack-table {{ border-collapse: collapse; font-size: 6.5pt; }}
+.rack-table thead th {{ background: #37474f; color: #eceff1; font-weight: 600; padding: 2px 3px; text-align: center; }}
+.rack-table tbody tr:nth-child(even) {{ background: #f8fafc; }}
+.rack-table tbody tr:nth-child(odd) {{ background: #fff; }}
+.rack-table tbody td {{ border-bottom: 0.3px solid #eceff1; }}
+</style></head><body>{pages_html}</body></html>'''
+
+        pdf = weasyprint.HTML(string=html).write_pdf()
+        filename = f'랙실장도_{school.name}.pdf'
+        response = HttpResponse(pdf, content_type='application/pdf')
+        response['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(filename)}"
+        return response
+
     # ── 구성도 (Cytoscape.js) ────────────────────────────
     @action(detail=False, methods=['get'], url_path='diagram_data')
     def diagram_data(self, request):
