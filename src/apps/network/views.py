@@ -406,7 +406,7 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(self._db_rack(school_id))
 
     def _parse_nas_rack(self, school_name):
-        """NAS 랙실장도 엑셀 파싱"""
+        """NAS 랙실장도 엑셀 파싱 — 다중 랙 자동 감지 (6열 간격)"""
         import os
         rack_folder = os.path.join(self.NAS_BASE, self.NAS_FOLDERS.get('rack', ''))
         if not rack_folder or not os.path.isdir(rack_folder):
@@ -425,124 +425,134 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         except Exception:
             return None
 
-        ws = wb[wb.sheetnames[0]]
-        max_col = ws.max_column or 13
-
-        # 양식 판별: 첫 U=1 위치 찾기
-        u1_row, u1_col = None, None
-        for r in range(3, 15):
-            for c in [1, 2]:
-                v = ws.cell(r, c).value
-                if v and str(v).strip() == '1':
-                    u1_row, u1_col = r, c
-                    break
-            if u1_row:
+        # 멀티시트: 학교명 시트 또는 랙실장도 시트 우선
+        ws = None
+        for sname in wb.sheetnames:
+            if school_name in sname or '랙' in sname or '렉' in sname:
+                ws = wb[sname]
                 break
+        if ws is None:
+            # 학교명/포트맵이 아닌 첫 시트
+            for sname in wb.sheetnames:
+                if '포트맵' not in sname and '층' not in sname:
+                    ws = wb[sname]
+                    break
+        if ws is None:
+            ws = wb[wb.sheetnames[0]]
 
-        if not u1_row:
+        # 1단계: 통신랙 이름이 있는 열(col) 수집 → 랙 위치 자동 감지
+        rack_positions = []  # [(u_col, eq_col, rack_name, location)]
+        rack_name_cols = {}
+        for r in range(1, 8):
+            for c in range(1, min((ws.max_column or 30) + 1, 40)):
+                v = ws.cell(r, c).value
+                if v and ('통신' in str(v)) and ('랙' in str(v) or '렉' in str(v)):
+                    rack_name_cols[c] = str(v).strip()
+
+        if rack_name_cols:
+            # 통신랙 이름 열 기준으로 U열/장비열 계산
+            for eq_col, rname in sorted(rack_name_cols.items()):
+                u_col = eq_col - 1  # U번호는 장비열 1칸 앞
+                # U열에 실제 숫자가 있는지 확인
+                has_u = False
+                for r in range(3, 15):
+                    v = ws.cell(r, u_col).value
+                    if v and str(v).strip().isdigit():
+                        has_u = True
+                        break
+                if not has_u:
+                    # U열이 다른 위치일 수 있음
+                    for alt_c in [c2 for c2 in [eq_col - 2, eq_col + 1] if c2 >= 1]:
+                        for r in range(3, 15):
+                            v = ws.cell(r, alt_c).value
+                            if v and str(v).strip().isdigit():
+                                u_col = alt_c
+                                has_u = True
+                                break
+                        if has_u:
+                            break
+                if has_u:
+                    # 운영장소 찾기
+                    location = ''
+                    for r in range(1, 5):
+                        v = ws.cell(r, eq_col).value
+                        if v:
+                            vs = str(v).strip()
+                            if ('서버' in vs or '전산' in vs or '층' in vs or 'EPS' in vs) and '통신' not in vs:
+                                location = vs
+                    rack_positions.append((u_col, eq_col, rname, location))
+        else:
+            # 통신랙 이름이 없는 경우: U=1 위치로 감지
+            for r in range(3, 15):
+                for c in [1, 2]:
+                    v = ws.cell(r, c).value
+                    if v and str(v).strip() == '1':
+                        rack_positions.append((c, c + 1, '통신랙 #1', ''))
+                        break
+                if rack_positions:
+                    break
+
+        if not rack_positions:
             wb.close()
             return None
 
-        equip_col = u1_col + 1  # 장비명 열
-
-        # 운영장소/랙이름 파싱
-        def _get_rack_meta(loc_col, name_col, label_row_offset):
-            """운영장소와 랙이름 추출"""
-            loc = ''
-            name = ''
-            # 운영장소: u1_row 위 2~3행
-            for r in range(max(1, u1_row - 4), u1_row):
-                v = ws.cell(r, loc_col).value
-                if v and '서버' in str(v) or v and '전산' in str(v) or v and '층' in str(v):
-                    loc = str(v).strip()
-                v2 = ws.cell(r, loc_col).value
-                if v2 and ('렉' in str(v2) or '랙' in str(v2) or '통신' in str(v2)):
-                    name = str(v2).strip()
-            return loc, name
-
-        # 랙1 파싱
+        # 2단계: 각 랙 파싱
         racks = []
-
-        def _parse_one_rack(u_col, eq_col, rack_label):
-            """한 랙의 장비 목록 파싱"""
-            location = ''
-            rack_name = ''
-            # 운영장소/랙이름: U1 위 행들에서 찾기
-            for r in range(max(1, u1_row - 4), u1_row):
-                v = ws.cell(r, eq_col).value
-                if v:
-                    vs = str(v).strip()
-                    if '렉' in vs or '랙' in vs or '통신' in vs:
-                        rack_name = vs
-                    elif len(vs) > 2:
-                        location = vs
+        for rack_idx, (u_col, eq_col, rack_name, location) in enumerate(rack_positions):
+            # U=1 시작행 찾기
+            u1_row = None
+            for r in range(3, 15):
+                v = ws.cell(r, u_col).value
+                if v and str(v).strip() == '1':
+                    u1_row = r
+                    break
+            if not u1_row:
+                continue
 
             items = []
-            # 랙 외부 장비 (U1 위 행에서 장비명이 있는 것)
+            # 랙 외부 장비 (U1 위 행)
             for r in range(max(1, u1_row - 5), u1_row):
                 v = ws.cell(r, eq_col).value
                 u_v = ws.cell(r, u_col).value
-                if v and not u_v and str(v).strip() not in ('', rack_name, location):
+                if v and not u_v:
                     vs = str(v).strip()
-                    if '통신' not in vs and '실장' not in vs and len(vs) > 1:
-                        items.append({'u': 0, 'name': vs, 'type': 'external'})
+                    if vs and '통신' not in vs and '실장' not in vs and vs != rack_name and vs != location and len(vs) > 1:
+                        items.append({'u': 0, 'name': vs, 'type': self._detect_equip_type(vs)})
 
             # U번호별 장비
             current_u = 0
-            for r in range(u1_row, ws.max_row + 1):
+            for r in range(u1_row, (ws.max_row or 40) + 1):
                 u_v = ws.cell(r, u_col).value
                 eq_v = ws.cell(r, eq_col).value
                 if u_v and str(u_v).strip().isdigit():
                     current_u = int(u_v)
                 if eq_v:
                     name = str(eq_v).strip()
-                    if name and name not in (rack_name, location):
-                        # 장비 유형 자동 판별
-                        etype = 'switch'
-                        nl = name.upper()
-                        if '패치' in name: etype = 'patch'
-                        elif 'FDF' in nl or 'OFD' in nl: etype = 'fdf'
-                        elif '방화벽' in name or 'FW' in nl: etype = 'firewall'
-                        elif 'UPS' in nl: etype = 'ups'
-                        elif '서버' in name: etype = 'server'
-                        elif 'P#' in name or 'POE' in nl: etype = 'poe'
-                        items.append({'u': current_u, 'name': name, 'type': etype})
+                    if name and name != rack_name and name != location:
+                        items.append({'u': current_u, 'name': name, 'type': self._detect_equip_type(name)})
 
             if items:
                 racks.append({
-                    'rack_name': rack_name or rack_label,
+                    'rack_name': rack_name,
                     'location': location,
                     'items': items,
                     'source': 'nas',
                 })
 
-        # 랙1
-        _parse_one_rack(u1_col, equip_col, '통신랙 #1')
-
-        # 랙2 확인 (col 8~9 영역)
-        if max_col >= 9:
-            has_rack2 = False
-            for r in range(max(1, u1_row - 3), u1_row + 3):
-                for c in [8, 9]:
-                    v = ws.cell(r, c).value
-                    if v and str(v).strip():
-                        has_rack2 = True
-                        break
-                if has_rack2:
-                    break
-            if has_rack2:
-                # 랙2 U열/장비열 찾기
-                u2_col = None
-                for c in [7, 8]:
-                    v = ws.cell(u1_row, c).value
-                    if v and str(v).strip() == '1':
-                        u2_col = c
-                        break
-                if u2_col:
-                    _parse_one_rack(u2_col, u2_col + 1, '통신랙 #2')
-
         wb.close()
         return racks if racks else None
+
+    @staticmethod
+    def _detect_equip_type(name):
+        """장비명으로 유형 자동 판별"""
+        nl = (name or '').upper()
+        if '패치' in name: return 'patch'
+        if 'FDF' in nl or 'OFD' in nl: return 'fdf'
+        if '방화벽' in name or 'FW/' in nl or 'NGF' in nl or '200E' in nl: return 'firewall'
+        if 'UPS' in nl: return 'ups'
+        if '서버' in name or 'SERVER' in nl: return 'server'
+        if 'P#' in name or 'POE' in nl: return 'poe'
+        return 'switch'
 
     def _db_rack(self, school_id):
         """DB 기반 랙 데이터 (폴백)"""
