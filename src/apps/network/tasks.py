@@ -627,29 +627,36 @@ def _parse_nas_portmap_file(filepath):
     import openpyxl
     try:
         wb = openpyxl.load_workbook(filepath, data_only=True)
-    except Exception:
+    except Exception as e:
+        logger.warning(f'선번장 파일 로드 실패: {filepath} — {e}')
         return None
 
     ext = filepath.rsplit('.', 1)[-1].lower()
     result = []
-    for sname in wb.sheetnames:
-        if sname in ('장비스펙', 'FDF', 'FDF현황'):
-            continue
-        ws = wb[sname]
-        if not ws.max_row:
-            continue
-        is_type_b = ext == 'xlsm'
-        if not is_type_b:
-            for r in range(1, min(10, ws.max_row + 1)):
-                v = ws.cell(r, 3).value
-                if v and '허' in str(v):
-                    is_type_b = True
-                    break
-        if is_type_b:
-            result.extend(_parse_portmap_type_b(ws, sname))
-        else:
-            result.extend(_parse_portmap_type_a(ws, sname))
-    wb.close()
+    try:
+        for sname in wb.sheetnames:
+            if sname in ('장비스펙', 'FDF', 'FDF현황'):
+                continue
+            try:
+                ws = wb[sname]
+                if not ws.max_row:
+                    continue
+                is_type_b = ext == 'xlsm'
+                if not is_type_b:
+                    for r in range(1, min(10, ws.max_row + 1)):
+                        v = ws.cell(r, 3).value
+                        if v and '허' in str(v):
+                            is_type_b = True
+                            break
+                if is_type_b:
+                    result.extend(_parse_portmap_type_b(ws, sname))
+                else:
+                    result.extend(_parse_portmap_type_a(ws, sname))
+            except Exception as e:
+                logger.warning(f'선번장 시트 파싱 오류: {os.path.basename(filepath)}/{sname} — {e}')
+                continue
+    finally:
+        wb.close()
     return result if result else None
 
 
@@ -718,6 +725,10 @@ def sync_nas_portmap():
             logger.error(f'[{school_name}] 선번장 파싱 오류: {e}')
             stats['failed'] += 1
             continue
+        # 진행률 로그 (100개마다)
+        done = stats['parsed'] + stats['skipped'] + stats['failed'] + 1
+        if done % 100 == 0:
+            logger.info(f'선번장 파싱 진행: {done}/{stats["total"]}')
 
         if not switches:
             stats['skipped'] += 1
