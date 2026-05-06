@@ -447,7 +447,11 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
             for c in range(1, min((ws.max_column or 30) + 1, 40)):
                 v = ws.cell(r, c).value
                 if v and ('통신' in str(v)) and ('랙' in str(v) or '렉' in str(v)):
-                    rack_name_cols[c] = str(v).strip()
+                    vs = str(v).strip()
+                    # "통신랙 실장도" 같은 제목은 제외
+                    if '실장도' in vs:
+                        continue
+                    rack_name_cols[c] = vs
 
         if rack_name_cols:
             # 통신랙 이름 열 기준으로 U열/장비열 계산
@@ -490,11 +494,45 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
                     rack_positions.append((u_col, eq_col, rname, location))
         else:
             # 통신랙 이름이 없는 경우: U=1 위치로 감지
+            u1_row_found = None
             for r in range(3, 15):
                 for c in [1, 2]:
                     v = ws.cell(r, c).value
                     if v and str(v).strip() == '1':
-                        rack_positions.append((c, c + 1, '통신랙 #1', ''))
+                        u1_row_found = r
+                        eq_c = c + 1
+                        # 운영장소 찾기 (R1~U1 사이)
+                        loc = ''
+                        for rr in range(1, r):
+                            for cc in range(1, 15):
+                                vv = ws.cell(rr, cc).value
+                                if vv:
+                                    vvs = str(vv).strip()
+                                    if any(k in vvs for k in ['서버', '전산', '층', 'EPS']) and '실장도' not in vvs and '통신' not in vvs:
+                                        loc = vvs
+                        # 랙이름 찾기 (R1~U1 사이 "통신렉 #N" 등)
+                        rname = '통신랙'
+                        for rr in range(1, r):
+                            vv = ws.cell(rr, eq_c).value
+                            if vv and ('렉' in str(vv) or '랙' in str(vv)) and '실장도' not in str(vv):
+                                rname = str(vv).strip()
+                        rack_positions.append((c, eq_c, rname, loc))
+                        # 같은 행에서 다른 랙 U=1이 있는지 확인 (col 8, 14, 20...)
+                        for alt_c in range(c + 6, min((ws.max_column or 30) + 1, 40), 6):
+                            alt_v = ws.cell(r, alt_c).value
+                            if alt_v and str(alt_v).strip() == '1':
+                                alt_eq = alt_c + 1
+                                alt_rname = '통신랙'
+                                alt_loc = ''
+                                for rr in range(1, r):
+                                    vv = ws.cell(rr, alt_eq).value
+                                    if vv:
+                                        vvs = str(vv).strip()
+                                        if ('렉' in vvs or '랙' in vvs) and '실장도' not in vvs:
+                                            alt_rname = vvs
+                                        elif any(k in vvs for k in ['서버', '전산', '층', 'EPS']) and '실장도' not in vvs:
+                                            alt_loc = vvs
+                                rack_positions.append((alt_c, alt_eq, alt_rname, alt_loc))
                         break
                 if rack_positions:
                     break
