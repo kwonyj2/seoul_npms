@@ -691,15 +691,23 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         except School.DoesNotExist:
             return Response({'error': '학교 없음'}, status=404)
 
-        # 1순위: DB에 port_map이 있으면 즉시 반환 (사전 파싱 결과)
-        db_result = self._db_portmap(school_id)
-        if db_result:
-            return Response(db_result)
+        # 1순위: DB에 port_map 데이터가 실제로 있으면 즉시 반환
+        has_portmap = SchoolEquipment.objects.filter(
+            school=school, category__in=['스위치', 'PoE', 'PoE스위치'],
+            port_map__isnull=False,
+        ).exclude(port_map=[]).exists()
+        if has_portmap:
+            return Response(self._db_portmap(school_id))
 
-        # 2순위: DB 없으면 NAS 실시간 파싱 (최초 1회만 느림)
+        # 2순위: NAS 실시간 파싱
         nas_result = self._parse_nas_portmap(school.name)
         if nas_result:
             return Response(nas_result)
+
+        # 3순위: DB 장비만 있고 port_map 없는 경우 (빈 포트)
+        db_result = self._db_portmap(school_id)
+        if db_result:
+            return Response(db_result)
 
         return Response([])
 
