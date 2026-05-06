@@ -1243,6 +1243,7 @@ function nmsToggleMode() {
 
 function nmsTabSave() {
   if (_currentNmsTab === 'diagram') dgmSave();
+  else if (_currentNmsTab === 'portmap') pmSaveCurrent();
   else if (_currentNmsTab === 'rack') rkSave();
   else if (_currentNmsTab === 'apmap') apSave();
 }
