@@ -659,19 +659,25 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='rack_save')
     def rack_save(self, request):
-        """랙실장도 배치 저장 (장비별 U 위치)"""
-        from apps.schools.models import SchoolEquipment
+        """랙실장도 저장 — SchoolEquipment에 rack_unit/rack_size 업데이트"""
+        from apps.schools.models import School, SchoolEquipment
+        school_id = request.data.get('school_id')
         items = request.data.get('items', [])
-        if not items:
-            return Response({'error': 'items 필요'}, status=400)
+        if not school_id:
+            return Response({'error': 'school_id 필요'}, status=400)
+        try:
+            school = School.objects.get(pk=school_id)
+        except School.DoesNotExist:
+            return Response({'error': '학교 없음'}, status=404)
+
         updated = 0
         for item in items:
-            eid = item.get('id')
-            rack_unit = item.get('rack_unit')
-            rack_size = item.get('rack_size', 1)
-            if eid:
-                SchoolEquipment.objects.filter(pk=eid).update(
-                    rack_unit=rack_unit, rack_size=rack_size)
+            dev_id = item.get('device_id', '').strip()
+            if not dev_id:
+                continue
+            eqs = SchoolEquipment.objects.filter(school=school, device_id=dev_id)
+            if eqs.exists():
+                eqs.update(rack_unit=item.get('u') or None, rack_size=1)
                 updated += 1
         return Response({'success': True, 'updated': updated})
 
