@@ -2393,43 +2393,48 @@ const _PT_CABLE_COLORS = {
 
 function _ptMakeSvgNode(node) {
   const ports = node.port_colors || [];
-  const pc = Math.max(ports.length, node.port_count || 8, 4);
+  const pc = Math.min(Math.max(ports.length, node.port_count || 8, 4), 28);
   const half = Math.ceil(pc / 2);
-  const pw = 6, ph = 5, gap = 1, px = 4, py = 14;
-  const w = Math.max(px * 2 + half * (pw + gap), 60);
+  const pw = 5, ph = 4, gap = 1, px = 3, py = 16;
+  const w = Math.max(px * 2 + half * (pw + gap), 56);
   const rowH = ph + 2;
-  const h = py + rowH * 2 + 18;
+  const bodyH = rowH * 2 + 4;
+  const h = py + bodyH + 16;
   const netColor = _PT_NET_COLORS[node.group] || '#546e7a';
 
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">`;
-  svg += `<rect width="${w}" height="${h}" rx="4" fill="#fff" stroke="${netColor}" stroke-width="1.5"/>`;
-  svg += `<rect x="1" y="1" width="${w-2}" height="12" rx="3" fill="${netColor}"/>`;
-  svg += `<text x="${w/2}" y="9" fill="#fff" font-size="6" text-anchor="middle" font-weight="700">${node.id}</text>`;
+  // 그림자
+  svg += `<rect x="2" y="2" width="${w-2}" height="${h-2}" rx="5" fill="rgba(0,0,0,.08)"/>`;
+  // 본체
+  svg += `<rect x="0" y="0" width="${w}" height="${h}" rx="5" fill="#fff" stroke="${netColor}" stroke-width="2"/>`;
+  // 헤더 (장비ID)
+  svg += `<rect x="1" y="1" width="${w-2}" height="14" rx="4" fill="${netColor}"/>`;
+  svg += `<text x="${w/2}" y="11" fill="#fff" font-size="7" text-anchor="middle" font-weight="700">${node.id}</text>`;
+  // 스위치 본체 (어두운 배경)
+  svg += `<rect x="3" y="${py}" width="${w-6}" height="${bodyH}" rx="3" fill="#2d3436"/>`;
 
-  // 포트 그리기
+  // 포트
   const oddPorts = ports.filter((_, i) => i % 2 === 0);
   const evenPorts = ports.filter((_, i) => i % 2 === 1);
   function drawRow(list, y) {
     list.forEach((cable, i) => {
-      const x = px + i * (pw + gap);
-      const cc = _PT_CABLE_COLORS[(cable||'').toUpperCase().replace('.','').replace(' ','')] || null;
-      let fill = '#fff', stroke = '#ccc';
-      if (cc) { fill = cc; stroke = cc; }
-      else if (cable) {
+      const x = px + 2 + i * (pw + gap);
+      let fill = '#555';
+      if (cable) {
+        const cu = (cable||'').toUpperCase().replace('.','').replace(' ','');
         for (const [k, v] of Object.entries(_PT_CABLE_COLORS)) {
-          if ((cable||'').toUpperCase().includes(k.replace('.','').toUpperCase())) { fill = v; stroke = v; break; }
+          if (cu.includes(k.replace('.','').toUpperCase())) { fill = v; break; }
         }
       }
-      svg += `<rect x="${x}" y="${y}" width="${pw}" height="${ph}" rx="1" fill="${fill}" stroke="${stroke}" stroke-width="0.5"/>`;
+      svg += `<rect x="${x}" y="${y}" width="${pw}" height="${ph}" rx="1" fill="${fill}"/>`;
     });
   }
-  drawRow(oddPorts, py);
-  drawRow(evenPorts, py + rowH);
+  drawRow(oddPorts, py + 2);
+  drawRow(evenPorts, py + 2 + rowH);
 
   // 모델명
-  const model = (node.model || '').length > 12 ? node.model.substring(0,12)+'..' : (node.model || '');
-  svg += `<text x="${w/2}" y="${py + rowH * 2 + 8}" fill="#455a64" font-size="4.5" text-anchor="middle">${model}</text>`;
-  svg += `<text x="${w/2}" y="${py + rowH * 2 + 14}" fill="${netColor}" font-size="4" text-anchor="middle" font-weight="600">[${node.group}]</text>`;
+  const model = (node.model || '').length > 14 ? node.model.substring(0,14)+'..' : (node.model || '');
+  svg += `<text x="${w/2}" y="${h-4}" fill="#78909c" font-size="5" text-anchor="middle">${model}</text>`;
   svg += `</svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
@@ -2451,7 +2456,8 @@ function ptLoadDirect(schoolId) {
 
 function _ptRender(data) {
   const container = document.getElementById('pt-content');
-  // 범례 HTML
+
+  // 범례 + 계위 라벨
   let legendHtml = '<div style="position:absolute;bottom:8px;left:8px;background:rgba(255,255,255,.95);border-radius:6px;padding:6px 10px;font-size:.65rem;z-index:10;border:1px solid #e0e0e0;">';
   legendHtml += '<b style="color:#37474f;">케이블</b> ';
   for (const [k, c] of Object.entries(_PT_CABLE_COLORS)) {
@@ -2460,42 +2466,74 @@ function _ptRender(data) {
   }
   legendHtml += '&nbsp;&nbsp;<b style="color:#37474f;">망구분</b> ';
   for (const [k, c] of Object.entries(_PT_NET_COLORS)) {
-    if (k === '공통') continue;
+    if (k === '공통' || k === 'FDF' || k === 'PoE') continue;
     legendHtml += `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${c};margin:0 2px;vertical-align:middle;"></span>${k} `;
   }
   legendHtml += '</div>';
+
+  // 계위 라벨
+  legendHtml += '<div style="position:absolute;top:8px;left:8px;font-size:.6rem;z-index:10;color:#90a4ae;">';
+  legendHtml += '<div style="margin-bottom:2px;"><b>1계위</b> 코어</div>';
+  legendHtml += '<div style="margin-top:80px;"><b>2계위</b> 분배</div>';
+  legendHtml += '<div style="margin-top:80px;"><b>3계위</b> 액세스</div>';
+  legendHtml += '</div>';
+
   container.innerHTML = `<div id="pt-cy" style="width:100%;height:100%;"></div>${legendHtml}`;
 
-  const elements = [];
+  // ── 수동 좌표 계산 (PPTX 스타일) ──
+  const groupOrder = ['교사망', '학생망', '무선망', '기타', '공통'];
+  const groupXMap = {};
+  const containerW = container.offsetWidth || 1200;
+  const containerH = container.offsetHeight || 600;
+  const colW = containerW / (groupOrder.length + 0.5);
+  groupOrder.forEach((g, i) => { groupXMap[g] = colW * (i + 0.5); });
 
-  // 그룹(compound) 노드
-  data.groups.forEach(g => {
-    elements.push({
-      group: 'nodes',
-      data: { id: 'group_' + g, label: g },
-      classes: 'group',
-    });
+  const levelY = {1: containerH * 0.15, 2: containerH * 0.5, 3: containerH * 0.82};
+
+  // 그룹+계위별 노드 분류
+  const buckets = {};
+  data.nodes.forEach(n => {
+    const key = `${n.group}_${n.level}`;
+    if (!buckets[key]) buckets[key] = [];
+    buckets[key].push(n);
   });
+
+  // 좌표 할당
+  const nodePositions = {};
+  for (const [key, nodes] of Object.entries(buckets)) {
+    const [grp, lvl] = key.split('_');
+    const baseX = groupXMap[grp] || containerW * 0.8;
+    const baseY = levelY[parseInt(lvl)] || containerH * 0.5;
+    const spacing = Math.min(colW / (nodes.length + 1), 90);
+    const startX = baseX - (nodes.length - 1) * spacing / 2;
+    nodes.forEach((n, i) => {
+      nodePositions[n.id] = { x: startX + i * spacing, y: baseY };
+    });
+  }
+
+  const elements = [];
 
   // 노드
   data.nodes.forEach(n => {
     const svgUrl = _ptMakeSvgNode(n);
-    const w = Math.max(60, Math.ceil((n.port_count || 8) / 2) * 7 + 8);
-    const h = 50;
+    const pc = Math.min(Math.max(n.port_count || 8, 4), 28);
+    const w = Math.max(56, Math.ceil(pc / 2) * 6 + 8);
+    const h = 48;
     elements.push({
       group: 'nodes',
       data: {
-        id: n.id, label: n.id, parent: 'group_' + n.group,
+        id: n.id, label: n.id,
         model: n.model, net: n.group, level: n.level,
         svgUrl: svgUrl, nodeW: w, nodeH: h,
       },
+      position: nodePositions[n.id] || { x: 100, y: 100 },
     });
   });
 
   // 엣지
   data.edges.forEach(e => {
     const cable = e.cable || '';
-    let color = '#999';
+    let color = '#bbb';
     for (const [k, c] of Object.entries(_PT_CABLE_COLORS)) {
       if ((cable).toUpperCase().replace('.','').includes(k.replace('.','').toUpperCase())) { color = c; break; }
     }
@@ -2514,14 +2552,7 @@ function _ptRender(data) {
     container: document.getElementById('pt-cy'),
     elements: elements,
     style: [
-      { selector: 'node.group', style: {
-        'background-color': '#f5f5f5', 'background-opacity': 0.6,
-        'border-color': '#bdbdbd', 'border-width': 1,
-        'label': 'data(label)', 'text-valign': 'top', 'text-halign': 'center',
-        'font-size': 11, 'font-weight': 'bold', 'color': '#455a64',
-        'padding': 15, 'shape': 'roundrectangle',
-      }},
-      { selector: 'node:child', style: {
+      { selector: 'node', style: {
         'background-image': 'data(svgUrl)', 'background-fit': 'contain',
         'background-color': '#fff', 'background-opacity': 0,
         'width': 'data(nodeW)', 'height': 'data(nodeH)',
@@ -2532,18 +2563,31 @@ function _ptRender(data) {
         'target-arrow-shape': 'none',
         'curve-style': 'bezier',
         'label': 'data(label)', 'font-size': 6, 'color': '#78909c',
-        'text-rotation': 'autorotate', 'text-margin-y': -6,
+        'text-rotation': 'autorotate', 'text-margin-y': -8,
+        'opacity': 0.8,
+      }},
+      { selector: 'node:selected', style: {
+        'border-width': 3, 'border-color': '#ff5722',
       }},
     ],
-    layout: {
-      name: 'cose',
-      animate: false,
-      nodeRepulsion: 8000,
-      idealEdgeLength: 80,
-      nodeOverlap: 20,
-      padding: 30,
-    },
+    layout: { name: 'preset' },
+    userZoomingEnabled: true,
+    userPanningEnabled: true,
+    boxSelectionEnabled: false,
   });
+
+  // 망구분 배경 영역 그리기 (캔버스 위 오버레이)
+  const cyDiv = document.getElementById('pt-cy');
+  let bgHtml = '';
+  groupOrder.forEach((g, i) => {
+    const c = _PT_NET_COLORS[g] || '#546e7a';
+    const x = colW * i;
+    bgHtml += `<div style="position:absolute;top:0;left:${x}px;width:${colW}px;height:100%;
+      background:${c}08;border-right:1px dashed ${c}30;z-index:0;pointer-events:none;">
+      <div style="text-align:center;padding-top:4px;font-size:.7rem;font-weight:700;color:${c};opacity:.6;">${g}</div>
+    </div>`;
+  });
+  cyDiv.insertAdjacentHTML('beforeend', `<div style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;">${bgHtml}</div>`);
 }
 
 // ══════════════════════════════════════════════════════════
