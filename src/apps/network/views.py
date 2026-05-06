@@ -716,6 +716,7 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         """셀 배경색으로 실제 연결 케이블 감지
         각 포트에 3칸(C6|C5.e|C5 또는 UTP|SM|MM)이 있고,
         배경색이 칠해진(patternType=solid) 칸이 실제 연결된 케이블.
+        theme=0(흰색) 배경은 제외.
         """
         if cable_labels is None:
             cable_labels = ['C6', 'C5.e', 'C5']
@@ -723,8 +724,22 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
             c = ws.cell(row, col + offset)
             if c.fill and c.fill.patternType == 'solid':
                 fg = c.fill.fgColor
-                if fg and fg.rgb and fg.rgb != '00000000':
-                    return label
+                if not fg:
+                    continue
+                # theme 기반 색상(theme=0은 흰색) 제외
+                try:
+                    theme = fg.theme
+                    if theme is not None and isinstance(theme, int):
+                        continue  # theme 색상은 실제 케이블 색상이 아님
+                except (TypeError, AttributeError):
+                    pass
+                # RGB 명시 색상만 인정
+                try:
+                    rgb = fg.rgb
+                    if rgb and isinstance(rgb, str) and rgb.startswith('FF') and rgb != 'FF000000':
+                        return label
+                except (TypeError, AttributeError):
+                    continue
         return ''
 
     def _parse_nas_portmap(self, school_name):

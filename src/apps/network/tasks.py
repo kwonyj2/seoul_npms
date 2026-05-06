@@ -529,15 +529,29 @@ def _old_bulk_analyze_deprecated(image_dir: str = None):
 # ── 선번장 NAS 사전 파싱 → DB 저장 ─────────────────────────
 
 def _detect_cable_by_color(ws, row, col, cable_labels=None):
-    """셀 배경색으로 실제 연결 케이블 감지"""
+    """셀 배경색으로 실제 연결 케이블 감지
+    theme=0(흰색) 배경은 제외, RGB 명시 색상만 인정.
+    """
     if cable_labels is None:
         cable_labels = ['C6', 'C5.e', 'C5']
     for offset, label in enumerate(cable_labels):
         c = ws.cell(row, col + offset)
         if c.fill and c.fill.patternType == 'solid':
             fg = c.fill.fgColor
-            if fg and fg.rgb and fg.rgb != '00000000':
-                return label
+            if not fg:
+                continue
+            try:
+                theme = fg.theme
+                if theme is not None and isinstance(theme, int):
+                    continue
+            except (TypeError, AttributeError):
+                pass
+            try:
+                rgb = fg.rgb
+                if rgb and isinstance(rgb, str) and rgb.startswith('FF') and rgb != 'FF000000':
+                    return label
+            except (TypeError, AttributeError):
+                continue
     return ''
 
 
