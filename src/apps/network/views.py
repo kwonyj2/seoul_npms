@@ -1096,13 +1096,13 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
 @page {{ size: A4 landscape; margin: 12mm 10mm; }}
 body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt; color: #333; margin: 0; }}
 .page {{ width: 100%; }}
-.header {{ display: flex; align-items: center; border-bottom: 2px solid #1565c0; padding-bottom: 4px; margin-bottom: 8px; }}
+.header {{ border-bottom: 2px solid #1565c0; padding-bottom: 4px; margin-bottom: 8px; overflow: hidden; }}
 .school-name {{ font-size: 12pt; font-weight: 800; color: #1565c0; }}
 .title {{ font-size: 10pt; font-weight: 600; color: #455a64; margin-left: 12px; }}
-.page-num {{ margin-left: auto; font-size: 8pt; color: #90a4ae; }}
-.content {{ display: flex; gap: 10px; }}
-.left-panel {{ width: 48%; display: flex; flex-direction: column; }}
-.right-panel {{ width: 52%; }}
+.page-num {{ float: right; font-size: 8pt; color: #90a4ae; }}
+.content {{ overflow: hidden; }}
+.left-panel {{ float: left; width: 46%; padding-right: 10px; }}
+.right-panel {{ float: right; width: 52%; }}
 .info-table {{ width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 7.5pt; }}
 .info-table th {{ background: #f5f7fa; color: #546e7a; font-weight: 600; text-align: left; padding: 3px 8px; border: 1px solid #dee2e6; width: 65px; }}
 .info-table td {{ padding: 3px 8px; border: 1px solid #dee2e6; }}
@@ -1110,8 +1110,8 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
 .badge-y {{ background: #1565c0; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 7pt; font-weight: 700; }}
 .badge-n {{ background: #90a4ae; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 7pt; }}
 .badge-conn {{ background: #198754; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 7pt; font-weight: 700; }}
-.svg-box {{ text-align: center; margin-top: 6px; flex: 1; display: flex; align-items: center; justify-content: center; }}
-.svg-box svg {{ width: 100%; }}
+.svg-box {{ text-align: center; margin-top: 6px; }}
+.svg-box svg {{ width: 100%; height: auto; }}
 .port-table {{ width: 100%; border-collapse: collapse; font-size: 7pt; }}
 .port-table thead th {{ background: linear-gradient(135deg, #37474f, #546e7a); color: #eceff1; font-weight: 600; padding: 4px; text-align: center; }}
 .port-table tbody tr:nth-child(even) {{ background: #f8fafc; }}
