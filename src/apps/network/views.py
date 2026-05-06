@@ -699,6 +699,22 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         # NAS 파일 없으면 DB 기반 폴백
         return Response(self._db_portmap(school_id))
 
+    @staticmethod
+    def _detect_cable_by_color(ws, row, col, cable_labels=None):
+        """셀 배경색으로 실제 연결 케이블 감지
+        각 포트에 3칸(C6|C5.e|C5 또는 UTP|SM|MM)이 있고,
+        배경색이 칠해진(patternType=solid) 칸이 실제 연결된 케이블.
+        """
+        if cable_labels is None:
+            cable_labels = ['C6', 'C5.e', 'C5']
+        for offset, label in enumerate(cable_labels):
+            c = ws.cell(row, col + offset)
+            if c.fill and c.fill.patternType == 'solid':
+                fg = c.fill.fgColor
+                if fg and fg.rgb and fg.rgb != '00000000':
+                    return label
+        return ''
+
     def _parse_nas_portmap(self, school_name):
         """NAS 선번장 파일 파싱 — xlsx/xlsm 양식 A/B 자동 감지"""
         import os
@@ -715,7 +731,7 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
 
         try:
             import openpyxl
-            wb = openpyxl.load_workbook(found_file, read_only=True, data_only=True)
+            wb = openpyxl.load_workbook(found_file, data_only=True)
         except Exception:
             return None
 
@@ -749,8 +765,11 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         return result if result else None
 
     def _parse_type_b(self, ws, sname):
-        """양식 B (xlsm 스타일): 67열, 19행 간격, C열 시작"""
+        """양식 B (xlsm 스타일): 67열, 19행 간격, C열 시작
+        케이블: 셀 배경색으로 감지 (C6|C5.e|C5 3칸, 포트25~는 UTP|SM|MM)
+        """
         PORT_COLS_B = [3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 53, 57]
+        UPLINK_COLS_B = [53, 57]  # 포트 25~28 (UTP|SM|MM)
         switches = []
         for r in range(1, ws.max_row + 1):
             v = ws.cell(r, 3).value
@@ -767,24 +786,25 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
 
             ports = []
             for col in PORT_COLS_B:
+                labels = ['UTP', 'SM', 'MM'] if col in UPLINK_COLS_B else ['C6', 'C5.e', 'C5']
                 # 홀수
                 pnum = ws.cell(base + 6, col).value
                 conn = str(ws.cell(base + 8, col).value or '').strip()
-                cable = str(ws.cell(base + 7, col).value or '').strip()
+                cable = self._detect_cable_by_color(ws, base + 7, col, labels)
                 if pnum and str(pnum).strip():
                     pn = int(pnum) if str(pnum).strip().isdigit() else 0
                     if pn > 0:
                         ports.append({'port': pn, 'connected_to': conn if conn != '/' else '',
-                                      'cable': cable, 'vlan': '', 'note': '', 'status': 'up' if conn and conn != '/' else 'down'})
+                                      'cable': cable, 'vlan': '', 'note': ''})
                 # 짝수
                 pnum2 = ws.cell(base + 11, col).value
                 conn2 = str(ws.cell(base + 13, col).value or '').strip()
-                cable2 = str(ws.cell(base + 12, col).value or '').strip()
+                cable2 = self._detect_cable_by_color(ws, base + 12, col, labels)
                 if pnum2 and str(pnum2).strip():
                     pn2 = int(pnum2) if str(pnum2).strip().isdigit() else 0
                     if pn2 > 0:
                         ports.append({'port': pn2, 'connected_to': conn2 if conn2 != '/' else '',
-                                      'cable': cable2, 'vlan': '', 'note': '', 'status': 'up' if conn2 and conn2 != '/' else 'down'})
+                                      'cable': cable2, 'vlan': '', 'note': ''})
             ports.sort(key=lambda p: p['port'])
             switches.append({
                 'id': 0, 'model_name': model, 'device_id': hub_id,
@@ -797,8 +817,11 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         return switches
 
     def _parse_type_a(self, ws, sname):
-        """양식 A (xlsx 스타일): 66열, 10행 간격, A열 시작"""
+        """양식 A (xlsx 스타일): 66열, 10행 간격, A열 시작
+        케이블: 셀 배경색으로 감지 (C6|C5.e|C5 3칸, 업링크는 UTP|SM|MM)
+        """
         PORT_COLS_A = [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49, 52, 55, 58]
+        UPLINK_COLS_A = [55, 58]  # 포트 25~28 (UTP|SM|MM)
         switches = []
         for r in range(1, ws.max_row + 1):
             v = ws.cell(r, 1).value
@@ -817,22 +840,23 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
 
             ports = []
             for col in PORT_COLS_A:
+                labels = ['UTP', 'SM', 'MM'] if col in UPLINK_COLS_A else ['C6', 'C5.e', 'C5']
                 # 홀수 (base+2)
                 pnum = ws.cell(base + 2, col).value
-                cable = str(ws.cell(base + 3, col).value or '').strip()
+                cable = self._detect_cable_by_color(ws, base + 3, col, labels)
                 conn = str(ws.cell(base + 4, col).value or '').strip()
                 if pnum and str(pnum).strip().isdigit():
                     pn = int(pnum)
                     ports.append({'port': pn, 'connected_to': conn if conn and conn != '/' else '',
-                                  'cable': cable, 'vlan': '', 'note': '', 'status': 'up' if conn and conn != '/' else 'down'})
+                                  'cable': cable, 'vlan': '', 'note': ''})
                 # 짝수 (base+5)
                 pnum2 = ws.cell(base + 5, col).value
-                cable2 = str(ws.cell(base + 6, col).value or '').strip()
+                cable2 = self._detect_cable_by_color(ws, base + 6, col, labels)
                 conn2 = str(ws.cell(base + 7, col).value or '').strip()
                 if pnum2 and str(pnum2).strip().isdigit():
                     pn2 = int(pnum2)
                     ports.append({'port': pn2, 'connected_to': conn2 if conn2 and conn2 != '/' else '',
-                                  'cable': cable2, 'vlan': '', 'note': '', 'status': 'up' if conn2 and conn2 != '/' else 'down'})
+                                  'cable': cable2, 'vlan': '', 'note': ''})
             ports.sort(key=lambda p: p['port'])
             switches.append({
                 'id': 0, 'model_name': model, 'device_id': hub_id or model,
