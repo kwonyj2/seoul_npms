@@ -1775,19 +1775,21 @@ function rkSelectRack(rackIdx) {
     <span class="ms-auto badge" style="font-size:.6rem;background:#e8f5e9;color:#2e7d32;">${rackItems.length}개 장비</span></div>`;
 
   // 헤더
+  const _colDef = '<colgroup><col style="width:30px;"><col style="width:50px;"><col><col style="width:70px;"><col style="width:60px;"></colgroup>';
   html += `<table class="table table-sm mb-0" style="font-size:.7rem;line-height:1.3;table-layout:fixed;width:100%;flex-shrink:0;">
-    <colgroup><col style="width:36px;"><col style="width:50%;"><col style="width:25%;"><col style="width:25%;"></colgroup>
+    ${_colDef}
     <thead><tr style="background:linear-gradient(135deg,#37474f,#546e7a);color:#eceff1;">
-      <th style="padding:5px 4px;text-align:center;font-weight:600;">U</th>
-      <th style="padding:5px 4px;text-align:center;font-weight:600;">장비명</th>
-      <th style="padding:5px 4px;text-align:center;font-weight:600;">유형</th>
-      <th style="padding:5px 4px;text-align:center;font-weight:600;">비고</th>
+      <th style="padding:5px 3px;text-align:center;font-weight:600;">U</th>
+      <th style="padding:5px 3px;text-align:center;font-weight:600;">장비ID</th>
+      <th style="padding:5px 3px;text-align:center;font-weight:600;">장비명</th>
+      <th style="padding:5px 3px;text-align:center;font-weight:600;">유형</th>
+      <th style="padding:5px 3px;text-align:center;font-weight:600;">비고</th>
     </tr></thead></table>`;
 
   // 스크롤 영역
   html += `<div style="overflow-y:auto;flex:1;">`;
   html += `<table class="table table-sm mb-0" id="rk-item-table" style="font-size:.7rem;line-height:1.3;table-layout:fixed;width:100%;border:1px solid #e2e8f0;">
-    <colgroup><col style="width:36px;"><col style="width:50%;"><col style="width:25%;"><col style="width:25%;"></colgroup><tbody>`;
+    ${_colDef}<tbody>`;
 
   // U번호 순서 (U1→maxU, 엑셀과 동일)
   const typeLabels = {switch:'스위치',poe:'PoE',firewall:'방화벽',fdf:'FDF/OFD',patch:'패치판넬',server:'서버',ups:'UPS',external:'랙외부'};
@@ -1799,52 +1801,57 @@ function rkSelectRack(rackIdx) {
     const stripe = u % 2 === 0 ? '#ffffff' : '#f8fafc';
     if (item) {
       const ts = _rkTypeStyle(item.type);
+      const devId = item.device_id || '';
+      const devModel = item.model || item.name;
       html += `<tr style="background:${stripe};">
-        <td class="text-center fw-bold" style="padding:3px 4px;color:#37474f;border-bottom:1px solid #eceff1;">${u}</td>
-        <td style="padding:2px 4px;border-bottom:1px solid #eceff1;">
-          <input type="text" class="form-control border-0 rk-name-input" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;" data-u="${u}" value="${item.name}">
+        <td class="text-center fw-bold" style="padding:3px 3px;color:#37474f;border-bottom:1px solid #eceff1;">${u}</td>
+        <td style="padding:2px 3px;border-bottom:1px solid #eceff1;font-weight:600;color:#1565c0;font-size:.64rem;">${devId}</td>
+        <td style="padding:2px 3px;border-bottom:1px solid #eceff1;">
+          <input type="text" class="form-control border-0 rk-name-input" style="font-size:.64rem;height:20px;padding:1px 3px;background:transparent;" data-u="${u}" value="${devModel}">
         </td>
-        <td class="text-center rk-type-td" style="padding:2px 3px;border-bottom:1px solid #eceff1;" data-u="${u}">
+        <td class="text-center rk-type-td" style="padding:2px 2px;border-bottom:1px solid #eceff1;" data-u="${u}">
           <div class="d-flex align-items-center justify-content-center">
-            <span class="rk-type-dot" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${ts.bg};margin-right:3px;"></span>
-            <select class="form-select border-0 rk-type-sel" style="font-size:.63rem;height:20px;padding:0 2px;background:transparent;text-align-last:center;flex:1;" data-u="${u}" onchange="rkTypeChange(this)">
+            <span class="rk-type-dot" style="display:inline-block;width:7px;height:7px;border-radius:2px;background:${ts.bg};margin-right:2px;"></span>
+            <select class="form-select border-0 rk-type-sel" style="font-size:.6rem;height:20px;padding:0 1px;background:transparent;text-align-last:center;flex:1;" data-u="${u}" onchange="rkTypeChange(this)">
               ${typeOpts.replace(`value="${item.type}"`, `value="${item.type}" selected`)}
             </select>
           </div>
         </td>
-        <td style="padding:2px 4px;border-bottom:1px solid #eceff1;"><input type="text" class="form-control border-0 rk-note-input" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;" data-u="${u}" value="${item.note||''}"></td>
+        <td style="padding:2px 3px;border-bottom:1px solid #eceff1;"><input type="text" class="form-control border-0 rk-note-input" style="font-size:.64rem;height:20px;padding:1px 3px;background:transparent;" data-u="${u}" value="${item.note||''}"></td>
       </tr>`;
     } else {
       html += `<tr style="background:${stripe};">
-        <td class="text-center" style="padding:3px 4px;color:#ccc;border-bottom:1px solid #eceff1;">${u}</td>
-        <td style="padding:2px 4px;border-bottom:1px solid #eceff1;">
-          <input type="text" class="form-control border-0 rk-name-input" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;color:#aaa;" data-u="${u}" value="" placeholder="장비 입력">
+        <td class="text-center" style="padding:3px 3px;color:#ccc;border-bottom:1px solid #eceff1;">${u}</td>
+        <td style="padding:2px 3px;border-bottom:1px solid #eceff1;"></td>
+        <td style="padding:2px 3px;border-bottom:1px solid #eceff1;">
+          <input type="text" class="form-control border-0 rk-name-input" style="font-size:.64rem;height:20px;padding:1px 3px;background:transparent;color:#aaa;" data-u="${u}" value="" placeholder="장비 입력">
         </td>
-        <td class="text-center rk-type-td" style="padding:2px 3px;border-bottom:1px solid #eceff1;" data-u="${u}">
+        <td class="text-center rk-type-td" style="padding:2px 2px;border-bottom:1px solid #eceff1;" data-u="${u}">
           <div class="d-flex align-items-center justify-content-center">
-            <span class="rk-type-dot" style="display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:3px;"></span>
-            <select class="form-select border-0 rk-type-sel" style="font-size:.63rem;height:20px;padding:0 2px;background:transparent;text-align-last:center;flex:1;" data-u="${u}" onchange="rkTypeChange(this)">
+            <span class="rk-type-dot" style="display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:2px;"></span>
+            <select class="form-select border-0 rk-type-sel" style="font-size:.6rem;height:20px;padding:0 1px;background:transparent;text-align-last:center;flex:1;" data-u="${u}" onchange="rkTypeChange(this)">
               <option value="">-</option>${typeOpts}
             </select>
           </div>
         </td>
-        <td style="padding:2px 4px;border-bottom:1px solid #eceff1;"><input type="text" class="form-control border-0 rk-note-input" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;" data-u="${u}" value=""></td>
+        <td style="padding:2px 3px;border-bottom:1px solid #eceff1;"><input type="text" class="form-control border-0 rk-note-input" style="font-size:.64rem;height:20px;padding:1px 3px;background:transparent;" data-u="${u}" value=""></td>
       </tr>`;
     }
   }
 
   // 랙 외부 장비
   if (extItems.length) {
-    html += `<tr style="background:#fff3cd;"><td colspan="4" class="fw-bold text-center" style="padding:4px;font-size:.65rem;color:#856404;">랙 외부 장비</td></tr>`;
+    html += `<tr style="background:#fff3cd;"><td colspan="5" class="fw-bold text-center" style="padding:4px;font-size:.65rem;color:#856404;">랙 외부 장비</td></tr>`;
     extItems.forEach(item => {
       const ts = _rkTypeStyle(item.type);
+      const devId = item.device_id || '';
+      const devModel = item.model || item.name;
       html += `<tr style="background:#fffbeb;">
-        <td class="text-center" style="padding:3px 4px;color:#999;border-bottom:1px solid #eceff1;">-</td>
-        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;">
-          <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${ts.bg};margin-right:4px;vertical-align:middle;"></span>${item.name}
-        </td>
-        <td class="text-center" style="padding:3px 4px;border-bottom:1px solid #eceff1;color:${ts.bg};font-weight:600;">${typeLabels[item.type]||item.type}</td>
-        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;"></td>
+        <td class="text-center" style="padding:3px 3px;color:#999;border-bottom:1px solid #eceff1;">-</td>
+        <td style="padding:3px 3px;border-bottom:1px solid #eceff1;font-weight:600;color:#1565c0;font-size:.64rem;">${devId}</td>
+        <td style="padding:3px 3px;border-bottom:1px solid #eceff1;">${devModel}</td>
+        <td class="text-center" style="padding:3px 3px;border-bottom:1px solid #eceff1;color:${ts.bg};font-weight:600;font-size:.6rem;">${typeLabels[item.type]||item.type}</td>
+        <td style="padding:3px 3px;border-bottom:1px solid #eceff1;"></td>
       </tr>`;
     });
   }

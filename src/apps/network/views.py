@@ -472,14 +472,21 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
                         if has_u:
                             break
                 if has_u:
-                    # 운영장소 찾기
+                    # 운영장소 찾기 (R1~R2, 해당 랙 열 또는 인접 열)
                     location = ''
-                    for r in range(1, 5):
-                        v = ws.cell(r, eq_col).value
-                        if v:
-                            vs = str(v).strip()
-                            if ('서버' in vs or '전산' in vs or '층' in vs or 'EPS' in vs) and '통신' not in vs:
-                                location = vs
+                    for r in [1, 2]:
+                        for cc in [eq_col, eq_col - 1, eq_col + 1, u_col]:
+                            if cc < 1:
+                                continue
+                            v = ws.cell(r, cc).value
+                            if v:
+                                vs = str(v).strip()
+                                if vs and not ('통신' in vs and ('랙' in vs or '렉' in vs)) and '실장도' not in vs and len(vs) > 2:
+                                    if any(k in vs for k in ['서버', '전산', '층', 'EPS', '교무', '복도', '실']):
+                                        location = vs
+                                        break
+                        if location:
+                            break
                     rack_positions.append((u_col, eq_col, rname, location))
         else:
             # 통신랙 이름이 없는 경우: U=1 위치로 감지
@@ -510,14 +517,19 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
                 continue
 
             items = []
-            # 랙 외부 장비 (U1 위 행)
-            for r in range(max(1, u1_row - 5), u1_row):
+            # 랙 외부 장비 (랙이름 행~U1 사이, R1~R2는 운영장소이므로 제외)
+            for r in range(max(3, u1_row - 5), u1_row):
                 v = ws.cell(r, eq_col).value
                 u_v = ws.cell(r, u_col).value
                 if v and not u_v:
                     vs = str(v).strip()
-                    if vs and '통신' not in vs and '실장' not in vs and vs != rack_name and vs != location and len(vs) > 1:
-                        items.append({'u': 0, 'name': vs, 'type': self._detect_equip_type(vs)})
+                    if not vs or len(vs) <= 1:
+                        continue
+                    # 운영장소/랙이름/제목 제외
+                    if self._is_location_text(vs) or vs == rack_name or vs == location:
+                        continue
+                    dev_id, dev_name = self._split_device_id(vs)
+                    items.append({'u': 0, 'name': vs, 'device_id': dev_id, 'model': dev_name, 'type': self._detect_equip_type(vs)})
 
             # U번호별 장비
             current_u = 0
@@ -528,8 +540,9 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
                     current_u = int(u_v)
                 if eq_v:
                     name = str(eq_v).strip()
-                    if name and name != rack_name and name != location:
-                        items.append({'u': current_u, 'name': name, 'type': self._detect_equip_type(name)})
+                    if name and name != rack_name and name != location and not self._is_location_text(name):
+                        dev_id, dev_name = self._split_device_id(name)
+                        items.append({'u': current_u, 'name': name, 'device_id': dev_id, 'model': dev_name, 'type': self._detect_equip_type(name)})
 
             if items:
                 racks.append({
@@ -548,11 +561,35 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
         nl = (name or '').upper()
         if '패치' in name: return 'patch'
         if 'FDF' in nl or 'OFD' in nl: return 'fdf'
-        if '방화벽' in name or 'FW/' in nl or 'NGF' in nl or '200E' in nl: return 'firewall'
+        if '방화벽' in name or 'FW/' in nl or 'FW#' in nl or 'NGF' in nl or '200E' in nl: return 'firewall'
         if 'UPS' in nl: return 'ups'
         if '서버' in name or 'SERVER' in nl: return 'server'
         if 'P#' in name or 'POE' in nl: return 'poe'
         return 'switch'
+
+    @staticmethod
+    def _is_location_text(text):
+        """운영장소/제목 텍스트인지 판별"""
+        if not text:
+            return False
+        keywords = ['서버', '전산', '층', 'EPS', '교무', '복도', '실장도', '통신랙', '통신렉']
+        return any(k in text for k in keywords)
+
+    @staticmethod
+    def _split_device_id(name):
+        """장비명에서 장비ID 분리: 'K#M E4020-24TX' → ('K#M', 'E4020-24TX')"""
+        import re
+        if not name:
+            return '', name or ''
+        m = re.match(r'^([KHMPGFB][#B]\S*)\s+(.+)$', name.strip())
+        if m:
+            return m.group(1), m.group(2).strip('() ')
+        # IP# 패턴
+        m2 = re.match(r'^(IP#\S*)\s+(.+)$', name.strip())
+        if m2:
+            return m2.group(1), m2.group(2).strip('() ')
+        # 방화벽#1, FDF#2 등은 ID가 아닌 장비명
+        return '', name
 
     def _db_rack(self, school_id):
         """DB 기반 랙 데이터 (폴백)"""
