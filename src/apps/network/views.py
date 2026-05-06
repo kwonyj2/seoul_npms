@@ -1076,12 +1076,13 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
                         <div class="svg-box">{svg}</div>
                     </div>
                     <div class="right-panel">
-                        <table class="port-table">
+                        <table class="port-table" style="table-layout:fixed;width:100%;">
+                            <colgroup><col style="width:32px;"><col style="width:40%;"><col style="width:30%;"><col style="width:30%;"></colgroup>
                             <thead><tr>
-                                <th style="width:36px;">Port</th>
+                                <th>Port</th>
                                 <th>연결장비</th>
-                                <th style="width:60px;">케이블</th>
-                                <th style="width:56px;">점검상태</th>
+                                <th>케이블</th>
+                                <th>점검상태</th>
                             </tr></thead>
                             <tbody>{port_rows}</tbody>
                         </table>
@@ -1100,8 +1101,8 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
 .title {{ font-size: 10pt; font-weight: 600; color: #455a64; margin-left: 12px; }}
 .page-num {{ margin-left: auto; font-size: 8pt; color: #90a4ae; }}
 .content {{ display: flex; gap: 10px; }}
-.left-panel {{ width: 38%; display: flex; flex-direction: column; }}
-.right-panel {{ width: 62%; }}
+.left-panel {{ width: 48%; display: flex; flex-direction: column; }}
+.right-panel {{ width: 52%; }}
 .info-table {{ width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 7.5pt; }}
 .info-table th {{ background: #f5f7fa; color: #546e7a; font-weight: 600; text-align: left; padding: 3px 8px; border: 1px solid #dee2e6; width: 65px; }}
 .info-table td {{ padding: 3px 8px; border: 1px solid #dee2e6; }}
@@ -1109,8 +1110,8 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
 .badge-y {{ background: #1565c0; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 7pt; font-weight: 700; }}
 .badge-n {{ background: #90a4ae; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 7pt; }}
 .badge-conn {{ background: #198754; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 7pt; font-weight: 700; }}
-.svg-box {{ text-align: center; margin-top: 4px; }}
-.svg-box svg {{ max-width: 100%; }}
+.svg-box {{ text-align: center; margin-top: 6px; flex: 1; display: flex; align-items: center; justify-content: center; }}
+.svg-box svg {{ width: 100%; }}
 .port-table {{ width: 100%; border-collapse: collapse; font-size: 7pt; }}
 .port-table thead th {{ background: linear-gradient(135deg, #37474f, #546e7a); color: #eceff1; font-weight: 600; padding: 4px; text-align: center; }}
 .port-table tbody tr:nth-child(even) {{ background: #f8fafc; }}
