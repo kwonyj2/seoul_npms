@@ -1802,13 +1802,15 @@ function rkSelectRack(rackIdx) {
       html += `<tr style="background:${stripe};">
         <td class="text-center fw-bold" style="padding:3px 4px;color:#37474f;border-bottom:1px solid #eceff1;">${u}</td>
         <td style="padding:2px 4px;border-bottom:1px solid #eceff1;">
-          <span class="rk-type-dot" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${ts.bg};margin-right:4px;vertical-align:middle;"></span>
-          <input type="text" class="form-control border-0 rk-name-input d-inline" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;width:calc(100% - 16px);" data-u="${u}" value="${item.name}">
+          <input type="text" class="form-control border-0 rk-name-input" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;" data-u="${u}" value="${item.name}">
         </td>
-        <td class="text-center" style="padding:2px 3px;border-bottom:1px solid #eceff1;">
-          <select class="form-select border-0 rk-type-sel" style="font-size:.63rem;height:20px;padding:0 2px;background:transparent;text-align-last:center;" data-u="${u}" onchange="rkTypeChange(this)">
-            ${typeOpts.replace(`value="${item.type}"`, `value="${item.type}" selected`)}
-          </select>
+        <td class="text-center rk-type-td" style="padding:2px 3px;border-bottom:1px solid #eceff1;" data-u="${u}">
+          <div class="d-flex align-items-center justify-content-center">
+            <span class="rk-type-dot" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${ts.bg};margin-right:3px;"></span>
+            <select class="form-select border-0 rk-type-sel" style="font-size:.63rem;height:20px;padding:0 2px;background:transparent;text-align-last:center;flex:1;" data-u="${u}" onchange="rkTypeChange(this)">
+              ${typeOpts.replace(`value="${item.type}"`, `value="${item.type}" selected`)}
+            </select>
+          </div>
         </td>
         <td style="padding:2px 4px;border-bottom:1px solid #eceff1;"><input type="text" class="form-control border-0 rk-note-input" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;" data-u="${u}" value="${item.note||''}"></td>
       </tr>`;
@@ -1818,10 +1820,13 @@ function rkSelectRack(rackIdx) {
         <td style="padding:2px 4px;border-bottom:1px solid #eceff1;">
           <input type="text" class="form-control border-0 rk-name-input" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;color:#aaa;" data-u="${u}" value="" placeholder="장비 입력">
         </td>
-        <td style="padding:2px 3px;border-bottom:1px solid #eceff1;">
-          <select class="form-select border-0 rk-type-sel" style="font-size:.63rem;height:20px;padding:0 2px;background:transparent;text-align-last:center;" data-u="${u}" onchange="rkTypeChange(this)">
-            <option value="">-</option>${typeOpts}
-          </select>
+        <td class="text-center rk-type-td" style="padding:2px 3px;border-bottom:1px solid #eceff1;" data-u="${u}">
+          <div class="d-flex align-items-center justify-content-center">
+            <span class="rk-type-dot" style="display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:3px;"></span>
+            <select class="form-select border-0 rk-type-sel" style="font-size:.63rem;height:20px;padding:0 2px;background:transparent;text-align-last:center;flex:1;" data-u="${u}" onchange="rkTypeChange(this)">
+              <option value="">-</option>${typeOpts}
+            </select>
+          </div>
         </td>
         <td style="padding:2px 4px;border-bottom:1px solid #eceff1;"><input type="text" class="form-control border-0 rk-note-input" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;" data-u="${u}" value=""></td>
       </tr>`;
@@ -1852,22 +1857,9 @@ function rkSelectRack(rackIdx) {
 function rkTypeChange(sel) {
   const val = sel.value;
   const ts = val ? _rkTypeStyle(val) : null;
-  // 같은 행의 장비명 셀에 도트 업데이트
-  const row = sel.closest('tr');
-  if (row) {
-    const nameTd = row.cells[1];
-    let dot = nameTd.querySelector('.rk-type-dot');
-    if (ts) {
-      if (!dot) {
-        dot = document.createElement('span');
-        dot.className = 'rk-type-dot';
-        dot.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle;';
-        nameTd.insertBefore(dot, nameTd.firstChild);
-      }
-      dot.style.background = ts.bg;
-    } else if (dot) {
-      dot.remove();
-    }
+  const dot = sel.closest('td').querySelector('.rk-type-dot');
+  if (dot) {
+    dot.style.background = ts ? ts.bg : 'transparent';
   }
 }
 
