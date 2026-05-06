@@ -1755,8 +1755,20 @@ function _pmDoLoad(schoolId) {
     });
 }
 
+const _NET_ICONS = {
+  '교사망': {icon:'bi-pc-display', color:'#1565c0'},
+  '학생망': {icon:'bi-people-fill', color:'#2e7d32'},
+  '무선망': {icon:'bi-wifi', color:'#e65100'},
+  '기타망': {icon:'bi-gear-fill', color:'#6a1b9a'},
+};
+function _netStyle(net) {
+  for (const [k, v] of Object.entries(_NET_ICONS)) {
+    if (net.includes(k.replace('망',''))) return v;
+  }
+  return {icon:'bi-diagram-3-fill', color:'#546e7a'};
+}
+
 function _pmRenderFull(d) {
-  // 망구분별 그룹화
   const groups = {};
   d.forEach((sw, i) => {
     const net = sw.network_type || '기타망';
@@ -1765,32 +1777,54 @@ function _pmRenderFull(d) {
   });
   const src = d[0]?.source || 'db';
 
-  // 좌측 트리 HTML
+  // 좌측 트리: 접기/펼치기 망구분별 그룹
   let treeHtml = '';
-  if (src === 'nas') treeHtml += '<div class="small text-success mb-1"><i class="bi bi-file-earmark-excel me-1"></i>NAS 로드</div>';
+  if (src === 'nas') {
+    treeHtml += `<div class="d-flex align-items-center px-2 py-1 mb-1" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:6px;">
+      <i class="bi bi-file-earmark-spreadsheet text-success me-1"></i>
+      <span style="font-size:.7rem;font-weight:600;color:#2e7d32;">NAS 파일 로드</span></div>`;
+  }
+  let gIdx = 0;
   for (const [net, sws] of Object.entries(groups)) {
-    treeHtml += `<div class="fw-bold small text-muted mt-1 mb-0 px-2" style="font-size:.75rem;"><i class="bi bi-hdd-network me-1"></i>${net} (${sws.length})</div>`;
+    const ns = _netStyle(net);
+    treeHtml += `<div class="pm-tree-group" style="margin-bottom:2px;">
+      <div class="d-flex align-items-center px-2 py-1" style="cursor:pointer;border-radius:4px;background:#f5f5f5;transition:background .15s;"
+           onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none';this.querySelector('.pm-caret').classList.toggle('bi-caret-right-fill');this.querySelector('.pm-caret').classList.toggle('bi-caret-down-fill')"
+           onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background='#f5f5f5'">
+        <i class="bi bi-caret-down-fill pm-caret me-1" style="font-size:.6rem;color:#90a4ae;"></i>
+        <i class="bi ${ns.icon} me-1" style="color:${ns.color};font-size:.75rem;"></i>
+        <span style="font-size:.72rem;font-weight:600;color:#37474f;">${net}</span>
+        <span class="badge rounded-pill ms-auto" style="font-size:.55rem;background:${ns.color};color:#fff;">${sws.length}</span>
+      </div>
+      <div class="pm-tree-children">`;
     sws.forEach(sw => {
-      treeHtml += `<div class="pm-tree-item px-2 py-1" data-idx="${sw._idx}" onclick="pmSelectSwitch(${sw._idx},this)" style="cursor:pointer;font-size:.72rem;border-left:3px solid transparent;">
-        <i class="bi bi-ethernet me-1"></i>${sw.device_id||sw.model_name}
-        <small class="text-muted">${sw.model_name||''}</small>
+      const isPoE = sw.category === 'PoE' || (sw.device_id||'').toUpperCase().includes('P#');
+      const swIcon = isPoE ? 'bi-lightning-charge-fill' : 'bi-hdd-rack-fill';
+      const swColor = isPoE ? '#ff8f00' : ns.color;
+      treeHtml += `<div class="pm-tree-item d-flex align-items-center px-2 py-1" data-idx="${sw._idx}"
+            onclick="pmSelectSwitch(${sw._idx},this)"
+            style="cursor:pointer;font-size:.7rem;border-left:3px solid transparent;border-radius:0 4px 4px 0;margin-left:8px;transition:all .15s;"
+            onmouseover="if(!this.classList.contains('active'))this.style.background='#e8eaf6'" onmouseout="if(!this.classList.contains('active'))this.style.background=''">
+        <i class="bi ${swIcon} me-1" style="color:${swColor};font-size:.7rem;"></i>
+        <span class="fw-semibold" style="color:#37474f;">${sw.device_id||sw.model_name}</span>
+        <small class="text-muted ms-1" style="font-size:.6rem;">${sw.model_name||''}</small>
       </div>`;
     });
+    treeHtml += `</div></div>`;
+    gIdx++;
   }
 
-  // 전체 레이아웃
   document.getElementById('pm-switch-tabs').style.display = 'none';
   let html = `<div class="row g-1" style="height:calc(100vh - 200px);">`;
   // 좌측 트리
   html += `<div class="col-md-2 col-lg-2" style="overflow-y:auto;max-height:calc(100vh - 200px);">
     <div class="card border-0 shadow-sm h-100"><div class="card-body p-1">${treeHtml}</div></div></div>`;
-  // 중앙 SVG + 우측 표
+  // 중앙 + 우측
   html += `<div class="col-md-10 col-lg-10" id="pm-detail">
-    <div class="text-center text-muted py-5"><i class="bi bi-hand-index fs-3 d-block mb-2"></i>좌측에서 스위치를 선택하세요</div></div>`;
+    <div class="text-center text-muted py-5"><i class="bi bi-hand-index-thumb fs-2 d-block mb-2" style="color:#90a4ae;"></i><span style="font-size:.85rem;">좌측에서 스위치를 선택하세요</span></div></div>`;
   html += `</div>`;
   document.getElementById('pm-content').innerHTML = html;
 
-  // 첫 번째 스위치 자동 선택
   if (d.length > 0) pmSelectSwitch(0, document.querySelector('.pm-tree-item'));
 }
 
@@ -1799,10 +1833,12 @@ function pmSelectSwitch(idx, el) {
   document.querySelectorAll('.pm-tree-item').forEach(e => {
     e.style.borderLeftColor = 'transparent';
     e.style.background = '';
+    e.classList.remove('active');
   });
   if (el) {
-    el.style.borderLeftColor = '#0d6efd';
-    el.style.background = '#e8f0fe';
+    el.style.borderLeftColor = '#1565c0';
+    el.style.background = '#e3f2fd';
+    el.classList.add('active');
   }
   renderPortMap(_pmData[idx]);
 }
@@ -1832,8 +1868,10 @@ function _cableColor(cable) {
 function renderPortMap(sw) {
   const ports = sw.ports || [];
   const pc = sw.port_count || 24;
-  // status 초기값 보장
-  ports.forEach(p => { if (!p.status) p.status = ''; });
+  // status 초기값: 케이블 있으면 활성(up), 없으면 미확인
+  ports.forEach(p => {
+    if (!p.status) p.status = (p.cable && p.cable.trim()) ? 'up' : '';
+  });
   const connCount = ports.filter(p => p.cable && p.cable.trim()).length;
   const poeLabel = sw.category === 'PoE' || (sw.device_id||'').toUpperCase().includes('P#') ? 'Y' : 'N';
 
@@ -1841,6 +1879,9 @@ function renderPortMap(sw) {
 
   // ── 좌측: 스위치 정보 + SVG ──
   html += `<div class="col-md-5 d-flex flex-column">`;
+  html += `<div class="d-flex align-items-center mb-1 px-1" style="border-bottom:2px solid #1565c0;">
+    <i class="bi bi-info-circle-fill me-1" style="color:#1565c0;"></i>
+    <span style="font-size:.75rem;font-weight:700;color:#1565c0;">스위치 정보</span></div>`;
 
   // 스위치 정보 요약 표
   html += `<table class="table table-sm mb-2" style="font-size:.72rem;line-height:1.3;border-collapse:separate;border-spacing:0;border:1px solid #dee2e6;border-radius:6px;overflow:hidden;">
@@ -1911,7 +1952,12 @@ function renderPortMap(sw) {
   html += `</svg></div>`;
 
   // ── 우측: 포트 상세 표 ──
-  html += `<div class="col-md-7" style="overflow-y:auto;max-height:calc(100vh - 210px);">`;
+  html += `<div class="col-md-7 d-flex flex-column" style="max-height:calc(100vh - 210px);">`;
+  html += `<div class="d-flex align-items-center mb-1 px-1" style="border-bottom:2px solid #2e7d32;">
+    <i class="bi bi-list-columns-reverse me-1" style="color:#2e7d32;"></i>
+    <span style="font-size:.75rem;font-weight:700;color:#2e7d32;">포트 정보</span>
+    <span class="ms-auto badge" style="font-size:.6rem;background:#e8f5e9;color:#2e7d32;">${connCount}/${pc} 연결</span></div>`;
+  html += `<div style="overflow-y:auto;flex:1;">`;
   html += `<table class="table table-sm mb-0" id="pm-port-table" style="font-size:.7rem;line-height:1.3;border-collapse:separate;border-spacing:0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">`;
   html += `<thead><tr style="background:linear-gradient(135deg,#37474f,#546e7a);color:#eceff1;">
     <th style="width:42px;padding:5px 4px;text-align:center;font-weight:600;">Port</th>
@@ -1952,7 +1998,7 @@ function renderPortMap(sw) {
       </td>
     </tr>`;
   });
-  html += `</tbody></table></div>`;
+  html += `</tbody></table></div></div>`;
 
   html += `</div>`;
   document.getElementById('pm-detail').innerHTML = html;
