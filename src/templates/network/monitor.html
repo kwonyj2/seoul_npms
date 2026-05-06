@@ -1613,63 +1613,219 @@ function _rkDoLoad(schoolId) {
     .then(r => r.json()).then(d => {
       _rkData = d;
       if (!d.length) {
-        document.getElementById('rk-content').innerHTML = '<div class="text-center text-muted py-4">스위치/PoE 장비가 없습니다.</div>';
+        document.getElementById('rk-content').innerHTML = '<div class="text-center text-muted py-4">랙실장도 데이터가 없습니다.</div>';
         return;
       }
-      renderRacks(d);
+      _rkRenderFull(d);
     }).catch(() => {
       document.getElementById('rk-content').innerHTML = '<div class="text-danger text-center py-4">로드 실패</div>';
     });
 }
 
-function renderRacks(racks) {
-  const totalU = 42;
-  const uH = 22, rackW = 320, padX = 40, padY = 50;
-  const svgH = padY + totalU * uH + 30;
+const _RK_TYPE_COLORS = {
+  switch: {bg:'#0d6efd', text:'#fff', icon:'bi-hdd-rack-fill'},
+  poe: {bg:'#6f42c1', text:'#fff', icon:'bi-lightning-charge-fill'},
+  firewall: {bg:'#dc3545', text:'#fff', icon:'bi-shield-lock-fill'},
+  fdf: {bg:'#198754', text:'#fff', icon:'bi-diagram-3-fill'},
+  patch: {bg:'#6c757d', text:'#fff', icon:'bi-grid-3x3-gap-fill'},
+  server: {bg:'#0dcaf0', text:'#333', icon:'bi-pc-display'},
+  ups: {bg:'#ffc107', text:'#333', icon:'bi-battery-charging'},
+  external: {bg:'#e9ecef', text:'#333', icon:'bi-box-arrow-up-right'},
+};
+function _rkTypeStyle(t) { return _RK_TYPE_COLORS[t] || _RK_TYPE_COLORS['switch']; }
 
-  let html = '<div class="row g-3" id="rk-racks">';
-  racks.forEach((rack, ri) => {
-    const svgW = rackW + padX * 2;
-    html += `<div class="col-md-6 col-lg-4">`;
-    html += `<div class="card border-0 shadow-sm"><div class="card-header bg-white py-2 fw-bold small">`;
-    html += `<i class="bi bi-server me-1"></i>${rack.building} ${rack.floor}층 ${rack.location}</div>`;
-    html += `<div class="card-body p-2 text-center">`;
-    html += `<svg width="${svgW}" height="${svgH}" id="rk-svg-${ri}" style="background:#1e272e;border-radius:6px;">`;
-    // 랙 프레임
-    html += `<rect x="${padX-5}" y="${padY-5}" width="${rackW+10}" height="${totalU*uH+10}" rx="4" fill="none" stroke="#576574" stroke-width="2"/>`;
-    // U 슬롯
-    for (let u = 1; u <= totalU; u++) {
-      const y = padY + (totalU - u) * uH;
-      html += `<rect x="${padX}" y="${y}" width="${rackW}" height="${uH-1}" rx="2" fill="#2d3436" stroke="#3d3d3d" stroke-width="0.5"/>`;
-      html += `<text x="${padX-3}" y="${y+uH/2+3}" fill="#636e72" font-size="8" text-anchor="end">${u}U</text>`;
-    }
-    // 장비 배치
-    rack.items.forEach(item => {
-      if (!item.rack_unit) return;
-      const u = item.rack_unit;
-      const size = item.rack_size || 1;
-      const y = padY + (totalU - u - size + 1) * uH;
-      const h = size * uH - 2;
-      html += `<rect x="${padX+2}" y="${y+1}" width="${rackW-4}" height="${h}" rx="3" fill="${item.color}" opacity="0.9" stroke="#fff" stroke-width="0.5" style="cursor:pointer" onclick="rkEditItem(${ri},${item.id})"/>`;
-      const label = `${item.model_name} ${item.device_id ? '('+item.device_id+')' : ''} [${item.network_type}]`;
-      html += `<text x="${padX+rackW/2}" y="${y+h/2+4}" fill="#fff" font-size="${size>1?'10':'9'}" text-anchor="middle" font-weight="bold" style="pointer-events:none">${label.length>35?label.substring(0,35)+'..':label}</text>`;
+let _rkCurrentRack = 0;
+
+function _rkRenderFull(data) {
+  const src = data[0]?.source || 'db';
+
+  // 좌측 트리
+  let treeHtml = '';
+  if (src === 'nas') {
+    treeHtml += `<div class="d-flex align-items-center px-2 py-1 mb-1" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-radius:6px;flex-shrink:0;">
+      <i class="bi bi-file-earmark-spreadsheet text-success me-1"></i>
+      <span style="font-size:.7rem;font-weight:600;color:#2e7d32;">NAS 파일 로드</span></div>`;
+  }
+  data.forEach((rack, ri) => {
+    const itemCount = rack.items ? rack.items.length : 0;
+    treeHtml += `<div class="rk-tree-group" style="margin-bottom:2px;">
+      <div class="d-flex align-items-center px-2 py-1" style="cursor:pointer;border-radius:4px;background:#f5f5f5;transition:background .15s;"
+           onclick="rkSelectRack(${ri})"
+           onmouseover="this.style.background='#e3f2fd'" onmouseout="this.style.background='#f5f5f5'">
+        <i class="bi bi-server me-1" style="color:#1565c0;font-size:.75rem;"></i>
+        <span style="font-size:.72rem;font-weight:600;color:#37474f;">${rack.rack_name||'통신랙'}</span>
+        <span class="badge rounded-pill ms-auto" style="font-size:.55rem;background:#1565c0;color:#fff;">${itemCount}</span>
+      </div>`;
+    // 랙 내 장비 목록
+    treeHtml += `<div class="rk-tree-items">`;
+    (rack.items||[]).forEach((item, ii) => {
+      const ts = _rkTypeStyle(item.type);
+      treeHtml += `<div class="rk-tree-item d-flex align-items-center px-2 py-1" data-rack="${ri}" data-idx="${ii}"
+            style="cursor:pointer;font-size:.68rem;margin-left:8px;border-left:3px solid transparent;border-radius:0 4px 4px 0;transition:all .15s;"
+            onmouseover="this.style.background='#e8eaf6'" onmouseout="this.style.background=''">
+        <i class="bi ${ts.icon} me-1" style="color:${ts.bg};font-size:.65rem;"></i>
+        <span style="color:#37474f;">${item.u ? 'U'+item.u+' ' : ''}</span>
+        <span class="fw-semibold" style="color:#455a64;">${item.name}</span>
+      </div>`;
     });
-    html += `</svg></div>`;
-
-    // 미배치 장비 목록
-    const unplaced = rack.items.filter(i => !i.rack_unit);
-    if (unplaced.length) {
-      html += `<div class="card-footer bg-white small"><strong>미배치 장비 (${unplaced.length})</strong>`;
-      html += `<div class="mt-1">`;
-      unplaced.forEach(item => {
-        html += `<span class="badge me-1 mb-1" style="background:${item.color};cursor:pointer" onclick="rkEditItem(${ri},${item.id})">${item.model_name} ${item.device_id||''}</span>`;
-      });
-      html += `</div></div>`;
-    }
-    html += `</div></div>`;
+    treeHtml += `</div></div>`;
   });
-  html += '</div>';
+
+  let html = `<div class="row g-1" style="height:calc(100vh - 200px);">`;
+  // 좌측 트리
+  html += `<div class="col-md-2 col-lg-2 d-flex flex-column" style="max-height:calc(100vh - 200px);">
+    <div class="card border-0 shadow-sm h-100 d-flex flex-column"><div class="card-body p-1 d-flex flex-column" style="overflow:hidden;">
+      <div style="overflow-y:auto;flex:1;">${treeHtml}</div>
+    </div></div></div>`;
+  // 중앙+우측
+  html += `<div class="col-md-10 col-lg-10" id="rk-detail">
+    <div class="text-center text-muted py-5"><i class="bi bi-server fs-2 d-block mb-2" style="color:#90a4ae;"></i><span style="font-size:.85rem;">좌측에서 랙을 선택하세요</span></div></div>`;
+  html += `</div>`;
   document.getElementById('rk-content').innerHTML = html;
+
+  // 첫 번째 랙 자동 선택
+  if (data.length > 0) rkSelectRack(0);
+}
+
+function rkSelectRack(rackIdx) {
+  _rkCurrentRack = rackIdx;
+  const rack = _rkData[rackIdx];
+  if (!rack) return;
+  const items = rack.items || [];
+  const maxU = Math.max(...items.map(i => i.u || 0), 20);
+  const totalU = Math.max(maxU + 2, 20);
+
+  let html = `<div class="row g-1" style="height:calc(100vh - 210px);">`;
+
+  // ── 중앙: 랙 정보 + SVG ──
+  html += `<div class="col-md-5 d-flex flex-column">`;
+  html += `<div class="d-flex align-items-center mb-1 px-1" style="border-bottom:2px solid #1565c0;flex-shrink:0;">
+    <i class="bi bi-info-circle-fill me-1" style="color:#1565c0;"></i>
+    <span style="font-size:.75rem;font-weight:700;color:#1565c0;">랙 정보</span></div>`;
+
+  // 랙 정보 요약 표
+  const extItems = items.filter(i => i.type === 'external');
+  const rackItems = items.filter(i => i.type !== 'external');
+  html += `<table class="table table-sm mb-2" style="font-size:.72rem;line-height:1.3;border-collapse:separate;border-spacing:0;border:1px solid #dee2e6;border-radius:6px;overflow:hidden;">
+    <colgroup><col style="width:72px;"><col></colgroup>
+    <tbody>
+      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">랙 이름</td><td class="fw-bold" style="padding:3px 8px;">${rack.rack_name||'-'}</td></tr>
+      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">운영장소</td><td style="padding:3px 8px;">${rack.location||'-'}</td></tr>
+      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">장비 수</td><td style="padding:3px 8px;"><span class="badge bg-primary">${rackItems.length}</span> (랙외부: ${extItems.length})</td></tr>
+      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">랙 크기</td><td style="padding:3px 8px;">${totalU}U</td></tr>
+    </tbody></table>`;
+
+  // SVG 랙 이미지
+  const uH = 18, rackW = 280, padX = 30, padY = 15;
+  const svgW = rackW + padX * 2;
+  const svgH = padY * 2 + totalU * uH + 20;
+
+  html += `<div style="overflow-y:auto;flex:1;">`;
+  html += `<svg width="100%" viewBox="0 0 ${svgW} ${svgH}" style="border-radius:8px;">`;
+  html += `<defs><linearGradient id="rk-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e8edf2"/><stop offset="100%" stop-color="#c9d1da"/></linearGradient></defs>`;
+  html += `<rect width="${svgW}" height="${svgH}" rx="8" fill="url(#rk-bg)"/>`;
+  html += `<rect x="${padX-3}" y="${padY-3}" width="${rackW+6}" height="${totalU*uH+6}" rx="4" fill="#f0f4f8" stroke="#b0bec5" stroke-width="1"/>`;
+
+  // U 슬롯 (하단=1U, 상단=maxU)
+  for (let u = 1; u <= totalU; u++) {
+    const y = padY + (totalU - u) * uH;
+    html += `<rect x="${padX}" y="${y}" width="${rackW}" height="${uH-1}" rx="1" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="0.3"/>`;
+    html += `<text x="${padX-4}" y="${y+uH/2+3}" fill="#90a4ae" font-size="6" text-anchor="end">${u}</text>`;
+  }
+
+  // 장비 배치
+  rackItems.forEach(item => {
+    if (!item.u) return;
+    const ts = _rkTypeStyle(item.type);
+    const u = item.u;
+    const size = 1;
+    const y = padY + (totalU - u) * uH;
+    const h = size * uH - 1;
+    html += `<rect x="${padX+1}" y="${y}" width="${rackW-2}" height="${h}" rx="2" fill="${ts.bg}" opacity="0.9" stroke="#fff" stroke-width="0.5"/>`;
+    const lbl = item.name.length > 35 ? item.name.substring(0,35)+'..' : item.name;
+    html += `<text x="${padX+rackW/2}" y="${y+h/2+3}" fill="${ts.text}" font-size="7" text-anchor="middle" font-weight="600" style="pointer-events:none">${lbl}</text>`;
+  });
+
+  // 범례
+  const ly = padY + totalU * uH + 12;
+  html += `<text x="${padX}" y="${ly}" fill="#607d8b" font-size="6">`;
+  for (const [key, ts] of Object.entries(_RK_TYPE_COLORS)) {
+    if (key === 'external') continue;
+    const labels = {switch:'스위치',poe:'PoE',firewall:'방화벽',fdf:'FDF',patch:'패치판넬',server:'서버',ups:'UPS'};
+    html += `<tspan fill="${ts.bg}">&#9632;</tspan>${labels[key]||key} `;
+  }
+  html += `</text>`;
+  html += `</svg></div></div>`;
+
+  // ── 우측: 랙실장도 정보 표 ──
+  html += `<div class="col-md-7 d-flex flex-column" style="max-height:calc(100vh - 210px);overflow:hidden;">`;
+  html += `<div class="d-flex align-items-center mb-1 px-1" style="border-bottom:2px solid #2e7d32;flex-shrink:0;">
+    <i class="bi bi-list-columns-reverse me-1" style="color:#2e7d32;"></i>
+    <span style="font-size:.75rem;font-weight:700;color:#2e7d32;">랙실장도 정보</span>
+    <span class="ms-auto badge" style="font-size:.6rem;background:#e8f5e9;color:#2e7d32;">${rackItems.length}개 장비</span></div>`;
+
+  // 헤더
+  html += `<table class="table table-sm mb-0" style="font-size:.7rem;line-height:1.3;table-layout:fixed;width:100%;flex-shrink:0;">
+    <colgroup><col style="width:36px;"><col style="width:50%;"><col style="width:25%;"><col style="width:25%;"></colgroup>
+    <thead><tr style="background:linear-gradient(135deg,#37474f,#546e7a);color:#eceff1;">
+      <th style="padding:5px 4px;text-align:center;font-weight:600;">U</th>
+      <th style="padding:5px 4px;text-align:center;font-weight:600;">장비명</th>
+      <th style="padding:5px 4px;text-align:center;font-weight:600;">유형</th>
+      <th style="padding:5px 4px;text-align:center;font-weight:600;">비고</th>
+    </tr></thead></table>`;
+
+  // 스크롤 영역
+  html += `<div style="overflow-y:auto;flex:1;">`;
+  html += `<table class="table table-sm mb-0" id="rk-item-table" style="font-size:.7rem;line-height:1.3;table-layout:fixed;width:100%;border:1px solid #e2e8f0;">
+    <colgroup><col style="width:36px;"><col style="width:50%;"><col style="width:25%;"><col style="width:25%;"></colgroup><tbody>`;
+
+  // U번호 역순(상단→하단)으로 표시
+  const typeLabels = {switch:'스위치',poe:'PoE',firewall:'방화벽',fdf:'FDF/OFD',patch:'패치판넬',server:'서버',ups:'UPS',external:'랙외부'};
+  // U별 맵
+  const uMap = {};
+  rackItems.forEach(item => { if (item.u) uMap[item.u] = item; });
+  for (let u = totalU; u >= 1; u--) {
+    const item = uMap[u];
+    const stripe = u % 2 === 0 ? '#ffffff' : '#f8fafc';
+    if (item) {
+      const ts = _rkTypeStyle(item.type);
+      html += `<tr style="background:${stripe};">
+        <td class="text-center fw-bold" style="padding:3px 4px;color:#37474f;border-bottom:1px solid #eceff1;">${u}</td>
+        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${ts.bg};margin-right:4px;vertical-align:middle;"></span>${item.name}
+        </td>
+        <td class="text-center" style="padding:3px 4px;border-bottom:1px solid #eceff1;color:${ts.bg};font-weight:600;">${typeLabels[item.type]||item.type}</td>
+        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;"><input type="text" class="form-control border-0" style="font-size:.65rem;height:20px;padding:1px 4px;background:transparent;" value=""></td>
+      </tr>`;
+    } else {
+      html += `<tr style="background:${stripe};">
+        <td class="text-center" style="padding:3px 4px;color:#ccc;border-bottom:1px solid #eceff1;">${u}</td>
+        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;color:#ddd;">-</td>
+        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;"></td>
+        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;"></td>
+      </tr>`;
+    }
+  }
+
+  // 랙 외부 장비
+  if (extItems.length) {
+    html += `<tr style="background:#fff3cd;"><td colspan="4" class="fw-bold text-center" style="padding:4px;font-size:.65rem;color:#856404;">랙 외부 장비</td></tr>`;
+    extItems.forEach(item => {
+      const ts = _rkTypeStyle(item.type);
+      html += `<tr style="background:#fffbeb;">
+        <td class="text-center" style="padding:3px 4px;color:#999;border-bottom:1px solid #eceff1;">-</td>
+        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${ts.bg};margin-right:4px;vertical-align:middle;"></span>${item.name}
+        </td>
+        <td class="text-center" style="padding:3px 4px;border-bottom:1px solid #eceff1;color:${ts.bg};font-weight:600;">${typeLabels[item.type]||item.type}</td>
+        <td style="padding:3px 4px;border-bottom:1px solid #eceff1;"></td>
+      </tr>`;
+    });
+  }
+
+  html += `</tbody></table></div></div>`;
+  html += `</div>`;
+  document.getElementById('rk-detail').innerHTML = html;
 }
 
 function rkEditItem(rackIdx, itemId) {
