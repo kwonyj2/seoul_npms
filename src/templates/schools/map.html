@@ -375,6 +375,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════════════
 // 공통
@@ -866,7 +867,9 @@ function distExportExcel() {
   });
 
   // 그룹별 Nearest Neighbor 정렬 + 거리 계산
-  let csv = '\uFEFF전체순번,그룹순번,학교명,학제,교육지원청,자치구,위도,경도,인접거리(km),누적거리(km)\n';
+  // XLSX 생성 (SheetJS)
+  const wb = XLSX.utils.book_new();
+  const wsData = [['전체순번','그룹순번','교육지원청','자치구','학교명','학제','위도','경도','인접거리(km)','누적거리(km)']];
   let globalSeq = 0;
 
   // 교육지원청 순서 → 자치구 가나다순
@@ -912,19 +915,35 @@ function distExportExcel() {
       }
       const lat = parseFloat(s.lat).toFixed(5);
       const lng = parseFloat(s.lng).toFixed(5);
-      csv += `${globalSeq},${i+1},${s.name},${s.school_type_name || ''},${group.center},${group.gu},${lat},${lng},${i === 0 ? '-' : adjDist.toFixed(2)},${i === 0 ? '-' : cumDist.toFixed(2)}\n`;
+      wsData.push([
+        globalSeq, i+1, group.center, group.gu, s.name, s.school_type_name || '',
+        parseFloat(lat), parseFloat(lng),
+        i === 0 ? '' : parseFloat(adjDist.toFixed(2)),
+        i === 0 ? '' : parseFloat(cumDist.toFixed(2)),
+      ]);
     });
   }
 
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // 열 폭 자동 맞춤
+  const colWidths = wsData[0].map((_, ci) => {
+    let maxLen = 0;
+    wsData.forEach(row => {
+      const val = row[ci] != null ? String(row[ci]) : '';
+      // 한글은 2배 폭
+      const len = [...val].reduce((sum, ch) => sum + (ch.charCodeAt(0) > 127 ? 2 : 1), 0);
+      if (len > maxLen) maxLen = len;
+    });
+    return { wch: Math.max(maxLen + 2, 6) };
+  });
+  ws['!cols'] = colWidths;
+
+  XLSX.utils.book_append_sheet(wb, ws, '거리순서');
+
   const label = filterCenter || '전체';
   const guLabel = filterGu || '전체';
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `학교거리순서_${label}_${guLabel}_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  XLSX.writeFile(wb, `학교거리순서_${label}_${guLabel}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ══════════════════════════════════════════════════════════════════
