@@ -313,6 +313,9 @@
       <select id="d-gu" class="form-select form-select-sm" style="width:140px;" onchange="distCalculate()">
         <option value="">전체 자치구</option>
       </select>
+      <button class="btn btn-sm btn-outline-success px-3" onclick="distExportExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>엑셀 다운로드
+      </button>
       <div class="ms-auto small text-muted" id="dist-summary"></div>
     </div>
 
@@ -838,6 +841,40 @@ function distFocusSchool(id) {
 function distFitAll() {
   if (!distMarkerSource || distMarkerSource.getFeatures().length === 0) return;
   distMap.getView().fit(distMarkerSource.getExtent(), { padding: [40,40,40,40], maxZoom: 14, duration: 500 });
+}
+
+function distExportExcel() {
+  const rows = document.querySelectorAll('#dist-tbody tr');
+  if (!rows.length) { alert('데이터가 없습니다.'); return; }
+
+  const center = document.getElementById('d-center').value || '전체';
+  const gu = document.getElementById('d-gu').value || '전체';
+
+  // CSV 생성 (엑셀 호환 UTF-8 BOM)
+  let csv = '\uFEFF순번,학교명,교육지원청,자치구,위도,경도,인접거리(km),누적거리(km)\n';
+  rows.forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    if (cells.length >= 6) {
+      const seq = cells[0].textContent;
+      const name = cells[1].textContent;
+      const guName = cells[2].textContent;
+      const lat = cells[3].textContent;
+      // 경도는 테이블에 없으므로 allData에서 찾기
+      const school = allData.find(s => s.name === name);
+      const lng = school ? parseFloat(school.lng).toFixed(5) : '';
+      const adj = cells[4].textContent;
+      const cum = cells[5].textContent;
+      csv += `${seq},${name},${center},${guName},${lat},${lng},${adj},${cum}\n`;
+    }
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `학교거리순서_${center}_${gu}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ══════════════════════════════════════════════════════════════════
