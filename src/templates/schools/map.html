@@ -6,11 +6,35 @@
 
 {% block extra_css %}
 <style>
+/* ── 탭 메뉴 ─────────────────────────────────── */
+.smap-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 8px;
+}
+.smap-tab {
+  padding: 7px 18px;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  color: #64748b;
+  transition: all .15s;
+}
+.smap-tab:hover { color: #1e40af; }
+.smap-tab.active {
+  color: #1e40af;
+  border-bottom-color: #2563eb;
+}
+.smap-tab-content { display: none; }
+.smap-tab-content.active { display: block; }
+
 /* ── 전체 레이아웃 ─────────────────────────────── */
 .smap-wrap {
   display: flex;
   gap: 8px;
-  height: calc(100vh - 128px);
+  height: calc(100vh - 170px);
   min-height: 480px;
 }
 
@@ -84,14 +108,14 @@
 }
 .smap-map-panel .card-header { flex-shrink: 0; }
 
-#school-map {
+#school-map, #dist-map {
   flex: 1 1 0;
   min-height: 0;
   position: relative;
 }
 
 /* 팝업 */
-#smap-popup {
+.smap-popup {
   display: none;
   position: absolute;
   background: #fff;
@@ -112,151 +136,319 @@
   align-items: center; font-size: .7rem;
 }
 .smap-legend span { display: flex; align-items: center; gap: 3px; }
+
+/* ── 거리순서 탭 ──────────────────────────────── */
+.dist-wrap {
+  display: flex;
+  gap: 8px;
+  height: calc(100vh - 170px);
+  min-height: 480px;
+}
+.dist-table-panel {
+  width: 480px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dist-table-scroll {
+  flex: 1 1 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+.dist-table {
+  font-size: .75rem;
+  width: 100%;
+}
+.dist-table th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  z-index: 1;
+  padding: 6px 8px;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+.dist-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  white-space: nowrap;
+}
+.dist-table tr:hover { background: #eff6ff; }
+.dist-table tr.selected { background: #dbeafe; font-weight: 600; }
+.dist-map-panel {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dist-info-bar {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: .8rem;
+  margin-bottom: 8px;
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid px-3 py-1" style="height:calc(100vh - 108px);">
 
-  <!-- 상단 KPI 요약 -->
-  <div class="row g-2 mb-2" id="smap-kpi">
-    <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center py-2">
-        <div class="small text-muted">전체 학교</div>
-        <div class="fw-bold fs-5" id="kpi-total">-</div>
+  <!-- 탭 메뉴 -->
+  <div class="smap-tabs">
+    <div class="smap-tab active" data-tab="map-tab" onclick="switchTab('map-tab')">
+      <i class="bi bi-geo-alt me-1"></i>학교 위치 지도
+    </div>
+    <div class="smap-tab" data-tab="dist-tab" onclick="switchTab('dist-tab')">
+      <i class="bi bi-signpost-2 me-1"></i>학교 거리순서
+    </div>
+  </div>
+
+  <!-- ═══ 탭1: 학교 위치 지도 ═══ -->
+  <div class="smap-tab-content active" id="map-tab">
+    <!-- 상단 KPI 요약 -->
+    <div class="row g-2 mb-2" id="smap-kpi">
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-2">
+          <div class="small text-muted">전체 학교</div>
+          <div class="fw-bold fs-5" id="kpi-total">-</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-2">
+          <div class="small text-danger">장애 발생</div>
+          <div class="fw-bold fs-5 text-danger" id="kpi-incident">-</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-2">
+          <div class="small text-muted">좌표 등록</div>
+          <div class="fw-bold fs-5" id="kpi-coords">-</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-2">
+          <div class="small text-muted">표시 중</div>
+          <div class="fw-bold fs-5 text-primary" id="kpi-visible">-</div>
+        </div>
       </div>
     </div>
-    <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center py-2">
-        <div class="small text-danger">장애 발생</div>
-        <div class="fw-bold fs-5 text-danger" id="kpi-incident">-</div>
+
+    <div class="smap-wrap">
+      <!-- ── 좌측 패널 ── -->
+      <div class="smap-side">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header py-2 bg-white border-bottom">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-semibold" style="font-size:.85rem;">
+                <i class="bi bi-funnel text-primary me-1"></i>필터
+              </span>
+              <button class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:.72rem;"
+                      onclick="resetFilters()" title="전체 필터 초기화">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>초기화
+              </button>
+            </div>
+            <select id="f-center" class="form-select form-select-sm mb-1" onchange="updateGuOptions();applyFilter()">
+              <option value="">전체 교육지원청</option>
+            </select>
+            <select id="f-type" class="form-select form-select-sm mb-1" onchange="updateGuOptions();applyFilter()">
+              <option value="">전체 학교유형</option>
+            </select>
+            <select id="f-gu" class="form-select form-select-sm mb-1" onchange="applyFilter()">
+              <option value="">전체 자치구</option>
+            </select>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-white px-2"><i class="bi bi-search text-muted"></i></span>
+              <input type="text" id="f-search" class="form-control border-start-0"
+                     placeholder="학교명 검색..." oninput="applyFilter()">
+              <button class="btn btn-outline-secondary px-2" type="button"
+                      onclick="clearSearch()" title="초기화">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+          </div>
+          <div class="smap-list-scroll" id="smap-list">
+            <div class="text-center text-muted small py-4">로딩 중...</div>
+          </div>
+          <div class="card-footer bg-white border-top py-2">
+            <div class="smap-legend" id="smap-legend"></div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center py-2">
-        <div class="small text-muted">좌표 등록</div>
-        <div class="fw-bold fs-5" id="kpi-coords">-</div>
-      </div>
-    </div>
-    <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm text-center py-2">
-        <div class="small text-muted">표시 중</div>
-        <div class="fw-bold fs-5 text-primary" id="kpi-visible">-</div>
+
+      <!-- ── 우측 지도 ── -->
+      <div class="smap-map-panel">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+              <span class="live-dot"></span>
+              <span class="fw-semibold" style="font-size:.85rem;">
+                <i class="bi bi-map text-primary me-1"></i>학교 위치 지도
+              </span>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+              <span class="badge bg-primary" id="smap-count">-</span>
+              <button class="btn btn-sm btn-outline-secondary px-2 py-0" onclick="smapFitAll()" title="전체 보기">
+                <i class="bi bi-fullscreen"></i>
+              </button>
+            </div>
+          </div>
+          <div id="school-map">
+            <div id="smap-popup" class="smap-popup"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="smap-wrap">
-
-    <!-- ── 좌측 패널 ── -->
-    <div class="smap-side">
-      <div class="card border-0 shadow-sm">
-        <div class="card-header py-2 bg-white border-bottom">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="fw-semibold" style="font-size:.85rem;">
-              <i class="bi bi-funnel text-primary me-1"></i>필터
-            </span>
-            <button class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:.72rem;"
-                    onclick="resetFilters()" title="전체 필터 초기화">
-              <i class="bi bi-arrow-counterclockwise me-1"></i>초기화
-            </button>
-          </div>
-          <!-- 교육지원청 -->
-          <select id="f-center" class="form-select form-select-sm mb-1" onchange="updateGuOptions();applyFilter()">
-            <option value="">전체 교육지원청</option>
-          </select>
-          <!-- 학교유형 -->
-          <select id="f-type" class="form-select form-select-sm mb-1" onchange="updateGuOptions();applyFilter()">
-            <option value="">전체 학교유형</option>
-          </select>
-          <!-- 자치구 (교육지원청·학제 선택 시 연동) -->
-          <select id="f-gu" class="form-select form-select-sm mb-1" onchange="applyFilter()">
-            <option value="">전체 자치구</option>
-          </select>
-          <!-- 검색 -->
-          <div class="input-group input-group-sm">
-            <span class="input-group-text bg-white px-2"><i class="bi bi-search text-muted"></i></span>
-            <input type="text" id="f-search" class="form-control border-start-0"
-                   placeholder="학교명 검색..." oninput="applyFilter()">
-            <button class="btn btn-outline-secondary px-2" type="button"
-                    onclick="clearSearch()" title="초기화">
-              <i class="bi bi-x-lg"></i>
-            </button>
-          </div>
-        </div>
-
-        <div class="smap-list-scroll" id="smap-list">
-          <div class="text-center text-muted small py-4">로딩 중...</div>
-        </div>
-
-        <!-- 범례 -->
-        <div class="card-footer bg-white border-top py-2">
-          <div class="smap-legend" id="smap-legend"></div>
-        </div>
+  <!-- ═══ 탭2: 학교 거리순서 ═══ -->
+  <div class="smap-tab-content" id="dist-tab">
+    <!-- 필터 + 정보 바 -->
+    <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
+      <select id="d-center" class="form-select form-select-sm" style="width:160px;" onchange="distUpdateGu();distCalculate()">
+        <option value="">전체 교육지원청</option>
+      </select>
+      <select id="d-gu" class="form-select form-select-sm" style="width:140px;" onchange="distCalculate()">
+        <option value="">전체 자치구</option>
+      </select>
+      <div class="form-check form-check-inline ms-2">
+        <input class="form-check-input" type="checkbox" id="d-road" onchange="distCalculate()">
+        <label class="form-check-label small" for="d-road">도로거리 포함</label>
       </div>
+      <div class="ms-auto small text-muted" id="dist-summary"></div>
     </div>
 
-    <!-- ── 우측 지도 ── -->
-    <div class="smap-map-panel">
-      <div class="card border-0 shadow-sm">
-        <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center">
-          <div class="d-flex align-items-center gap-2">
-            <span class="live-dot"></span>
-            <span class="fw-semibold" style="font-size:.85rem;">
-              <i class="bi bi-map text-primary me-1"></i>학교 위치 지도
+    <div class="dist-info-bar" id="dist-click-info">
+      <i class="bi bi-info-circle me-1"></i>
+      지도에서 학교 마커를 <strong>2개 클릭</strong>하면 두 학교 간 거리가 산출됩니다.
+      <span id="dist-click-result" class="ms-2 fw-bold text-primary"></span>
+    </div>
+
+    <div class="dist-wrap">
+      <!-- 좌측 테이블 -->
+      <div class="dist-table-panel">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header py-2 bg-white border-bottom">
+            <span class="fw-semibold" style="font-size:.82rem;">
+              <i class="bi bi-sort-numeric-down text-primary me-1"></i>거리순서 리스트
             </span>
           </div>
-          <div class="d-flex gap-2 align-items-center">
-            <span class="badge bg-primary" id="smap-count">-</span>
-            <button class="btn btn-sm btn-outline-secondary px-2 py-0" onclick="smapFitAll()" title="전체 보기">
+          <div class="dist-table-scroll">
+            <table class="dist-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>학교명</th>
+                  <th>자치구</th>
+                  <th>위도</th>
+                  <th title="인접 학교 간 직선거리">인접(km)</th>
+                  <th title="1번 학교로부터 누적 직선거리">누적(km)</th>
+                  <th title="도로거리 (체크 시)" class="dist-road-col" style="display:none;">도로(km)</th>
+                </tr>
+              </thead>
+              <tbody id="dist-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 우측 지도 -->
+      <div class="dist-map-panel">
+        <div class="card border-0 shadow-sm h-100">
+          <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center">
+            <span class="fw-semibold" style="font-size:.82rem;">
+              <i class="bi bi-map text-success me-1"></i>거리순서 지도
+            </span>
+            <button class="btn btn-sm btn-outline-secondary px-2 py-0" onclick="distFitAll()" title="전체 보기">
               <i class="bi bi-fullscreen"></i>
             </button>
           </div>
-        </div>
-        <div id="school-map">
-          <div id="smap-popup"></div>
+          <div id="dist-map">
+            <div id="dist-popup" class="smap-popup"></div>
+          </div>
         </div>
       </div>
     </div>
-
   </div>
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// ── 학교유형 색상 ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// 공통
+// ══════════════════════════════════════════════════════════════════
 const TYPE_COLOR = {
-  '초등학교':   '#1E90FF',
-  '중학교':     '#32CD32',
-  '고등학교':   '#FF4500',
-  '특수학교':   '#8A2BE2',
-  '유치원':     '#FF69B4',
-  '각종학교':   '#FFD700',
-  '고등기술학교':'#FF8C00',
+  '초등학교':'#1E90FF','중학교':'#32CD32','고등학교':'#FF4500',
+  '특수학교':'#8A2BE2','유치원':'#FF69B4','각종학교':'#FFD700','고등기술학교':'#FF8C00',
 };
 const DEFAULT_COLOR = '#6c757d';
-
 function typeColor(name) {
   if (!name) return DEFAULT_COLOR;
-  for (const [k, v] of Object.entries(TYPE_COLOR)) {
-    if (name.includes(k)) return v;
-  }
+  for (const [k, v] of Object.entries(TYPE_COLOR)) { if (name.includes(k)) return v; }
   return DEFAULT_COLOR;
 }
-
-// 주소에서 자치구 추출 ("서울특별시 강남구 ..." → "강남구")
 function extractGu(addr) {
   if (!addr) return '';
   const m = addr.match(/([가-힣]+구)/);
   return m ? m[1] : '';
 }
+const CENTER_ORDER = ['동부','서부','남부','북부','중부','강동송파','강서양천','강남서초','동작관악','성동광진','성북강북'];
+const TYPE_ORDER = ['유치원','초등학교','중학교','고등학교','특수학교','각종학교','고등기술학교'];
+function sortByOrder(arr, order) {
+  return [...arr].sort((a, b) => {
+    const ia = order.indexOf(a), ib = order.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b, 'ko');
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
 
-// ── 상태 ─────────────────────────────────────────────────────
+// Haversine 직선거리 (km)
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// VWorld 도로거리 API 호출
+async function getRouteDistance(lng1, lat1, lng2, lat2) {
+  try {
+    const resp = await apiGet(`${API_BASE}/schools/route/?start=${lng1},${lat1}&end=${lng2},${lat2}`);
+    return resp;
+  } catch { return null; }
+}
+
+let allData = [];
+
+// ── 탭 전환 ───────────────────────────────────────────────
+function switchTab(tabId) {
+  document.querySelectorAll('.smap-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.smap-tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+
+  if (tabId === 'map-tab') {
+    setTimeout(() => smapMap && smapMap.updateSize(), 100);
+  } else if (tabId === 'dist-tab') {
+    if (!distMap) initDistMap();
+    setTimeout(() => distMap && distMap.updateSize(), 100);
+    if (!distInitialized) { distInitialize(); distInitialized = true; }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 탭1: 학교 위치 지도
+// ══════════════════════════════════════════════════════════════════
 let smapMap = null, markerSource = null, popupOverlay = null;
-let allData = [], filteredData = [];
+let filteredData = [];
 
-// ── 마커 스타일 생성 (Canvas 원형) ───────────────────────────
 function makePinStyle(color, size = 7) {
   const c = document.createElement('canvas');
   const r = size + 2;
@@ -264,38 +456,28 @@ function makePinStyle(color, size = 7) {
   const ctx = c.getContext('2d');
   ctx.beginPath();
   ctx.arc(r, r, size, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  ctx.fillStyle = color; ctx.fill();
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke();
   return new ol.style.Style({
     image: new ol.style.Icon({ img: c, imgSize: [c.width, c.height], anchor: [0.5, 0.5] }),
   });
 }
 
-// ── 지도 초기화 ───────────────────────────────────────────────
 function initMap() {
   const key = typeof VWORLD_API_KEY !== 'undefined' ? VWORLD_API_KEY : '';
   markerSource = new ol.source.Vector();
-
   smapMap = new ol.Map({
     target: 'school-map',
-    pixelRatio: window.devicePixelRatio || 1,
     layers: [
       new ol.layer.Tile({
         source: new ol.source.XYZ({
           url: `https://api.vworld.kr/req/wmts/1.0.0/${key}/Base/{z}/{y}/{x}.png`,
-          attributions: '© 국토정보플랫폼',
-          maxZoom: 19,
+          attributions: '© 국토정보플랫폼', maxZoom: 19,
         }),
       }),
       new ol.layer.Vector({ source: markerSource }),
     ],
-    view: new ol.View({
-      center: ol.proj.fromLonLat([126.9780, 37.5665]),
-      zoom: 11,
-    }),
+    view: new ol.View({ center: ol.proj.fromLonLat([126.9780, 37.5665]), zoom: 11 }),
   });
 
   const popupEl = document.getElementById('smap-popup');
@@ -308,21 +490,14 @@ function initMap() {
       popupEl.innerHTML = f.get('info');
       popupEl.style.display = 'block';
       popupOverlay.setPosition(f.getGeometry().getCoordinates());
-    } else {
-      popupEl.style.display = 'none';
-      popupOverlay.setPosition(undefined);
-    }
+    } else { popupEl.style.display = 'none'; popupOverlay.setPosition(undefined); }
   });
-
   smapMap.on('pointermove', evt => {
-    smapMap.getTargetElement().style.cursor =
-      smapMap.hasFeatureAtPixel(evt.pixel) ? 'pointer' : '';
+    smapMap.getTargetElement().style.cursor = smapMap.hasFeatureAtPixel(evt.pixel) ? 'pointer' : '';
   });
-
   setTimeout(() => smapMap.updateSize(), 100);
 }
 
-// ── 데이터 로드 ───────────────────────────────────────────────
 async function loadData() {
   try {
     const data = await apiGet(`${API_BASE}/schools/schools/gis/`);
@@ -337,119 +512,72 @@ async function loadData() {
   }
 }
 
-// ── 필터 옵션 생성 ────────────────────────────────────────────
-// 교육지원청·학교유형 고정 순서
-const CENTER_ORDER = ['동부','서부','남부','북부','중부','강동송파','강서양천','강남서초','동작관악','성동광진','성북강북'];
-const TYPE_ORDER   = ['유치원','초등학교','중학교','고등학교','특수학교','각종학교','고등기술학교'];
-
-function sortByOrder(arr, order) {
-  return [...arr].sort((a, b) => {
-    const ia = order.indexOf(a), ib = order.indexOf(b);
-    if (ia === -1 && ib === -1) return a.localeCompare(b, 'ko');
-    if (ia === -1) return 1;
-    if (ib === -1) return -1;
-    return ia - ib;
-  });
-}
-
 function buildFilterOptions() {
   const centers = sortByOrder([...new Set(allData.map(s => s.support_center_name).filter(Boolean))], CENTER_ORDER);
   const cSel = document.getElementById('f-center');
-  centers.forEach(c => { const o = new Option(c, c); cSel.add(o); });
-
+  centers.forEach(c => { cSel.add(new Option(c, c)); });
   const types = sortByOrder([...new Set(allData.map(s => s.school_type_name).filter(Boolean))], TYPE_ORDER);
   const tSel = document.getElementById('f-type');
-  types.forEach(t => { const o = new Option(t, t); tSel.add(o); });
-
-  // 자치구 초기값 — 전체 데이터 기준
+  types.forEach(t => { tSel.add(new Option(t, t)); });
   updateGuOptions();
 }
 
-// ── 자치구 옵션 재구성 (교육지원청·학제 연동) ────────────────
 function updateGuOptions() {
-  const center  = document.getElementById('f-center').value;
-  const type    = document.getElementById('f-type').value;
-  const gSel    = document.getElementById('f-gu');
-  const prevGu  = gSel.value;   // 기존 선택값 보존 시도
-
-  // 교육지원청 + 학교유형만 적용한 subset으로 자치구 목록 생성
+  const center = document.getElementById('f-center').value;
+  const type = document.getElementById('f-type').value;
+  const gSel = document.getElementById('f-gu');
+  const prevGu = gSel.value;
   const subset = allData.filter(s => {
     if (center && s.support_center_name !== center) return false;
-    if (type   && s.school_type_name   !== type)   return false;
+    if (type && s.school_type_name !== type) return false;
     return true;
   });
-  const gus = [...new Set(subset.map(s => extractGu(s.address)).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, 'ko'));
-
+  const gus = [...new Set(subset.map(s => extractGu(s.address)).filter(Boolean))].sort((a,b) => a.localeCompare(b,'ko'));
   gSel.innerHTML = '<option value="">전체 자치구</option>';
-  gus.forEach(g => { const o = new Option(g, g); gSel.add(o); });
-
-  // 이전 선택이 새 목록에 있으면 유지, 없으면 초기화
+  gus.forEach(g => { gSel.add(new Option(g, g)); });
   gSel.value = gus.includes(prevGu) ? prevGu : '';
 }
 
-// ── 검색 초기화 ───────────────────────────────────────────────
-function clearSearch() {
-  document.getElementById('f-search').value = '';
-  applyFilter();
-}
-
-// ── 전체 필터 초기화 ──────────────────────────────────────────
+function clearSearch() { document.getElementById('f-search').value = ''; applyFilter(); }
 function resetFilters() {
   document.getElementById('f-center').value = '';
-  document.getElementById('f-type').value   = '';
+  document.getElementById('f-type').value = '';
   document.getElementById('f-search').value = '';
-  updateGuOptions();   // 자치구 목록 전체로 복원
-  applyFilter();
+  updateGuOptions(); applyFilter();
 }
 
-// ── 필터 적용 ─────────────────────────────────────────────────
 function applyFilter() {
   const center = document.getElementById('f-center').value;
-  const type   = document.getElementById('f-type').value;
-  const gu     = document.getElementById('f-gu').value;
-  const q      = document.getElementById('f-search').value.trim();
-
+  const type = document.getElementById('f-type').value;
+  const gu = document.getElementById('f-gu').value;
+  const q = document.getElementById('f-search').value.trim();
   filteredData = allData.filter(s => {
     if (center && s.support_center_name !== center) return false;
-    if (type   && s.school_type_name   !== type)   return false;
-    if (gu     && extractGu(s.address) !== gu)     return false;
-    if (q      && !s.name.includes(q))             return false;
+    if (type && s.school_type_name !== type) return false;
+    if (gu && extractGu(s.address) !== gu) return false;
+    if (q && !s.name.includes(q)) return false;
     return true;
   });
-
-  renderAll();
-  updateKpi();
+  renderAll(); updateKpi();
 }
 
-// ── 렌더 (마커 + 목록 + 범례) ─────────────────────────────────
-function renderAll() {
-  renderMarkers();
-  renderList();
-  renderLegend();
-}
+function renderAll() { renderMarkers(); renderList(); renderLegend(); }
 
 function renderMarkers() {
   markerSource.clear();
   filteredData.forEach(s => {
     const color = typeColor(s.school_type_name);
     const feature = new ol.Feature({
-      geometry: new ol.geom.Point(
-        ol.proj.fromLonLat([parseFloat(s.lng), parseFloat(s.lat)])
-      ),
+      geometry: new ol.geom.Point(ol.proj.fromLonLat([parseFloat(s.lng), parseFloat(s.lat)])),
     });
     feature.setStyle(makePinStyle(color));
-
     const gu = extractGu(s.address) || '';
     const incHtml = s.active_incidents > 0
       ? `<span style="color:#dc3545;font-weight:700;">⚠ 장애 ${s.active_incidents}건</span>`
       : `<span style="color:#198754;"><i class="bi bi-check-circle-fill"></i> 정상</span>`;
-
     feature.set('info', `
       <div style="font-weight:700;font-size:13px;margin-bottom:5px;">${s.name}</div>
-      <div style="color:#6c757d;font-size:11px;margin-bottom:3px;">
-        ${s.school_type_name || ''} · ${gu}
-      </div>
+      <div style="color:#6c757d;font-size:11px;margin-bottom:3px;">${s.school_type_name || ''} · ${gu}</div>
       <div style="margin-bottom:2px;font-size:11px;">${s.address || ''}</div>
       ${s.phone ? `<div style="margin-bottom:4px;font-size:11px;">☎ ${s.phone}</div>` : ''}
       <div style="font-size:12px;">${incHtml}</div>
@@ -461,35 +589,16 @@ function renderMarkers() {
 
 function renderList() {
   const el = document.getElementById('smap-list');
-  if (!filteredData.length) {
-    el.innerHTML = '<div class="text-center text-muted small py-4">검색 결과 없음</div>';
-    return;
-  }
-
-  // 교육지원청별 그룹핑
+  if (!filteredData.length) { el.innerHTML = '<div class="text-center text-muted small py-4">검색 결과 없음</div>'; return; }
   const groups = {};
-  filteredData.forEach(s => {
-    const c = s.support_center_name || '기타';
-    if (!groups[c]) groups[c] = [];
-    groups[c].push(s);
-  });
-
+  filteredData.forEach(s => { const c = s.support_center_name || '기타'; if (!groups[c]) groups[c] = []; groups[c].push(s); });
   let html = '';
   for (const [center, schools] of Object.entries(groups)) {
-    html += `<div class="smap-center-hdr">
-      <i class="bi bi-building"></i>${center}
-      <span class="ms-auto" style="font-weight:400;font-size:.65rem;">${schools.length}교</span>
-    </div>`;
+    html += `<div class="smap-center-hdr"><i class="bi bi-building"></i>${center}<span class="ms-auto" style="font-weight:400;font-size:.65rem;">${schools.length}교</span></div>`;
     schools.forEach(s => {
       const color = typeColor(s.school_type_name);
-      const incBadge = s.active_incidents > 0
-        ? `<span class="badge bg-danger ms-auto" style="font-size:.58rem;">${s.active_incidents}</span>`
-        : '';
-      html += `<div class="smap-item" data-id="${s.id}" onclick="focusSchool(${s.id})">
-        <span class="dot" style="background:${color};"></span>
-        <span class="name">${s.name}</span>
-        ${incBadge}
-      </div>`;
+      const incBadge = s.active_incidents > 0 ? `<span class="badge bg-danger ms-auto" style="font-size:.58rem;">${s.active_incidents}</span>` : '';
+      html += `<div class="smap-item" data-id="${s.id}" onclick="focusSchool(${s.id})"><span class="dot" style="background:${color};"></span><span class="name">${s.name}</span>${incBadge}</div>`;
     });
   }
   el.innerHTML = html;
@@ -497,33 +606,24 @@ function renderList() {
 
 function renderLegend() {
   const types = sortByOrder([...new Set(filteredData.map(s => s.school_type_name).filter(Boolean))], TYPE_ORDER);
-  document.getElementById('smap-legend').innerHTML = types.map(t => {
-    const color = typeColor(t);
-    return `<span>
-      <span style="width:9px;height:9px;border-radius:50%;background:${color};display:inline-block;"></span>
-      ${t}
-    </span>`;
-  }).join('');
+  document.getElementById('smap-legend').innerHTML = types.map(t =>
+    `<span><span style="width:9px;height:9px;border-radius:50%;background:${typeColor(t)};display:inline-block;"></span>${t}</span>`
+  ).join('');
 }
 
-// ── KPI 갱신 ─────────────────────────────────────────────────
 function updateKpi() {
-  const withCoords = allData.length;
-  const incCount   = filteredData.filter(s => s.active_incidents > 0).length;
-  document.getElementById('kpi-total').textContent   = numFmt(allData.length);
-  document.getElementById('kpi-incident').textContent= numFmt(incCount);
-  document.getElementById('kpi-coords').textContent  = numFmt(withCoords);
+  document.getElementById('kpi-total').textContent = numFmt(allData.length);
+  document.getElementById('kpi-incident').textContent = numFmt(filteredData.filter(s => s.active_incidents > 0).length);
+  document.getElementById('kpi-coords').textContent = numFmt(allData.length);
   document.getElementById('kpi-visible').textContent = numFmt(filteredData.length);
-  document.getElementById('smap-count').textContent  = filteredData.length + '교';
+  document.getElementById('smap-count').textContent = filteredData.length + '교';
 }
 
-// ── 학교 포커스 ───────────────────────────────────────────────
 function focusSchool(id) {
   const s = filteredData.find(x => x.id === id);
   if (!s) return;
   const coord = ol.proj.fromLonLat([parseFloat(s.lng), parseFloat(s.lat)]);
   smapMap.getView().animate({ center: coord, zoom: 15, duration: 500 });
-
   const feature = markerSource.getFeatures().find(f => f.get('schoolId') === id);
   if (feature) {
     const popupEl = document.getElementById('smap-popup');
@@ -531,22 +631,244 @@ function focusSchool(id) {
     popupEl.style.display = 'block';
     popupOverlay.setPosition(coord);
   }
-
-  // 목록 하이라이트
   document.querySelectorAll('.smap-item').forEach(el => el.classList.remove('active'));
   const item = document.querySelector(`.smap-item[data-id="${id}"]`);
   if (item) { item.classList.add('active'); item.scrollIntoView({ block: 'nearest' }); }
 }
 
-// ── 전체 보기 ─────────────────────────────────────────────────
 function smapFitAll() {
   if (!markerSource || markerSource.getFeatures().length === 0) return;
-  smapMap.getView().fit(markerSource.getExtent(), {
-    padding: [40, 40, 40, 40], maxZoom: 13, duration: 500,
+  smapMap.getView().fit(markerSource.getExtent(), { padding: [40,40,40,40], maxZoom: 13, duration: 500 });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 탭2: 학교 거리순서
+// ══════════════════════════════════════════════════════════════════
+let distMap = null, distMarkerSource = null, distLineSource = null, distPopupOverlay = null;
+let distInitialized = false;
+let distClickSchools = []; // 클릭으로 선택한 학교 2개
+
+function initDistMap() {
+  const key = typeof VWORLD_API_KEY !== 'undefined' ? VWORLD_API_KEY : '';
+  distMarkerSource = new ol.source.Vector();
+  distLineSource = new ol.source.Vector();
+
+  distMap = new ol.Map({
+    target: 'dist-map',
+    layers: [
+      new ol.layer.Tile({
+        source: new ol.source.XYZ({
+          url: `https://api.vworld.kr/req/wmts/1.0.0/${key}/Base/{z}/{y}/{x}.png`,
+          attributions: '© 국토정보플랫폼', maxZoom: 19,
+        }),
+      }),
+      new ol.layer.Vector({ source: distLineSource, style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: '#ef4444', width: 2, lineDash: [6, 4] })
+      })}),
+      new ol.layer.Vector({ source: distMarkerSource }),
+    ],
+    view: new ol.View({ center: ol.proj.fromLonLat([126.9780, 37.5665]), zoom: 11 }),
+  });
+
+  const popupEl = document.getElementById('dist-popup');
+  distPopupOverlay = new ol.Overlay({ element: popupEl, autoPan: true });
+  distMap.addOverlay(distPopupOverlay);
+
+  // 클릭으로 2교 선택 → 거리 산출
+  distMap.on('click', async evt => {
+    const f = distMap.forEachFeatureAtPixel(evt.pixel, f => f);
+    if (!f || !f.get('school')) return;
+    const school = f.get('school');
+
+    distClickSchools.push(school);
+    if (distClickSchools.length > 2) distClickSchools = [school];
+
+    if (distClickSchools.length === 2) {
+      const [s1, s2] = distClickSchools;
+      const straight = haversine(parseFloat(s1.lat), parseFloat(s1.lng), parseFloat(s2.lat), parseFloat(s2.lng));
+      let resultHtml = `<strong>${s1.name}</strong> ↔ <strong>${s2.name}</strong>: 직선 ${straight.toFixed(2)}km`;
+
+      // 도로거리도 산출
+      const route = await getRouteDistance(s1.lng, s1.lat, s2.lng, s2.lat);
+      if (route && route.distance_km) {
+        resultHtml += ` / 도로 ${route.distance_km}km (${route.duration_min}분)`;
+      }
+      document.getElementById('dist-click-result').innerHTML = resultHtml;
+
+      // 지도에 연결선 표시
+      distLineSource.clear();
+      const line = new ol.Feature({
+        geometry: new ol.geom.LineString([
+          ol.proj.fromLonLat([parseFloat(s1.lng), parseFloat(s1.lat)]),
+          ol.proj.fromLonLat([parseFloat(s2.lng), parseFloat(s2.lat)]),
+        ])
+      });
+      distLineSource.addFeature(line);
+    } else {
+      document.getElementById('dist-click-result').innerHTML = `<strong>${school.name}</strong> 선택됨 — 두 번째 학교를 클릭하세요`;
+      distLineSource.clear();
+    }
+  });
+
+  distMap.on('pointermove', evt => {
+    distMap.getTargetElement().style.cursor = distMap.hasFeatureAtPixel(evt.pixel) ? 'pointer' : '';
   });
 }
 
-// ── 초기 실행 ─────────────────────────────────────────────────
+function distInitialize() {
+  // 필터 옵션 생성
+  const centers = sortByOrder([...new Set(allData.map(s => s.support_center_name).filter(Boolean))], CENTER_ORDER);
+  const cSel = document.getElementById('d-center');
+  centers.forEach(c => { cSel.add(new Option(c, c)); });
+  distCalculate();
+}
+
+function distUpdateGu() {
+  const center = document.getElementById('d-center').value;
+  const gSel = document.getElementById('d-gu');
+  const subset = allData.filter(s => !center || s.support_center_name === center);
+  const gus = [...new Set(subset.map(s => extractGu(s.address)).filter(Boolean))].sort((a,b) => a.localeCompare(b,'ko'));
+  gSel.innerHTML = '<option value="">전체 자치구</option>';
+  gus.forEach(g => { gSel.add(new Option(g, g)); });
+}
+
+function distCalculate() {
+  const center = document.getElementById('d-center').value;
+  const gu = document.getElementById('d-gu').value;
+  const showRoad = document.getElementById('d-road').checked;
+
+  // 도로거리 열 토글
+  document.querySelectorAll('.dist-road-col').forEach(el => {
+    el.style.display = showRoad ? '' : 'none';
+  });
+
+  // 필터
+  let schools = allData.filter(s => {
+    if (center && s.support_center_name !== center) return false;
+    if (gu && extractGu(s.address) !== gu) return false;
+    return true;
+  });
+
+  // 위도 내림차순 정렬 (북→남)
+  schools.sort((a, b) => parseFloat(b.lat) - parseFloat(a.lat));
+
+  // 거리 계산
+  let totalDist = 0;
+  const rows = schools.map((s, i) => {
+    let adjDist = 0;
+    if (i > 0) {
+      const prev = schools[i-1];
+      adjDist = haversine(parseFloat(prev.lat), parseFloat(prev.lng), parseFloat(s.lat), parseFloat(s.lng));
+      totalDist += adjDist;
+    }
+    return { ...s, seq: i + 1, adjDist, cumDist: totalDist, gu: extractGu(s.address) };
+  });
+
+  // 테이블 렌더
+  const tbody = document.getElementById('dist-tbody');
+  tbody.innerHTML = rows.map(r => `
+    <tr data-id="${r.id}" onclick="distFocusSchool(${r.id})" style="cursor:pointer;">
+      <td>${r.seq}</td>
+      <td>${r.name}</td>
+      <td>${r.gu}</td>
+      <td>${parseFloat(r.lat).toFixed(5)}</td>
+      <td>${r.seq === 1 ? '-' : r.adjDist.toFixed(2)}</td>
+      <td>${r.seq === 1 ? '-' : r.cumDist.toFixed(2)}</td>
+      <td class="dist-road-col" style="display:${showRoad ? '' : 'none'};">-</td>
+    </tr>
+  `).join('');
+
+  // 요약
+  document.getElementById('dist-summary').textContent =
+    `${rows.length}개 학교 | 총 직선거리: ${totalDist.toFixed(2)}km`;
+
+  // 지도 마커 갱신
+  distRenderMarkers(rows);
+
+  // 도로거리 비동기 로드
+  if (showRoad && rows.length > 1 && rows.length <= 100) {
+    distLoadRoadDistances(rows);
+  }
+}
+
+function distRenderMarkers(rows) {
+  if (!distMarkerSource) return;
+  distMarkerSource.clear();
+  distLineSource.clear();
+
+  rows.forEach((s, i) => {
+    const coord = ol.proj.fromLonLat([parseFloat(s.lng), parseFloat(s.lat)]);
+    const feature = new ol.Feature({ geometry: new ol.geom.Point(coord) });
+
+    // 번호 마커
+    const canvas = document.createElement('canvas');
+    canvas.width = 24; canvas.height = 24;
+    const ctx = canvas.getContext('2d');
+    ctx.beginPath(); ctx.arc(12, 12, 10, 0, Math.PI*2);
+    ctx.fillStyle = '#2563eb'; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(s.seq, 12, 12);
+
+    feature.setStyle(new ol.style.Style({
+      image: new ol.style.Icon({ img: canvas, imgSize: [24,24], anchor: [0.5,0.5] })
+    }));
+    feature.set('school', s);
+    distMarkerSource.addFeature(feature);
+  });
+
+  // 순서 연결선
+  if (rows.length > 1) {
+    const coords = rows.map(s => ol.proj.fromLonLat([parseFloat(s.lng), parseFloat(s.lat)]));
+    const line = new ol.Feature({ geometry: new ol.geom.LineString(coords) });
+    line.setStyle(new ol.style.Style({
+      stroke: new ol.style.Stroke({ color: 'rgba(37,99,235,0.4)', width: 2 })
+    }));
+    distLineSource.addFeature(line);
+  }
+
+  // 전체 보기
+  if (rows.length > 0) {
+    setTimeout(() => distFitAll(), 200);
+  }
+}
+
+async function distLoadRoadDistances(rows) {
+  // 순차적으로 인접 학교 간 도로거리 로드 (최대 100개)
+  for (let i = 1; i < rows.length && i < 100; i++) {
+    const prev = rows[i-1], curr = rows[i];
+    const route = await getRouteDistance(prev.lng, prev.lat, curr.lng, curr.lat);
+    if (route && route.distance_km) {
+      const tr = document.querySelector(`#dist-tbody tr:nth-child(${i+1})`);
+      if (tr) {
+        const roadTd = tr.querySelector('.dist-road-col');
+        if (roadTd) roadTd.textContent = route.distance_km;
+      }
+    }
+  }
+}
+
+function distFocusSchool(id) {
+  const s = allData.find(x => x.id === id);
+  if (!s || !distMap) return;
+  const coord = ol.proj.fromLonLat([parseFloat(s.lng), parseFloat(s.lat)]);
+  distMap.getView().animate({ center: coord, zoom: 15, duration: 500 });
+
+  // 테이블 하이라이트
+  document.querySelectorAll('#dist-tbody tr').forEach(tr => tr.classList.remove('selected'));
+  const tr = document.querySelector(`#dist-tbody tr[data-id="${id}"]`);
+  if (tr) { tr.classList.add('selected'); tr.scrollIntoView({ block: 'nearest' }); }
+}
+
+function distFitAll() {
+  if (!distMarkerSource || distMarkerSource.getFeatures().length === 0) return;
+  distMap.getView().fit(distMarkerSource.getExtent(), { padding: [40,40,40,40], maxZoom: 14, duration: 500 });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 초기화
+// ══════════════════════════════════════════════════════════════════
 initMap();
 loadData();
 </script>

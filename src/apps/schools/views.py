@@ -1,9 +1,10 @@
-import csv, io
+import csv, io, httpx
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.http import JsonResponse, HttpResponse
+from django.conf import settings
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -26,6 +27,46 @@ def school_list_view(request):
 @login_required
 def school_map_view(request):
     return render(request, 'schools/map.html')
+
+
+@login_required
+def vworld_route_proxy(request):
+    """VWorld 경로 API 프록시 — 두 지점 간 도로거리/시간 반환"""
+    start = request.GET.get('start')  # "lng,lat"
+    end = request.GET.get('end')      # "lng,lat"
+    if not start or not end:
+        return JsonResponse({'error': 'start, end 파라미터 필요 (lng,lat)'}, status=400)
+
+    api_key = getattr(settings, 'VWORLD_API_KEY', '')
+    if not api_key:
+        return JsonResponse({'error': 'VWorld API 키 미설정'}, status=500)
+
+    url = 'https://api.vworld.kr/req/route'
+    params = {
+        'key': api_key,
+        'service': 'route',
+        'request': 'GetRoute',
+        'format': 'json',
+        'road': 'ROAD',
+        'start': start,
+        'end': end,
+    }
+    try:
+        resp = httpx.get(url, params=params, timeout=10)
+        data = resp.json()
+        # 거리(m)와 시간(초) 추출
+        route = data.get('response', {}).get('result', {}).get('route', {})
+        distance = route.get('distance', 0)  # 미터
+        duration = route.get('duration', 0)  # 초
+        return JsonResponse({
+            'distance_m': distance,
+            'distance_km': round(float(distance) / 1000, 2) if distance else 0,
+            'duration_s': duration,
+            'duration_min': round(float(duration) / 60, 1) if duration else 0,
+            'raw': data,
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=502)
 
 
 @login_required
