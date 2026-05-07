@@ -2130,9 +2130,9 @@ function _cableColor(cable) {
 function renderPortMap(sw) {
   const ports = sw.ports || [];
   const pc = sw.port_count || 24;
-  // status 초기값: 연결(connected_to) 있으면 활성(up), 없으면 미연결(none)
+  // status 자동 판정: 연결(connected_to) 있으면 활성(up), 없으면 미연결(none)
   ports.forEach(p => {
-    if (!p.status) p.status = (p.connected_to && p.connected_to.trim()) ? 'up' : 'none';
+    p.status = (p.connected_to && p.connected_to.trim()) ? 'up' : 'none';
   });
   const connCount = ports.filter(p => p.cable && p.cable.trim()).length;
   const poeLabel = sw.category === 'PoE' || (sw.device_id||'').toUpperCase().includes('P#') ? 'Y' : 'N';
