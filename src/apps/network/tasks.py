@@ -682,56 +682,34 @@ def _parse_nas_portmap_file(filepath):
     return result if result else None
 
 
-@celery_app.task
+@celery_app.task(soft_time_limit=3600, time_limit=3900)
 def sync_nas_portmap():
-    """NAS 선번장 파일 사전 파싱 → 배치 단위로 분할 실행
+    """NAS 선번장 파일 사전 파싱 → SchoolEquipment.port_map에 저장
 
-    - 200개씩 나눠서 별도 태스크로 실행 (메모리 초과 방지)
+    - 100개마다 gc.collect()로 메모리 해제
     - 매일 새벽 자동 실행 (CELERY_BEAT_SCHEDULE)
     """
+    from apps.schools.models import School, SchoolEquipment
+
     NAS_BASE = os.environ.get('NAS_ARTIFACT_ROOT', '/app/nas/media/npms/산출물')
     portmap_folder = os.path.join(NAS_BASE, '2025년 테크센터', '2025년 테크센터-네트워크 선번장')
     if not os.path.isdir(portmap_folder):
         logger.warning(f'선번장 폴더 없음: {portmap_folder}')
         return {'error': '폴더 없음'}
 
+    school_map = {s.name: s for s in School.objects.all()}
     files = [f for f in os.listdir(portmap_folder)
              if (f.endswith('.xlsx') or f.endswith('.xlsm')) and not f.startswith('~')]
 
-    BATCH_SIZE = 100
-    batches = [files[i:i+BATCH_SIZE] for i in range(0, len(files), BATCH_SIZE)]
-    logger.info(f'선번장 파싱 시작: {len(files)}개 파일 → {len(batches)}개 배치 (순차)')
+    stats = {'total': len(files), 'parsed': 0, 'skipped': 0, 'failed': 0}
+    logger.info(f'선번장 파싱 시작: {len(files)}개 파일')
 
-    # 순차 실행 (메모리 초과 방지 — 이전 배치 완료 후 다음 배치 시작)
-    from celery import chain
-    chain(*[_sync_portmap_batch.s(batch, idx + 1, len(batches)) for idx, batch in enumerate(batches)]).delay()
-
-    return {'total_files': len(files), 'batches': len(batches)}
-
-
-@celery_app.task
-def _sync_portmap_batch(*args):
-    """선번장 배치 파싱 (100개 단위, 순차 실행)"""
-    # chain 호출 시 이전 결과가 첫 인자로 들어오므로 마지막 3개 인자만 사용
-    if len(args) == 4:
-        _, file_list, batch_num, total_batches = args
-    else:
-        file_list, batch_num, total_batches = args
-    from apps.schools.models import School, SchoolEquipment
-
-    NAS_BASE = os.environ.get('NAS_ARTIFACT_ROOT', '/app/nas/media/npms/산출물')
-    portmap_folder = os.path.join(NAS_BASE, '2025년 테크센터', '2025년 테크센터-네트워크 선번장')
-
-    school_map = {s.name: s for s in School.objects.all()}
-    stats = {'parsed': 0, 'skipped': 0, 'failed': 0}
-
-    for fname in file_list:
+    for i, fname in enumerate(files):
         filepath = os.path.join(portmap_folder, fname)
         if not os.path.isfile(filepath):
             stats['skipped'] += 1
             continue
 
-        # 파일명에서 학교명 추출
         school_name = fname.rsplit('.', 1)[0]
         if '_' in school_name:
             school_name = school_name.rsplit('_', 1)[-1]
@@ -741,8 +719,7 @@ def _sync_portmap_batch(*args):
         if not school:
             for variant in (school_name, '서울' + school_name, school_name.replace('서울', '', 1)):
                 if variant in school_map:
-                    school = school_map[variant]
-                    break
+                    school = school_map[variant]; break
         if not school:
             stats['skipped'] += 1
             continue
@@ -767,9 +744,10 @@ def _sync_portmap_batch(*args):
         except Exception as e:
             logger.error(f'[{school_name}] 선번장 파싱 오류: {e}')
             stats['failed'] += 1
-            continue
-        finally:
             gc.collect()
+            continue
+
+        gc.collect()
 
         if not switches:
             stats['skipped'] += 1
@@ -805,7 +783,13 @@ def _sync_portmap_batch(*args):
 
         stats['parsed'] += 1
 
-    logger.info(f'선번장 배치 {batch_num}/{total_batches} 완료: 파싱 {stats["parsed"]}, 스킵 {stats["skipped"]}, 실패 {stats["failed"]}')
+        # 100개마다 진행률 로그 + 강제 메모리 해제
+        done = stats['parsed'] + stats['skipped'] + stats['failed']
+        if done % 100 == 0:
+            gc.collect()
+            logger.info(f'선번장 파싱 진행: {done}/{stats["total"]} (파싱 {stats["parsed"]}, 스킵 {stats["skipped"]})')
+
+    logger.info(f'선번장 사전 파싱 완료: 총 {stats["total"]}, 파싱 {stats["parsed"]}, 스킵 {stats["skipped"]}, 실패 {stats["failed"]}')
     return stats
 
 
