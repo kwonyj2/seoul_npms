@@ -597,21 +597,28 @@ def _parse_portmap_type_b(ws, sname):
 
 
 def _parse_portmap_type_a(ws, sname):
-    """양식 A (xlsx): 66열, 10행 간격, A열 시작"""
-    PORT_COLS = [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49, 52, 55, 58]
-    UPLINK_COLS = [55, 58]
+    """양식 A (xlsx): 66열, 10행 간격, A열 또는 C열 시작"""
     switches = []
     for r in range(1, ws.max_row + 1):
-        v = ws.cell(r, 1).value
-        if not (v and str(v).strip() == '망구분'):
+        # col 1 또는 col 3에서 '망구분' 찾기
+        start_col = 0
+        for sc in [1, 3]:
+            v = ws.cell(r, sc).value
+            if v and str(v).strip() == '망구분':
+                start_col = sc
+                break
+        if not start_col:
             continue
+        offset = start_col - 1  # 0 또는 2
+        PORT_COLS = [1 + offset + i * 3 for i in range(20)]
+        UPLINK_COLS = PORT_COLS[-2:]
         base = r
-        net_type = str(ws.cell(base, 4).value or '').strip()
-        model = str(ws.cell(base, 13).value or '').strip()
-        location = str(ws.cell(base, 22).value or '').strip()
-        poe = str(ws.cell(base, 31).value or '').strip()
-        hub_id = str(ws.cell(base + 1, 4).value or '').strip()
-        mfr = str(ws.cell(base + 1, 13).value or '').strip()
+        net_type = str(ws.cell(base, 4 + offset).value or '').strip()
+        model = str(ws.cell(base, 13 + offset).value or '').strip()
+        location = str(ws.cell(base, 22 + offset).value or '').strip()
+        poe = str(ws.cell(base, 31 + offset).value or '').strip()
+        hub_id = str(ws.cell(base + 1, 4 + offset).value or '').strip()
+        mfr = str(ws.cell(base + 1, 13 + offset).value or '').strip()
         if not hub_id and not model:
             continue
         ports = []
