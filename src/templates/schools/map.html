@@ -844,35 +844,85 @@ function distFitAll() {
 }
 
 function distExportExcel() {
-  const rows = document.querySelectorAll('#dist-tbody tr');
-  if (!rows.length) { alert('데이터가 없습니다.'); return; }
+  const filterCenter = document.getElementById('d-center').value;
+  const filterGu = document.getElementById('d-gu').value;
 
-  const center = document.getElementById('d-center').value || '전체';
-  const gu = document.getElementById('d-gu').value || '전체';
+  // 대상 학교 필터
+  let schools = allData.filter(s => {
+    if (filterCenter && s.support_center_name !== filterCenter) return false;
+    if (filterGu && extractGu(s.address) !== filterGu) return false;
+    return true;
+  });
+  if (!schools.length) { alert('데이터가 없습니다.'); return; }
 
-  // CSV 생성 (엑셀 호환 UTF-8 BOM)
-  let csv = '\uFEFF순번,학교명,교육지원청,자치구,위도,경도,인접거리(km),누적거리(km)\n';
-  rows.forEach(tr => {
-    const cells = tr.querySelectorAll('td');
-    if (cells.length >= 6) {
-      const seq = cells[0].textContent;
-      const name = cells[1].textContent;
-      const guName = cells[2].textContent;
-      const lat = cells[3].textContent;
-      // 경도는 테이블에 없으므로 allData에서 찾기
-      const school = allData.find(s => s.name === name);
-      const lng = school ? parseFloat(school.lng).toFixed(5) : '';
-      const adj = cells[4].textContent;
-      const cum = cells[5].textContent;
-      csv += `${seq},${name},${center},${guName},${lat},${lng},${adj},${cum}\n`;
-    }
+  // 교육지원청별 → 자치구별 그룹핑
+  const groups = {};
+  schools.forEach(s => {
+    const c = s.support_center_name || '기타';
+    const g = extractGu(s.address) || '기타';
+    const key = `${c}||${g}`;
+    if (!groups[key]) groups[key] = { center: c, gu: g, schools: [] };
+    groups[key].schools.push(s);
   });
 
+  // 그룹별 Nearest Neighbor 정렬 + 거리 계산
+  let csv = '\uFEFF전체순번,그룹순번,학교명,교육지원청,자치구,위도,경도,인접거리(km),누적거리(km)\n';
+  let globalSeq = 0;
+
+  // 교육지원청 순서 → 자치구 가나다순
+  const sortedKeys = Object.keys(groups).sort((a, b) => {
+    const [ca, ga] = a.split('||');
+    const [cb, gb] = b.split('||');
+    const ci = CENTER_ORDER.indexOf(ca), cj = CENTER_ORDER.indexOf(cb);
+    if (ci !== cj) return (ci === -1 ? 99 : ci) - (cj === -1 ? 99 : cj);
+    return ga.localeCompare(gb, 'ko');
+  });
+
+  for (const key of sortedKeys) {
+    const group = groups[key];
+    let list = group.schools;
+
+    // Nearest Neighbor 정렬
+    if (list.length > 1) {
+      list.sort((a, b) => parseFloat(b.lat) - parseFloat(a.lat));
+      const ordered = [list[0]];
+      const remaining = new Set(list.slice(1).map((_, i) => i + 1));
+      while (remaining.size > 0) {
+        const last = ordered[ordered.length - 1];
+        let minDist = Infinity, nearest = -1;
+        for (const idx of remaining) {
+          const d = haversine(parseFloat(last.lat), parseFloat(last.lng), parseFloat(list[idx].lat), parseFloat(list[idx].lng));
+          if (d < minDist) { minDist = d; nearest = idx; }
+        }
+        ordered.push(list[nearest]);
+        remaining.delete(nearest);
+      }
+      list = ordered;
+    }
+
+    // CSV 행 생성
+    let cumDist = 0;
+    list.forEach((s, i) => {
+      globalSeq++;
+      let adjDist = 0;
+      if (i > 0) {
+        const prev = list[i-1];
+        adjDist = haversine(parseFloat(prev.lat), parseFloat(prev.lng), parseFloat(s.lat), parseFloat(s.lng));
+        cumDist += adjDist;
+      }
+      const lat = parseFloat(s.lat).toFixed(5);
+      const lng = parseFloat(s.lng).toFixed(5);
+      csv += `${globalSeq},${i+1},${s.name},${group.center},${group.gu},${lat},${lng},${i === 0 ? '-' : adjDist.toFixed(2)},${i === 0 ? '-' : cumDist.toFixed(2)}\n`;
+    });
+  }
+
+  const label = filterCenter || '전체';
+  const guLabel = filterGu || '전체';
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `학교거리순서_${center}_${gu}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `학교거리순서_${label}_${guLabel}_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
