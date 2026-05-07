@@ -749,8 +749,25 @@ function distCalculate() {
     return true;
   });
 
-  // 위도 내림차순 정렬 (북→남)
-  schools.sort((a, b) => parseFloat(b.lat) - parseFloat(a.lat));
+  // Nearest Neighbor 정렬 (가장 북쪽 학교부터 시작, 가장 가까운 학교를 순서대로 연결)
+  if (schools.length > 1) {
+    // 시작점: 가장 북쪽(위도 최대) 학교
+    schools.sort((a, b) => parseFloat(b.lat) - parseFloat(a.lat));
+    const ordered = [schools[0]];
+    const remaining = new Set(schools.slice(1).map((s, i) => i + 1));
+
+    while (remaining.size > 0) {
+      const last = ordered[ordered.length - 1];
+      let minDist = Infinity, nearest = -1;
+      for (const idx of remaining) {
+        const d = haversine(parseFloat(last.lat), parseFloat(last.lng), parseFloat(schools[idx].lat), parseFloat(schools[idx].lng));
+        if (d < minDist) { minDist = d; nearest = idx; }
+      }
+      ordered.push(schools[nearest]);
+      remaining.delete(nearest);
+    }
+    schools = ordered;
+  }
 
   // 거리 계산
   let totalDist = 0;
