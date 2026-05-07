@@ -698,19 +698,25 @@ def sync_nas_portmap():
     files = [f for f in os.listdir(portmap_folder)
              if (f.endswith('.xlsx') or f.endswith('.xlsm')) and not f.startswith('~')]
 
-    BATCH_SIZE = 200
+    BATCH_SIZE = 100
     batches = [files[i:i+BATCH_SIZE] for i in range(0, len(files), BATCH_SIZE)]
-    logger.info(f'선번장 파싱 시작: {len(files)}개 파일 → {len(batches)}개 배치')
+    logger.info(f'선번장 파싱 시작: {len(files)}개 파일 → {len(batches)}개 배치 (순차)')
 
-    for idx, batch in enumerate(batches):
-        _sync_portmap_batch.delay(batch, idx + 1, len(batches))
+    # 순차 실행 (메모리 초과 방지 — 이전 배치 완료 후 다음 배치 시작)
+    from celery import chain
+    chain(*[_sync_portmap_batch.s(batch, idx + 1, len(batches)) for idx, batch in enumerate(batches)]).delay()
 
     return {'total_files': len(files), 'batches': len(batches)}
 
 
 @celery_app.task
-def _sync_portmap_batch(file_list, batch_num, total_batches):
-    """선번장 배치 파싱 (200개 단위)"""
+def _sync_portmap_batch(*args):
+    """선번장 배치 파싱 (100개 단위, 순차 실행)"""
+    # chain 호출 시 이전 결과가 첫 인자로 들어오므로 마지막 3개 인자만 사용
+    if len(args) == 4:
+        _, file_list, batch_num, total_batches = args
+    else:
+        file_list, batch_num, total_batches = args
     from apps.schools.models import School, SchoolEquipment
 
     NAS_BASE = os.environ.get('NAS_ARTIFACT_ROOT', '/app/nas/media/npms/산출물')
