@@ -738,50 +738,49 @@ def sync_nas_portmap():
                     stats['skipped'] += 1
                     continue
 
-        # 파싱 실행
+        # 파싱 + DB 저장 (전체를 try/except로 감싸서 한 파일 오류가 전체를 중단하지 않도록)
         try:
             switches = _parse_nas_portmap_file(filepath)
+            gc.collect()
+
+            if not switches:
+                stats['skipped'] += 1
+                continue
+
+            # DB 저장
+            for sw in switches:
+                device_id = sw['device_id']
+                eq, created = SchoolEquipment.objects.get_or_create(
+                    school=school,
+                    device_id=device_id,
+                    defaults={
+                        'category': sw['category'],
+                        'model_name': sw['model_name'],
+                        'network_type': sw['network_type'],
+                        'manufacturer': sw['manufacturer'],
+                        'install_location': sw['install_location'],
+                    }
+                )
+                ports = sw['ports']
+                if ports:
+                    ports[0]['_file_mtime'] = file_mtime
+                eq.port_map = ports
+                if not eq.model_name and sw['model_name']:
+                    eq.model_name = sw['model_name']
+                if not eq.network_type and sw['network_type']:
+                    eq.network_type = sw['network_type']
+                if not eq.manufacturer and sw['manufacturer']:
+                    eq.manufacturer = sw['manufacturer']
+                if not eq.install_location and sw['install_location']:
+                    eq.install_location = sw['install_location']
+                eq.save()
+
+            stats['parsed'] += 1
         except Exception as e:
-            logger.error(f'[{school_name}] 선번장 파싱 오류: {e}')
+            logger.error(f'[{school_name}] 선번장 처리 오류: {e}')
             stats['failed'] += 1
             gc.collect()
             continue
-
-        gc.collect()
-
-        if not switches:
-            stats['skipped'] += 1
-            continue
-
-        # DB 저장
-        for sw in switches:
-            device_id = sw['device_id']
-            eq, created = SchoolEquipment.objects.get_or_create(
-                school=school,
-                device_id=device_id,
-                defaults={
-                    'category': sw['category'],
-                    'model_name': sw['model_name'],
-                    'network_type': sw['network_type'],
-                    'manufacturer': sw['manufacturer'],
-                    'install_location': sw['install_location'],
-                }
-            )
-            ports = sw['ports']
-            if ports:
-                ports[0]['_file_mtime'] = file_mtime
-            eq.port_map = ports
-            if not eq.model_name and sw['model_name']:
-                eq.model_name = sw['model_name']
-            if not eq.network_type and sw['network_type']:
-                eq.network_type = sw['network_type']
-            if not eq.manufacturer and sw['manufacturer']:
-                eq.manufacturer = sw['manufacturer']
-            if not eq.install_location and sw['install_location']:
-                eq.install_location = sw['install_location']
-            eq.save()
-
-        stats['parsed'] += 1
 
         # 100개마다 진행률 로그 + 강제 메모리 해제
         done = stats['parsed'] + stats['skipped'] + stats['failed']
