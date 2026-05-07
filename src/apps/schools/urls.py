@@ -19,8 +19,6 @@ urlpatterns = [
     path('<int:pk>/building-docs/', views.building_docs_api, name='building-docs'),
     # 네트워크 문서 API
     path('<int:pk>/network-docs/', views.network_docs_api, name='network-docs'),
-    # VWorld 경로(도로거리) 프록시 API
-    path('route/', views.vworld_route_proxy, name='vworld-route'),
     # REST API
     path('', include(router.urls)),
 ]

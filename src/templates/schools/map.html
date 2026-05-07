@@ -313,10 +313,6 @@
       <select id="d-gu" class="form-select form-select-sm" style="width:140px;" onchange="distCalculate()">
         <option value="">전체 자치구</option>
       </select>
-      <div class="form-check form-check-inline ms-2">
-        <input class="form-check-input" type="checkbox" id="d-road" onchange="distCalculate()">
-        <label class="form-check-label small" for="d-road">도로거리 포함</label>
-      </div>
       <div class="ms-auto small text-muted" id="dist-summary"></div>
     </div>
 
@@ -345,7 +341,6 @@
                   <th>위도</th>
                   <th title="인접 학교 간 직선거리">인접(km)</th>
                   <th title="1번 학교로부터 누적 직선거리">누적(km)</th>
-                  <th title="도로거리 (체크 시)" class="dist-road-col" style="display:none;">도로(km)</th>
                 </tr>
               </thead>
               <tbody id="dist-tbody"></tbody>
@@ -417,13 +412,6 @@ function haversine(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// VWorld 도로거리 API 호출
-async function getRouteDistance(lng1, lat1, lng2, lat2) {
-  try {
-    const resp = await apiGet(`${API_BASE}/schools/route/?start=${lng1},${lat1}&end=${lng2},${lat2}`);
-    return resp;
-  } catch { return null; }
-}
 
 let allData = [];
 
@@ -675,7 +663,7 @@ function initDistMap() {
   distMap.addOverlay(distPopupOverlay);
 
   // 클릭으로 2교 선택 → 거리 산출
-  distMap.on('click', async evt => {
+  distMap.on('click', evt => {
     const f = distMap.forEachFeatureAtPixel(evt.pixel, f => f);
     if (!f || !f.get('school')) return;
     const school = f.get('school');
@@ -686,14 +674,8 @@ function initDistMap() {
     if (distClickSchools.length === 2) {
       const [s1, s2] = distClickSchools;
       const straight = haversine(parseFloat(s1.lat), parseFloat(s1.lng), parseFloat(s2.lat), parseFloat(s2.lng));
-      let resultHtml = `<strong>${s1.name}</strong> ↔ <strong>${s2.name}</strong>: 직선 ${straight.toFixed(2)}km`;
-
-      // 도로거리도 산출
-      const route = await getRouteDistance(s1.lng, s1.lat, s2.lng, s2.lat);
-      if (route && route.distance_km) {
-        resultHtml += ` / 도로 ${route.distance_km}km (${route.duration_min}분)`;
-      }
-      document.getElementById('dist-click-result').innerHTML = resultHtml;
+      document.getElementById('dist-click-result').innerHTML =
+        `<strong>${s1.name}</strong> ↔ <strong>${s2.name}</strong>: ${straight.toFixed(2)}km`;
 
       // 지도에 연결선 표시
       distLineSource.clear();
@@ -735,12 +717,6 @@ function distUpdateGu() {
 function distCalculate() {
   const center = document.getElementById('d-center').value;
   const gu = document.getElementById('d-gu').value;
-  const showRoad = document.getElementById('d-road').checked;
-
-  // 도로거리 열 토글
-  document.querySelectorAll('.dist-road-col').forEach(el => {
-    el.style.display = showRoad ? '' : 'none';
-  });
 
   // 필터
   let schools = allData.filter(s => {
@@ -791,7 +767,6 @@ function distCalculate() {
       <td>${parseFloat(r.lat).toFixed(5)}</td>
       <td>${r.seq === 1 ? '-' : r.adjDist.toFixed(2)}</td>
       <td>${r.seq === 1 ? '-' : r.cumDist.toFixed(2)}</td>
-      <td class="dist-road-col" style="display:${showRoad ? '' : 'none'};">-</td>
     </tr>
   `).join('');
 
@@ -802,10 +777,6 @@ function distCalculate() {
   // 지도 마커 갱신
   distRenderMarkers(rows);
 
-  // 도로거리 비동기 로드
-  if (showRoad && rows.length > 1 && rows.length <= 100) {
-    distLoadRoadDistances(rows);
-  }
 }
 
 function distRenderMarkers(rows) {
@@ -851,20 +822,6 @@ function distRenderMarkers(rows) {
   }
 }
 
-async function distLoadRoadDistances(rows) {
-  // 순차적으로 인접 학교 간 도로거리 로드 (최대 100개)
-  for (let i = 1; i < rows.length && i < 100; i++) {
-    const prev = rows[i-1], curr = rows[i];
-    const route = await getRouteDistance(prev.lng, prev.lat, curr.lng, curr.lat);
-    if (route && route.distance_km) {
-      const tr = document.querySelector(`#dist-tbody tr:nth-child(${i+1})`);
-      if (tr) {
-        const roadTd = tr.querySelector('.dist-road-col');
-        if (roadTd) roadTd.textContent = route.distance_km;
-      }
-    }
-  }
-}
 
 function distFocusSchool(id) {
   const s = allData.find(x => x.id === id);
