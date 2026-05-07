@@ -830,14 +830,19 @@ def _parse_rack_file(filepath):
         logger.warning(f'랙 파일 로드 실패: {filepath} — {e}')
         return None
 
-    # 학교명 시트 우선
+    # 시트 선택 우선순위: 랙/렉 키워드 → 학교명(마지막 시트) → 포트맵/층/계위도 제외
     ws = None
     for sname in wb.sheetnames:
         if '랙' in sname or '렉' in sname:
             ws = wb[sname]; break
     if not ws:
+        # 마지막 시트가 학교명인 경우가 많음
+        last = wb.sheetnames[-1]
+        if '포트맵' not in last and '층' not in last and '계위' not in last:
+            ws = wb[last]
+    if not ws:
         for sname in wb.sheetnames:
-            if '포트맵' not in sname and '층' not in sname:
+            if '포트맵' not in sname and '층' not in sname and '계위' not in sname:
                 ws = wb[sname]; break
     if not ws:
         ws = wb[wb.sheetnames[0]]
@@ -861,6 +866,7 @@ def _parse_rack_file(filepath):
         for eq_col, rname in sorted(rack_name_cols.items()):
             u_col = eq_col - 1
             has_u = False
+            # U#1 찾기
             for r in range(3, 15):
                 try:
                     v = ws.cell(r, u_col).value
@@ -878,6 +884,25 @@ def _parse_rack_file(filepath):
                         if v and str(v).strip() == '1':
                             u_col = alt_c; has_u = True; break
                     if has_u: break
+            # U#1이 없으면 숫자가 있는 U열 확인 (짝수만 있는 랙 대응)
+            if not has_u:
+                for r in range(3, min((ws.max_row or 40) + 1, 50)):
+                    try:
+                        v = ws.cell(r, u_col).value
+                    except Exception:
+                        continue
+                    if v and str(v).strip().isdigit():
+                        has_u = True; break
+                if not has_u:
+                    for alt_c in [c2 for c2 in [eq_col - 2, eq_col + 1] if c2 >= 1]:
+                        for r in range(3, min((ws.max_row or 40) + 1, 50)):
+                            try:
+                                v = ws.cell(r, alt_c).value
+                            except Exception:
+                                continue
+                            if v and str(v).strip().isdigit():
+                                u_col = alt_c; has_u = True; break
+                        if has_u: break
             if has_u:
                 location = ''
                 for r in [1, 2]:
@@ -934,19 +959,80 @@ def _parse_rack_file(filepath):
             if rack_positions: break
 
     if not rack_positions:
+        # U번호 없는 단순 목록 형식 처리
+        # 통신랙 이름이 있는 열에서 장비를 직접 수집
+        if rack_name_cols:
+            racks = []
+            for eq_col, rname in sorted(rack_name_cols.items()):
+                # 랙 이름 행 찾기
+                rack_row = None
+                for r in range(1, 8):
+                    try:
+                        v = ws.cell(r, eq_col).value
+                    except Exception:
+                        continue
+                    if v and str(v).strip() == rname:
+                        rack_row = r; break
+                if not rack_row:
+                    rack_row = 3
+
+                # 위치 찾기 (랙 이름 위 행)
+                location = ''
+                for r in range(1, rack_row):
+                    for cc in range(max(1, eq_col - 1), eq_col + 2):
+                        try:
+                            v = ws.cell(r, cc).value
+                        except Exception:
+                            continue
+                        if v:
+                            vs = str(v).strip()
+                            if vs and '실장도' not in vs and not ('통신' in vs and ('랙' in vs or '렉' in vs)):
+                                if any(k in vs for k in ['서버', '전산', '층', 'EPS', '교무', '컴퓨터']):
+                                    location = vs
+
+                # 장비 수집 (랙 이름 아래 행)
+                items = []
+                for r in range(rack_row + 1, (ws.max_row or 40) + 1):
+                    try:
+                        v = ws.cell(r, eq_col).value
+                    except Exception:
+                        continue
+                    if v:
+                        name = str(v).strip()
+                        if name and len(name) > 1 and not is_location(name) and name != rname:
+                            dev_id, dev_name = split_id(name)
+                            items.append({'u': 0, 'name': name, 'device_id': dev_id, 'model': dev_name, 'type': detect_type(name)})
+
+                if items:
+                    racks.append({
+                        'rack_name': rname.replace('렉', '랙'),
+                        'location': location,
+                        'items': items,
+                        'source': 'nas',
+                    })
+            wb.close()
+            return racks if racks else None
+
         wb.close()
         return None
 
     racks = []
     for u_col, eq_col, rack_name, location in rack_positions:
+        # U#1 행 또는 첫 번째 U번호 행 찾기
         u1_row = None
-        for r in range(3, 15):
+        first_u_row = None
+        for r in range(3, min((ws.max_row or 40) + 1, 50)):
             try:
                 v = ws.cell(r, u_col).value
             except Exception:
                 continue
-            if v and str(v).strip() == '1':
-                u1_row = r; break
+            if v and str(v).strip().isdigit():
+                if first_u_row is None:
+                    first_u_row = r
+                if str(v).strip() == '1':
+                    u1_row = r; break
+        if not u1_row:
+            u1_row = first_u_row
         if not u1_row: continue
 
         items = []
