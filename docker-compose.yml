@@ -100,7 +100,7 @@ services:
       - /run/log/journal:/run/log/journal:ro
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.production
-    command: celery -A config.celery worker --loglevel=info --concurrency=4
+    command: celery -A config.celery worker --loglevel=info --concurrency=4 --max-memory-per-child=512000
     networks:
       - npms_network
 

@@ -2,6 +2,7 @@ from config.celery import app as celery_app
 import logging
 import os
 import json
+import gc
 
 logger = logging.getLogger(__name__)
 
@@ -738,10 +739,12 @@ def sync_nas_portmap():
         except Exception as e:
             logger.error(f'[{school_name}] 선번장 파싱 오류: {e}')
             stats['failed'] += 1
+            gc.collect()
             continue
         # 진행률 로그 (100개마다)
         done = stats['parsed'] + stats['skipped'] + stats['failed'] + 1
         if done % 100 == 0:
+            gc.collect()
             logger.info(f'선번장 파싱 진행: {done}/{stats["total"]}')
 
         if not switches:
@@ -1029,6 +1032,7 @@ def sync_nas_rack():
         except Exception as e:
             logger.error(f'[{school_name}] 랙실장도 파싱 오류: {e}')
             stats['failed'] += 1
+            gc.collect()
             continue
 
         if not racks:
@@ -1044,6 +1048,7 @@ def sync_nas_rack():
         stats['parsed'] += 1
 
         if (stats['parsed'] + stats['skipped'] + stats['failed']) % 100 == 0:
+            gc.collect()
             logger.info(f'랙실장도 파싱 진행: {stats["parsed"] + stats["skipped"] + stats["failed"]}/{stats["total"]}')
 
     logger.info(f'랙실장도 사전 파싱 완료: 총 {stats["total"]}, 파싱 {stats["parsed"]}, 스킵 {stats["skipped"]}, 실패 {stats["failed"]}')
