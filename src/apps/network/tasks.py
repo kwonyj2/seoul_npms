@@ -677,29 +677,46 @@ def _parse_nas_portmap_file(filepath):
 
 @celery_app.task
 def sync_nas_portmap():
-    """NAS 선번장 파일 사전 파싱 → SchoolEquipment.port_map에 저장
+    """NAS 선번장 파일 사전 파싱 → 배치 단위로 분할 실행
 
-    - mtime 비교로 변경된 파일만 재파싱
+    - 200개씩 나눠서 별도 태스크로 실행 (메모리 초과 방지)
     - 매일 새벽 자동 실행 (CELERY_BEAT_SCHEDULE)
     """
-    from apps.schools.models import School, SchoolEquipment
-    from django.utils import timezone
-
     NAS_BASE = os.environ.get('NAS_ARTIFACT_ROOT', '/app/nas/media/npms/산출물')
     portmap_folder = os.path.join(NAS_BASE, '2025년 테크센터', '2025년 테크센터-네트워크 선번장')
     if not os.path.isdir(portmap_folder):
         logger.warning(f'선번장 폴더 없음: {portmap_folder}')
         return {'error': '폴더 없음'}
 
-    school_map = {s.name: s for s in School.objects.all()}
-    stats = {'total': 0, 'parsed': 0, 'skipped': 0, 'failed': 0}
-
     files = [f for f in os.listdir(portmap_folder)
              if (f.endswith('.xlsx') or f.endswith('.xlsm')) and not f.startswith('~')]
 
-    for fname in files:
-        stats['total'] += 1
+    BATCH_SIZE = 200
+    batches = [files[i:i+BATCH_SIZE] for i in range(0, len(files), BATCH_SIZE)]
+    logger.info(f'선번장 파싱 시작: {len(files)}개 파일 → {len(batches)}개 배치')
+
+    for idx, batch in enumerate(batches):
+        _sync_portmap_batch.delay(batch, idx + 1, len(batches))
+
+    return {'total_files': len(files), 'batches': len(batches)}
+
+
+@celery_app.task
+def _sync_portmap_batch(file_list, batch_num, total_batches):
+    """선번장 배치 파싱 (200개 단위)"""
+    from apps.schools.models import School, SchoolEquipment
+
+    NAS_BASE = os.environ.get('NAS_ARTIFACT_ROOT', '/app/nas/media/npms/산출물')
+    portmap_folder = os.path.join(NAS_BASE, '2025년 테크센터', '2025년 테크센터-네트워크 선번장')
+
+    school_map = {s.name: s for s in School.objects.all()}
+    stats = {'parsed': 0, 'skipped': 0, 'failed': 0}
+
+    for fname in file_list:
         filepath = os.path.join(portmap_folder, fname)
+        if not os.path.isfile(filepath):
+            stats['skipped'] += 1
+            continue
 
         # 파일명에서 학교명 추출
         school_name = fname.rsplit('.', 1)[0]
@@ -709,7 +726,6 @@ def sync_nas_portmap():
 
         school = school_map.get(school_name)
         if not school:
-            # 서울 접두어 시도
             for variant in (school_name, '서울' + school_name, school_name.replace('서울', '', 1)):
                 if variant in school_map:
                     school = school_map[variant]
@@ -718,14 +734,13 @@ def sync_nas_portmap():
             stats['skipped'] += 1
             continue
 
-        # mtime 비교: 기존 장비의 port_map이 있고, 파일 미변경이면 스킵
+        # mtime 비교
         file_mtime = os.path.getmtime(filepath)
         existing = SchoolEquipment.objects.filter(
             school=school, category__in=['스위치', 'PoE', 'PoE스위치'],
             port_map__isnull=False,
         ).first()
         if existing and existing.port_map:
-            # port_map에 _mtime 메타가 있으면 비교
             if isinstance(existing.port_map, list) and len(existing.port_map) > 0:
                 meta = existing.port_map[0] if isinstance(existing.port_map[0], dict) else {}
                 saved_mtime = meta.get('_file_mtime', 0)
@@ -739,19 +754,15 @@ def sync_nas_portmap():
         except Exception as e:
             logger.error(f'[{school_name}] 선번장 파싱 오류: {e}')
             stats['failed'] += 1
-            gc.collect()
             continue
-        # 진행률 로그 (100개마다)
-        done = stats['parsed'] + stats['skipped'] + stats['failed'] + 1
-        if done % 100 == 0:
+        finally:
             gc.collect()
-            logger.info(f'선번장 파싱 진행: {done}/{stats["total"]}')
 
         if not switches:
             stats['skipped'] += 1
             continue
 
-        # DB 저장: SchoolEquipment에 매칭 또는 생성
+        # DB 저장
         for sw in switches:
             device_id = sw['device_id']
             eq, created = SchoolEquipment.objects.get_or_create(
@@ -765,7 +776,6 @@ def sync_nas_portmap():
                     'install_location': sw['install_location'],
                 }
             )
-            # port_map 저장 (첫 포트에 _file_mtime 메타 추가)
             ports = sw['ports']
             if ports:
                 ports[0]['_file_mtime'] = file_mtime
@@ -782,7 +792,7 @@ def sync_nas_portmap():
 
         stats['parsed'] += 1
 
-    logger.info(f'선번장 사전 파싱 완료: 총 {stats["total"]}, 파싱 {stats["parsed"]}, 스킵 {stats["skipped"]}, 실패 {stats["failed"]}')
+    logger.info(f'선번장 배치 {batch_num}/{total_batches} 완료: 파싱 {stats["parsed"]}, 스킵 {stats["skipped"]}, 실패 {stats["failed"]}')
     return stats
 
 
