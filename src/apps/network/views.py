@@ -1550,10 +1550,11 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 7pt
             location = ' / '.join(filter(None, [sw.get('building'), sw.get('floor'), sw.get('install_location')])) or '-'
 
             # SVG 포트맵
-            # 포트 status 기본값: 케이블 있으면 활성, 없으면 미연결
+            # 포트 status 자동 판정: connected_to 또는 cable 있으면 활성, 없으면 미연결
             for p in ports:
-                if not p.get('status'):
-                    p['status'] = 'up' if p.get('cable', '').strip() else 'none'
+                has_conn = (p.get('connected_to') or '').strip()
+                has_cable = (p.get('cable') or '').strip()
+                p['status'] = 'up' if (has_conn or has_cable) else 'none'
 
             odd_ports = [p for p in ports if p.get('port', 0) % 2 == 1]
             even_ports = [p for p in ports if p.get('port', 0) % 2 == 0]
