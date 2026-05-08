@@ -1506,8 +1506,7 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 7pt
 
         # ── 스위치 삭제 ──
         if request.data.get('delete'):
-            eq.port_map = []
-            eq.save(update_fields=['port_map'])
+            eq.delete()
             return Response({'success': True})
 
         # ── 포트 저장 ──
