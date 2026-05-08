@@ -1480,18 +1480,48 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 7pt
 
     @action(detail=False, methods=['post'], url_path='portmap_save')
     def portmap_save(self, request):
-        """선번장 포트 연결정보 저장"""
+        """선번장 포트/스위치 정보 저장·추가·삭제"""
         from apps.schools.models import SchoolEquipment
+
+        # ── 스위치 추가 ──
+        if request.data.get('new_switch'):
+            school_id = request.data.get('school_id')
+            device_id = request.data.get('device_id', '').strip()
+            if not school_id or not device_id:
+                return Response({'error': 'school_id, device_id 필요'}, status=400)
+            eq = SchoolEquipment.objects.create(
+                school_id=school_id, device_id=device_id,
+                network_type=request.data.get('network_type', '기타망'),
+                category='스위치', port_map=[],
+            )
+            return Response({'success': True, 'id': eq.id})
+
         equip_id = request.data.get('equipment_id')
-        ports = request.data.get('ports', [])
         if not equip_id:
             return Response({'error': 'equipment_id 필요'}, status=400)
         try:
             eq = SchoolEquipment.objects.get(pk=equip_id)
         except SchoolEquipment.DoesNotExist:
             return Response({'error': '장비 없음'}, status=404)
+
+        # ── 스위치 삭제 ──
+        if request.data.get('delete'):
+            eq.port_map = []
+            eq.save(update_fields=['port_map'])
+            return Response({'success': True})
+
+        # ── 포트 저장 ──
+        ports = request.data.get('ports', [])
         eq.port_map = ports
-        eq.save(update_fields=['port_map'])
+
+        # ── 스위치 정보 수정 ──
+        info = request.data.get('info', {})
+        update_fields = ['port_map']
+        for field in ('device_id', 'network_type', 'model_name', 'manufacturer', 'install_location', 'category'):
+            if field in info:
+                setattr(eq, field, info[field])
+                update_fields.append(field)
+        eq.save(update_fields=update_fields)
         return Response({'success': True})
 
     @action(detail=False, methods=['get'], url_path='portmap_pdf')

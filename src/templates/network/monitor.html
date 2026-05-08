@@ -58,8 +58,6 @@
           <button class="btn btn-sm btn-success d-none" id="nms-btn-excel" onclick="pmExcel()"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
           <button class="btn btn-sm btn-danger d-none" id="nms-btn-pdf" onclick="nmsTabPdf()"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</button>
           <button class="btn btn-sm btn-success d-none" id="nms-btn-save" onclick="nmsTabSave()"><i class="bi bi-save me-1"></i>저장</button>
-          <button class="btn btn-sm btn-outline-dark d-none" id="nms-btn-mode" onclick="nmsToggleMode()"><i class="bi bi-pencil-square me-1"></i>편집</button>
-          <button class="btn btn-sm btn-outline-info d-none" id="nms-btn-png" onclick="nmsTabPng()"><i class="bi bi-image me-1"></i>PNG</button>
           <label class="btn btn-sm btn-outline-secondary d-none mb-0" id="nms-btn-plan"><i class="bi bi-upload me-1"></i>도면<input type="file" accept="image/*" onchange="apUploadPlan(this)" style="display:none;"></label>
           <span id="nms-school-badge" class="badge bg-info text-dark d-none align-self-center" style="font-size:.72rem;"></span>
         </div>
@@ -1209,57 +1207,32 @@ function _nmsUpdateButtons() {
   document.getElementById('nms-btn-excel').classList.add('d-none');
   document.getElementById('nms-btn-pdf').classList.add('d-none');
   document.getElementById('nms-btn-save').classList.add('d-none');
-  document.getElementById('nms-btn-png').classList.add('d-none');
   document.getElementById('nms-btn-plan').classList.add('d-none');
-  document.getElementById('nms-btn-mode').classList.add('d-none');
   if (!has) return;
-  // 보기/편집 토글 버튼 항상 표시
-  document.getElementById('nms-btn-mode').classList.remove('d-none');
-  _updateModeButton();
-  // 선번장/랙실장도: PDF 버튼 표시 (보기/편집 무관)
-  if (tab === 'portmap' || tab === 'rack') {
+  // 선번장: 엑셀/PDF/저장 항상 표시
+  if (tab === 'portmap') {
+    document.getElementById('nms-btn-excel').classList.remove('d-none');
     document.getElementById('nms-btn-pdf').classList.remove('d-none');
-  }
-  if (_nmsEditMode) {
-    // 편집 모드: 저장/PNG/엑셀/도면 버튼 표시
-    if (tab === 'portmap') {
-      document.getElementById('nms-btn-excel').classList.remove('d-none');
-    }
     document.getElementById('nms-btn-save').classList.remove('d-none');
-    document.getElementById('nms-btn-png').classList.remove('d-none');
-    if (tab === 'apmap') {
-      document.getElementById('nms-btn-plan').classList.remove('d-none');
-    }
+  }
+  // 랙실장도: PDF/저장 표시
+  if (tab === 'rack') {
+    document.getElementById('nms-btn-pdf').classList.remove('d-none');
+    document.getElementById('nms-btn-save').classList.remove('d-none');
+  }
+  // AP위치도: 저장/도면 표시
+  if (tab === 'apmap') {
+    document.getElementById('nms-btn-save').classList.remove('d-none');
+    document.getElementById('nms-btn-plan').classList.remove('d-none');
+  }
+  // 구성도: 저장 표시
+  if (tab === 'diagram') {
+    document.getElementById('nms-btn-save').classList.remove('d-none');
   }
 }
 
-function _updateModeButton() {
-  const btn = document.getElementById('nms-btn-mode');
-  if (_nmsEditMode) {
-    btn.innerHTML = '<i class="bi bi-eye me-1"></i>보기';
-    btn.className = 'btn btn-sm btn-dark';
-  } else {
-    btn.innerHTML = '<i class="bi bi-pencil-square me-1"></i>편집';
-    btn.className = 'btn btn-sm btn-outline-dark';
-  }
-}
-
-function nmsToggleMode() {
-  _nmsEditMode = !_nmsEditMode;
-  _nmsUpdateButtons();
-  if (!_nmsSelectedSchool) return;
-  const id = _nmsSelectedSchool.id;
-  // 선번장/랙실장도/선번장구성도: 항상 DB 기반
-  if (_currentNmsTab === 'portmap') { _pmSchoolId = id; pmLoadDirect(id); }
-  else if (_currentNmsTab === 'rack') { _rkSchoolId = id; rkLoadDirect(id); }
-  else if (_currentNmsTab === 'portmap_topo') { ptLoadDirect(id); }
-  else if (_nmsEditMode) {
-    if (_currentNmsTab === 'diagram') { _dgmSchoolId = id; dgmLoadDirect(id); }
-    else if (_currentNmsTab === 'apmap') { _apSchoolId = id; apLoadDirect(id); }
-  } else {
-    nmsLoadNasFile(id, _currentNmsTab);
-  }
-}
+function _updateModeButton() {}
+function nmsToggleMode() {}
 
 function nmsTabSave() {
   if (_currentNmsTab === 'diagram') dgmSave();
@@ -2082,6 +2055,7 @@ function _pmRenderFull(d) {
         <i class="bi ${swIcon} me-1" style="color:${swColor};font-size:.7rem;"></i>
         <span class="fw-semibold" style="color:#37474f;">${sw.device_id||sw.model_name}</span>
         <small class="text-muted ms-1" style="font-size:.6rem;">${sw.model_name||''}</small>
+        <button class="btn btn-xs ms-auto p-0" onclick="event.stopPropagation();pmDeleteSwitch(${sw._idx})" title="삭제" style="color:#e53935;font-size:.65rem;line-height:1;"><i class="bi bi-x-circle"></i></button>
       </div>`;
     });
     treeHtml += `</div></div>`;
@@ -2102,6 +2076,7 @@ function _pmRenderFull(d) {
     <div class="card border-0 shadow-sm h-100 d-flex flex-column"><div class="card-body p-1 d-flex flex-column" style="overflow:hidden;">
       ${nasHeader}
       <div style="overflow-y:auto;flex:1;">${treeHtml}</div>
+      <button class="btn btn-xs btn-outline-primary w-100 mt-1" onclick="pmAddSwitch()" style="font-size:.7rem;"><i class="bi bi-plus-circle me-1"></i>스위치 추가</button>
     </div></div></div>`;
   // 중앙 + 우측
   html += `<div class="col-md-10 col-lg-10" id="pm-detail">
@@ -2169,16 +2144,27 @@ function renderPortMap(sw) {
     <i class="bi bi-info-circle-fill me-1" style="color:#1565c0;"></i>
     <span style="font-size:.75rem;font-weight:700;color:#1565c0;">스위치 정보</span></div>`;
 
-  // 스위치 정보 요약 표
+  // 스위치 정보 요약 표 (편집 가능)
+  const _f = (id, val) => `<input type="text" id="pm-info-${id}" value="${(val||'').replace(/"/g,'&quot;')}" class="form-control form-control-sm border-0 p-0" style="font-size:.72rem;height:auto;">`;
   html += `<table class="table table-sm mb-2" style="font-size:.72rem;line-height:1.3;border-collapse:separate;border-spacing:0;border:1px solid #dee2e6;border-radius:6px;overflow:hidden;">
     <colgroup><col style="width:72px;"><col></colgroup>
     <tbody>
-      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">스위치ID</td><td class="fw-bold" style="padding:3px 8px;">${sw.device_id||'-'}</td></tr>
-      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">망구분</td><td style="padding:3px 8px;">${sw.network_type||'-'}</td></tr>
-      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">모델명</td><td style="padding:3px 8px;">${sw.model_name||'-'}</td></tr>
-      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">제조사</td><td style="padding:3px 8px;">${sw.manufacturer||'-'}</td></tr>
-      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">운영장소</td><td style="padding:3px 8px;">${[sw.building, sw.floor, sw.install_location].filter(Boolean).join(' / ') || '-'}</td></tr>
-      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">PoE</td><td style="padding:3px 8px;">${poeLabel === 'Y' ? '<span class="badge bg-primary">Y</span>' : '<span class="badge bg-secondary">N</span>'}</td></tr>
+      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">스위치ID</td><td style="padding:3px 8px;">${_f('device_id', sw.device_id)}</td></tr>
+      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">망구분</td><td style="padding:3px 8px;">
+        <select id="pm-info-network_type" class="form-select form-select-sm border-0 p-0" style="font-size:.72rem;height:auto;">
+          <option value="교사망" ${sw.network_type==='교사망'?'selected':''}>교사망</option>
+          <option value="학생망" ${sw.network_type==='학생망'?'selected':''}>학생망</option>
+          <option value="무선망" ${sw.network_type==='무선망'?'selected':''}>무선망</option>
+          <option value="기타망" ${(sw.network_type||'').includes('기타')||!sw.network_type?'selected':''}>기타망</option>
+        </select></td></tr>
+      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">모델명</td><td style="padding:3px 8px;">${_f('model_name', sw.model_name)}</td></tr>
+      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">제조사</td><td style="padding:3px 8px;">${_f('manufacturer', sw.manufacturer)}</td></tr>
+      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">운영장소</td><td style="padding:3px 8px;">${_f('install_location', sw.install_location)}</td></tr>
+      <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">PoE</td><td style="padding:3px 8px;">
+        <select id="pm-info-category" class="form-select form-select-sm border-0 p-0" style="font-size:.72rem;height:auto;">
+          <option value="스위치" ${sw.category!=='PoE'?'selected':''}>N</option>
+          <option value="PoE" ${sw.category==='PoE'?'selected':''}>Y</option>
+        </select></td></tr>
       <tr><td class="fw-semibold text-muted" style="background:#f8f9fa;padding:3px 8px;">포트</td><td style="padding:3px 8px;"><span class="badge bg-success">${connCount}</span> / ${pc} 연결</td></tr>
     </tbody></table>`;
 
@@ -2367,15 +2353,59 @@ function pmSaveCurrent() {
   document.querySelectorAll('.pm-status-sel').forEach(el => {
     ports[parseInt(el.dataset.idx)].status = el.value;
   });
+  // 스위치 정보 수정값 반영
+  const infoFields = ['device_id','network_type','model_name','manufacturer','install_location','category'];
+  const swInfo = {};
+  infoFields.forEach(f => {
+    const el = document.getElementById('pm-info-'+f);
+    if (el) swInfo[f] = el.value;
+  });
   fetch(`${API_BASE}/network/topology/portmap_save/`, {
     method: 'POST',
     headers: {'Content-Type':'application/json','X-CSRFToken': CSRF_TOKEN},
-    body: JSON.stringify({equipment_id: sw.id, ports: ports}),
+    body: JSON.stringify({equipment_id: sw.id, ports: ports, info: swInfo}),
   }).then(r => r.json()).then(d => {
     if (d.success) {
       showToast('선번장 저장 완료');
+      Object.assign(sw, swInfo);
       sw.ports = ports;
-      renderPortMap(sw);
+      // 트리 새로고침
+      pmLoadDirect(_pmSchoolId);
+    }
+  });
+}
+
+function pmDeleteSwitch(idx) {
+  const sw = _pmData[idx];
+  if (!sw) return;
+  if (!confirm(`${sw.device_id||sw.model_name} 스위치를 삭제하시겠습니까?`)) return;
+  fetch(`${API_BASE}/network/topology/portmap_save/`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF_TOKEN},
+    body: JSON.stringify({equipment_id: sw.id, ports: [], delete: true}),
+  }).then(r => r.json()).then(d => {
+    showToast('스위치가 삭제되었습니다');
+    pmLoadDirect(_pmSchoolId);
+  });
+}
+
+function pmAddSwitch() {
+  if (!_pmSchoolId) { showToast('학교를 먼저 선택하세요','warning'); return; }
+  const name = prompt('새 스위치 ID를 입력하세요 (예: K#1)');
+  if (!name || !name.trim()) return;
+  const net = prompt('망 구분을 선택하세요\n1=교사망, 2=학생망, 3=무선망, 4=기타망', '1');
+  const netMap = {'1':'교사망','2':'학생망','3':'무선망','4':'기타망'};
+  const netType = netMap[net] || '기타망';
+  fetch(`${API_BASE}/network/topology/portmap_save/`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken': CSRF_TOKEN},
+    body: JSON.stringify({school_id: _pmSchoolId, new_switch: true, device_id: name.trim(), network_type: netType}),
+  }).then(r => r.json()).then(d => {
+    if (d.success) {
+      showToast('스위치가 추가되었습니다');
+      pmLoadDirect(_pmSchoolId);
+    } else {
+      showToast(d.error||'추가 실패','error');
     }
   });
 }
