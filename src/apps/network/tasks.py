@@ -590,7 +590,7 @@ def _parse_portmap_type_b(ws, sname):
         switches.append({
             'device_id': hub_id, 'model_name': model, 'network_type': net_type,
             'manufacturer': mfr, 'install_location': location,
-            'category': 'PoE' if 'P' in hub_id.upper() and '#' in hub_id else '스위치',
+            'category': '스위치',
             'port_count': len(ports), 'ports': ports, 'sheet': sname,
         })
     return switches
@@ -805,7 +805,7 @@ def _parse_rack_file(filepath):
         if '방화벽' in name or 'FW/' in nl or 'FW#' in nl or 'NGF' in nl or '200E' in nl: return 'firewall'
         if 'UPS' in nl: return 'ups'
         if '서버' in name or 'SERVER' in nl: return 'server'
-        if 'P#' in name or 'POE' in nl: return 'poe'
+        if 'POE' in nl: return 'poe'
         return 'switch'
 
     def split_id(name):

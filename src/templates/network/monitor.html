@@ -2052,7 +2052,7 @@ function _pmRenderFull(d) {
       </div>
       <div class="pm-tree-children">`;
     sws.forEach(sw => {
-      const isPoE = sw.category === 'PoE' || (sw.device_id||'').toUpperCase().includes('P#');
+      const isPoE = sw.category === 'PoE';
       const swIcon = isPoE ? 'bi-lightning-charge-fill' : 'bi-hdd-rack-fill';
       const swColor = isPoE ? '#ff8f00' : ns.color;
       treeHtml += `<div class="pm-tree-item d-flex align-items-center px-2 py-1" data-idx="${sw._idx}"
@@ -2139,7 +2139,7 @@ function renderPortMap(sw) {
     p.status = (hasConn || hasCable) ? 'up' : 'none';
   });
   const connCount = ports.filter(p => p.cable && p.cable.trim()).length;
-  const poeLabel = sw.category === 'PoE' || (sw.device_id||'').toUpperCase().includes('P#') ? 'Y' : 'N';
+  const poeLabel = sw.category === 'PoE' ? 'Y' : 'N';
 
   let html = `<div class="row g-1" style="height:calc(100vh - 210px);">`;
 
