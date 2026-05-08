@@ -1249,17 +1249,15 @@ function nmsToggleMode() {
   _nmsUpdateButtons();
   if (!_nmsSelectedSchool) return;
   const id = _nmsSelectedSchool.id;
-  if (_nmsEditMode) {
-    // 편집 모드: DB 기반 편집기 로드
+  // 선번장/랙실장도/선번장구성도: 항상 DB 기반
+  if (_currentNmsTab === 'portmap') { _pmSchoolId = id; pmLoadDirect(id); }
+  else if (_currentNmsTab === 'rack') { _rkSchoolId = id; rkLoadDirect(id); }
+  else if (_currentNmsTab === 'portmap_topo') { ptLoadDirect(id); }
+  else if (_nmsEditMode) {
     if (_currentNmsTab === 'diagram') { _dgmSchoolId = id; dgmLoadDirect(id); }
-    else if (_currentNmsTab === 'portmap') { _pmSchoolId = id; pmLoadDirect(id); }
-    else if (_currentNmsTab === 'portmap_topo') { ptLoadDirect(id); }
-    else if (_currentNmsTab === 'rack') { _rkSchoolId = id; rkLoadDirect(id); }
     else if (_currentNmsTab === 'apmap') { _apSchoolId = id; apLoadDirect(id); }
   } else {
-    // 보기 모드: NAS 파일 이미지 로드 (선번장 구성도는 항상 직접 로드)
-    if (_currentNmsTab === 'portmap_topo') { ptLoadDirect(id); }
-    else { nmsLoadNasFile(id, _currentNmsTab); }
+    nmsLoadNasFile(id, _currentNmsTab);
   }
 }
 
@@ -1294,11 +1292,13 @@ function nmsLoadSelected() {
   }
   const id = _nmsSelectedSchool.id;
   _nmsUpdateButtons();
-  if (_nmsEditMode) {
-    // 편집 모드: DB 기반 편집기
+  // 선번장/랙실장도/선번장구성도: 항상 DB 기반 직접 로드 (파싱 데이터 사용)
+  if (_currentNmsTab === 'portmap') { _pmSchoolId = id; pmLoadDirect(id); }
+  else if (_currentNmsTab === 'rack') { _rkSchoolId = id; rkLoadDirect(id); }
+  else if (_currentNmsTab === 'portmap_topo') { ptLoadDirect(id); }
+  else if (_nmsEditMode) {
+    // 편집 모드: DB 기반
     if (_currentNmsTab === 'diagram') { _dgmSchoolId = id; dgmLoadDirect(id); }
-    else if (_currentNmsTab === 'portmap') { _pmSchoolId = id; pmLoadDirect(id); }
-    else if (_currentNmsTab === 'rack') { _rkSchoolId = id; rkLoadDirect(id); }
     else if (_currentNmsTab === 'apmap') { _apSchoolId = id; apLoadDirect(id); }
   } else {
     // 보기 모드: NAS 파일 이미지
