@@ -1827,11 +1827,11 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
 
     @action(detail=False, methods=['post'], url_path='pptx_extract_run')
     def pptx_extract_run(self, request):
-        """구성도 PPTX 일괄 추출 → 엑셀 파일 생성"""
-        import io
+        """구성도 PPTX 일괄 추출 → 엑셀 파일 생성 (pptx_parser 활용)"""
+        import io, re as _re
         from openpyxl import Workbook
         from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-        from .tasks import extract_pptx_network
+        from .pptx_parser import parse_pptx_topology
 
         folder = os.path.join('/app/nas/media/npms/산출물/2025년 테크센터', '2025년 테크센터-네트워크 구성도')
         if not os.path.isdir(folder):
@@ -1842,15 +1842,56 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
         if selected:
             files = [f for f in files if f in selected]
 
+        def _extract_school_name(fname):
+            from pathlib import Path
+            p = Path(fname)
+            for cand in [p.stem, p.parent.name]:
+                m = _re.search(r'([가-힣]{2,}?(?:초등학교|중학교|고등학교|특수학교|학교|유치원))', cand)
+                if m:
+                    return m.group(1)
+            parts = _re.split(r'[_\-\s\.]+', p.stem)
+            for token in reversed(parts):
+                if _re.search(r'[가-힣]{2,}', token):
+                    return token
+            return p.stem
+
         all_rows = []
         results = []
         for fname in files:
             fpath = os.path.join(folder, fname)
             try:
-                rows = extract_pptx_network(fpath)
-                all_rows.extend(rows)
-                school = rows[0]['학교명'] if rows else '?'
-                results.append({'file': fname, 'school': school, 'devices': len(rows), 'status': 'ok'})
+                data = parse_pptx_topology(fpath)
+                school = _extract_school_name(fname)
+                nodes = data.get('nodes', [])
+                edges = data.get('edges', [])
+                stats = data.get('stats', {})
+                # 노드를 행으로 변환
+                for n in nodes:
+                    # 연결 정보 찾기
+                    upper = ''
+                    cable = ''
+                    for e in edges:
+                        if e.get('to_name') == n.get('name'):
+                            upper = e.get('from_name', '')
+                            cable = e.get('cable_type', '')
+                            break
+                    all_rows.append({
+                        '학교명': school,
+                        '망': n.get('network_type', ''),
+                        '망ID': n.get('name', ''),
+                        '모델명': n.get('model', ''),
+                        '장비유형': n.get('device_type', ''),
+                        '위치': n.get('location', ''),
+                        '계위': f"{n.get('phase', '')}계위" if n.get('phase') else '',
+                        '상위장비': upper,
+                        '케이블': cable,
+                    })
+                results.append({
+                    'file': fname, 'school': school,
+                    'devices': stats.get('devices_found', 0) + stats.get('firewalls_found', 0),
+                    'edges': stats.get('edges_inferred', 0),
+                    'status': 'ok',
+                })
             except Exception as e:
                 results.append({'file': fname, 'school': '', 'devices': 0, 'status': 'fail', 'error': str(e)})
 
@@ -1861,8 +1902,7 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
         wb = Workbook()
         ws = wb.active
         ws.title = '장비목록'
-        headers = ['학교명', '슬라이드', '망', '망ID', '모델명', '건물명', '층', '위치',
-                    '계위', '포트(다운→업)', '케이블 업→다운', '업링크 케이블', '케이블 출처']
+        headers = ['학교명', '망', '망ID', '모델명', '장비유형', '위치', '계위', '상위장비', '케이블']
         hf = Font(name='맑은 고딕', bold=True, color='FFFFFF', size=11)
         hfill = PatternFill('solid', start_color='2F4858')
         ha = Alignment(horizontal='center', vertical='center', wrap_text=True)
@@ -1877,25 +1917,25 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
             cell.border = border
 
         net_fill = {
-            '보안(공통)': PatternFill('solid', start_color='FCE4E4'),
+            '': PatternFill('solid', start_color='FCE4E4'),
             '교사망': PatternFill('solid', start_color='FFF4D6'),
             '학생망': PatternFill('solid', start_color='E8F5DC'),
             '무선망': PatternFill('solid', start_color='E1ECFA'),
             '기타망': PatternFill('solid', start_color='F0EFE9'),
+            '전화망': PatternFill('solid', start_color='F3E5F5'),
+            '스쿨넷': PatternFill('solid', start_color='E0F7FA'),
         }
         fn = Font(name='맑은 고딕', size=10)
         ca = Alignment(horizontal='center', vertical='center')
         school_fill = PatternFill('solid', start_color='D0E5F2')
 
-        TIER_ORDER = {'상단(보안)': 0, '1계위': 1, '2계위': 2, '3계위': 3}
-        NET_ORDER = {'보안(공통)': 0, '교사망': 1, '학생망': 2, '무선망': 3, '기타망': 4}
-        all_rows.sort(key=lambda r: (r['학교명'], r['슬라이드'],
-                                     TIER_ORDER.get(r['계위'], 9), NET_ORDER.get(r['망'], 9), r['망ID']))
+        NET_ORDER = {'': 0, '교사망': 1, '학생망': 2, '무선망': 3, '기타망': 4, '전화망': 5, '스쿨넷': 6}
+        all_rows.sort(key=lambda r: (r['학교명'], NET_ORDER.get(r['망'], 9), r['망ID']))
 
         for ri, r in enumerate(all_rows, start=2):
             fill = net_fill.get(r['망'])
             for ci, key in enumerate(headers, 1):
-                cell = ws.cell(row=ri, column=ci, value=r[key])
+                cell = ws.cell(row=ri, column=ci, value=r.get(key, ''))
                 cell.border = border
                 cell.font = fn
                 cell.alignment = ca
@@ -1905,16 +1945,15 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
                 elif fill:
                     cell.fill = fill
 
-        widths = {'A': 14, 'B': 8, 'C': 10, 'D': 14, 'E': 14, 'F': 8, 'G': 6,
-                  'H': 12, 'I': 10, 'J': 14, 'K': 18, 'L': 12, 'M': 22}
+        widths = {'A': 16, 'B': 10, 'C': 14, 'D': 16, 'E': 12, 'F': 20, 'G': 8, 'H': 12, 'I': 10}
         for col, w in widths.items():
             ws.column_dimensions[col].width = w
         ws.freeze_panes = 'A2'
-        ws.auto_filter.ref = f"A1:M{len(all_rows) + 1}"
+        ws.auto_filter.ref = f"A1:I{len(all_rows) + 1}"
 
         # 학교별 요약 시트
         ws2 = wb.create_sheet('학교별 요약')
-        sh = ['학교명', '총 장비수', '교사망', '학생망', '무선망', '기타망', '보안', '포트정보', '케이블추출']
+        sh = ['학교명', '총 장비수', '교사망', '학생망', '무선망', '기타망', '전화망', '방화벽', '연결수']
         for c, h in enumerate(sh, 1):
             cell = ws2.cell(row=1, column=c, value=h)
             cell.font = hf
@@ -1926,10 +1965,11 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
             schools[r['학교명']].append(r)
         for ri, (school, srows) in enumerate(sorted(schools.items()), start=2):
             nets = [r['망'] for r in srows]
+            types = [r['장비유형'] for r in srows]
             vals = [school, len(srows), nets.count('교사망'), nets.count('학생망'),
-                    nets.count('무선망'), nets.count('기타망'), nets.count('보안(공통)'),
-                    sum(1 for r in srows if r['포트(다운→업)']),
-                    sum(1 for r in srows if r['케이블 출처'] == '추출')]
+                    nets.count('무선망'), nets.count('기타망'), nets.count('전화망'),
+                    types.count('firewall'),
+                    sum(1 for r in srows if r['상위장비'])]
             for ci, v in enumerate(vals, 1):
                 cell = ws2.cell(row=ri, column=ci, value=v)
                 cell.font = fn
