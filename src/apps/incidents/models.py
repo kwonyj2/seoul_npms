@@ -96,6 +96,7 @@ class Incident(models.Model):
     requester_name  = models.CharField('요청자', max_length=50)
     requester_phone = models.CharField('요청자 연락처', max_length=20)
     requester_position = models.CharField('요청자 직책', max_length=50, blank=True)
+    requester_email = models.EmailField('요청자 이메일', blank=True)
     description     = models.TextField('요청내용')
 
     # 시간 추적

@@ -103,7 +103,7 @@ class IncidentCreateSerializer(serializers.ModelSerializer):
         model = Incident
         fields = ['school', 'category', 'subcategory', 'other_detail', 'priority',
                   'contact_method', 'requester_name', 'requester_phone',
-                  'requester_position', 'description', 'fault_type', 'is_human_error',
+                  'requester_position', 'requester_email', 'description', 'fault_type', 'is_human_error',
                   'location_building', 'location_floor', 'location_room', 'location_detail']
 
     def create(self, validated_data):
@@ -160,7 +160,7 @@ class IncidentUpdateSerializer(serializers.ModelSerializer):
         fields = ['school', 'category', 'subcategory', 'other_detail',
                   'status', 'priority', 'resolution', 'resolution_type',
                   'contact_method', 'requester_name', 'requester_phone',
-                  'requester_position', 'description',
+                  'requester_position', 'requester_email', 'description',
                   'received_at', 'arrived_at', 'started_at', 'completed_at',
                   'fault_type', 'is_human_error',
                   'location_building', 'location_floor', 'location_room',

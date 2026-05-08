@@ -132,14 +132,24 @@
             </div>
 
             <div class="row g-2 mb-3">
-              <div class="col-6">
+              <div class="col-4">
                 <label class="form-label small fw-semibold">장애 요청자 <span class="text-danger">*</span></label>
                 <input type="text" id="txt-requester" class="form-control form-control-sm" placeholder="요청자 성명">
               </div>
-              <div class="col-6">
+              <div class="col-4">
                 <label class="form-label small fw-semibold">요청자 연락처 <span class="text-danger">*</span></label>
                 <input type="tel" id="txt-requester-phone" class="form-control form-control-sm" placeholder="010-xxxx-xxxx"
                        oninput="formatPhone(this)">
+              </div>
+              <div class="col-4">
+                <label class="form-label small fw-semibold">요청자 직책</label>
+                <input type="text" id="txt-requester-position" class="form-control form-control-sm" placeholder="직책">
+              </div>
+            </div>
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label small fw-semibold">요청자 이메일</label>
+                <input type="email" id="txt-requester-email" class="form-control form-control-sm" placeholder="이메일">
               </div>
             </div>
 
@@ -238,12 +248,14 @@ document.getElementById('sel-school').addEventListener('change', function() {
 // ── 담당 선생님 자동완성 ─────────────────────────────────────────────────────
 let _primaryContact = null;
 
+let _allContacts = [];
 async function loadSchoolContact(schoolId) {
   hideContactHint();
   try {
-    const contacts = await apiGet(`${API_BASE}/schools/schools/${schoolId}/contacts/`);
+    const data = await apiGet(`${API_BASE}/schools/contacts/?school=${schoolId}`);
+    _allContacts = data.results || data;
     // is_primary=true인 담당자 우선, 없으면 첫 번째
-    _primaryContact = contacts.find(c => c.is_primary) || contacts[0] || null;
+    _primaryContact = _allContacts.find(c => c.is_primary) || _allContacts[0] || null;
     if (!_primaryContact) return;
     document.getElementById('contact-hint-name').textContent  = _primaryContact.name;
     document.getElementById('contact-hint-phone').textContent = _primaryContact.phone || '';
@@ -261,8 +273,10 @@ function hideContactHint() {
 document.getElementById('btn-use-contact').addEventListener('click', function(e) {
   e.preventDefault();
   if (!_primaryContact) return;
-  document.getElementById('txt-requester').value       = _primaryContact.name;
-  document.getElementById('txt-requester-phone').value = _primaryContact.phone || '';
+  document.getElementById('txt-requester').value          = _primaryContact.name;
+  document.getElementById('txt-requester-phone').value    = _primaryContact.phone || '';
+  document.getElementById('txt-requester-position').value = _primaryContact.position || '';
+  document.getElementById('txt-requester-email').value    = _primaryContact.email || '';
   document.getElementById('contact-hint').classList.add('d-none');
 });
 
@@ -536,14 +550,19 @@ document.getElementById('create-form').addEventListener('submit', async function
   if (!requester) { showToast('요청자 성명을 입력하세요', 'warning'); return; }
   if (!reqPhone)  { showToast('요청자 연락처를 입력하세요', 'warning'); return; }
 
+  const reqPosition = document.getElementById('txt-requester-position').value.trim();
+  const reqEmail    = document.getElementById('txt-requester-email').value.trim();
+
   const payload = {
-    school:          parseInt(school),
-    category:        parseInt(category),
-    priority:        document.getElementById('sel-priority').value,
-    description:     symptom,
-    requester_name:  requester,
-    requester_phone: reqPhone,
-    contact_method:  document.getElementById('sel-channel').value,
+    school:              parseInt(school),
+    category:            parseInt(category),
+    priority:            document.getElementById('sel-priority').value,
+    description:         symptom,
+    requester_name:      requester,
+    requester_phone:     reqPhone,
+    requester_position:  reqPosition,
+    requester_email:     reqEmail,
+    contact_method:      document.getElementById('sel-channel').value,
   };
   const subcat = document.getElementById('sel-subcategory').value;
   if (subcat) payload.subcategory = parseInt(subcat);

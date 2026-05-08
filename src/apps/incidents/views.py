@@ -828,6 +828,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
                 phone=incident.requester_phone,
                 position=incident.requester_position or '',
                 source='incident',
+                email=getattr(incident, 'requester_email', '') or '',
             )
 
     def get_permissions(self):
