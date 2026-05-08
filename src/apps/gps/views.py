@@ -31,8 +31,9 @@ class GpsLogViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        from core.modules import FIELD_WORKER_ROLES
         qs = GpsLog.objects.select_related('worker')
-        if user.role == 'worker':
+        if user.role in FIELD_WORKER_ROLES:
             qs = qs.filter(worker=user)
         worker_id = self.request.query_params.get('worker_id')
         if worker_id:
@@ -68,8 +69,9 @@ class WorkerLocationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        from core.modules import FIELD_WORKER_ROLES
         qs = WorkerLocation.objects.select_related('worker').filter(
-            worker__role='worker', worker__is_active=True
+            worker__role__in=FIELD_WORKER_ROLES, worker__is_active=True
         )
         # 최근 30분 이내 갱신된 인력만
         cutoff = timezone.now() - timedelta(minutes=30)
@@ -92,8 +94,9 @@ class RouteHistoryViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        from core.modules import FIELD_WORKER_ROLES
         qs = RouteHistory.objects.select_related('worker', 'incident')
-        if user.role == 'worker':
+        if user.role in FIELD_WORKER_ROLES:
             qs = qs.filter(worker=user)
         worker_id = self.request.query_params.get('worker_id')
         if worker_id:

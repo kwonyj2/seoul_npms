@@ -90,7 +90,10 @@ def get_dashboard_data():
         u['last_active'] = timezone.localtime(u['last_active']).strftime('%H:%M') if u['last_active'] else ''
         u['role_display'] = dict([
             ('superadmin','슈퍼관리자'),('admin','관리자'),
-            ('customer','학교담당자'),('worker','현장기사'),('resident','상주인력'),
+            ('customer','학교담당자'),('worker','현장기사'),
+            ('resident_central','상주(중앙)'),('resident_tech','상주(테크매니저)'),
+            ('resident_edu','상주(교육청)'),('etc','기타(영업/사업)'),
+            ('resident','상주(구)'),
         ]).get(u['user__role'], u['user__role'])
     active_workers  = User.objects.filter(role='worker', is_active=True).count()
     school_count    = School.objects.filter(is_active=True).count()
@@ -191,7 +194,9 @@ def dashboard_summary(request):
 
     # 현재 접속자 (60분 이내 활동)
     ROLE_KR = {'superadmin':'슈퍼관리자','admin':'관리자','customer':'학교담당자',
-               'worker':'현장기사','resident':'상주인력'}
+               'worker':'현장기사','resident_central':'상주(중앙)',
+               'resident_tech':'상주(테크매니저)','resident_edu':'상주(교육청)',
+               'etc':'기타(영업/사업)','resident':'상주(구)'}
     online_sessions = UserSession.objects.filter(is_active=True, last_active__gte=cutoff)
     raw_users = list(online_sessions.select_related('user').values(
         'user__name', 'user__role', 'current_page', 'last_active', 'ip_address'
@@ -415,8 +420,9 @@ def dashboard_workers_gis(request):
         for wl in WorkerLocation.objects.select_related('worker').filter(updated_at__gte=cutoff)
     }
 
+    from core.modules import FIELD_WORKER_ROLES
     workers = User.objects.filter(
-        is_active=True, role__in=('worker', 'resident')
+        is_active=True, role__in=FIELD_WORKER_ROLES
     ).select_related('support_center').order_by('name')
 
     result = []
@@ -620,7 +626,8 @@ def dashboard_attendance_stats(request):
 
     CENTER_ORDER = ['동부','서부','남부','북부','중부','강동송파','강서양천','강남서초','동작관악','성동광진','성북강북','교육청']
 
-    workers = list(User.objects.filter(role__in=('worker','resident'), is_active=True).select_related('support_center'))
+    from core.modules import FIELD_WORKER_ROLES
+    workers = list(User.objects.filter(role__in=FIELD_WORKER_ROLES, is_active=True).select_related('support_center'))
 
     center_workers = {}
     for w in workers:
@@ -669,7 +676,7 @@ def dashboard_attendance_stats(request):
     gl = sum(r['leave'] for r in result)
 
     my_status = None
-    if request.user.role in ('worker', 'resident'):
+    if request.user.role in FIELD_WORKER_ROLES:
         my_log = AttendanceLog.objects.filter(worker=request.user, work_date=today).first()
         if my_log:
             if my_log.status == 'leave':
@@ -707,11 +714,12 @@ def dashboard_attendance_stats(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def dashboard_checkin(request):
-    """출근 처리 (worker/resident 전용)"""
+    """출근 처리 (현장기사/상주인력 전용)"""
     from apps.workforce.models import AttendanceLog
     from apps.workforce.views import _get_device_type
+    from core.modules import FIELD_WORKER_ROLES
 
-    if request.user.role not in ('worker', 'resident'):
+    if request.user.role not in FIELD_WORKER_ROLES:
         return Response({'error': '현장기사 또는 상주인력만 출근 처리 가능합니다.'}, status=403)
 
     today  = timezone.localdate()
@@ -744,10 +752,11 @@ def dashboard_checkin(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def dashboard_checkout(request):
-    """퇴근 처리 (worker/resident 전용)"""
+    """퇴근 처리 (현장기사/상주인력 전용)"""
     from apps.workforce.models import AttendanceLog
+    from core.modules import FIELD_WORKER_ROLES
 
-    if request.user.role not in ('worker', 'resident'):
+    if request.user.role not in FIELD_WORKER_ROLES:
         return Response({'error': '현장기사 또는 상주인력만 퇴근 처리 가능합니다.'}, status=403)
 
     today = timezone.localdate()

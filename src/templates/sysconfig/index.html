@@ -145,8 +145,11 @@
                 <option value="superadmin">슈퍼관리자</option>
                 <option value="admin">관리자</option>
                 <option value="worker">현장기사</option>
-                <option value="resident">상주자</option>
+                <option value="resident_central">상주(중앙)</option>
+                <option value="resident_tech">상주(테크매니저)</option>
+                <option value="resident_edu">상주(교육청)</option>
                 <option value="customer">학교담당자</option>
+                <option value="etc">기타(영업/사업)</option>
               </select>
               <select id="u-center" class="form-select form-select-sm" style="width:140px;" onchange="renderUserTable()">
                 <option value="">전체 지원청</option>
@@ -221,8 +224,13 @@
               <div class="col-md-6"><label class="form-label small mb-1">이메일</label><input type="email" id="um-email" class="form-control form-control-sm"></div>
               <div class="col-md-3"><label class="form-label small mb-1">역할 *</label>
                 <select id="um-role" class="form-select form-select-sm">
-                  <option value="worker">현장기사</option><option value="resident">상주자</option>
-                  <option value="admin">관리자</option><option value="customer">학교담당자</option>
+                  <option value="worker">현장기사</option>
+                  <option value="resident_central">상주(중앙)</option>
+                  <option value="resident_tech">상주(테크매니저)</option>
+                  <option value="resident_edu">상주(교육청)</option>
+                  <option value="admin">관리자</option>
+                  <option value="customer">학교담당자</option>
+                  <option value="etc">기타(영업/사업)</option>
                   <option value="superadmin">슈퍼관리자</option>
                 </select></div>
               <div class="col-md-3"><label class="form-label small mb-1">소속 지원청</label>
@@ -780,11 +788,15 @@ function escH(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
 
 // ══ 탭2: 사용자 관리 ══════════════════════════════════
 const ROLE_BADGE_MAP = {
-  superadmin:'<span class="badge bg-danger">슈퍼관리자</span>',
-  admin:     '<span class="badge bg-primary">관리자</span>',
-  worker:    '<span class="badge bg-success">현장기사</span>',
-  resident:  '<span class="badge bg-info text-dark">상주자</span>',
-  customer:  '<span class="badge bg-secondary">학교담당자</span>',
+  superadmin:       '<span class="badge bg-danger">슈퍼관리자</span>',
+  admin:            '<span class="badge bg-primary">관리자</span>',
+  worker:           '<span class="badge bg-success">현장기사</span>',
+  resident_central: '<span class="badge bg-info text-dark">상주(중앙)</span>',
+  resident_tech:    '<span class="badge" style="background:#6f42c1;color:#fff;">상주(테크)</span>',
+  resident_edu:     '<span class="badge" style="background:#0dcaf0;color:#000;">상주(교육청)</span>',
+  customer:         '<span class="badge bg-secondary">학교담당자</span>',
+  etc:              '<span class="badge bg-warning text-dark">기타</span>',
+  resident:         '<span class="badge bg-info text-dark">상주(구)</span>',
 };
 let _allUsers=[], _editId=null, _delId=null, _uPage=1;
 const U_PER_PAGE = 25;
@@ -1018,12 +1030,12 @@ function doExport(module, fmt){
 }
 
 // ══ 탭4: NAS 역할 권한 ══════════════════════════════════
-const NAS_ROLE_LABELS={superadmin:'<span class="badge bg-dark">슈퍼관리자</span>',admin:'<span class="badge bg-primary">관리자</span>',worker:'<span class="badge bg-success">현장기사</span>',resident:'<span class="badge bg-info text-dark">상주자</span>',customer:'<span class="badge bg-warning text-dark">고객</span>'};
+const NAS_ROLE_LABELS={superadmin:'<span class="badge bg-dark">슈퍼관리자</span>',admin:'<span class="badge bg-primary">관리자</span>',worker:'<span class="badge bg-success">현장기사</span>',resident_central:'<span class="badge bg-info text-dark">상주(중앙)</span>',resident_tech:'<span class="badge" style="background:#6f42c1;color:#fff;">상주(테크)</span>',resident_edu:'<span class="badge" style="background:#0dcaf0;color:#000;">상주(교육청)</span>',customer:'<span class="badge bg-warning text-dark">고객</span>',etc:'<span class="badge bg-secondary">기타</span>'};
 const NAS_ACTIONS=['download','upload','delete','create_folder'];
 const NAS_ACT_LBL={download:'파일 다운로드',upload:'파일 업로드',delete:'파일 삭제',create_folder:'폴더 생성'};
 function loadNasRolePerms(){
   fetch(SYSCONF_API+'/nas-role-perms/').then(r=>r.json()).then(d=>{
-    const roles=['superadmin','admin','worker','resident','customer'];
+    const roles=['superadmin','admin','worker','resident_central','resident_tech','resident_edu','customer','etc'];
     document.getElementById('nas-role-tbody').innerHTML=roles.map(role=>{
       const cells=NAS_ACTIONS.map(act=>{
         const checked=d.perms[role]&&d.perms[role][act];

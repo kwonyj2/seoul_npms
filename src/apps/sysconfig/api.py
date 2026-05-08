@@ -478,11 +478,14 @@ def nas_role_perms(request):
     from core.modules import ROLE_HIERARCHY
     ACTIONS = ['download', 'upload', 'delete', 'create_folder']
     DEFAULTS = {
-        ('superadmin', 'download'): True,  ('superadmin', 'upload'): True,  ('superadmin', 'delete'): True,  ('superadmin', 'create_folder'): True,
-        ('admin',      'download'): True,  ('admin',      'upload'): True,  ('admin',      'delete'): True,  ('admin',      'create_folder'): True,
-        ('worker',     'download'): True,  ('worker',     'upload'): True,  ('worker',     'delete'): False, ('worker',     'create_folder'): False,
-        ('resident',   'download'): True,  ('resident',   'upload'): False, ('resident',   'delete'): False, ('resident',   'create_folder'): False,
-        ('customer',   'download'): True,  ('customer',   'upload'): False, ('customer',   'delete'): False, ('customer',   'create_folder'): False,
+        ('superadmin',       'download'): True,  ('superadmin',       'upload'): True,  ('superadmin',       'delete'): True,  ('superadmin',       'create_folder'): True,
+        ('admin',            'download'): True,  ('admin',            'upload'): True,  ('admin',            'delete'): True,  ('admin',            'create_folder'): True,
+        ('worker',           'download'): True,  ('worker',           'upload'): True,  ('worker',           'delete'): False, ('worker',           'create_folder'): False,
+        ('resident_central', 'download'): True,  ('resident_central', 'upload'): False, ('resident_central', 'delete'): False, ('resident_central', 'create_folder'): False,
+        ('resident_tech',    'download'): True,  ('resident_tech',    'upload'): False, ('resident_tech',    'delete'): False, ('resident_tech',    'create_folder'): False,
+        ('resident_edu',     'download'): True,  ('resident_edu',     'upload'): False, ('resident_edu',     'delete'): False, ('resident_edu',     'create_folder'): False,
+        ('customer',         'download'): True,  ('customer',         'upload'): False, ('customer',         'delete'): False, ('customer',         'create_folder'): False,
+        ('etc',              'download'): True,  ('etc',              'upload'): False, ('etc',              'delete'): False, ('etc',              'create_folder'): False,
     }
     if request.method == 'GET':
         db_perms = {(p.role, p.action): p.allowed for p in NasRoleConfig.objects.all()}

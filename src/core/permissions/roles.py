@@ -1,5 +1,6 @@
 from functools import wraps
 from rest_framework.permissions import BasePermission
+from core.modules import FIELD_WORKER_ROLES
 
 
 class IsSuperAdmin(BasePermission):
@@ -11,8 +12,11 @@ class IsAdmin(BasePermission):
         return request.user.is_authenticated and request.user.role in ('superadmin', 'admin')
 
 class IsWorker(BasePermission):
+    """현장기사 이상 (superadmin, admin, worker, 상주 3종)"""
     def has_permission(self, request, view):
-        return request.user.is_authenticated and request.user.role in ('superadmin', 'admin', 'worker')
+        return request.user.is_authenticated and request.user.role in (
+            'superadmin', 'admin', 'worker', *FIELD_WORKER_ROLES
+        )
 
 class IsCustomer(BasePermission):
     def has_permission(self, request, view):

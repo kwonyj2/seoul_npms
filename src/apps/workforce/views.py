@@ -41,7 +41,7 @@ def center_worker_tree(request):
     center_map = {c.name: {'id': c.id, 'name': c.name, 'workers': []} for c in centers_qs}
 
     workers = User.objects.filter(
-        role__in=['worker', 'resident'],
+        role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'],
         support_center__isnull=False,
     ).select_related('support_center').order_by('name')
 
@@ -68,7 +68,7 @@ def today_schedule_kpi(request):
     today = timezone.localdate()
 
     total_workers = User.objects.filter(
-        role__in=['worker', 'resident'], support_center__isnull=False
+        role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'], support_center__isnull=False
     ).count()
     today_checkin = AttendanceLog.objects.filter(
         work_date=today, check_in_at__isnull=False
@@ -299,7 +299,7 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
         date_to   = params.get('date_to')
         att_status= params.get('status')
 
-        if self.request.user.role == 'worker':
+        if self.request.user.role in ('worker', 'resident_central', 'resident_tech', 'resident_edu'):
             qs = qs.filter(worker=self.request.user)
         elif worker:
             qs = qs.filter(worker_id=worker)
@@ -449,7 +449,7 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
         date_to   = date(year, month, days_in_month)
 
         workers_qs = User.objects.filter(
-            role__in=['worker', 'resident'], support_center__isnull=False
+            role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'], support_center__isnull=False
         ).select_related('support_center').order_by('name')
         if center_id:
             workers_qs = workers_qs.filter(support_center_id=center_id)
@@ -521,7 +521,7 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
             date_to   = date(year, 12, 31)
 
         workers_qs = User.objects.filter(
-            role__in=['worker', 'resident'], support_center__isnull=False
+            role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'], support_center__isnull=False
         ).select_related('support_center').order_by('name')
         if center_id:
             workers_qs = workers_qs.filter(support_center_id=center_id)

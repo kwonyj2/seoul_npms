@@ -5,15 +5,27 @@ MODULE_REGISTRY — NPMS 모듈 레지스트리
 """
 
 # 역할 우선순위 (index가 낮을수록 높은 권한)
-ROLE_HIERARCHY = ['superadmin', 'admin', 'worker', 'resident', 'customer']
+ROLE_HIERARCHY = [
+    'superadmin', 'admin', 'worker',
+    'resident_central', 'resident_tech', 'resident_edu',
+    'customer', 'etc',
+]
 
 ROLE_LABELS = {
-    'superadmin': '슈퍼관리자',
-    'admin':      '관리자',
-    'worker':     '현장기사',
-    'resident':   '상주자',
-    'customer':   '고객',
+    'superadmin':       '슈퍼관리자',
+    'admin':            '관리자',
+    'worker':           '현장기사',
+    'resident_central': '상주(중앙)',
+    'resident_tech':    '상주(테크매니저)',
+    'resident_edu':     '상주(교육청)',
+    'customer':         '고객',
+    'etc':              '기타(영업/사업)',
 }
+
+# 상주 역할 그룹 (출퇴근·근태·GPS 대상)
+RESIDENT_ROLES = ('resident_central', 'resident_tech', 'resident_edu')
+# 출퇴근·근태 대상 전체
+FIELD_WORKER_ROLES = ('worker', 'resident_central', 'resident_tech', 'resident_edu')
 
 MODULE_REGISTRY = {
     # ── 대시보드 ───────────────────────────────

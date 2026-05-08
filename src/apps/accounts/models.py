@@ -27,11 +27,14 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     """사용자 모델"""
     ROLE_CHOICES = [
-        ('superadmin', '슈퍼관리자'),
-        ('admin',      '관리자'),
-        ('customer',   '고객(학교담당자)'),
-        ('worker',     '현장기사'),
-        ('resident',   '상주인력'),
+        ('superadmin',       '슈퍼관리자'),
+        ('admin',            '관리자'),
+        ('customer',         '고객(학교담당자)'),
+        ('worker',           '현장기사'),
+        ('resident_central', '상주(중앙)'),
+        ('resident_tech',    '상주(테크매니저)'),
+        ('resident_edu',     '상주(교육청)'),
+        ('etc',              '기타(영업/사업)'),
     ]
 
     username       = models.CharField('사용자명', max_length=50, unique=True)
