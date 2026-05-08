@@ -25,8 +25,8 @@ NS = {
 }
 EMU = 914400
 DEVICE_ID_RE = re.compile(r'^(Secui|TrusGuard|[KHMGPi]#)')
-# 포트 정규식 확장: (1←︎23), (3F←︎UP1), (UP2←︎25), (2↔︎7) 등
-PORT_RE = re.compile(r'^\(([A-Za-z0-9]+)\s*[←→↔︎\u2190-\u21FF\uFE00-\uFE0F\-~]+\s*([A-Za-z0-9]+)\)$')
+# 포트 정규식 확장: ( 01↔︎UP1 ), ( 16 -24), (3F←︎UP1) 등 — 공백 허용
+PORT_RE = re.compile(r'^\(\s*([A-Za-z0-9]+)\s*[←→↔︎\u2190-\u21FF\uFE00-\uFE0F\-~\s]+\s*([A-Za-z0-9]+)\s*\)$')
 
 CABLE_COLOR_MAP = {
     'FF0000': '광',
@@ -200,12 +200,23 @@ def extract_short_id(text):
     return re.sub(r'\s+', '', m.group(1)) if m else text[:10]
 
 
+def _clean_port_text(t):
+    """포트 텍스트 전처리: 숫자 사이 불필요한 공백 제거"""
+    # '( 2 4← 8 )' → '(24←8)' — 화살표 앞뒤 숫자/영문 사이 공백 제거
+    t = re.sub(r'(\d)\s+(\d)', r'\1\2', t)
+    t = re.sub(r'([A-Za-z])\s+(\d)', r'\1\2', t)
+    t = re.sub(r'(\d)\s+([A-Za-z])', r'\1\2', t)
+    return t
+
+
 def extract_devices_and_ports(text_shapes):
     devices, port_labels = [], []
     for s in text_shapes:
         paras = s['paras']
         if not paras:
             continue
+        # 포트 텍스트 전처리
+        paras = [_clean_port_text(p) if p.startswith('(') else p for p in paras]
         if len(paras) == 1 and PORT_RE.match(paras[0]):
             m = PORT_RE.match(paras[0])
             port_labels.append({
