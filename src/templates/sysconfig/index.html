@@ -263,9 +263,13 @@
         <span class="ms-auto badge bg-success-subtle text-success" style="font-size:.65rem;">체크 = 해당 역할에 접근 허용</span>
       </div>
       <div class="card-body p-0 overflow-auto" style="max-height:calc(100vh - 220px);">
-        <table class="table table-sm table-bordered mb-0 matrix-table">
+        <table class="table table-sm table-bordered mb-0 matrix-table" style="table-layout:fixed;">
+          <colgroup>
+            <col style="width:160px;">
+            <col span="8">
+          </colgroup>
           <thead id="matrix-thead" class="sticky-top bg-white"><tr>
-            <th class="text-start ps-2" style="min-width:140px;">모듈</th>
+            <th class="text-start ps-2">모듈</th>
             <th class="text-center" style="font-size:.75rem;">슈퍼관리자</th>
             <th class="text-center" style="font-size:.75rem;">관리자</th>
             <th class="text-center" style="font-size:.75rem;">현장기사</th>
