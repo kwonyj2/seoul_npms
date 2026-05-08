@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from rest_framework import viewsets, status
@@ -1920,7 +1921,7 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
             cell.fill = hfill
             cell.alignment = ha
             cell.border = border
-        schools = _defaultdict(list)
+        schools = defaultdict(list)
         for r in all_rows:
             schools[r['학교명']].append(r)
         for ri, (school, srows) in enumerate(sorted(schools.items()), start=2):
