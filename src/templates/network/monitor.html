@@ -336,8 +336,7 @@
 }
 </style>
 <script>
-// ── 초기 로드 (토폴로지가 기본 탭) ──────────────────────────
-loadTopoSchools();
+// ── 초기 로드: 변수 선언 후 아래에서 호출 ──────────────────────
 
 // ── 탭 전환 ─────────────────────────────────────────────────
 function switchTab(name, el) {
@@ -360,6 +359,9 @@ let topoNetwork = null;
 let _topoTree = [];   // tree API 결과 캐시
 
 let _topoLoaded = false;
+// ── 초기 로드 (토폴로지가 기본 탭) ──────────────────────────
+loadTopoSchools();
+
 async function loadTopoSchools() {
   if (_topoLoaded) return;
   _topoLoaded = true;

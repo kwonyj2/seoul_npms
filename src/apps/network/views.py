@@ -1451,15 +1451,18 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 7pt
         ).order_by('network_type', 'device_id', 'id')
         result = []
         for eq in equips:
+            port_map = eq.port_map or []
+            existing = {p.get('port'): p for p in port_map if isinstance(p, dict)}
+            # 실제 데이터의 최대 포트 번호 우선, 없으면 모델명 기반 추정
+            max_port = max(existing.keys()) if existing else 0
             port_count = 24
             model = (eq.model_name or '').upper()
             if '48' in model: port_count = 48
+            elif '52' in model: port_count = 52
+            elif '28' in model: port_count = 28
             elif '16' in model: port_count = 16
             elif '8' in model and '28' not in model: port_count = 8
-            elif '28' in model: port_count = 28
-            elif '52' in model: port_count = 52
-            port_map = eq.port_map or []
-            existing = {p.get('port'): p for p in port_map if isinstance(p, dict)}
+            port_count = max(port_count, max_port)
             ports = []
             for i in range(1, port_count + 1):
                 p = existing.get(i, {})
