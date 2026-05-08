@@ -1162,7 +1162,7 @@ _NS = {
 }
 _EMU = 914400
 _DEVICE_ID_RE = _re.compile(r'^(Secui|TrusGuard|[KHMGPi]#)')
-_PORT_RE = _re.compile(r'^\((\d+)\s+(\d+)\)$')
+_PORT_RE = _re.compile(r'^\(([A-Za-z0-9]+)\s*[←→↔︎\u2190-\u21FF\uFE00-\uFE0F\-~]+\s*([A-Za-z0-9]+)\)$')
 _CABLE_COLOR_MAP = {
     'FF0000': '광', '00AFEF': 'Cat6', '00B0F0': 'Cat6',
     '00B050': 'Cat5', 'FF66CC': 'Cat5e',
@@ -1364,12 +1364,12 @@ def extract_pptx_network(pptx_path):
                     continue
                 if len(paras) == 1 and _PORT_RE.match(paras[0]):
                     m = _PORT_RE.match(paras[0])
-                    port_labels.append({'p1': int(m.group(1)), 'p2': int(m.group(2)), 'cx': s['cx'], 'cy': s['cy']})
+                    port_labels.append({'p1': m.group(1), 'p2': m.group(2), 'cx': s['cx'], 'cy': s['cy']})
                 elif _DEVICE_ID_RE.match(paras[0]):
                     paras_clean = paras[:]
                     if len(paras) >= 3 and _PORT_RE.match(paras[-1]):
                         m = _PORT_RE.match(paras[-1])
-                        port_labels.append({'p1': int(m.group(1)), 'p2': int(m.group(2)), 'cx': s['cx'], 'cy': s['y'] + s['h'] - 0.05})
+                        port_labels.append({'p1': m.group(1), 'p2': m.group(2), 'cx': s['cx'], 'cy': s['y'] + s['h'] - 0.05})
                         paras_clean = paras[:-1]
                     devices.append({
                         'x': s['x'], 'y': s['y'], 'w': s['w'], 'h': s['h'],
