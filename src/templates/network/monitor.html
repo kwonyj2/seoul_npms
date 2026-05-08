@@ -2027,19 +2027,39 @@ function _netStyle(net) {
 }
 
 function _pmRenderFull(d) {
+  // 망 그룹별 정렬: 교사망 → 학생망 → 무선망 → 기타망
+  const NET_ORDER = ['교사', '학생', '행정', '무선'];
+  function netSortKey(net) {
+    const idx = NET_ORDER.findIndex(k => net.includes(k));
+    return idx >= 0 ? idx : 99;
+  }
+  // 그룹 내 정렬: BB(백본) 최상위, 나머지 device_id 순
+  function swSort(a, b) {
+    const aBB = (a.device_id||'').toUpperCase().startsWith('BB');
+    const bBB = (b.device_id||'').toUpperCase().startsWith('BB');
+    if (aBB && !bBB) return -1;
+    if (!aBB && bBB) return 1;
+    return (a.device_id||'').localeCompare(b.device_id||'', 'ko', {numeric:true});
+  }
+
   const groups = {};
   d.forEach((sw, i) => {
     const net = sw.network_type || '기타망';
     if (!groups[net]) groups[net] = [];
     groups[net].push({...sw, _idx: i});
   });
+  // 그룹 내 정렬 (BB 최상위)
+  for (const sws of Object.values(groups)) sws.sort(swSort);
+  // 망 순서 정렬
+  const sortedNets = Object.keys(groups).sort((a, b) => netSortKey(a) - netSortKey(b));
+
   const src = d[0]?.source || 'db';
 
   // 좌측 트리: 접기/펼치기 망구분별 그룹
   let treeHtml = '';
-  // NAS 헤더는 트리 밖 고정으로 이동
   let gIdx = 0;
-  for (const [net, sws] of Object.entries(groups)) {
+  for (const net of sortedNets) {
+    const sws = groups[net];
     const ns = _netStyle(net);
     treeHtml += `<div class="pm-tree-group" style="margin-bottom:2px;">
       <div class="d-flex align-items-center px-2 py-1" style="cursor:pointer;border-radius:4px;background:#f5f5f5;transition:background .15s;"
