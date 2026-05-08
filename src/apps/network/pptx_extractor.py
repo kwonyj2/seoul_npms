@@ -25,8 +25,12 @@ NS = {
 }
 EMU = 914400
 DEVICE_ID_RE = re.compile(r'^(Secui|TrusGuard|[KHMGPi]#)')
-# 포트 정규식 확장: ( 01↔︎UP1 ), ( 16 -24), (3F←︎UP1) 등 — 공백 허용
+# 포트 정규식 확장:
+# (1←︎23), ( 01↔︎UP1 ), ( 16 -24) — 화살표 구분자
+# (1   26), (26   25) — 공백만 구분자 (가락중 등)
 PORT_RE = re.compile(r'^\(\s*([A-Za-z0-9]+)\s*[←→↔︎\u2190-\u21FF\uFE00-\uFE0F\-~\s]+\s*([A-Za-z0-9]+)\s*\)$')
+# 장비 텍스트 끝에 포함된 포트: "P#1 E4020-24PS 본관 3층 복도 (3   28)"
+INLINE_PORT_RE = re.compile(r'\(\s*([A-Za-z0-9]+)\s*[←→↔︎\u2190-\u21FF\uFE00-\uFE0F\-~\s]+\s*([A-Za-z0-9]+)\s*\)\s*$')
 
 CABLE_COLOR_MAP = {
     'FF0000': '광',
@@ -225,6 +229,7 @@ def extract_devices_and_ports(text_shapes):
             })
         elif DEVICE_ID_RE.match(paras[0]):
             paras_clean = paras[:]
+            # 마지막 단락이 포트 패턴인 경우
             if len(paras) >= 3 and PORT_RE.match(paras[-1]):
                 m = PORT_RE.match(paras[-1])
                 port_labels.append({
@@ -233,10 +238,22 @@ def extract_devices_and_ports(text_shapes):
                     'src': 'belongs_to_below',
                 })
                 paras_clean = paras[:-1]
-            devices.append({
+            # 장비 텍스트 끝에 포트 포함: "P#1 E4020-24PS 본관 3층 복도 (3   28)"
+            inline_port = None
+            full_text = ' '.join(paras_clean)
+            im = INLINE_PORT_RE.search(full_text)
+            if im:
+                inline_port = (im.group(1), im.group(2))
+                # 포트 부분 제거한 텍스트로 교체
+                cleaned = full_text[:im.start()].strip()
+                paras_clean = [cleaned] if cleaned else paras_clean
+            dev = {
                 'x': s['x'], 'y': s['y'], 'w': s['w'], 'h': s['h'],
                 'cx': s['cx'], 'cy': s['cy'], 'paras_clean': paras_clean,
-            })
+            }
+            if inline_port:
+                dev['port'] = inline_port
+            devices.append(dev)
 
     for d in devices:
         d['short'] = extract_short_id(d['paras_clean'][0])
@@ -246,6 +263,8 @@ def extract_devices_and_ports(text_shapes):
 def match_ports_to_devices(devices, port_labels):
     used = set()
     for d in sorted(devices, key=lambda x: (x['cy'], x['cx'])):
+        if d.get('port'):  # 인라인 포트 이미 있으면 스킵
+            continue
         best, best_score = None, 999
         for i, pl in enumerate(port_labels):
             if i in used or pl['cy'] >= d['y']:
