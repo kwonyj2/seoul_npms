@@ -82,7 +82,8 @@
   <!-- 탭 네비게이션 -->
   <ul class="nav nav-tabs mb-3" id="sys-tabs">
     <li class="nav-item"><a class="nav-link active" href="#" onclick="switchTab('db',this);return false;"><i class="bi bi-database me-1"></i>주요 DB 관리</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('users',this);return false;"><i class="bi bi-people me-1"></i>사용자·권한 관리</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('users',this);return false;"><i class="bi bi-people me-1"></i>사용자 관리</a></li>
+    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('roles',this);return false;"><i class="bi bi-shield-lock me-1"></i>역할별 모듈 권한</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('export',this);return false;"><i class="bi bi-box-arrow-up me-1"></i>데이터 내보내기</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('nas',this);return false;"><i class="bi bi-folder me-1"></i>NAS 권한 설정</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('celery',this);return false;"><i class="bi bi-gear-wide-connected me-1"></i>작업 모니터링</a></li>
@@ -135,7 +136,7 @@
 
     <div class="row g-3">
       <!-- 사용자 목록 -->
-      <div class="col-12 col-xl-8">
+      <div class="col-12">
         <div class="card border-0 shadow-sm">
           <div class="card-header bg-white border-bottom py-2">
             <div class="d-flex flex-wrap gap-2 align-items-center">
@@ -182,32 +183,6 @@
         </div>
       </div>
 
-      <!-- 역할별 모듈 접근 매트릭스 -->
-      <div class="col-12 col-xl-6">
-        <div class="card border-0 shadow-sm h-100 d-flex flex-column">
-          <div class="card-header bg-white border-bottom py-2 d-flex align-items-center gap-2">
-            <i class="bi bi-shield-lock text-warning"></i>
-            <span class="fw-semibold small">역할별 모듈 접근 권한</span>
-            <span class="ms-auto badge bg-success-subtle text-success" style="font-size:.65rem;">체크 = 해당 역할 이상 접근 가능</span>
-          </div>
-          <div class="card-body p-0 matrix-wrap flex-fill overflow-auto">
-            <table class="table table-sm table-bordered mb-0 matrix-table">
-              <thead id="matrix-thead"><tr>
-                <th class="text-start ps-2">모듈</th>
-                <th class="text-center" style="font-size:.7rem;">슈퍼<br>관리자</th>
-                <th class="text-center" style="font-size:.7rem;">관리자</th>
-                <th class="text-center" style="font-size:.7rem;">현장<br>기사</th>
-                <th class="text-center" style="font-size:.7rem;">상주<br>(중앙)</th>
-                <th class="text-center" style="font-size:.7rem;">상주<br>(테크)</th>
-                <th class="text-center" style="font-size:.7rem;">상주<br>(교육청)</th>
-                <th class="text-center" style="font-size:.7rem;">고객</th>
-                <th class="text-center" style="font-size:.7rem;">기타</th>
-              </tr></thead>
-              <tbody id="matrix-tbody"><tr><td colspan="9" class="text-center py-3 text-muted">로딩 중…</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- 등록/수정 모달 -->
@@ -272,6 +247,36 @@
             <button class="btn btn-sm btn-danger" onclick="confirmDelete()">삭제</button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════
+       탭2-2: 역할별 모듈 접근 권한
+  ══════════════════════════════════════════ -->
+  <div id="tab-roles" class="sys-tab-content">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom py-2 d-flex align-items-center gap-2">
+        <i class="bi bi-shield-lock text-warning"></i>
+        <span class="fw-semibold small">역할별 모듈 접근 권한</span>
+        <span class="ms-auto badge bg-success-subtle text-success" style="font-size:.65rem;">체크 = 해당 역할에 접근 허용</span>
+      </div>
+      <div class="card-body p-0 overflow-auto" style="max-height:calc(100vh - 220px);">
+        <table class="table table-sm table-bordered mb-0 matrix-table">
+          <thead id="matrix-thead" class="sticky-top bg-white"><tr>
+            <th class="text-start ps-2" style="min-width:140px;">모듈</th>
+            <th class="text-center" style="font-size:.75rem;">슈퍼관리자</th>
+            <th class="text-center" style="font-size:.75rem;">관리자</th>
+            <th class="text-center" style="font-size:.75rem;">현장기사</th>
+            <th class="text-center" style="font-size:.75rem;">상주(중앙)</th>
+            <th class="text-center" style="font-size:.75rem;">상주(테크)</th>
+            <th class="text-center" style="font-size:.75rem;">상주(교육청)</th>
+            <th class="text-center" style="font-size:.75rem;">고객</th>
+            <th class="text-center" style="font-size:.75rem;">기타</th>
+          </tr></thead>
+          <tbody id="matrix-tbody"><tr><td colspan="9" class="text-center py-3 text-muted">로딩 중…</td></tr></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -730,14 +735,15 @@
 {% block extra_js %}
 <script>
 const SYSCONF_API = API_BASE.replace('/api','') + '/api/sysconfig';
-const SYS_TABS   = ['db','users','export','nas','celery','docs','dbadmin','info'];
+const SYS_TABS   = ['db','users','roles','export','nas','celery','docs','dbadmin','info'];
 
 // ══ 탭 전환 ═══════════════════════════════════════════
 function switchTab(name, el) {
   document.querySelectorAll('#sys-tabs .nav-link').forEach(a => a.classList.remove('active'));
   el.classList.add('active');
   SYS_TABS.forEach(t => document.getElementById('tab-'+t).classList.toggle('active', t===name));
-  if (name==='users'  && !window._uLoaded)  { loadUsers(); loadMatrix(); window._uLoaded=true; }
+  if (name==='users'  && !window._uLoaded)  { loadUsers(); window._uLoaded=true; }
+  if (name==='roles'  && !window._rLoaded)  { loadMatrix(); window._rLoaded=true; }
   if (name==='export' && !window._exLoaded) { loadPhotoTypes(); window._exLoaded=true; }
   if (name==='nas'    && !window._nLoaded)  { loadNasFolders(); loadNasRolePerms(); window._nLoaded=true; }
   if (name==='accesslog') { /* 수동 조회 */ }
