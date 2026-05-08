@@ -99,14 +99,25 @@ class School(models.Model):
 
 
 class SchoolContact(models.Model):
-    """학교 담당자 (장애접수 시 자동 불러오기)"""
-    school     = models.ForeignKey(School, on_delete=models.CASCADE, verbose_name='학교', related_name='contacts')
-    name       = models.CharField('담당자명', max_length=50)
-    phone      = models.CharField('연락처', max_length=20)
-    position   = models.CharField('직책', max_length=50, blank=True)
-    email      = models.EmailField('이메일', blank=True)
-    is_primary = models.BooleanField('주담당자', default=False)
-    created_at = models.DateTimeField('등록일시', auto_now_add=True)
+    """학교 담당자 — 통합 DB (수동등록/장애접수/보고서 확인자 자동 취합)"""
+    SOURCE_CHOICES = [
+        ('manual',   '수동등록'),
+        ('incident', '장애접수'),
+        ('report',   '보고서'),
+        ('pms',      'PMS동기화'),
+        ('csv',      'CSV업로드'),
+    ]
+    school         = models.ForeignKey(School, on_delete=models.CASCADE, verbose_name='학교', related_name='contacts')
+    name           = models.CharField('담당자명', max_length=50)
+    phone          = models.CharField('연락처', max_length=20)
+    position       = models.CharField('직책', max_length=50, blank=True)
+    email          = models.EmailField('이메일', blank=True)
+    is_primary     = models.BooleanField('주담당자', default=False)
+    source         = models.CharField('출처', max_length=20, choices=SOURCE_CHOICES, default='manual')
+    last_contact_at = models.DateTimeField('마지막 연락일시', null=True, blank=True)
+    note           = models.CharField('메모', max_length=200, blank=True)
+    created_at     = models.DateTimeField('등록일시', auto_now_add=True)
+    updated_at     = models.DateTimeField('수정일시', auto_now=True)
 
     class Meta:
         db_table = 'school_contacts'
@@ -115,6 +126,30 @@ class SchoolContact(models.Model):
 
     def __str__(self):
         return f'{self.school.name} - {self.name}'
+
+    @classmethod
+    def register_or_update(cls, school, name, phone, position='', source='manual', **kwargs):
+        """담당자 등록 또는 갱신 — 같은 학교+이름+연락처면 갱신"""
+        from django.utils import timezone
+        if not name or not phone:
+            return None
+        now = kwargs.get('last_contact_at', timezone.now())
+        obj, created = cls.objects.get_or_create(
+            school=school, name=name, phone=phone,
+            defaults={
+                'position': position or '',
+                'source': source,
+                'last_contact_at': now,
+                'email': kwargs.get('email', ''),
+                'note': kwargs.get('note', ''),
+            }
+        )
+        if not created:
+            obj.last_contact_at = now
+            if position:
+                obj.position = position
+            obj.save(update_fields=['last_contact_at', 'position', 'updated_at'])
+        return obj
 
 
 class SchoolBuilding(models.Model):

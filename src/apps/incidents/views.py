@@ -817,6 +817,19 @@ class IncidentViewSet(viewsets.ModelViewSet):
             return IncidentUpdateSerializer
         return IncidentDetailSerializer
 
+    def perform_create(self, serializer):
+        incident = serializer.save(received_by=self.request.user)
+        # 요청자 정보를 학교 담당자 DB에 자동 등록
+        if incident.requester_name and incident.requester_phone:
+            from apps.schools.models import SchoolContact
+            SchoolContact.register_or_update(
+                school=incident.school,
+                name=incident.requester_name,
+                phone=incident.requester_phone,
+                position=incident.requester_position or '',
+                source='incident',
+            )
+
     def get_permissions(self):
         if self.action == 'destroy':
             return [IsAdmin()]
@@ -1103,6 +1116,16 @@ class IncidentViewSet(viewsets.ModelViewSet):
                 'created_by':       request.user,
             }
         )
+
+        # 선생님 서명 정보 → 학교 담당자 DB 자동 등록
+        sig_name = request.data.get('sig_school_name', '').strip()
+        sig_phone = request.data.get('sig_school_phone', '').strip()
+        if sig_name and sig_phone:
+            from apps.schools.models import SchoolContact
+            SchoolContact.register_or_update(
+                school=incident.school, name=sig_name, phone=sig_phone,
+                source='report',
+            )
 
         # PDF 생성
         from .services import generate_delay_reason_pdf

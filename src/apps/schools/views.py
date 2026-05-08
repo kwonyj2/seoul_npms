@@ -1611,3 +1611,20 @@ class SchoolBuildingViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 errors.append({'row': row, 'error': str(e)})
         return Response({'created': created, 'updated': updated, 'errors': errors})
+
+
+class SchoolContactViewSet(viewsets.ModelViewSet):
+    """학교 담당자 CRUD"""
+    queryset = SchoolContact.objects.select_related('school')
+    serializer_class = SchoolContactSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        school_id = self.request.query_params.get('school')
+        if school_id:
+            qs = qs.filter(school_id=school_id)
+        return qs.order_by('-is_primary', 'name')
+
+    def perform_create(self, serializer):
+        serializer.save(source='manual')

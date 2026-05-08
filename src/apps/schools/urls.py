@@ -9,6 +9,7 @@ router.register(r'centers',   views.SupportCenterViewSet, basename='center')
 router.register(r'types',     views.SchoolTypeViewSet,    basename='schooltype')
 router.register(r'schools',   views.SchoolViewSet,        basename='school')
 router.register(r'buildings', views.SchoolBuildingViewSet,basename='building')
+router.register(r'contacts',  views.SchoolContactViewSet, basename='contact')
 
 urlpatterns = [
     # 템플릿 뷰

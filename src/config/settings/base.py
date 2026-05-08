@@ -186,11 +186,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.schools.tasks.scan_vsdx_folder',
         'schedule': 300,
     },
-    # 운영 PMS 담당자 정보 동기화 (매일 새벽 2시)
-    'sync-pms-contacts': {
-        'task': 'apps.schools.tasks.sync_pms_contacts',
-        'schedule': crontab(hour=2, minute=0),
-    },
+    # 운영 PMS 담당자 정보 동기화 — 비활성화 (담당자 통합 DB로 전환)
+    # 'sync-pms-contacts': {
+    #     'task': 'apps.schools.tasks.sync_pms_contacts',
+    #     'schedule': crontab(hour=2, minute=0),
+    # },
     # PostgreSQL 자동 백업 (매일 새벽 3시)
     'db-backup': {
         'task': 'core.tasks.backup_database',

@@ -20,9 +20,14 @@ class SchoolTypeSerializer(serializers.ModelSerializer):
 
 
 class SchoolContactSerializer(serializers.ModelSerializer):
+    source_display = serializers.CharField(source='get_source_display', read_only=True)
+
     class Meta:
         model = SchoolContact
-        fields = ['id', 'name', 'phone', 'position', 'email', 'is_primary']
+        fields = ['id', 'school', 'name', 'phone', 'position', 'email',
+                  'is_primary', 'source', 'source_display', 'last_contact_at', 'note',
+                  'created_at', 'updated_at']
+        read_only_fields = ['source_display', 'created_at', 'updated_at']
 
 
 class SchoolBuildingSerializer(serializers.ModelSerializer):
