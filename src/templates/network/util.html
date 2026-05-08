@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}UTIL{% endblock %}
+{% block page_title %}<i class="bi bi-tools me-2 text-info"></i>UTIL{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-2">
+  <!-- 탭 -->
+  <ul class="nav nav-tabs mb-3" id="util-tabs">
+    <li class="nav-item">
+      <a class="nav-link active" href="#" onclick="switchUtilTab('pptx-extract',this);return false;">
+        <i class="bi bi-file-earmark-ppt me-1"></i>구성도 추출기
+      </a>
+    </li>
+  </ul>
+
+  <!-- 구성도 추출기 탭 -->
+  <div id="tab-pptx-extract">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom py-2 d-flex justify-content-between align-items-center">
+        <div>
+          <i class="bi bi-file-earmark-ppt text-danger me-1"></i>
+          <span class="fw-semibold small">구성도 PPTX 네트워크 장비 추출기</span>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <span id="pptx-status" class="badge bg-secondary">확인 중...</span>
+          <button class="btn btn-sm btn-primary" onclick="pptxExtractRun()" id="btn-pptx-run">
+            <i class="bi bi-play-circle me-1"></i>전체 추출 실행
+          </button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-info small py-2 mb-3">
+          <i class="bi bi-info-circle me-1"></i>
+          NAS의 구성도 PPTX 파일에서 네트워크 장비(스위치, 방화벽 등)의 ID, 모델명, 설치위치, 포트, 케이블 정보를 자동 추출하여 엑셀 파일로 다운로드합니다.
+        </div>
+
+        <!-- 진행 상황 -->
+        <div id="pptx-progress" class="d-none mb-3">
+          <div class="d-flex justify-content-between small mb-1">
+            <span id="pptx-progress-text">처리 중...</span>
+            <span id="pptx-progress-count"></span>
+          </div>
+          <div class="progress" style="height:8px;">
+            <div id="pptx-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- 결과 테이블 -->
+        <div id="pptx-result" class="d-none">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="fw-semibold small"><i class="bi bi-list-check me-1"></i>추출 결과</span>
+            <span id="pptx-result-summary" class="small text-muted"></span>
+          </div>
+          <div style="max-height:400px;overflow-y:auto;">
+            <table class="table table-sm table-bordered mb-0" style="font-size:.8rem;">
+              <thead class="table-light sticky-top">
+                <tr><th>파일명</th><th>학교명</th><th style="width:80px;">장비수</th><th style="width:60px;">결과</th><th>비고</th></tr>
+              </thead>
+              <tbody id="pptx-result-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const UTIL_TABS = ['pptx-extract'];
+function switchUtilTab(name, el) {
+  document.querySelectorAll('#util-tabs .nav-link').forEach(a => a.classList.remove('active'));
+  el.classList.add('active');
+  UTIL_TABS.forEach(t => {
+    const tab = document.getElementById('tab-' + t);
+    if (tab) tab.style.display = (t === name) ? '' : 'none';
+  });
+}
+
+// 상태 확인
+(async function() {
+  try {
+    const d = await apiGet(`${API_BASE}/network/topology/pptx_extract_status/`);
+    const badge = document.getElementById('pptx-status');
+    if (d.exists) {
+      badge.className = 'badge bg-success';
+      badge.textContent = `PPTX ${d.count}개 파일`;
+    } else {
+      badge.className = 'badge bg-danger';
+      badge.textContent = '폴더 없음';
+      document.getElementById('btn-pptx-run').disabled = true;
+    }
+  } catch(e) {
+    document.getElementById('pptx-status').textContent = '확인 실패';
+  }
+})();
+
+async function pptxExtractRun() {
+  const btn = document.getElementById('btn-pptx-run');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>추출 중...';
+
+  document.getElementById('pptx-progress').classList.remove('d-none');
+  document.getElementById('pptx-result').classList.add('d-none');
+  document.getElementById('pptx-progress-bar').style.width = '50%';
+  document.getElementById('pptx-progress-text').textContent = 'PPTX 파일 분석 중... (1,410개 파일 — 수 분 소요될 수 있습니다)';
+
+  try {
+    // XMLHttpRequest로 blob 다운로드
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_BASE}/network/topology/pptx_extract_run/`, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('X-CSRFToken', CSRF_TOKEN);
+    xhr.responseType = 'blob';
+    xhr.timeout = 600000; // 10분
+
+    xhr.onload = function() {
+      document.getElementById('pptx-progress-bar').style.width = '100%';
+      document.getElementById('pptx-progress-bar').classList.remove('progress-bar-animated');
+
+      if (xhr.status === 200) {
+        const ct = xhr.getResponseHeader('Content-Type');
+        if (ct && ct.includes('spreadsheetml')) {
+          // 엑셀 파일 다운로드
+          const blob = new Blob([xhr.response], {type: ct});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'network_diagram_extract.xlsx';
+          a.click();
+          URL.revokeObjectURL(url);
+          document.getElementById('pptx-progress-text').textContent = '추출 완료! 엑셀 파일이 다운로드됩니다.';
+          showToast('구성도 추출 완료 — 엑셀 다운로드', 'success');
+        } else {
+          // JSON 응답 (에러 또는 결과)
+          const reader = new FileReader();
+          reader.onload = function() {
+            const d = JSON.parse(reader.result);
+            showExtractResult(d);
+          };
+          reader.readAsText(xhr.response);
+        }
+      } else {
+        document.getElementById('pptx-progress-text').textContent = '추출 실패';
+        showToast('추출 실패', 'error');
+      }
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-play-circle me-1"></i>전체 추출 실행';
+    };
+    xhr.onerror = function() {
+      document.getElementById('pptx-progress-text').textContent = '네트워크 오류';
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-play-circle me-1"></i>전체 추출 실행';
+    };
+    xhr.send(JSON.stringify({}));
+  } catch(e) {
+    showToast('추출 실패: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-play-circle me-1"></i>전체 추출 실행';
+  }
+}
+
+function showExtractResult(d) {
+  if (!d.results) return;
+  document.getElementById('pptx-result').classList.remove('d-none');
+  const ok = d.results.filter(r => r.status === 'ok').length;
+  const fail = d.results.filter(r => r.status === 'fail').length;
+  const total = d.total_rows || 0;
+  document.getElementById('pptx-result-summary').textContent =
+    `성공 ${ok}개 / 실패 ${fail}개 / 총 장비 ${total}행`;
+  document.getElementById('pptx-progress-text').textContent =
+    total > 0 ? '추출 완료' : '추출된 데이터 없음';
+
+  document.getElementById('pptx-result-tbody').innerHTML = d.results.map(r => {
+    const badge = r.status === 'ok'
+      ? '<span class="badge bg-success">성공</span>'
+      : '<span class="badge bg-danger">실패</span>';
+    return `<tr>
+      <td class="text-truncate" style="max-width:200px;" title="${r.file}">${r.file}</td>
+      <td>${r.school||'-'}</td>
+      <td class="text-center">${r.devices}</td>
+      <td class="text-center">${badge}</td>
+      <td class="text-muted small">${r.error||''}</td>
+    </tr>`;
+  }).join('');
+}
+</script>
+{% endblock %}

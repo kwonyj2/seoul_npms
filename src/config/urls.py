@@ -29,7 +29,7 @@ from apps.audit.views import audit_view
 from apps.wbs.views import wbs_view
 from apps.assets.views import assets_view
 from apps.gps.views import gps_map_view
-from apps.network.views import network_monitor_view, ap_analyzer_view
+from apps.network.views import network_monitor_view, ap_analyzer_view, network_util_view
 from apps.reports.views import (reports_view, performance_report_view,
                                 performance_report_data_api, export_performance_excel,
                                 monthly_work_report_api, labeling_view)
@@ -72,6 +72,7 @@ gps_map_view            = module_required('gps')(gps_map_view)
 materials_view          = module_required('materials')(materials_view)
 assets_view             = module_required('assets')(assets_view)
 network_monitor_view    = module_required('network')(network_monitor_view)
+network_util_view       = module_required('network')(network_util_view)
 ap_analyzer_view        = module_required('ap_analyzer')(ap_analyzer_view)
 progress_view           = module_required('progress')(progress_view)
 audit_view              = module_required('audit')(audit_view)
@@ -164,6 +165,7 @@ urlpatterns = [
     # GPS / 네트워크 / 보고서 / NAS / 사진 / 통계
     path('gps/',                  gps_map_view,                    name='gps'),
     path('network/',              network_monitor_view,            name='network'),
+    path('network/util/',         network_util_view,               name='network-util'),
     path('ap-analyzer/',          ap_analyzer_view,                name='ap-analyzer'),
     path('reports/',              reports_view,                    name='reports'),
     path('performance/',          performance_report_view,         name='performance'),

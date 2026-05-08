@@ -17,6 +17,11 @@ def ap_analyzer_view(request):
     return render(request, 'ap_analyzer/index.html')
 
 
+@login_required
+def network_util_view(request):
+    return render(request, 'network/util.html')
+
+
 from .models import (
     NetworkDevice, NetworkPort, NetworkLink,
     NetworkTopology, NetworkEvent, SnmpDevice, SnmpMetric, NetworkCommand
@@ -1807,6 +1812,145 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(fname)}"
         return resp
+
+    # ── 구성도 추출기 API ────────────────────────────
+    @action(detail=False, methods=['get'], url_path='pptx_extract_list')
+    def pptx_extract_list(self, request):
+        """구성도 PPTX 파일 목록 반환"""
+        folder = os.path.join('/app/nas/media/npms/산출물/2025년 테크센터', '2025년 테크센터-네트워크 구성도')
+        if not os.path.isdir(folder):
+            return Response({'error': f'폴더 없음: {folder}', 'files': []})
+        files = sorted([f for f in os.listdir(folder) if f.endswith(('.pptx', '.ppt')) and not f.startswith('~$')])
+        return Response({'folder': folder, 'count': len(files), 'files': files})
+
+    @action(detail=False, methods=['post'], url_path='pptx_extract_run')
+    def pptx_extract_run(self, request):
+        """구성도 PPTX 일괄 추출 → 엑셀 파일 생성"""
+        import io
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        from .tasks import extract_pptx_network
+
+        folder = os.path.join('/app/nas/media/npms/산출물/2025년 테크센터', '2025년 테크센터-네트워크 구성도')
+        if not os.path.isdir(folder):
+            return Response({'error': '구성도 폴더 없음'}, status=400)
+
+        selected = request.data.get('files', [])
+        files = sorted([f for f in os.listdir(folder) if f.endswith(('.pptx', '.ppt')) and not f.startswith('~$')])
+        if selected:
+            files = [f for f in files if f in selected]
+
+        all_rows = []
+        results = []
+        for fname in files:
+            fpath = os.path.join(folder, fname)
+            try:
+                rows = extract_pptx_network(fpath)
+                all_rows.extend(rows)
+                school = rows[0]['학교명'] if rows else '?'
+                results.append({'file': fname, 'school': school, 'devices': len(rows), 'status': 'ok'})
+            except Exception as e:
+                results.append({'file': fname, 'school': '', 'devices': 0, 'status': 'fail', 'error': str(e)})
+
+        if not all_rows:
+            return Response({'results': results, 'total_rows': 0, 'error': '추출된 데이터 없음'})
+
+        # 엑셀 생성
+        wb = Workbook()
+        ws = wb.active
+        ws.title = '장비목록'
+        headers = ['학교명', '슬라이드', '망', '망ID', '모델명', '건물명', '층', '위치',
+                    '계위', '포트(다운→업)', '케이블 업→다운', '업링크 케이블', '케이블 출처']
+        hf = Font(name='맑은 고딕', bold=True, color='FFFFFF', size=11)
+        hfill = PatternFill('solid', start_color='2F4858')
+        ha = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        thin = Side(border_style='thin', color='BBBBBB')
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        for c, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=c, value=h)
+            cell.font = hf
+            cell.fill = hfill
+            cell.alignment = ha
+            cell.border = border
+
+        net_fill = {
+            '보안(공통)': PatternFill('solid', start_color='FCE4E4'),
+            '교사망': PatternFill('solid', start_color='FFF4D6'),
+            '학생망': PatternFill('solid', start_color='E8F5DC'),
+            '무선망': PatternFill('solid', start_color='E1ECFA'),
+            '기타망': PatternFill('solid', start_color='F0EFE9'),
+        }
+        fn = Font(name='맑은 고딕', size=10)
+        ca = Alignment(horizontal='center', vertical='center')
+        school_fill = PatternFill('solid', start_color='D0E5F2')
+
+        TIER_ORDER = {'상단(보안)': 0, '1계위': 1, '2계위': 2, '3계위': 3}
+        NET_ORDER = {'보안(공통)': 0, '교사망': 1, '학생망': 2, '무선망': 3, '기타망': 4}
+        all_rows.sort(key=lambda r: (r['학교명'], r['슬라이드'],
+                                     TIER_ORDER.get(r['계위'], 9), NET_ORDER.get(r['망'], 9), r['망ID']))
+
+        for ri, r in enumerate(all_rows, start=2):
+            fill = net_fill.get(r['망'])
+            for ci, key in enumerate(headers, 1):
+                cell = ws.cell(row=ri, column=ci, value=r[key])
+                cell.border = border
+                cell.font = fn
+                cell.alignment = ca
+                if key == '학교명':
+                    cell.fill = school_fill
+                    cell.font = Font(name='맑은 고딕', size=10, bold=True, color='185FA5')
+                elif fill:
+                    cell.fill = fill
+
+        widths = {'A': 14, 'B': 8, 'C': 10, 'D': 14, 'E': 14, 'F': 8, 'G': 6,
+                  'H': 12, 'I': 10, 'J': 14, 'K': 18, 'L': 12, 'M': 22}
+        for col, w in widths.items():
+            ws.column_dimensions[col].width = w
+        ws.freeze_panes = 'A2'
+        ws.auto_filter.ref = f"A1:M{len(all_rows) + 1}"
+
+        # 학교별 요약 시트
+        ws2 = wb.create_sheet('학교별 요약')
+        sh = ['학교명', '총 장비수', '교사망', '학생망', '무선망', '기타망', '보안', '포트정보', '케이블추출']
+        for c, h in enumerate(sh, 1):
+            cell = ws2.cell(row=1, column=c, value=h)
+            cell.font = hf
+            cell.fill = hfill
+            cell.alignment = ha
+            cell.border = border
+        schools = _defaultdict(list)
+        for r in all_rows:
+            schools[r['학교명']].append(r)
+        for ri, (school, srows) in enumerate(sorted(schools.items()), start=2):
+            nets = [r['망'] for r in srows]
+            vals = [school, len(srows), nets.count('교사망'), nets.count('학생망'),
+                    nets.count('무선망'), nets.count('기타망'), nets.count('보안(공통)'),
+                    sum(1 for r in srows if r['포트(다운→업)']),
+                    sum(1 for r in srows if r['케이블 출처'] == '추출')]
+            for ci, v in enumerate(vals, 1):
+                cell = ws2.cell(row=ri, column=ci, value=v)
+                cell.font = fn
+                cell.alignment = ca
+                cell.border = border
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        from django.http import HttpResponse
+        resp = HttpResponse(buf.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        resp['Content-Disposition'] = 'attachment; filename="network_diagram_extract.xlsx"'
+        return resp
+
+    @action(detail=False, methods=['get'], url_path='pptx_extract_status')
+    def pptx_extract_status(self, request):
+        """구성도 폴더 상태 확인"""
+        folder = os.path.join('/app/nas/media/npms/산출물/2025년 테크센터', '2025년 테크센터-네트워크 구성도')
+        if not os.path.isdir(folder):
+            return Response({'exists': False, 'count': 0})
+        files = [f for f in os.listdir(folder) if f.endswith(('.pptx', '.ppt')) and not f.startswith('~$')]
+        return Response({'exists': True, 'count': len(files), 'folder': folder})
 
     # ── NAS 파일 기반 뷰어 ────────────────────────────
     NAS_BASE = '/app/nas/media/npms/산출물/2025년 테크센터'

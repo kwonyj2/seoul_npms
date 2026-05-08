@@ -1145,3 +1145,317 @@ def sync_nas_rack():
 
     logger.info(f'랙실장도 사전 파싱 완료: 총 {stats["total"]}, 파싱 {stats["parsed"]}, 스킵 {stats["skipped"]}, 실패 {stats["failed"]}')
     return stats
+
+
+# ══════════════════════════════════════════════════════════
+# 구성도 PPTX 네트워크 장비 추출기
+# ══════════════════════════════════════════════════════════
+import re as _re
+import tempfile
+import zipfile
+from collections import defaultdict as _defaultdict
+from xml.etree import ElementTree as _ET
+
+_NS = {
+    'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+    'p': 'http://schemas.openxmlformats.org/presentationml/2006/main',
+}
+_EMU = 914400
+_DEVICE_ID_RE = _re.compile(r'^(Secui|TrusGuard|[KHMGPi]#)')
+_PORT_RE = _re.compile(r'^\((\d+)\s+(\d+)\)$')
+_CABLE_COLOR_MAP = {
+    'FF0000': '광', '00AFEF': 'Cat6', '00B0F0': 'Cat6',
+    '00B050': 'Cat5', 'FF66CC': 'Cat5e',
+}
+
+
+def _pptx_get_xfrm(spPr):
+    xfrm = spPr.find('a:xfrm', _NS)
+    if xfrm is None:
+        return None
+    off = xfrm.find('a:off', _NS)
+    ext = xfrm.find('a:ext', _NS)
+    chOff = xfrm.find('a:chOff', _NS)
+    chExt = xfrm.find('a:chExt', _NS)
+    return {
+        'x': int(off.get('x')) if off is not None else 0,
+        'y': int(off.get('y')) if off is not None else 0,
+        'w': int(ext.get('cx')) if ext is not None else 0,
+        'h': int(ext.get('cy')) if ext is not None else 0,
+        'chX': int(chOff.get('x')) if chOff is not None else 0,
+        'chY': int(chOff.get('y')) if chOff is not None else 0,
+        'chW': int(chExt.get('cx')) if chExt is not None else 0,
+        'chH': int(chExt.get('cy')) if chExt is not None else 0,
+        'flipH': xfrm.get('flipH', '0'),
+        'flipV': xfrm.get('flipV', '0'),
+    }
+
+
+def _pptx_walk_shapes(slide_root):
+    text_shapes, lines = [], []
+
+    def _walk(elem, ax, ay, sx, sy):
+        for child in elem:
+            tag = child.tag.split('}')[-1]
+            if tag == 'grpSp':
+                grpSpPr = child.find('p:grpSpPr', _NS)
+                if grpSpPr is None:
+                    _walk(child, ax, ay, sx, sy)
+                    continue
+                xf = _pptx_get_xfrm(grpSpPr)
+                if xf is None or not xf['chW'] or not xf['chH']:
+                    _walk(child, ax, ay, sx, sy)
+                    continue
+                new_sx = sx * (xf['w'] / xf['chW'])
+                new_sy = sy * (xf['h'] / xf['chH'])
+                new_ax = ax + xf['x'] * sx - xf['chX'] * new_sx
+                new_ay = ay + xf['y'] * sy - xf['chY'] * new_sy
+                _walk(child, new_ax, new_ay, new_sx, new_sy)
+            elif tag in ('sp', 'cxnSp'):
+                spPr = child.find('p:spPr', _NS)
+                if spPr is None:
+                    continue
+                xf = _pptx_get_xfrm(spPr)
+                if xf is None:
+                    continue
+                abs_x = (ax + xf['x'] * sx) / _EMU
+                abs_y = (ay + xf['y'] * sy) / _EMU
+                abs_w = xf['w'] * sx / _EMU
+                abs_h = xf['h'] * sy / _EMU
+                ln = spPr.find('a:ln', _NS)
+                color, dash = None, 'solid'
+                if ln is not None:
+                    srgb = ln.find('.//a:srgbClr', _NS)
+                    if srgb is not None:
+                        color = srgb.get('val')
+                    d = ln.find('a:prstDash', _NS)
+                    if d is not None:
+                        dash = d.get('val')
+                prst = spPr.find('a:prstGeom', _NS)
+                cust = spPr.find('a:custGeom', _NS)
+                geom = (prst.get('prst') if prst is not None else 'custom' if cust is not None else 'unknown')
+                paras = []
+                txBody = child.find('p:txBody', _NS)
+                if txBody is not None:
+                    for p in txBody.findall('a:p', _NS):
+                        t = ''.join(r.text or '' for r in p.findall('.//a:t', _NS)).strip()
+                        if t:
+                            paras.append(t)
+                is_line = (tag == 'cxnSp' or geom == 'line'
+                           or (geom == 'custom' and color is not None and ln is not None))
+                entry = {
+                    'x': abs_x, 'y': abs_y, 'w': abs_w, 'h': abs_h,
+                    'cx': abs_x + abs_w / 2, 'cy': abs_y + abs_h / 2,
+                    'flipH': xf['flipH'], 'flipV': xf['flipV'],
+                    'color': color, 'dash': dash, 'geom': geom, 'paras': paras,
+                }
+                if is_line and cust is not None:
+                    pathEl = cust.find('.//a:path', _NS)
+                    if pathEl is not None:
+                        pw = int(pathEl.get('w', 0))
+                        ph = int(pathEl.get('h', 0))
+                        pts = []
+                        for c2 in pathEl:
+                            ttag = c2.tag.split('}')[-1]
+                            for pt in c2.findall('a:pt', _NS):
+                                pts.append((ttag, int(pt.get('x')), int(pt.get('y'))))
+                        entry['pts_local'] = pts
+                        entry['pw'] = pw
+                        entry['ph'] = ph
+                if is_line:
+                    lines.append(entry)
+                elif paras:
+                    text_shapes.append(entry)
+
+    spTree = slide_root.find('.//p:cSld/p:spTree', _NS)
+    if spTree is not None:
+        _walk(spTree, 0, 0, 1.0, 1.0)
+    return text_shapes, lines
+
+
+def _pptx_extract_school_name(pptx_path):
+    from pathlib import Path
+    p = Path(pptx_path)
+    for cand in [p.stem, p.parent.name]:
+        m = _re.search(r'([가-힣]{2,}?(?:초등학교|중학교|고등학교|특수학교|학교|유치원))', cand)
+        if m:
+            return m.group(1)
+    for cand in [p.stem, p.parent.name]:
+        parts = _re.split(r'[_\-\s\.]+', cand)
+        for token in reversed(parts):
+            if _re.search(r'[가-힣]{2,}', token):
+                return token
+    return p.stem
+
+
+def _pptx_net_from_id(sid):
+    if sid.startswith('K#'): return '교사망'
+    if sid.startswith('H#'): return '학생망'
+    if sid.startswith('M#') or sid.startswith('P#'): return '무선망'
+    if sid.startswith('G#'): return '기타망'
+    return '보안(공통)'
+
+
+def _pptx_tier_from_y(cy):
+    if cy < 1.6: return '상단(보안)'
+    if cy < 2.9: return '1계위'
+    if cy < 5.9: return '2계위'
+    return '3계위'
+
+
+def _pptx_extract_short_id(text):
+    m = _re.match(r'(Secui\s*\d+ED\s*#\d+|TrusGuard\s*\w+|[KHMGPi]#\s*[A-Z0-9]+)',
+                  _re.sub(r'\s+', ' ', text).strip())
+    return _re.sub(r'\s+', '', m.group(1)) if m else text[:10]
+
+
+def _pptx_parse_meta(d):
+    paras = d.get('paras_clean', [])
+    p0 = paras[0] if paras else ''
+    p1 = paras[1] if len(paras) > 1 else ''
+    short = d['short']
+    if short.startswith('Secui'):
+        return 'Secui 800ED', '본관', '1F', '방화벽'
+    if short.startswith('TrusGuard'):
+        return 'TrusGuard 200E', '본관', '1F', '10G 방화벽'
+    model = p0.replace(short, '', 1).strip()
+    building = floor = location = ''
+    if p1:
+        bm = _re.search(r'(본관|정보관|정보동|체육관|별관|학생관|학생동)', p1)
+        if bm:
+            building = bm.group(1)
+        fm = _re.search(r'(\d+)\s*[F층]', p1)
+        if fm:
+            floor = f"{fm.group(1)}F"
+        rest = p1
+        if bm: rest = rest.replace(bm.group(0), '', 1)
+        if fm: rest = rest.replace(fm.group(0), '', 1)
+        location = _re.sub(r'\s+', ' ', rest).strip()
+    return model, building, floor, location
+
+
+def extract_pptx_network(pptx_path):
+    """단일 PPTX 파일에서 네트워크 장비 정보 추출 → 행 리스트 반환"""
+    import math
+    school = _pptx_extract_school_name(pptx_path)
+    rows = []
+    with tempfile.TemporaryDirectory() as tmp:
+        with zipfile.ZipFile(pptx_path) as z:
+            z.extractall(tmp)
+        slides_dir = os.path.join(tmp, 'ppt', 'slides')
+        if not os.path.isdir(slides_dir):
+            return []
+        slide_files = sorted(
+            [f for f in os.listdir(slides_dir) if f.startswith('slide') and f.endswith('.xml')],
+            key=lambda f: int(_re.search(r'\d+', f).group())
+        )
+        for slide_file in slide_files:
+            slide_num = int(_re.search(r'\d+', slide_file).group())
+            try:
+                tree = _ET.parse(os.path.join(slides_dir, slide_file))
+            except _ET.ParseError:
+                continue
+            text_shapes, line_shapes = _pptx_walk_shapes(tree.getroot())
+            # 장비/포트 분리
+            devices, port_labels = [], []
+            for s in text_shapes:
+                paras = s['paras']
+                if not paras:
+                    continue
+                if len(paras) == 1 and _PORT_RE.match(paras[0]):
+                    m = _PORT_RE.match(paras[0])
+                    port_labels.append({'p1': int(m.group(1)), 'p2': int(m.group(2)), 'cx': s['cx'], 'cy': s['cy']})
+                elif _DEVICE_ID_RE.match(paras[0]):
+                    paras_clean = paras[:]
+                    if len(paras) >= 3 and _PORT_RE.match(paras[-1]):
+                        m = _PORT_RE.match(paras[-1])
+                        port_labels.append({'p1': int(m.group(1)), 'p2': int(m.group(2)), 'cx': s['cx'], 'cy': s['y'] + s['h'] - 0.05})
+                        paras_clean = paras[:-1]
+                    devices.append({
+                        'x': s['x'], 'y': s['y'], 'w': s['w'], 'h': s['h'],
+                        'cx': s['cx'], 'cy': s['cy'], 'paras_clean': paras_clean,
+                        'short': _pptx_extract_short_id(paras_clean[0]),
+                    })
+            if not devices:
+                continue
+            # 포트 매칭
+            used = set()
+            for d in sorted(devices, key=lambda x: (x['cy'], x['cx'])):
+                best, best_score = None, 999
+                for i, pl in enumerate(port_labels):
+                    if i in used or pl['cy'] >= d['y']:
+                        continue
+                    dx = abs(pl['cx'] - d['cx'])
+                    dy = d['y'] - pl['cy']
+                    if dx > d['w'] / 2 + 0.3 or dy > 0.8:
+                        continue
+                    score = dy + dx * 0.4
+                    if score < best_score:
+                        best_score, best = score, i
+                if best is not None:
+                    pl = port_labels[best]
+                    d['port'] = (pl['p1'], pl['p2'])
+                    used.add(best)
+                else:
+                    d['port'] = None
+            # 케이블 엣지
+            edge_cable = {}
+            for l in line_shapes:
+                if not l.get('color'):
+                    continue
+                cable = _CABLE_COLOR_MAP.get(l['color'])
+                if not cable:
+                    continue
+                if l.get('pts_local') and l.get('pw') and l.get('ph'):
+                    first, last = l['pts_local'][0], l['pts_local'][-1]
+                    x1 = l['x'] + (first[1] / l['pw']) * l['w']
+                    y1 = l['y'] + (first[2] / l['ph']) * l['h']
+                    x2 = l['x'] + (last[1] / l['pw']) * l['w']
+                    y2 = l['y'] + (last[2] / l['ph']) * l['h']
+                else:
+                    x1, y1, x2, y2 = l['x'], l['y'], l['x'] + l['w'], l['y'] + l['h']
+                    if l['flipH'] == '1': x1, x2 = x2, x1
+                    if l['flipV'] == '1': y1, y2 = y2, y1
+
+                def nearest(x, y):
+                    bd, br = 1.2, None
+                    for dd in devices:
+                        dx2 = max(0, abs(x - dd['cx']) - dd['w'] / 2)
+                        dy2 = max(0, abs(y - dd['cy']) - dd['h'] / 2)
+                        dist = math.hypot(dx2, dy2)
+                        if dist < bd:
+                            bd, br = dist, dd
+                    return br
+
+                a = nearest(x1, y1)
+                b = nearest(x2, y2)
+                if a and b and a['short'] != b['short']:
+                    edge_cable[(a['short'], b['short'])] = cable
+                    edge_cable[(b['short'], a['short'])] = cable
+            # 행 생성
+            for d in devices:
+                short = d['short']
+                network = _pptx_net_from_id(short)
+                tier = _pptx_tier_from_y(d['cy'])
+                model, building, floor, location = _pptx_parse_meta(d)
+                p = d.get('port')
+                port_str = f"({p[0]}→{p[1]})" if p else ''
+                # 상위 연결 찾기
+                upper_short = ''
+                cable = ''
+                for (a, b), c in edge_cable.items():
+                    if a == short:
+                        other = next((dd for dd in devices if dd['short'] == b and dd['cy'] < d['cy'] - 0.3), None)
+                        if other:
+                            upper_short = b
+                            cable = c
+                            break
+                cable_pair = f"{upper_short} → {short}" if upper_short else ''
+                rows.append({
+                    '학교명': school, '슬라이드': slide_num, '망': network,
+                    '망ID': short, '모델명': model, '건물명': building,
+                    '층': floor, '위치': location, '계위': tier,
+                    '포트(다운→업)': port_str, '케이블 업→다운': cable_pair,
+                    '업링크 케이블': cable, '케이블 출처': '추출' if cable else '',
+                })
+    return rows

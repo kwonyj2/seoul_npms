@@ -120,6 +120,13 @@
     </li>
     {% endif %}
     {% comment %}AP 신호 측정 — 실측 불가(시각화 도구만)로 메뉴 비활성화{% endcomment %}
+    {% if user_access.network %}
+    <li class="nav-item">
+      <a href="/npms/network/util/" class="nav-link">
+        <i class="bi bi-tools"></i><span>UTIL</span>
+      </a>
+    </li>
+    {% endif %}
     {% if user_access.schools %}
     <li class="nav-item">
       <a href="/npms/schools/list/" class="nav-link">
