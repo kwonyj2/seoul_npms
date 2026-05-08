@@ -183,7 +183,7 @@
       </div>
 
       <!-- 역할별 모듈 접근 매트릭스 -->
-      <div class="col-12 col-xl-4">
+      <div class="col-12 col-xl-6">
         <div class="card border-0 shadow-sm h-100 d-flex flex-column">
           <div class="card-header bg-white border-bottom py-2 d-flex align-items-center gap-2">
             <i class="bi bi-shield-lock text-warning"></i>
@@ -192,15 +192,18 @@
           </div>
           <div class="card-body p-0 matrix-wrap flex-fill overflow-auto">
             <table class="table table-sm table-bordered mb-0 matrix-table">
-              <thead><tr>
+              <thead id="matrix-thead"><tr>
                 <th class="text-start ps-2">모듈</th>
-                <th class="text-center" title="슈퍼관리자">슈퍼<br>관리자</th>
-                <th class="text-center">관리자</th>
-                <th class="text-center">현장<br>기사</th>
-                <th class="text-center">상주자</th>
-                <th class="text-center">고객</th>
+                <th class="text-center" style="font-size:.7rem;">슈퍼<br>관리자</th>
+                <th class="text-center" style="font-size:.7rem;">관리자</th>
+                <th class="text-center" style="font-size:.7rem;">현장<br>기사</th>
+                <th class="text-center" style="font-size:.7rem;">상주<br>(중앙)</th>
+                <th class="text-center" style="font-size:.7rem;">상주<br>(테크)</th>
+                <th class="text-center" style="font-size:.7rem;">상주<br>(교육청)</th>
+                <th class="text-center" style="font-size:.7rem;">고객</th>
+                <th class="text-center" style="font-size:.7rem;">기타</th>
               </tr></thead>
-              <tbody id="matrix-tbody"><tr><td colspan="6" class="text-center py-3 text-muted">로딩 중…</td></tr></tbody>
+              <tbody id="matrix-tbody"><tr><td colspan="9" class="text-center py-3 text-muted">로딩 중…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -956,7 +959,7 @@ function loadMatrix(){
       return `<tr><td class="text-start ps-2" style="white-space:nowrap;font-size:.8rem"><i class="bi ${mod.icon} me-1 text-muted"></i>${mod.label}</td>${cells}</tr>`;
     }).join('');
     requestAnimationFrame(adjustMatrixRows);
-  }).catch(()=>{ document.getElementById('matrix-tbody').innerHTML='<tr><td colspan="6" class="text-danger text-center">로드 실패</td></tr>'; });
+  }).catch(()=>{ document.getElementById('matrix-tbody').innerHTML='<tr><td colspan="9" class="text-danger text-center">로드 실패</td></tr>'; });
 }
 function adjustMatrixRows(){
   const wrap  = document.querySelector('.matrix-wrap');
