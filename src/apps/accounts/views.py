@@ -232,6 +232,13 @@ class UserViewSet(viewsets.ModelViewSet):
             return [IsAdmin()]
         return super().get_permissions()
 
+    def perform_update(self, serializer):
+        password = serializer.validated_data.pop('password', '')
+        instance = serializer.save()
+        if password:
+            instance.set_password(password)
+            instance.save(update_fields=['password'])
+
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user

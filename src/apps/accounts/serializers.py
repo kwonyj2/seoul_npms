@@ -50,11 +50,22 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):
+    password  = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    password2 = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
     class Meta:
         model = User
         fields = ['name', 'email', 'phone', 'role', 'support_center',
                   'home_address', 'home_lat', 'home_lng', 'service_expiry',
-                  'is_active', 'profile_image']
+                  'is_active', 'profile_image', 'password', 'password2']
+
+    def validate(self, attrs):
+        pw = attrs.get('password', '')
+        pw2 = attrs.get('password2', '')
+        if pw and pw != pw2:
+            raise serializers.ValidationError({'password': '비밀번호가 일치하지 않습니다.'})
+        attrs.pop('password2', None)
+        return attrs
 
 
 class PasswordChangeSerializer(serializers.Serializer):
