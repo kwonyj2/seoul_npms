@@ -264,22 +264,13 @@
       </div>
       <div class="card-body p-0 overflow-auto" style="max-height:calc(100vh - 220px);">
         <table class="table table-sm table-bordered mb-0 matrix-table" style="table-layout:fixed;">
-          <colgroup>
+          <colgroup id="matrix-colgroup">
             <col style="width:160px;">
-            <col span="8">
           </colgroup>
           <thead id="matrix-thead" class="sticky-top bg-white"><tr>
             <th class="text-start ps-2">모듈</th>
-            <th class="text-center" style="font-size:.75rem;">슈퍼관리자</th>
-            <th class="text-center" style="font-size:.75rem;">관리자</th>
-            <th class="text-center" style="font-size:.75rem;">현장기사</th>
-            <th class="text-center" style="font-size:.75rem;">상주(중앙)</th>
-            <th class="text-center" style="font-size:.75rem;">상주(테크)</th>
-            <th class="text-center" style="font-size:.75rem;">상주(교육청)</th>
-            <th class="text-center" style="font-size:.75rem;">고객</th>
-            <th class="text-center" style="font-size:.75rem;">기타</th>
           </tr></thead>
-          <tbody id="matrix-tbody"><tr><td colspan="9" class="text-center py-3 text-muted">로딩 중…</td></tr></tbody>
+          <tbody id="matrix-tbody"><tr><td colspan="99" class="text-center py-3 text-muted">로딩 중…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -963,6 +954,12 @@ async function bulkImportUsers(input){
 }
 function loadMatrix(){
   fetch(SYSCONF_API+'/modules/').then(r=>r.json()).then(d=>{
+    // 헤더 동적 생성
+    const cg=document.getElementById('matrix-colgroup');
+    cg.innerHTML='<col style="width:160px;">'+d.roles.map(()=>'<col>').join('');
+    const thead=document.getElementById('matrix-thead');
+    thead.innerHTML='<tr><th class="text-start ps-2">모듈</th>'+d.roles.map(r=>`<th class="text-center" style="font-size:.75rem;">${r.label}</th>`).join('')+'</tr>';
+
     document.getElementById('matrix-tbody').innerHTML=d.modules.map(mod=>{
       const cells=d.roles.map(r=>{
         const can=d.matrix[r.key][mod.key];
@@ -972,7 +969,7 @@ function loadMatrix(){
       return `<tr><td class="text-start ps-2" style="white-space:nowrap;font-size:.8rem"><i class="bi ${mod.icon} me-1 text-muted"></i>${mod.label}</td>${cells}</tr>`;
     }).join('');
     requestAnimationFrame(adjustMatrixRows);
-  }).catch(()=>{ document.getElementById('matrix-tbody').innerHTML='<tr><td colspan="9" class="text-danger text-center">로드 실패</td></tr>'; });
+  }).catch(()=>{ document.getElementById('matrix-tbody').innerHTML='<tr><td colspan="99" class="text-danger text-center">로드 실패</td></tr>'; });
 }
 function adjustMatrixRows(){
   const wrap  = document.querySelector('.matrix-wrap');
