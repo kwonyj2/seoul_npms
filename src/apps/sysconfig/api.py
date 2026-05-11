@@ -131,10 +131,13 @@ def module_matrix(request):
     from apps.sysconfig.models import ModuleRolePerm
     from core.modules import can_access
     # DB에 저장된 독립 권한을 반영하여 매트릭스 구성
+    # 비슈퍼관리자에게는 superadmin 역할 숨김
+    is_superadmin = getattr(request.user, 'role', '') == 'superadmin'
+    visible_roles = ROLE_HIERARCHY if is_superadmin else [r for r in ROLE_HIERARCHY if r != 'superadmin']
+
     matrix = {}
     db_perms = {(p.module_key, p.role): p.allowed for p in ModuleRolePerm.objects.all()}
-    for role_obj in [{'key': r} for r in ROLE_HIERARCHY]:
-        r = role_obj['key']
+    for r in visible_roles:
         matrix[r] = {}
         for k in MODULE_REGISTRY:
             if (k, r) in db_perms:
@@ -146,7 +149,7 @@ def module_matrix(request):
         for k, v in MODULE_REGISTRY.items()
     ]
     return JsonResponse({
-        'roles':   [{'key': r, 'label': ROLE_LABELS.get(r, r)} for r in ROLE_HIERARCHY],
+        'roles':   [{'key': r, 'label': ROLE_LABELS.get(r, r)} for r in visible_roles],
         'modules': modules_info,
         'matrix':  matrix,
     })
@@ -487,15 +490,19 @@ def nas_role_perms(request):
         ('customer',         'download'): True,  ('customer',         'upload'): False, ('customer',         'delete'): False, ('customer',         'create_folder'): False,
         ('etc',              'download'): True,  ('etc',              'upload'): False, ('etc',              'delete'): False, ('etc',              'create_folder'): False,
     }
+    # 비슈퍼관리자에게는 superadmin 역할 숨김
+    is_superadmin = getattr(request.user, 'role', '') == 'superadmin'
+    visible_roles = ROLE_HIERARCHY if is_superadmin else [r for r in ROLE_HIERARCHY if r != 'superadmin']
+
     if request.method == 'GET':
         db_perms = {(p.role, p.action): p.allowed for p in NasRoleConfig.objects.all()}
         result = {}
-        for role in ROLE_HIERARCHY:
+        for role in visible_roles:
             result[role] = {
                 action: db_perms.get((role, action), DEFAULTS.get((role, action), False))
                 for action in ACTIONS
             }
-        return JsonResponse({'perms': result, 'actions': ACTIONS, 'roles': ROLE_HIERARCHY})
+        return JsonResponse({'perms': result, 'actions': ACTIONS, 'roles': visible_roles})
 
     elif request.method == 'PATCH':
         try:

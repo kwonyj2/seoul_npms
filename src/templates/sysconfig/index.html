@@ -143,7 +143,7 @@
               <input id="u-search" type="text" class="form-control form-control-sm" placeholder="이름·아이디·연락처" style="width:160px;" oninput="renderUserTable()">
               <select id="u-role" class="form-select form-select-sm" style="width:110px;" onchange="renderUserTable()">
                 <option value="">전체 역할</option>
-                <option value="superadmin">슈퍼관리자</option>
+                {% if request.user.role == 'superadmin' %}<option value="superadmin">슈퍼관리자</option>{% endif %}
                 <option value="admin">관리자</option>
                 <option value="worker">현장기사</option>
                 <option value="resident_central">상주(중앙)</option>
@@ -209,7 +209,7 @@
                   <option value="admin">관리자</option>
                   <option value="customer">학교담당자</option>
                   <option value="etc">기타(영업/사업)</option>
-                  <option value="superadmin">슈퍼관리자</option>
+                  {% if request.user.role == 'superadmin' %}<option value="superadmin">슈퍼관리자</option>{% endif %}
                 </select></div>
               <div class="col-md-3"><label class="form-label small mb-1">소속 지원청</label>
                 <select id="um-center" class="form-select form-select-sm">
@@ -740,6 +740,7 @@
 <script>
 const SYSCONF_API = API_BASE.replace('/api','') + '/api/sysconfig';
 const SYS_TABS   = ['db','users','roles','export','nas','celery','docs','dbadmin','info'];
+const IS_SUPERADMIN = '{{ request.user.role }}' === 'superadmin';
 
 // ══ 탭 전환 ═══════════════════════════════════════════
 function switchTab(name, el) {
@@ -820,6 +821,8 @@ async function loadUsers() {
   try {
     const data = await apiGet(`${API_BASE}/accounts/api/users/?page_size=9999`);
     _allUsers = data.results || data;
+    // 비슈퍼관리자에게는 superadmin 사용자 숨김
+    if (!IS_SUPERADMIN) _allUsers = _allUsers.filter(u => u.role !== 'superadmin');
     document.getElementById('cnt-total').textContent    = _allUsers.length;
     document.getElementById('cnt-worker').textContent   = _allUsers.filter(u=>u.role==='worker').length;
     document.getElementById('cnt-admin').textContent    = _allUsers.filter(u=>['admin','superadmin'].includes(u.role)).length;
@@ -1048,7 +1051,7 @@ const NAS_ACTIONS=['download','upload','delete','create_folder'];
 const NAS_ACT_LBL={download:'파일 다운로드',upload:'파일 업로드',delete:'파일 삭제',create_folder:'폴더 생성'};
 function loadNasRolePerms(){
   fetch(SYSCONF_API+'/nas-role-perms/').then(r=>r.json()).then(d=>{
-    const roles=['superadmin','admin','worker','resident_central','resident_tech','resident_edu','customer','etc'];
+    const roles = d.roles || ['admin','worker','resident_central','resident_tech','resident_edu','customer','etc'];
     document.getElementById('nas-role-tbody').innerHTML=roles.map(role=>{
       const cells=NAS_ACTIONS.map(act=>{
         const checked=d.perms[role]&&d.perms[role][act];
@@ -1083,7 +1086,7 @@ function loadNasFolders(){
           <select class="form-select form-select-sm mx-auto" style="width:140px;" onchange="updateFolderAccess(${f.id},this.value,this)">
             <option value="public" ${f.access_level==='public'?'selected':''}>전체공개</option>
             <option value="admin" ${f.access_level==='admin'?'selected':''}>관리자이상</option>
-            <option value="superadmin" ${f.access_level==='superadmin'?'selected':''}>슈퍼관리자</option>
+            ${IS_SUPERADMIN?`<option value="superadmin" ${f.access_level==='superadmin'?'selected':''}>슈퍼관리자</option>`:''}
           </select>
         </td>
       </tr>`).join('');
