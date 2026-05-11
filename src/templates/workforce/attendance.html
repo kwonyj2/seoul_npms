@@ -228,9 +228,9 @@
 {% block content %}
 <div class="container-fluid px-3 py-2">
 
-{% if user.role in 'worker resident' %}
+{% if user.role == 'worker' or user.role == 'resident' or user.role == 'resident_central' or user.role == 'resident_tech' or user.role == 'resident_edu' %}
 <!-- ═══════════════════════════════════════════════════════════
-     개인 뷰 (worker / resident)
+     개인 뷰 (worker / resident 계열)
      ═══════════════════════════════════════════════════════════ -->
 
 <!-- Hero 카드 -->
@@ -719,7 +719,7 @@
 {% block extra_js %}
 <script>
 const ME_ROLE = '{{ user.role }}';
-const IS_WORKER = ME_ROLE === 'worker' || ME_ROLE === 'resident';
+const IS_WORKER = ['worker','resident','resident_central','resident_tech','resident_edu'].includes(ME_ROLE);
 const TODAY_STR  = new Date().toISOString().slice(0,10);
 const TODAY_OBJ  = new Date();
 
@@ -766,7 +766,7 @@ function renderLegend(el) {
 // ────────────────────────────────────────────────────────────────────────
 // ══ 개인 뷰 ══════════════════════════════════════════════════════════════
 // ────────────────────────────────────────────────────────────────────────
-{% if user.role in 'worker resident' %}
+{% if user.role == 'worker' or user.role == 'resident' or user.role == 'resident_central' or user.role == 'resident_tech' or user.role == 'resident_edu' %}
 
 let _personalYear  = TODAY_OBJ.getFullYear();
 let _personalMonth = TODAY_OBJ.getMonth() + 1;
@@ -1060,12 +1060,15 @@ function initAdminFilters() {
     });
   }).catch(()=>{});
 
-  // 인력 셀렉트 채우기 (worker + resident)
+  // 인력 셀렉트 채우기 (worker + resident 계열)
   Promise.all([
-    apiGet(`${API_BASE}/accounts/api/users/`, {role:'worker',   page_size:200}),
-    apiGet(`${API_BASE}/accounts/api/users/`, {role:'resident', page_size:200}),
-  ]).then(([d1, d2]) => {
-    const workers = [...(d1.results||d1), ...(d2.results||d2)]
+    apiGet(`${API_BASE}/accounts/api/users/`, {role:'worker',           page_size:200}),
+    apiGet(`${API_BASE}/accounts/api/users/`, {role:'resident',         page_size:200}),
+    apiGet(`${API_BASE}/accounts/api/users/`, {role:'resident_central', page_size:200}),
+    apiGet(`${API_BASE}/accounts/api/users/`, {role:'resident_tech',    page_size:200}),
+    apiGet(`${API_BASE}/accounts/api/users/`, {role:'resident_edu',     page_size:200}),
+  ]).then(([d1, d2, d3, d4, d5]) => {
+    const workers = [...(d1.results||d1), ...(d2.results||d2), ...(d3.results||d3), ...(d4.results||d4), ...(d5.results||d5)]
       .sort((a,b) => a.name.localeCompare(b.name, 'ko'));
     _listWorkers = workers;
     const sel = document.getElementById('list-worker');

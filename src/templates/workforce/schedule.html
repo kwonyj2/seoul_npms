@@ -1184,7 +1184,7 @@ async function loadScheduleTypes() {
 
 // ── 새 일정 등록 모달 열기 ────────────────────────────
 function openNewScheduleModal(dateStr, dateObj, isAdmin) {
-  if (!isAdmin && ME_ROLE !== 'worker' && ME_ROLE !== 'resident') return;
+  if (!isAdmin && !['worker','resident','resident_central','resident_tech','resident_edu'].includes(ME_ROLE)) return;
   _resetSchedModal();
   document.getElementById('sched-modal-title').innerHTML =
     '<i class="bi bi-calendar-plus me-1 text-primary"></i>일정 등록';
@@ -1359,7 +1359,7 @@ async function _doDelete(id) {
 }
 
 // ── GPS 출퇴근 ────────────────────────────────────────
-{% if user.role == 'worker' or user.role == 'resident' %}
+{% if user.role == 'worker' or user.role == 'resident' or user.role == 'resident_central' or user.role == 'resident_tech' or user.role == 'resident_edu' %}
 function getPosition() {
   return new Promise(function(resolve, reject) {
     navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy:true, timeout:10000 });
