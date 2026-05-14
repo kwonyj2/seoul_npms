@@ -28,7 +28,7 @@ class PostViewSet(viewsets.ModelViewSet):
     parser_classes     = [parsers.MultiPartParser, parsers.JSONParser]
 
     def get_serializer_class(self):
-        if self.action == 'create':
+        if self.action in ('create', 'update', 'partial_update'):
             return PostCreateSerializer
         if self.action == 'retrieve':
             return PostDetailSerializer
