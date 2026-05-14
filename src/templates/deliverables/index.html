@@ -563,38 +563,18 @@ async function previewFile(id, name, mime) {
     btnApp.classList.add('d-none');
   }
 
-  const OFFICE_MIMES = [
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/msword',
-  ];
-  const officeExts = ['.pptx','.ppt','.xlsx','.xls','.docx','.doc'];
-  const fileExt = name.substring(name.lastIndexOf('.')).toLowerCase();
-  const isOffice = OFFICE_MIMES.includes(mime) || officeExts.includes(fileExt);
-
   if (mime.startsWith('image/')) {
     content.innerHTML = `<img src="${NAS_API}/files/${id}/preview/"
       style="max-width:100%;max-height:calc(100vh - 200px);object-fit:contain;"
       onerror="this.outerHTML='<div class=text-muted>이미지 로드 실패</div>'">`;
-  } else if (mime === 'application/pdf' || isOffice) {
-    content.innerHTML = `<div class="text-center py-3"><div class="spinner-border text-primary"></div><div class="mt-2 small text-muted">${isOffice ? 'PDF 변환 중...' : '로딩 중...'}</div></div>`;
-    const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'width:100%;height:calc(100vh - 160px);border:none;';
-    iframe.src = `${NAS_API}/files/${id}/preview/`;
-    iframe.onload = () => { content.innerHTML = ''; content.appendChild(iframe); };
-    iframe.onerror = () => { content.innerHTML = '<div class="text-muted py-5">미리보기 로드 실패</div>'; };
-    // 백그라운드 로드
-    const hidden = document.createElement('div');
-    hidden.style.display = 'none';
-    hidden.appendChild(iframe);
-    document.body.appendChild(hidden);
-    setTimeout(() => { if (hidden.parentNode) { content.innerHTML = ''; content.appendChild(iframe); } }, 500);
+  } else if (mime === 'application/pdf') {
+    content.innerHTML = `<iframe src="${NAS_API}/files/${id}/preview/"
+      style="width:100%;height:calc(100vh - 160px);border:none;"></iframe>`;
   } else {
-    // HWP / 기타: 안내 + 앱 열기 바로가기
-    const appLabel = hwp ? '한글(HWP)이' : null;
+    // Office / HWP / 기타: 안내 + 앱 열기 바로가기
+    const appLabel = scheme
+      ? `${scheme === 'ms-word' ? 'Microsoft Word' : scheme === 'ms-excel' ? 'Microsoft Excel' : 'Microsoft PowerPoint'}가`
+      : hwp ? '한글(HWP)이' : null;
     content.innerHTML = `<div class="text-center py-5 text-muted">
       <i class="bi ${FILE_ICON(mime)} display-4 d-block mb-3"></i>
       <div class="fw-semibold mb-1">${name}</div>
