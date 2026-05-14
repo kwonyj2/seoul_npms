@@ -620,13 +620,13 @@ async function openWriteModal(tmplId){
       schoolContacts=dc.contacts||[];
     }catch(e){ console.error(e); }
     if(schoolSwitchAssets.length===0){
-      var proceed=confirm(
+      alert(
         '⚠ '+selSchool.name+'에 출고등록된 스위치가 없습니다.\n\n'+
-        '장비 관리 > 출고 이력에서 해당 교육지원청 → 학교로\n'+
-        '출고 등록을 먼저 진행하는 것을 권장합니다.\n\n'+
-        '출고 등록 없이 제조번호를 직접 입력하여 계속하시겠습니까?'
+        '자재 관리 > 출고 이력에서 해당 교육지원청 → 학교로\n'+
+        '출고 등록을 먼저 진행해주세요.\n\n'+
+        '출고 이력이 등록되어야 스위치 설치 확인서를 생성할 수 있습니다.'
       );
-      if(!proceed) return;
+      return;
     }
   } else if(selTemplate.report_type==='cable'){
     try{
