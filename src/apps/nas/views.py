@@ -601,22 +601,77 @@ class FileViewSet(viewsets.ModelViewSet):
         url = f'{origin}/npms/nas/open/{token}/'
         return Response({'url': url, 'token': token})
 
+    # Office MIME → LibreOffice PDF 변환 대상
+    _OFFICE_MIMES = {
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',  # pptx
+        'application/vnd.ms-powerpoint',                                               # ppt
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',           # xlsx
+        'application/vnd.ms-excel',                                                    # xls
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',     # docx
+        'application/msword',                                                          # doc
+    }
+    _OFFICE_EXTS = {'.pptx', '.ppt', '.xlsx', '.xls', '.docx', '.doc'}
+
     @action(detail=True, methods=['get'])
     def preview(self, request, pk=None):
-        """이미지/PDF 인라인 미리보기"""
+        """이미지/PDF/Office 인라인 미리보기 (Office는 PDF 변환)"""
         file_obj = self.get_object()
         if not os.path.exists(file_obj.file_path):
             return Response({'error': '파일이 존재하지 않습니다.'}, status=status.HTTP_404_NOT_FOUND)
         mime = file_obj.mime_type or 'application/octet-stream'
+
+        # Office 파일 → PDF 변환 후 제공 (MIME 또는 확장자 판별)
+        ext = os.path.splitext(file_obj.file_path)[1].lower()
+        if mime in self._OFFICE_MIMES or ext in self._OFFICE_EXTS:
+            pdf_path = self._get_office_pdf(file_obj)
+            if pdf_path and os.path.exists(pdf_path):
+                response = FileResponse(open(pdf_path, 'rb'), content_type='application/pdf', as_attachment=False)
+                response['X-Frame-Options'] = 'SAMEORIGIN'
+                response['Content-Disposition'] = f'inline; filename="{os.path.splitext(file_obj.original_name)[0]}.pdf"'
+                return response
+            return Response({'error': 'PDF 변환에 실패했습니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         response = FileResponse(
             open(file_obj.file_path, 'rb'),
             content_type=mime,
             as_attachment=False,
         )
-        # iframe 내 표시 허용 (기본값 DENY → SAMEORIGIN으로 완화)
         response['X-Frame-Options'] = 'SAMEORIGIN'
         response['Content-Disposition'] = f'inline; filename="{file_obj.original_name}"'
         return response
+
+    @staticmethod
+    def _get_office_pdf(file_obj):
+        """Office 파일을 PDF로 변환 (캐시 활용)"""
+        import subprocess, hashlib
+        cache_dir = os.path.join(settings.BASE_DIR, '.preview_cache')
+        os.makedirs(cache_dir, exist_ok=True)
+
+        # 파일 경로 + 수정시간 기반 캐시 키
+        mtime = os.path.getmtime(file_obj.file_path)
+        cache_key = hashlib.md5(f'{file_obj.file_path}:{mtime}'.encode()).hexdigest()
+        cached_pdf = os.path.join(cache_dir, f'{cache_key}.pdf')
+
+        if os.path.exists(cached_pdf):
+            return cached_pdf
+
+        try:
+            result = subprocess.run(
+                ['libreoffice', '--headless', '--norestore', '--convert-to', 'pdf',
+                 '--outdir', cache_dir, file_obj.file_path],
+                capture_output=True, timeout=30,
+            )
+            if result.returncode != 0:
+                return None
+            # LibreOffice가 생성한 PDF 파일명 (원본명.pdf)
+            src_name = os.path.splitext(os.path.basename(file_obj.file_path))[0] + '.pdf'
+            src_path = os.path.join(cache_dir, src_name)
+            if os.path.exists(src_path):
+                os.rename(src_path, cached_pdf)
+                return cached_pdf
+        except Exception:
+            pass
+        return None
 
     @action(detail=False, methods=['get'])
     def search(self, request):
