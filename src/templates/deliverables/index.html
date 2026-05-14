@@ -123,9 +123,6 @@
     <div class="border-top p-2 d-flex gap-2 justify-content-between align-items-center flex-wrap">
       <div id="preview-meta" class="small text-muted"></div>
       <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-outline-success d-none" id="btn-open-app" title="PC에 설치된 앱으로 열기">
-          <i class="bi bi-box-arrow-up-right me-1"></i>앱으로 열기
-        </button>
         <button class="btn btn-sm btn-outline-danger" id="btn-delete-file">
           <i class="bi bi-trash"></i>
         </button>
@@ -496,72 +493,10 @@ function setView(v) {
 // ─────────────────────────────────────────
 // 미리보기 오프캔버스
 // ─────────────────────────────────────────
-// ─────────────────────────────────────────
-// Office URI 스킴 처리 (PC 앱으로 열기)
-// ms-word / ms-excel / ms-powerpoint: SharePoint·OneDrive 방식
-// HWP: 다운로드 후 OS 연결 앱으로 자동 실행
-// ─────────────────────────────────────────
-const OFFICE_URI = {
-  // Word
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'ms-word',
-  'application/msword': 'ms-word',
-  // Excel
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'ms-excel',
-  'application/vnd.ms-excel': 'ms-excel',
-  // PowerPoint
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'ms-powerpoint',
-  'application/vnd.ms-powerpoint': 'ms-powerpoint',
-};
-const EXT_URI = {
-  '.docx':'ms-word', '.doc':'ms-word',
-  '.xlsx':'ms-excel', '.xls':'ms-excel',
-  '.pptx':'ms-powerpoint', '.ppt':'ms-powerpoint',
-};
-const HWP_EXTS = new Set(['.hwp', '.hwpx']);
-
-function getOfficeScheme(mime, name) {
-  if (OFFICE_URI[mime]) return OFFICE_URI[mime];
-  const ext = name.slice(name.lastIndexOf('.')).toLowerCase();
-  return EXT_URI[ext] || null;
-}
-
-function isHwp(name) {
-  const ext = name.slice(name.lastIndexOf('.')).toLowerCase();
-  return HWP_EXTS.has(ext);
-}
-
-function openWithApp(id, name, mime) {
-  // 다운로드 즉시 실행 → Windows에서 연결된 앱(Excel/한글 등)으로 자동 열림
-  const a = document.createElement('a');
-  a.href = `${NAS_API}/files/${id}/download/`;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
-
 async function previewFile(id, name, mime) {
   previewFileId = id;
   document.getElementById('preview-title').textContent = name;
-  const content   = document.getElementById('preview-content');
-  const btnApp    = document.getElementById('btn-open-app');
-
-  // 앱으로 열기 버튼: Office 또는 HWP 일 때만 표시
-  const scheme    = getOfficeScheme(mime, name);
-  const hwp       = isHwp(name);
-  _preloadedTempUrl = null;
-
-  if (scheme || hwp) {
-    btnApp.classList.remove('d-none');
-    btnApp.innerHTML = hwp
-      ? '<i class="bi bi-download me-1"></i>한글로 열기'
-      : `<i class="bi bi-download me-1"></i>${
-          scheme === 'ms-word' ? 'Word' : scheme === 'ms-excel' ? 'Excel' : 'PowerPoint'
-        }로 열기`;
-    btnApp.onclick = () => openWithApp(id, name, mime);
-  } else {
-    btnApp.classList.add('d-none');
-  }
+  const content = document.getElementById('preview-content');
 
   if (mime.startsWith('image/')) {
     content.innerHTML = `<img src="${NAS_API}/files/${id}/preview/"
@@ -571,16 +506,10 @@ async function previewFile(id, name, mime) {
     content.innerHTML = `<iframe src="${NAS_API}/files/${id}/preview/"
       style="width:100%;height:calc(100vh - 160px);border:none;"></iframe>`;
   } else {
-    // Office / HWP / 기타: 안내 + 앱 열기 바로가기
-    const appLabel = scheme
-      ? `${scheme === 'ms-word' ? 'Microsoft Word' : scheme === 'ms-excel' ? 'Microsoft Excel' : 'Microsoft PowerPoint'}가`
-      : hwp ? '한글(HWP)이' : null;
     content.innerHTML = `<div class="text-center py-5 text-muted">
       <i class="bi ${FILE_ICON(mime)} display-4 d-block mb-3"></i>
       <div class="fw-semibold mb-1">${name}</div>
-      ${appLabel
-        ? `<small class="text-secondary">PC에 ${appLabel} 설치되어 있으면<br><strong>앱으로 열기</strong> 버튼을 클릭하세요.</small>`
-        : `<small>미리보기를 지원하지 않는 파일 형식입니다.</small>`}
+      <small>미리보기를 지원하지 않는 파일 형식입니다.<br>다운로드 후 확인하세요.</small>
     </div>`;
   }
 
