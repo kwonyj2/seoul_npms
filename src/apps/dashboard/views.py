@@ -82,7 +82,8 @@ def get_dashboard_data():
     ).count()
     inc_summary['sla_rate'] = round(sla_ok / total_m * 100, 1) if total_m > 0 else None
 
-    online_sessions = UserSession.objects.filter(is_active=True, last_active__gte=cutoff)
+    online_sessions = UserSession.objects.filter(is_active=True, last_active__gte=cutoff).exclude(
+        user__role__in=['admin', 'superadmin'])
     online_users    = list(online_sessions.select_related('user').values(
         'user__name', 'user__role', 'current_page', 'last_active', 'ip_address'
     ).order_by('-last_active')[:50])
@@ -198,7 +199,8 @@ def dashboard_summary(request):
                'worker':'현장기사','resident_central':'상주(중앙)',
                'resident_tech':'상주(테크매니저)','resident_edu':'상주(교육청)',
                'etc':'기타(영업/사업)','resident':'상주(구)'}
-    online_sessions = UserSession.objects.filter(is_active=True, last_active__gte=cutoff)
+    online_sessions = UserSession.objects.filter(is_active=True, last_active__gte=cutoff).exclude(
+        user__role__in=['admin', 'superadmin'])
     raw_users = list(online_sessions.select_related('user').values(
         'user__name', 'user__role', 'current_page', 'last_active', 'ip_address'
     ).order_by('-last_active')[:50])
