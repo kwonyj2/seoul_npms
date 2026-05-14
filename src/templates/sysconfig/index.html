@@ -1081,8 +1081,8 @@ function updateNasRolePerm(role, action, allowed, el){
 }
 
 // ══ 탭4: NAS 폴더 ══════════════════════════════════════
-const ACC_LABEL={public:'전체공개',admin:'관리자이상',superadmin:'슈퍼관리자'};
-const ACC_COLOR={public:'bg-success bg-opacity-10 text-success',admin:'bg-primary bg-opacity-10 text-primary',superadmin:'bg-dark bg-opacity-10 text-dark'};
+const ACC_LABEL={public:'전체공개',resident_central:'상주(중앙)이상',admin:'관리자이상',superadmin:'슈퍼관리자'};
+const ACC_COLOR={public:'bg-success bg-opacity-10 text-success',resident_central:'bg-info bg-opacity-10 text-info',admin:'bg-primary bg-opacity-10 text-primary',superadmin:'bg-dark bg-opacity-10 text-dark'};
 function loadNasFolders(){
   fetch(SYSCONF_API+'/nas-folders/').then(r=>r.json()).then(d=>{
     const tbody=document.getElementById('nas-tbody');
@@ -1094,6 +1094,7 @@ function loadNasFolders(){
         <td class="text-center">
           <select class="form-select form-select-sm mx-auto" style="width:140px;" onchange="updateFolderAccess(${f.id},this.value,this)">
             <option value="public" ${f.access_level==='public'?'selected':''}>전체공개</option>
+            <option value="resident_central" ${f.access_level==='resident_central'?'selected':''}>상주(중앙)이상</option>
             <option value="admin" ${f.access_level==='admin'?'selected':''}>관리자이상</option>
             ${IS_SUPERADMIN?`<option value="superadmin" ${f.access_level==='superadmin'?'selected':''}>슈퍼관리자</option>`:''}
           </select>

@@ -60,10 +60,11 @@ class FolderViewSet(viewsets.ModelViewSet):
         """사용자 역할에 따라 접근 가능한 폴더만 반환"""
         role = self.request.user.role
         if role == 'superadmin':
-            return qs  # 모든 폴더 접근 가능
-        if role in ('admin',):
+            return qs
+        if role == 'admin':
             return qs.exclude(access_level='superadmin')
-        # worker, resident, customer 등 일반 사용자
+        if role == 'resident_central':
+            return qs.filter(access_level__in=['public', 'resident_central'])
         return qs.filter(access_level='public')
 
     def get_queryset(self):

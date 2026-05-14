@@ -7,9 +7,10 @@ from django.db import models
 
 class Folder(models.Model):
     ACCESS_CHOICES = [
-        ('public',     '전체 공개'),
-        ('admin',      '관리자 이상'),
-        ('superadmin', '슈퍼어드민 전용'),
+        ('public',           '전체 공개'),
+        ('resident_central', '상주(중앙) 이상'),
+        ('admin',            '관리자 이상'),
+        ('superadmin',       '슈퍼관리자 전용'),
     ]
 
     name         = models.CharField('폴더명', max_length=255)
