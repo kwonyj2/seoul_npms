@@ -443,7 +443,7 @@ async function loadFiles() {
 function renderGrid(area, items) {
   area.innerHTML = `<div class="row g-2">` + items.map(f => `
     <div class="col-6 col-sm-4 col-md-3 col-lg-2">
-      <div class="card h-100 border cursor-pointer file-card" onclick="previewFile(${f.id},'${f.name}','${f.mime_type||''}')">
+      <div class="card h-100 border cursor-pointer file-card" onclick="handleFileClick(${f.id},'${f.name}','${f.mime_type||''}')">
         <div class="card-body text-center py-3 px-2">
           ${f.mime_type?.startsWith('image/')
             ? `<img src="${NAS_API}/files/${f.id}/preview/" style="max-width:80px;max-height:70px;object-fit:cover;" onerror="this.style.display='none'">`
@@ -462,7 +462,7 @@ function renderList(area, items) {
           <th style="width:80px;">크기</th><th style="width:90px;">업로드일</th><th style="width:50px;"></th></tr>
     </thead>
     <tbody>` + items.map(f => `
-      <tr class="cursor-pointer" onclick="previewFile(${f.id},'${f.name}','${f.mime_type||''}')">
+      <tr class="cursor-pointer" onclick="handleFileClick(${f.id},'${f.name}','${f.mime_type||''}')">
         <td>
           <i class="bi ${FILE_ICON(f.mime_type)} me-1"></i>
           <span class="fw-semibold">${f.name}</span>
@@ -493,6 +493,15 @@ function setView(v) {
 // ─────────────────────────────────────────
 // 미리보기 오프캔버스
 // ─────────────────────────────────────────
+function handleFileClick(id, name, mime) {
+  // PDF/이미지 → 미리보기, 그 외 → 바로 다운로드
+  if (mime === 'application/pdf' || mime?.startsWith('image/')) {
+    previewFile(id, name, mime);
+  } else {
+    window.location.href = `${NAS_API}/files/${id}/download/`;
+  }
+}
+
 async function previewFile(id, name, mime) {
   previewFileId = id;
   document.getElementById('preview-title').textContent = name;
