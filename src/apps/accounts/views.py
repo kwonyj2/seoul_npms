@@ -326,7 +326,7 @@ class UserViewSet(viewsets.ModelViewSet):
         ws.title = '인력목록'
 
         headers = ['username', '이름', '역할', '전화번호', '이메일',
-                   '소속', '기술등급', '소속지원청', '자택주소', '자택위도', '자택경도',
+                   '소속', '기술등급', '수행업무', '소속지원청', '자택주소', '자택위도', '자택경도',
                    '서비스만료일', '활성여부', '비밀번호(신규등록용)']
 
         header_fill = PatternFill('solid', fgColor='1F4E79')
@@ -354,6 +354,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 u.email or '',
                 u.affiliation or '',
                 u.tech_grade or '',
+                u.job_duty or '',
                 u.support_center.name if u.support_center else '',
                 u.home_address or '',
                 float(u.home_lat) if u.home_lat else '',
@@ -369,7 +370,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 if row_idx % 2 == 0:
                     cell.fill = PatternFill('solid', fgColor='F0F4FA')
 
-        col_widths = [16, 12, 12, 16, 28, 16, 12, 20, 40, 12, 12, 14, 8, 20]
+        col_widths = [16, 12, 12, 16, 28, 16, 12, 16, 20, 40, 12, 12, 14, 8, 20]
         for i, w in enumerate(col_widths, 1):
             ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -474,6 +475,7 @@ class UserViewSet(viewsets.ModelViewSet):
                     'role':           role,
                     'affiliation':    col(row, '소속'),
                     'tech_grade':     col(row, '기술등급'),
+                    'job_duty':       col(row, '수행업무'),
                     'support_center': center,
                     'home_address':   col(row, '자택주소'),
                     'is_active':      is_active,
@@ -506,8 +508,8 @@ class UserViewSet(viewsets.ModelViewSet):
         response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
         response['Content-Disposition'] = 'attachment; filename="worker_template.csv"'
         writer = csv.writer(response)
-        writer.writerow(['username', '이름', '역할', '전화번호', '이메일', '소속', '기술등급', '소속지원청', '비밀번호', '활성여부'])
-        writer.writerow(['hong1', '홍길동', 'worker', '010-1234-5678', 'hong@example.com', '(주)OO기술', '중급', '동부교육지원청', 'Pass1234!', '활성'])
+        writer.writerow(['username', '이름', '역할', '전화번호', '이메일', '소속', '기술등급', '수행업무', '소속지원청', '비밀번호', '활성여부'])
+        writer.writerow(['hong1', '홍길동', 'worker', '010-1234-5678', 'hong@example.com', '(주)OO기술', '중급', '네트워크유지보수', '동부교육지원청', 'Pass1234!', '활성'])
         return response
 
     @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
@@ -556,6 +558,7 @@ class UserViewSet(viewsets.ModelViewSet):
                     'role': role,
                     'affiliation': (row.get('소속') or '').strip(),
                     'tech_grade': (row.get('기술등급') or '').strip(),
+                    'job_duty': (row.get('수행업무') or '').strip(),
                     'support_center': center,
                     'is_active': is_active,
                 }

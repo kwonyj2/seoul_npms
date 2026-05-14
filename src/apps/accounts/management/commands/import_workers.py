@@ -111,6 +111,7 @@ class Command(BaseCommand):
             'email':       idx('이메일', 'email'),
             'affiliation': idx('소속', '소속회사', '회사', 'affiliation'),
             'tech_grade':  idx('기술등급', '등급', 'tech_grade'),
+            'job_duty':    idx('수행업무', '업무', 'job_duty'),
             'center':      idx('지원청', '교육지원청', '소속지원청', 'center'),
             'address':     idx('자택주소', '주소', 'address'),
             'password':    idx('비밀번호', '초기비밀번호', '비밀번호(신규등록용)', 'password'),
@@ -181,6 +182,7 @@ class Command(BaseCommand):
                             existing.email          = email
                             existing.affiliation    = get(row, 'affiliation') or existing.affiliation
                             existing.tech_grade     = get(row, 'tech_grade') or existing.tech_grade
+                            existing.job_duty       = get(row, 'job_duty') or existing.job_duty
                             existing.home_address   = address or existing.home_address
                             existing.support_center = center_obj or existing.support_center
                             existing.save()
@@ -196,6 +198,7 @@ class Command(BaseCommand):
                             phone=phone,
                             affiliation=get(row, 'affiliation'),
                             tech_grade=get(row, 'tech_grade'),
+                            job_duty=get(row, 'job_duty'),
                             home_address=address,
                             support_center=center_obj,
                             is_active=True,

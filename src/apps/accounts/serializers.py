@@ -11,7 +11,7 @@ class UserListSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'name', 'email', 'phone', 'role', 'role_display',
-                  'support_center', 'support_center_name', 'affiliation', 'tech_grade',
+                  'support_center', 'support_center_name', 'affiliation', 'tech_grade', 'job_duty',
                   'is_active', 'service_expiry', 'profile_image', 'created_at']
 
 
@@ -23,7 +23,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'name', 'email', 'phone', 'role', 'role_display',
-                  'support_center', 'support_center_name', 'affiliation', 'tech_grade',
+                  'support_center', 'support_center_name', 'affiliation', 'tech_grade', 'job_duty',
                   'home_address', 'home_lat', 'home_lng',
                   'profile_image', 'service_expiry', 'is_active', 'is_service_active',
                   'created_at', 'updated_at']
@@ -39,7 +39,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['username', 'email', 'name', 'phone', 'role', 'support_center',
-                  'affiliation', 'tech_grade',
+                  'affiliation', 'tech_grade', 'job_duty',
                   'home_address', 'home_lat', 'home_lng', 'service_expiry', 'password', 'password2']
 
     def validate(self, attrs):
@@ -58,7 +58,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['name', 'email', 'phone', 'role', 'support_center',
-                  'affiliation', 'tech_grade',
+                  'affiliation', 'tech_grade', 'job_duty',
                   'home_address', 'home_lat', 'home_lng', 'service_expiry',
                   'is_active', 'profile_image', 'password', 'password2']
 

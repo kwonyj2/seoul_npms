@@ -48,6 +48,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     affiliation    = models.CharField('소속', max_length=100, blank=True)
     tech_grade     = models.CharField('기술등급', max_length=50, blank=True)
+    job_duty       = models.CharField('수행업무', max_length=100, blank=True)
     home_address   = models.TextField('자택주소', blank=True)
     home_lat       = models.DecimalField('자택위도', max_digits=10, decimal_places=7, null=True, blank=True)
     home_lng       = models.DecimalField('자택경도', max_digits=10, decimal_places=7, null=True, blank=True)

@@ -635,6 +635,7 @@ def worker_profile_api(request, worker_id):
             'center_name':    worker.support_center.name if worker.support_center else '',
             'affiliation':    worker.affiliation,
             'tech_grade':     worker.tech_grade,
+            'job_duty':       worker.job_duty,
             'home_address':   worker.home_address,
             'is_active':      worker.is_active,
             'created_at':     timezone.localtime(worker.created_at).strftime('%Y-%m-%d'),

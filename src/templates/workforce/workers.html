@@ -332,6 +332,7 @@
             <tr><th>이메일</th><td id="info-email">-</td></tr>
             <tr><th>소속</th><td id="info-affiliation">-</td></tr>
             <tr><th>기술등급</th><td id="info-tech-grade">-</td></tr>
+            <tr><th>수행업무</th><td id="info-job-duty">-</td></tr>
             <tr><th>소속 지원청</th><td id="info-center">-</td></tr>
             <tr><th>자택주소</th><td id="info-address">-</td></tr>
             <tr><th>생년월일</th><td id="info-birth">-</td></tr>
@@ -543,6 +544,7 @@ async function loadProfile(id) {
     document.getElementById('info-email').textContent    = data.email       || '-';
     document.getElementById('info-affiliation').textContent = data.affiliation || '-';
     document.getElementById('info-tech-grade').textContent = data.tech_grade  || '-';
+    document.getElementById('info-job-duty').textContent   = data.job_duty    || '-';
     document.getElementById('info-center').textContent   = data.center_name || '-';
     document.getElementById('info-address').textContent  = data.home_address|| '-';
     document.getElementById('info-birth').textContent    = data.birth_date  || '-';
