@@ -96,7 +96,8 @@ def get_dashboard_data():
             ('resident','상주(구)'),
         ]).get(u['user__role'], u['user__role'])
     active_workers  = User.objects.filter(role='worker', is_active=True).count()
-    school_count    = School.objects.filter(is_active=True).count()
+    svc_q = Q(service_start_date__isnull=True) | Q(service_start_date__lte=today)
+    school_count    = School.objects.filter(is_active=True).filter(svc_q).count()
 
     # 미완료 전체 + 오늘 완료건 (오늘 자정까지 유지)
     from django.db.models import Case, When, IntegerField, Value
@@ -215,9 +216,10 @@ def dashboard_summary(request):
     # 활성 인력 수
     active_workers = User.objects.filter(role='worker', is_active=True).count()
 
-    # 학교 수
+    # 학교 수 (서비스 시작일 기준 필터)
     from apps.schools.models import School
-    school_count = School.objects.filter(is_active=True).count()
+    svc_q = Q(service_start_date__isnull=True) | Q(service_start_date__lte=today)
+    school_count = School.objects.filter(is_active=True).filter(svc_q).count()
 
     # 미완료 전체 + 오늘 완료건 — 완료는 하단 정렬, 최대 50건
     from django.db.models import Case, When, IntegerField, Value

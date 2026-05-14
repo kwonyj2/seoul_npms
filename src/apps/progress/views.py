@@ -147,8 +147,11 @@ class InspectionPlanViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def stats(self, request, pk=None):
         """계획별 통계"""
+        from django.utils import timezone
         plan = self.get_object()
-        qs = plan.school_inspections.select_related('school__support_center', 'assigned_worker')
+        today = timezone.localdate()
+        svc_q = Q(school__service_start_date__isnull=True) | Q(school__service_start_date__lte=today)
+        qs = plan.school_inspections.select_related('school__support_center', 'assigned_worker').filter(svc_q)
 
         by_center = {}
         for si in qs:
@@ -167,12 +170,14 @@ class InspectionPlanViewSet(viewsets.ModelViewSet):
             if si.status == 'completed':
                 by_worker[w]['completed'] += 1
 
+        total = qs.count()
+        completed = qs.filter(status='completed').count()
         return Response({
             'plan_id':      plan.id,
             'plan_name':    plan.name,
-            'total':        plan.total,
-            'completed':    plan.completed_count,
-            'progress_pct': plan.progress_pct,
+            'total':        total,
+            'completed':    completed,
+            'progress_pct': round(completed / total * 100) if total else 0,
             'by_status': {
                 'pending':   qs.filter(status='pending').count(),
                 'scheduled': qs.filter(status='scheduled').count(),

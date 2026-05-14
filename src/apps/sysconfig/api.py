@@ -39,7 +39,10 @@ def system_info(request):
     counts = {}
     try:
         from apps.schools.models import School, SchoolBuilding, SchoolContact
-        counts['schools']   = School.objects.count()
+        from django.db.models import Q
+        from django.utils import timezone
+        svc_q = Q(service_start_date__isnull=True) | Q(service_start_date__lte=timezone.localdate())
+        counts['schools']   = School.objects.filter(is_active=True).filter(svc_q).count()
         counts['buildings'] = SchoolBuilding.objects.count()
         counts['contacts']  = SchoolContact.objects.count()
     except Exception:

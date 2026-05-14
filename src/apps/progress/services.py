@@ -423,9 +423,11 @@ def process_upload(file_obj) -> dict:
     else:
         rows_raw = _parse_csv(file_obj)
 
-    # 학교 DB 전체 캐시 (name → [School])
+    # 학교 DB 전체 캐시 (name → [School]) — 서비스 시작일 도래한 학교만
+    from django.db.models import Q
+    svc_q = Q(service_start_date__isnull=True) | Q(service_start_date__lte=timezone.localdate())
     school_map: dict[str, list] = {}
-    for s in School.objects.select_related('support_center').filter(is_active=True):
+    for s in School.objects.select_related('support_center').filter(is_active=True).filter(svc_q):
         school_map.setdefault(s.name, []).append(s)
 
     matched = []
@@ -640,7 +642,9 @@ def generate_template_excel(plan_type: str = 'regular') -> bytes:
 
     # 데이터 행
     if plan_type == 'regular':
-        schools = School.objects.select_related('support_center').filter(is_active=True).order_by(
+        from django.db.models import Q
+        svc_q = Q(service_start_date__isnull=True) | Q(service_start_date__lte=timezone.localdate())
+        schools = School.objects.select_related('support_center').filter(is_active=True).filter(svc_q).order_by(
             'support_center__name', 'name'
         )
         for r, s in enumerate(schools, start=2):

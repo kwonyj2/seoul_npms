@@ -1628,7 +1628,8 @@ def _sync_wbs_regular_inspect(report):
     if not project:
         return
 
-    total_schools = School.objects.filter(is_active=True).count()
+    svc_q_wbs = Q(service_start_date__isnull=True) | Q(service_start_date__lte=inspect_date)
+    total_schools = School.objects.filter(is_active=True).filter(svc_q_wbs).count()
     if total_schools == 0:
         return
 
@@ -1708,6 +1709,7 @@ def monthly_work_report_api(request):
 
     # ── 1. 사업 개요: 학제별 학교 수 ──
     school_types = list(SchoolType.objects.order_by('order').values('code', 'name'))
+    svc_q = Q(service_start_date__isnull=True) | Q(service_start_date__lte=date_to)
 
     # 전체: 지원청별 크로스탭 생성
     centers_list = []
@@ -1715,7 +1717,7 @@ def monthly_work_report_api(request):
         centers_qs = SupportCenter.objects.filter(is_active=True).order_by('id')
         for ctr in centers_qs:
             ctr_counts = dict(
-                School.objects.filter(support_center=ctr, is_active=True)
+                School.objects.filter(support_center=ctr, is_active=True).filter(svc_q)
                 .values_list('school_type__code').annotate(cnt=Count('id'))
             )
             ctr_total = sum(ctr_counts.values())
@@ -1725,7 +1727,7 @@ def monthly_work_report_api(request):
             centers_list.append(row)
 
     school_counts = dict(
-        School.objects.filter(is_active=True, **school_filter)
+        School.objects.filter(is_active=True, **school_filter).filter(svc_q)
         .values_list('school_type__code').annotate(cnt=Count('id'))
     )
     total_schools = 0
