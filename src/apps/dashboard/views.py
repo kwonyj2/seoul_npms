@@ -473,17 +473,13 @@ def dashboard_schedule(request):
     today = timezone.localdate()
     week_end = today + timedelta(days=7)
 
-    # 진행중인 점검계획 (오늘 날짜 범위 내 우선 → 정기점검 최우선)
+    # 진행중인 점검계획 (정기점검 최우선 정렬)
     TYPE_ORDER = ['regular', 'special', 'quarterly', 'project', 'survey', 'followup']
     raw_plans = list(
         InspectionPlan.objects.filter(status='active')
         .values('id', 'name', 'plan_type', 'start_date', 'end_date')
     )
-    raw_plans.sort(key=lambda p: (
-        0 if (p['start_date'] and p['end_date'] and p['start_date'] <= today <= p['end_date']) else 1,
-        TYPE_ORDER.index(p['plan_type']) if p['plan_type'] in TYPE_ORDER else 99,
-        p['id'],
-    ))
+    raw_plans.sort(key=lambda p: (TYPE_ORDER.index(p['plan_type']) if p['plan_type'] in TYPE_ORDER else 99, p['id']))
     active_plans = raw_plans[:5]
     for p in active_plans:
         total = SchoolInspection.objects.filter(plan_id=p['id']).count()
