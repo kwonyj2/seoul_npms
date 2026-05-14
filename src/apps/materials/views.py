@@ -64,10 +64,10 @@ class MaterialViewSet(NoPaginateMixin, viewsets.ModelViewSet):
         response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
         response['Content-Disposition'] = 'attachment; filename="material_template.csv"'
         writer = csv.writer(response)
-        writer.writerow(['분류코드', '자재코드', '자재명', '규격', '단위', '최소재고', '공급업체', '비고'])
-        writer.writerow(['cable',     'CAB-UTP-001', 'UTP CAT6 케이블', '305m Roll', 'roll', '5', '한국정보통신', ''])
-        writer.writerow(['connector', 'CON-RJ45-001', 'RJ45 커넥터',    '8P8C',      'ea',   '50', '',            ''])
-        writer.writerow(['equipment', 'EQP-SW-001',   '스위치 24포트',  'GS324T',    'ea',   '2',  '넷기어',      ''])
+        writer.writerow(['분류코드', '자재코드', '자재명', '규격', '단위', '최소재고', '공급업체', '제조번호', '비고'])
+        writer.writerow(['cable',     'CAB-UTP-001', 'UTP CAT6 케이블', '305m Roll', 'roll', '5', '한국정보통신', '', ''])
+        writer.writerow(['connector', 'CON-RJ45-001', 'RJ45 커넥터',    '8P8C',      'ea',   '50', '',            '', ''])
+        writer.writerow(['equipment', 'EQP-SW-001',   '스위치 24포트',  'GS324T',    'ea',   '2',  '넷기어',      'SN-12345', ''])
         return response
 
     @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
@@ -116,8 +116,9 @@ class MaterialViewSet(NoPaginateMixin, viewsets.ModelViewSet):
                         'spec':      (row.get('규격')     or '').strip(),
                         'unit':      UNIT_MAP.get((row.get('단위') or 'ea').strip().lower(), 'ea'),
                         'min_stock': int(row.get('최소재고') or 0),
-                        'supplier':  (row.get('공급업체') or '').strip(),
-                        'note':      (row.get('비고')     or '').strip(),
+                        'supplier':       (row.get('공급업체') or '').strip(),
+                        'serial_number':  (row.get('제조번호') or '').strip(),
+                        'note':           (row.get('비고')     or '').strip(),
                         'is_active': True,
                     }
                 )
@@ -214,7 +215,7 @@ class MaterialInboundViewSet(NoPaginateMixin, viewsets.ModelViewSet):
         response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
         response['Content-Disposition'] = 'attachment; filename="inbound_template.csv"'
         writer = csv.writer(response)
-        writer.writerow(['자재코드', '수량', '입고일', '공급업체', '인계자', '인수자', '비고'])
+        writer.writerow(['자재코드', '수량', '입고일', '공급업체', '제조번호', '인계자', '인수자', '비고'])
         return response
 
     @action(detail=False, methods=['post'])
@@ -262,6 +263,7 @@ class MaterialInboundViewSet(NoPaginateMixin, viewsets.ModelViewSet):
                 inbound = MaterialInbound.objects.create(
                     inbound_number=MaterialInbound.generate_number(inbound_date),
                     material=material,
+                    serial_number=(row.get('제조번호') or '').strip(),
                     quantity=qty,
                     unit_price=0,
                     supplier=(row.get('공급업체')  or '').strip(),
@@ -519,7 +521,7 @@ class MaterialOutboundViewSet(NoPaginateMixin, viewsets.ModelViewSet):
         response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
         response['Content-Disposition'] = 'attachment; filename="outbound_template.csv"'
         writer = csv.writer(response)
-        writer.writerow(['자재코드', '수량', '출고일', '지원청명', '인계자', '인수자', '비고'])
+        writer.writerow(['자재코드', '수량', '출고일', '지원청명', '제조번호', '인계자', '인수자', '비고'])
         # 지원청명 목록을 비고란에 안내 (빈 행이므로 업로드 시 자동 무시됨)
         centers = list(SupportCenter.objects.all().order_by('name'))
         writer.writerow(['', '', '', '', '', '', '↓ 아래 지원청명 참고 (이 행들은 업로드 시 무시됩니다)'])
@@ -604,6 +606,7 @@ class MaterialOutboundViewSet(NoPaginateMixin, viewsets.ModelViewSet):
                 outbound = MaterialOutbound.objects.create(
                     outbound_number=f'OUT{date_key}_{seq:03d}',
                     material=material,
+                    serial_number=(row.get('제조번호') or '').strip(),
                     quantity=qty,
                     to_center=center,
                     outbound_date=outbound_date,

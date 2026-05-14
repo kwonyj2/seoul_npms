@@ -56,10 +56,11 @@
 <table class="item-table">
   <thead>
     <tr>
-      <th style="width:14%;">자재분류</th>
-      <th style="width:12%;">자재코드</th>
-      <th style="width:24%;">자재명</th>
-      <th style="width:20%;">규격/사양</th>
+      <th style="width:12%;">자재분류</th>
+      <th style="width:10%;">자재코드</th>
+      <th style="width:20%;">자재명</th>
+      <th style="width:14%;">규격/사양</th>
+      <th style="width:14%;">제조번호</th>
       <th style="width:8%;">단위</th>
       <th style="width:10%;">수량</th>
       <th style="width:12%;">수령처</th>
@@ -71,6 +72,7 @@
       <td>{{ outbound.material.code }}</td>
       <td class="name">{{ outbound.material.name }}</td>
       <td>{{ outbound.material.spec|default:"-" }}</td>
+      <td>{{ outbound.serial_number|default:"-" }}</td>
       <td>{{ outbound.material.get_unit_display }}</td>
       <td class="qty">{{ outbound.quantity }}</td>
       <td>{% if outbound.to_center %}{{ outbound.to_center.name }}{% endif %}{% if outbound.to_worker %}{{ outbound.to_worker.name }}{% endif %}</td>

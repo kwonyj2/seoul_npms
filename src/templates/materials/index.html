@@ -757,6 +757,10 @@
             <label class="form-label small fw-semibold">공급업체</label>
             <input type="text" id="item-supplier" class="form-control form-control-sm">
           </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold">제조번호</label>
+            <input type="text" id="item-serial" class="form-control form-control-sm" placeholder="제조번호(S/N)">
+          </div>
           <div class="col-12">
             <label class="form-label small fw-semibold">비고</label>
             <textarea id="item-note" class="form-control form-control-sm" rows="2"></textarea>
@@ -885,9 +889,15 @@
             <input type="date" id="ib-date" class="form-control form-control-sm">
           </div>
         </div>
-        <div class="mb-2" id="ib-supplier-wrap">
-          <label class="form-label small fw-semibold">공급업체</label>
-          <input type="text" id="ib-supplier" class="form-control form-control-sm" placeholder="업체명">
+        <div class="row g-2 mb-2">
+          <div class="col-6" id="ib-supplier-wrap">
+            <label class="form-label small fw-semibold">공급업체</label>
+            <input type="text" id="ib-supplier" class="form-control form-control-sm" placeholder="업체명">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">제조번호</label>
+            <input type="text" id="ib-serial" class="form-control form-control-sm" placeholder="S/N">
+          </div>
         </div>
         <div class="row g-2 mb-2">
           <div class="col-6">
@@ -1163,9 +1173,15 @@
             <input type="text" id="ob-receiver-phone" class="form-control form-control-sm" placeholder="010-0000-0000">
           </div>
         </div>
-        <div class="mb-2">
-          <label class="form-label small fw-semibold">비고</label>
-          <textarea id="ob-note" class="form-control form-control-sm" rows="2"></textarea>
+        <div class="row g-2 mb-2">
+          <div class="col-6">
+            <label class="form-label small fw-semibold">제조번호</label>
+            <input type="text" id="ob-serial" class="form-control form-control-sm" placeholder="S/N">
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-semibold">비고</label>
+            <input type="text" id="ob-note" class="form-control form-control-sm">
+          </div>
         </div>
         <div class="alert alert-warning py-2 small mb-0">
           <i class="bi bi-info-circle me-1"></i>출고 등록 시 창고 재고 자동 감소 + 해당 지원청 재고 자동 증가
@@ -1711,6 +1727,7 @@ function openItemModal(item) {
   document.getElementById('item-unit').value     = item ? (item.unit || 'ea') : 'ea';
   document.getElementById('item-minstock').value = item ? (item.min_stock ?? 0) : 0;
   document.getElementById('item-supplier').value = item ? (item.supplier || '') : '';
+  document.getElementById('item-serial').value   = item ? (item.serial_number || '') : '';
   document.getElementById('item-note').value     = item ? (item.note || '') : '';
   document.getElementById('item-delete-btn').style.display = item ? '' : 'none';
   loadCategorySelect().then(() => {
@@ -1732,8 +1749,9 @@ async function submitItem() {
     spec:       document.getElementById('item-spec').value.trim(),
     unit:       document.getElementById('item-unit').value,
     min_stock:  parseInt(document.getElementById('item-minstock').value) || 0,
-    supplier:   document.getElementById('item-supplier').value.trim(),
-    note:       document.getElementById('item-note').value.trim(),
+    supplier:       document.getElementById('item-supplier').value.trim(),
+    serial_number:  document.getElementById('item-serial').value.trim(),
+    note:           document.getElementById('item-note').value.trim(),
   };
   try {
     if (id) {
@@ -2862,7 +2880,7 @@ async function openInboundModal() {
   await initPersonnelCache();
   loadMaterials();
   // 필드 초기화
-  ['ib-handover','ib-handover-phone','ib-receiver','ib-receiver-phone','ib-supplier','ib-note'].forEach(id => {
+  ['ib-handover','ib-handover-phone','ib-receiver','ib-receiver-phone','ib-supplier','ib-serial','ib-note'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -2908,6 +2926,7 @@ async function submitInbound() {
       inbound_type:    isReturn ? 'return' : 'normal',
       from_center:     isReturn ? (parseInt(center) || null) : null,
       supplier:        document.getElementById('ib-supplier').value        || '',
+      serial_number:   document.getElementById('ib-serial').value          || '',
       inbound_date:    document.getElementById('ib-date').value,
       handover_person: document.getElementById('ib-handover').value        || '',
       handover_phone:  document.getElementById('ib-handover-phone').value  || '',
@@ -2928,6 +2947,8 @@ async function openOutboundModal() {
   document.getElementById('ob-handover-phone').value = '';
   document.getElementById('ob-receiver').value = '';
   document.getElementById('ob-receiver-phone').value = '';
+  document.getElementById('ob-serial').value = '';
+  document.getElementById('ob-note').value = '';
   const blank = '<option value="">-- 선택 또는 직접 입력 --</option>';
   document.getElementById('ob-handover-sel').innerHTML = blank + buildMatPersonOptions(_warehouseStaffMat).replace('<option value="">선택...</option>','');
   document.getElementById('ob-receiver-sel').innerHTML = blank;
@@ -2949,6 +2970,7 @@ async function submitOutbound() {
       handover_phone:  document.getElementById('ob-handover-phone').value || '',
       receiver_person: document.getElementById('ob-receiver').value || '',
       receiver_phone:  document.getElementById('ob-receiver-phone').value || '',
+      serial_number:   document.getElementById('ob-serial').value || '',
       note:            document.getElementById('ob-note').value,
     });
     bootstrap.Modal.getInstance(document.getElementById('outboundModal')).hide();

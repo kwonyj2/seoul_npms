@@ -47,6 +47,7 @@ class Material(models.Model):
     unit         = models.CharField('단위', max_length=10, choices=UNIT_CHOICES, default='ea')
     unit_price   = models.DecimalField('단가', max_digits=10, decimal_places=0, default=0)
     min_stock    = models.PositiveIntegerField('최소재고', default=0)
+    serial_number = models.CharField('제조번호', max_length=100, blank=True)
     supplier     = models.CharField('공급업체', max_length=100, blank=True)
     is_active    = models.BooleanField('활성', default=True)
     note         = models.TextField('비고', blank=True)
@@ -114,6 +115,7 @@ class MaterialInbound(models.Model):
     INBOUND_NUMBER_PREFIX = 'IN'
     inbound_number = models.CharField('입고번호', max_length=30, unique=True, db_index=True)
     material       = models.ForeignKey(Material, on_delete=models.PROTECT, verbose_name='자재')
+    serial_number  = models.CharField('제조번호', max_length=100, blank=True)
     quantity       = models.PositiveIntegerField('입고수량')
     unit_price       = models.DecimalField('단가', max_digits=10, decimal_places=0, default=0)
     inbound_type     = models.CharField('입고유형', max_length=10, choices=INBOUND_TYPE_CHOICES, default='normal')
@@ -156,6 +158,7 @@ class MaterialOutbound(models.Model):
     """자재 출고 (창고 → 지원청)"""
     outbound_number  = models.CharField('출고번호', max_length=30, unique=True, db_index=True)
     material         = models.ForeignKey(Material, on_delete=models.PROTECT, verbose_name='자재')
+    serial_number    = models.CharField('제조번호', max_length=100, blank=True)
     quantity         = models.PositiveIntegerField('출고수량')
     from_warehouse   = models.BooleanField('창고출고', default=True)
     from_center      = models.ForeignKey('schools.SupportCenter', on_delete=models.SET_NULL,
@@ -235,6 +238,7 @@ class MaterialReturn(models.Model):
     """잔여 자재 반납 (현장→센터 반납 입고)"""
     return_number    = models.CharField('반납번호', max_length=30, unique=True, db_index=True, blank=True)
     material         = models.ForeignKey(Material, on_delete=models.PROTECT, verbose_name='자재')
+    serial_number    = models.CharField('제조번호', max_length=100, blank=True)
     quantity         = models.PositiveIntegerField('반납수량')
     from_worker      = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='반납기사')
     from_school      = models.CharField('반납 출처(학교)', max_length=100, blank=True)

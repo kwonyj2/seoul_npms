@@ -19,7 +19,7 @@ class MaterialSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Material
         fields = ['id', 'code', 'name', 'spec', 'unit',
-                  'category', 'category_name', 'min_stock',
+                  'category', 'category_name', 'serial_number', 'min_stock',
                   'supplier', 'is_active', 'warehouse_qty']
 
     def get_warehouse_qty(self, obj):
@@ -80,7 +80,7 @@ class MaterialInboundSerializer(serializers.ModelSerializer):
         model            = MaterialInbound
         fields           = ['id', 'inbound_number', 'material', 'material_name',
                              'material_code', 'material_spec', 'material_unit', 'category_name',
-                             'quantity', 'unit_price', 'inbound_type', 'from_center', 'from_center_name',
+                             'serial_number', 'quantity', 'unit_price', 'inbound_type', 'from_center', 'from_center_name',
                              'supplier', 'handover_person', 'receiver_person',
                              'inbound_date', 'received_by', 'received_by_name', 'note', 'pdf_path',
                              'handover_signature', 'receiver_signature',
@@ -166,7 +166,7 @@ class MaterialOutboundSerializer(serializers.ModelSerializer):
         model            = MaterialOutbound
         fields           = ['id', 'outbound_number', 'material', 'material_name',
                              'material_code', 'material_spec', 'material_unit', 'category_name',
-                             'quantity', 'from_warehouse', 'from_center', 'from_center_name',
+                             'serial_number', 'quantity', 'from_warehouse', 'from_center', 'from_center_name',
                              'to_center', 'to_center_name',
                              'to_worker', 'to_worker_name', 'to_school', 'outbound_date',
                              'issued_by', 'issued_by_name', 'issued_by_center_name',
@@ -273,7 +273,7 @@ class MaterialReturnSerializer(serializers.ModelSerializer):
         model            = MaterialReturn
         fields           = ['id', 'return_number', 'material', 'material_name',
                              'material_code', 'material_spec', 'material_unit', 'category_name',
-                             'quantity', 'from_school', 'to_center', 'center_name',
+                             'serial_number', 'quantity', 'from_school', 'to_center', 'center_name',
                              'return_date', 'received_by', 'received_by_name',
                              'handover_person', 'receiver_person',
                              'handover_phone', 'receiver_phone', 'note', 'created_at']
