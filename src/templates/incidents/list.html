@@ -110,6 +110,9 @@
             <button class="btn btn-sm btn-outline-success" onclick="openUploadModal()">
               <i class="bi bi-upload me-1"></i>일괄업로드
             </button>
+            <button class="btn btn-sm btn-outline-danger d-none" id="btn-delete-selected" onclick="deleteSelected()">
+              <i class="bi bi-trash me-1"></i>선택 삭제
+            </button>
             {% endif %}
           </div>
         </div>
@@ -117,6 +120,9 @@
           <table class="table table-sm table-hover mb-0">
             <thead class="table-light sticky-top">
               <tr>
+                {% if user.role == 'superadmin' or user.role == 'admin' %}
+                <th style="width:35px;"><input type="checkbox" id="chk-all" onclick="toggleCheckAll(this)"></th>
+                {% endif %}
                 <th style="width:110px;">접수번호</th>
                 <th style="width:85px;">지원청</th>
                 <th style="width:150px;">학교명</th>
@@ -129,13 +135,14 @@
               </tr>
             </thead>
             <tbody id="incident-table-body">
-              <tr><td colspan="9" class="text-center text-muted py-4">로딩 중...</td></tr>
+              <tr><td colspan="10" class="text-center text-muted py-4">로딩 중...</td></tr>
             </tbody>
           </table>
         </div>
         <!-- 페이지네이션 -->
         <div class="card-footer py-2 d-flex justify-content-between align-items-center">
           <small class="text-muted">페이지 <span id="page-info">-</span></small>
+          <div id="page-numbers" class="d-flex align-items-center gap-1"></div>
           <div class="btn-group btn-group-sm">
             <button class="btn btn-outline-secondary" id="btn-prev" onclick="changePage(-1)" disabled>
               <i class="bi bi-chevron-left"></i>
@@ -385,7 +392,8 @@ async function loadIncidents() {
   const from     = document.getElementById('filter-from').value;
   const to       = document.getElementById('filter-to').value;
 
-  const params = {page: currentPage, page_size: 20};
+  const PAGE_SIZE = 25;
+  const params = {page: currentPage, page_size: PAGE_SIZE};
   if (q)        params.q        = q;
   if (status)   params.status   = status;
   if (priority) params.priority = priority;
@@ -396,43 +404,103 @@ async function loadIncidents() {
   else if (activeType)    params.school_type = activeType;
   else if (activeCenter)  params.center      = activeCenter;
 
+  const CAN_DELETE = !!document.getElementById('btn-delete-selected');
+  const colSpan = CAN_DELETE ? 10 : 9;
   const tbody = document.getElementById('incident-table-body');
-  tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">로딩 중...</td></tr>';
+  tbody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center text-muted py-3">로딩 중...</td></tr>`;
   try {
     const data = await apiGet(`${API_BASE}/incidents/incidents/`, params);
-    if (reqId !== _incidentReqId) return; // 구 응답 무시
-    totalPages = Math.ceil((data.count || 0) / 20);
+    if (reqId !== _incidentReqId) return;
+    totalPages = Math.ceil((data.count || 0) / PAGE_SIZE);
     document.getElementById('total-count').textContent = (data.count || 0).toLocaleString();
     document.getElementById('page-info').textContent = `${currentPage} / ${totalPages || 1}`;
     document.getElementById('btn-prev').disabled = currentPage <= 1;
     document.getElementById('btn-next').disabled = currentPage >= totalPages;
+    renderPageNumbers();
 
     const results = data.results || [];
     if (!results.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">장애 없음</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center text-muted py-4">장애 없음</td></tr>`;
       return;
     }
     tbody.innerHTML = results.map(i => `
-      <tr class="cursor-pointer ${PRIORITY_ROW[i.priority]||''}" onclick="location.href='/npms/incidents/${i.id}/'">
-        <td><small class="fw-bold text-primary">${i.incident_number}</small></td>
-        <td><small class="text-muted">${i.center_name||'-'}</small></td>
-        <td class="text-truncate" style="max-width:150px;" title="${i.school_name||''}">${i.school_name||'-'}</td>
-        <td><small>${i.category_name||'-'}</small></td>
-        <td>${PRIORITY_BADGE[i.priority]||i.priority}</td>
-        <td>${STATUS_BADGE[i.status]||i.status}</td>
-        <td><small>${i.assigned_worker||'<span class="text-danger">미배정</span>'}</small></td>
-        <td><small class="text-nowrap">${formatDateTime(i.received_at)}</small></td>
-        <td><small class="${(i.elapsed_minutes||0)>120?'text-danger fw-bold':'text-muted'}">${i.elapsed_minutes||0}분</small></td>
+      <tr class="cursor-pointer ${PRIORITY_ROW[i.priority]||''}">
+        ${CAN_DELETE ? `<td onclick="event.stopPropagation()"><input type="checkbox" class="chk-row" value="${i.id}" onchange="updateDeleteBtn()"></td>` : ''}
+        <td onclick="location.href='/npms/incidents/${i.id}/'"><small class="fw-bold text-primary">${i.incident_number}</small></td>
+        <td onclick="location.href='/npms/incidents/${i.id}/'"><small class="text-muted">${i.center_name||'-'}</small></td>
+        <td onclick="location.href='/npms/incidents/${i.id}/'" class="text-truncate" style="max-width:150px;" title="${i.school_name||''}">${i.school_name||'-'}</td>
+        <td onclick="location.href='/npms/incidents/${i.id}/'"><small>${i.category_name||'-'}</small></td>
+        <td onclick="location.href='/npms/incidents/${i.id}/'">${PRIORITY_BADGE[i.priority]||i.priority}</td>
+        <td onclick="location.href='/npms/incidents/${i.id}/'">${STATUS_BADGE[i.status]||i.status}</td>
+        <td onclick="location.href='/npms/incidents/${i.id}/'"><small>${i.assigned_worker||'<span class="text-danger">미배정</span>'}</small></td>
+        <td onclick="location.href='/npms/incidents/${i.id}/'"><small class="text-nowrap">${formatDateTime(i.received_at)}</small></td>
+        <td onclick="location.href='/npms/incidents/${i.id}/'"><small class="${(i.elapsed_minutes||0)>120?'text-danger fw-bold':'text-muted'}">${i.elapsed_minutes||0}분</small></td>
       </tr>`).join('');
+    // 전체 선택 해제
+    const chkAll = document.getElementById('chk-all');
+    if (chkAll) chkAll.checked = false;
+    updateDeleteBtn();
   } catch(e) {
     if (reqId !== _incidentReqId) return;
-    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-3">데이터 로드 오류</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center text-danger py-3">데이터 로드 오류</td></tr>`;
   }
 }
 
 function changePage(delta) {
   currentPage = Math.max(1, Math.min(totalPages, currentPage + delta));
   loadIncidents();
+}
+
+function goToPage(p) {
+  currentPage = p;
+  loadIncidents();
+}
+
+function renderPageNumbers() {
+  const container = document.getElementById('page-numbers');
+  if (!container) return;
+  const maxShow = 7;
+  let start = Math.max(1, currentPage - Math.floor(maxShow / 2));
+  let end = Math.min(totalPages, start + maxShow - 1);
+  if (end - start < maxShow - 1) start = Math.max(1, end - maxShow + 1);
+
+  let html = '';
+  if (start > 1) html += `<button class="btn btn-sm btn-outline-secondary" onclick="goToPage(1)">1</button>`;
+  if (start > 2) html += '<span class="text-muted px-1">…</span>';
+  for (let p = start; p <= end; p++) {
+    html += `<button class="btn btn-sm ${p === currentPage ? 'btn-primary' : 'btn-outline-secondary'}" onclick="goToPage(${p})">${p}</button>`;
+  }
+  if (end < totalPages - 1) html += '<span class="text-muted px-1">…</span>';
+  if (end < totalPages) html += `<button class="btn btn-sm btn-outline-secondary" onclick="goToPage(${totalPages})">${totalPages}</button>`;
+  container.innerHTML = html;
+}
+
+function toggleCheckAll(el) {
+  document.querySelectorAll('.chk-row').forEach(c => c.checked = el.checked);
+  updateDeleteBtn();
+}
+
+function updateDeleteBtn() {
+  const btn = document.getElementById('btn-delete-selected');
+  if (!btn) return;
+  const cnt = document.querySelectorAll('.chk-row:checked').length;
+  btn.classList.toggle('d-none', cnt === 0);
+  btn.innerHTML = `<i class="bi bi-trash me-1"></i>선택 삭제 (${cnt})`;
+}
+
+async function deleteSelected() {
+  const ids = [...document.querySelectorAll('.chk-row:checked')].map(c => c.value);
+  if (!ids.length) return;
+  if (!confirm(`선택한 ${ids.length}건의 장애를 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.`)) return;
+  try {
+    for (const id of ids) {
+      await apiDelete(`${API_BASE}/incidents/incidents/${id}/`);
+    }
+    showToast(`${ids.length}건 삭제 완료`, 'success');
+    loadIncidents();
+  } catch(e) {
+    showToast('삭제 실패: ' + (e?.detail || e?.message || ''), 'error');
+  }
 }
 
 function resetFilters() {

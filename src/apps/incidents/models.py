@@ -72,11 +72,10 @@ class Incident(models.Model):
         ('low',      '낮음'),
     ]
     CONTACT_METHOD_CHOICES = [
-        ('phone',   '전화'),
-        ('visit',   '방문'),
-        ('system',  '시스템'),
-        ('email',   '이메일'),
-        ('auto',    '자동감지'),
+        ('org',       '기관'),
+        ('tech',      '기술지원'),
+        ('phone',     '전화상담'),
+        ('engineer',  '현장엔지니어'),
     ]
 
     # 접수번호: 접수일8자리_001 형식
