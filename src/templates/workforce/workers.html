@@ -305,6 +305,8 @@
           <div class="hero-name" id="hero-name">-</div>
           <div class="hero-badges">
             <span class="badge bg-primary" id="hero-center-badge">-</span>
+            <span class="badge bg-info" id="hero-affiliation-badge" style="display:none;"></span>
+            <span class="badge bg-warning text-dark" id="hero-tech-grade-badge" style="display:none;"></span>
             <span class="badge" id="hero-status-badge">-</span>
           </div>
           <div class="hero-row"><i class="bi bi-telephone"></i><span id="hero-phone">-</span></div>
@@ -328,6 +330,8 @@
             <tr><th>성명</th><td id="info-name">-</td></tr>
             <tr><th>연락처</th><td id="info-phone">-</td></tr>
             <tr><th>이메일</th><td id="info-email">-</td></tr>
+            <tr><th>소속</th><td id="info-affiliation">-</td></tr>
+            <tr><th>기술등급</th><td id="info-tech-grade">-</td></tr>
             <tr><th>소속 지원청</th><td id="info-center">-</td></tr>
             <tr><th>자택주소</th><td id="info-address">-</td></tr>
             <tr><th>생년월일</th><td id="info-birth">-</td></tr>
@@ -509,6 +513,12 @@ async function loadProfile(id) {
     // Hero
     document.getElementById('hero-name').textContent    = data.name || '-';
     document.getElementById('hero-center-badge').textContent = data.center_name || '-';
+    const abBadge = document.getElementById('hero-affiliation-badge');
+    if (data.affiliation) { abBadge.textContent = data.affiliation; abBadge.style.display = ''; }
+    else { abBadge.style.display = 'none'; }
+    const tgBadge = document.getElementById('hero-tech-grade-badge');
+    if (data.tech_grade) { tgBadge.textContent = data.tech_grade; tgBadge.style.display = ''; }
+    else { tgBadge.style.display = 'none'; }
     const sb = document.getElementById('hero-status-badge');
     sb.textContent = data.is_active ? '재직중' : '비활성';
     sb.className   = `badge ${data.is_active ? 'bg-success' : 'bg-secondary'}`;
@@ -531,6 +541,8 @@ async function loadProfile(id) {
     document.getElementById('info-name').textContent     = data.name        || '-';
     document.getElementById('info-phone').textContent    = data.phone       || '-';
     document.getElementById('info-email').textContent    = data.email       || '-';
+    document.getElementById('info-affiliation').textContent = data.affiliation || '-';
+    document.getElementById('info-tech-grade').textContent = data.tech_grade  || '-';
     document.getElementById('info-center').textContent   = data.center_name || '-';
     document.getElementById('info-address').textContent  = data.home_address|| '-';
     document.getElementById('info-birth').textContent    = data.birth_date  || '-';

@@ -104,14 +104,16 @@ class Command(BaseCommand):
             return None
 
         COL = {
-            'username': idx('username', '아이디', '사용자명', '로그인ID'),
-            'name':     idx('이름', '성명', 'name'),
-            'role':     idx('역할', '권한', 'role'),
-            'phone':    idx('연락처', '전화번호', '휴대폰', 'phone'),
-            'email':    idx('이메일', 'email'),
-            'center':   idx('지원청', '교육지원청', '소속지원청', '소속', 'center'),
-            'address':  idx('자택주소', '주소', 'address'),
-            'password': idx('비밀번호', '초기비밀번호', '비밀번호(신규등록용)', 'password'),
+            'username':    idx('username', '아이디', '사용자명', '로그인ID'),
+            'name':        idx('이름', '성명', 'name'),
+            'role':        idx('역할', '권한', 'role'),
+            'phone':       idx('연락처', '전화번호', '휴대폰', 'phone'),
+            'email':       idx('이메일', 'email'),
+            'affiliation': idx('소속', '소속회사', '회사', 'affiliation'),
+            'tech_grade':  idx('기술등급', '등급', 'tech_grade'),
+            'center':      idx('지원청', '교육지원청', '소속지원청', 'center'),
+            'address':     idx('자택주소', '주소', 'address'),
+            'password':    idx('비밀번호', '초기비밀번호', '비밀번호(신규등록용)', 'password'),
         }
         self.stdout.write(f'컬럼 매핑: {COL}')
 
@@ -177,6 +179,8 @@ class Command(BaseCommand):
                             existing.role           = role
                             existing.phone          = phone or existing.phone
                             existing.email          = email
+                            existing.affiliation    = get(row, 'affiliation') or existing.affiliation
+                            existing.tech_grade     = get(row, 'tech_grade') or existing.tech_grade
                             existing.home_address   = address or existing.home_address
                             existing.support_center = center_obj or existing.support_center
                             existing.save()
@@ -190,6 +194,8 @@ class Command(BaseCommand):
                             email=email,
                             role=role,
                             phone=phone,
+                            affiliation=get(row, 'affiliation'),
+                            tech_grade=get(row, 'tech_grade'),
                             home_address=address,
                             support_center=center_obj,
                             is_active=True,

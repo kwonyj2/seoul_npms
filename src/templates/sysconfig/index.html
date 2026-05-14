@@ -171,7 +171,7 @@
             <table class="table table-sm table-hover align-middle mb-0 user-table">
               <thead><tr>
                 <th class="text-center">#</th><th>성명</th><th>아이디</th><th>역할</th>
-                <th>연락처</th><th>소속지원청</th><th>만료일</th><th class="text-center">상태</th><th></th>
+                <th>연락처</th><th>소속</th><th>기술등급</th><th>소속지원청</th><th>만료일</th><th class="text-center">상태</th><th></th>
               </tr></thead>
               <tbody id="user-tbody"><tr><td colspan="9" class="text-center py-4 text-muted">로딩 중…</td></tr></tbody>
             </table>
@@ -216,6 +216,8 @@
                   <option value="">선택 안함</option>
                   {% for c in centers %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
                 </select></div>
+              <div class="col-md-3"><label class="form-label small mb-1">소속</label><input type="text" id="um-affiliation" class="form-control form-control-sm" placeholder="소속 회사/기관"></div>
+              <div class="col-md-3"><label class="form-label small mb-1">기술등급</label><input type="text" id="um-tech-grade" class="form-control form-control-sm" placeholder="초급/중급/고급/특급"></div>
               <div class="col-12"><div class="fw-semibold text-muted small border-bottom pb-1">비밀번호</div></div>
               <div class="col-md-6"><label class="form-label small mb-1">비밀번호 <span class="text-danger" id="um-pw-req">*</span></label><input type="password" id="um-password" class="form-control form-control-sm" placeholder="수정 시 미입력이면 유지"></div>
               <div class="col-md-6"><label class="form-label small mb-1">비밀번호 확인</label><input type="password" id="um-password2" class="form-control form-control-sm"></div>
@@ -833,7 +835,7 @@ function renderUserTable() {
   if(act==='true')  list=list.filter(u=>u.is_active);
   if(act==='false') list=list.filter(u=>!u.is_active);
   const tbody=document.getElementById('user-tbody');
-  if(!list.length){ tbody.innerHTML='<tr><td colspan="9" class="text-center py-4 text-muted">결과 없음</td></tr>'; renderPager(0,0); return; }
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="11" class="text-center py-4 text-muted">결과 없음</td></tr>'; renderPager(0,0); return; }
   // 페이지네이션
   const totalPages = Math.ceil(list.length / U_PER_PAGE);
   if(_uPage > totalPages) _uPage = totalPages;
@@ -846,6 +848,8 @@ function renderUserTable() {
       <td class="small text-muted">${escH(u.username)}</td>
       <td>${ROLE_BADGE_MAP[u.role]||`<span class="badge bg-secondary">${u.role}</span>`}</td>
       <td class="small">${escH(u.phone||'—')}</td>
+      <td class="small">${escH(u.affiliation||'—')}</td>
+      <td class="small">${escH(u.tech_grade||'—')}</td>
       <td class="small">${escH(u.support_center_name||'—')}</td>
       <td class="small">${u.service_expiry||'—'}</td>
       <td class="text-center"><span class="badge ${u.is_active?'bg-success':'bg-secondary'}">${u.is_active?'활성':'비활성'}</span></td>
@@ -879,7 +883,7 @@ async function openUserModal(userId=null) {
   document.getElementById('um-req').style.display=isEdit?'none':'';
   document.getElementById('um-pw-req').style.display=isEdit?'none':'';
   document.getElementById('um-username').disabled=isEdit;
-  ['username','name','phone','email','address','lat','lng','password','password2'].forEach(f=>{
+  ['username','name','phone','email','address','lat','lng','password','password2','affiliation','tech-grade'].forEach(f=>{
     const el=document.getElementById('um-'+f); if(el) el.value='';
   });
   document.getElementById('um-role').value='worker';
@@ -892,6 +896,8 @@ async function openUserModal(userId=null) {
       ['username','name','phone','email'].forEach(f=>{ const el=document.getElementById('um-'+f); if(el) el.value=u[f]||''; });
       document.getElementById('um-role').value=u.role||'worker';
       document.getElementById('um-center').value=u.support_center||'';
+      document.getElementById('um-affiliation').value=u.affiliation||'';
+      document.getElementById('um-tech-grade').value=u.tech_grade||'';
       document.getElementById('um-address').value=u.home_address||'';
       document.getElementById('um-lat').value=u.home_lat||'';
       document.getElementById('um-lng').value=u.home_lng||'';
@@ -912,6 +918,8 @@ async function saveUser() {
     email:document.getElementById('um-email').value,
     role:document.getElementById('um-role').value,
     support_center:document.getElementById('um-center').value||null,
+    affiliation:document.getElementById('um-affiliation').value,
+    tech_grade:document.getElementById('um-tech-grade').value,
     home_address:document.getElementById('um-address').value,
     home_lat:document.getElementById('um-lat').value||null,
     home_lng:document.getElementById('um-lng').value||null,
