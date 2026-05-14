@@ -177,7 +177,7 @@ def nas_folders(request):
             return JsonResponse({'error': '잘못된 요청'}, status=400)
         folder_id = body.get('id')
         access_level = body.get('access_level')
-        if not folder_id or access_level not in ('public', 'admin', 'superadmin'):
+        if not folder_id or access_level not in ('public', 'resident_central', 'admin', 'superadmin'):
             return JsonResponse({'error': '잘못된 값'}, status=400)
         updated = Folder.objects.filter(id=folder_id).update(access_level=access_level)
         return JsonResponse({'updated': updated})
