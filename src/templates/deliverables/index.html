@@ -110,30 +110,6 @@
 </div>
 
 
-<!-- ─── 미리보기 오프캔버스 ─── -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="previewCanvas" style="width:min(680px,95vw);">
-  <div class="offcanvas-header py-2 border-bottom">
-    <h6 class="offcanvas-title fw-semibold text-truncate" id="preview-title">파일명</h6>
-    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-  </div>
-  <div class="offcanvas-body p-0 d-flex flex-column">
-    <div id="preview-content" class="flex-fill p-3 text-center">
-      <div class="text-muted py-5">미리보기 불가</div>
-    </div>
-    <div class="border-top p-2 d-flex gap-2 justify-content-between align-items-center flex-wrap">
-      <div id="preview-meta" class="small text-muted"></div>
-      <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-outline-danger" id="btn-delete-file">
-          <i class="bi bi-trash"></i>
-        </button>
-        <button class="btn btn-sm btn-primary" id="btn-download-file">
-          <i class="bi bi-download me-1"></i>다운로드
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
 
 <!-- ─── Modal: 파일 업로드 ─── -->
 <div class="modal fade" id="uploadModal" tabindex="-1">
@@ -230,7 +206,6 @@ let selectedSchoolName = '';
 let selectedTab        = '';
 let currentView        = 'grid';
 let filePage_          = 1, fileTotalPages = 1;
-let previewFileId      = null;
 
 let treeData     = [];
 let activeCenter = null;
@@ -490,63 +465,12 @@ function setView(v) {
   loadFiles();
 }
 
-// ─────────────────────────────────────────
-// 미리보기 오프캔버스
-// ─────────────────────────────────────────
 function handleFileClick(id, name, mime) {
-  // PDF/이미지 → 미리보기, 그 외 → 바로 다운로드
   if (mime === 'application/pdf' || mime?.startsWith('image/')) {
-    previewFile(id, name, mime);
+    window.open(`${NAS_API}/files/${id}/preview/`, '_blank');
   } else {
     window.location.href = `${NAS_API}/files/${id}/download/`;
   }
-}
-
-async function previewFile(id, name, mime) {
-  previewFileId = id;
-  document.getElementById('preview-title').textContent = name;
-  const content = document.getElementById('preview-content');
-
-  if (mime.startsWith('image/')) {
-    content.innerHTML = `<img src="${NAS_API}/files/${id}/preview/"
-      style="max-width:100%;max-height:calc(100vh - 200px);object-fit:contain;"
-      onerror="this.outerHTML='<div class=text-muted>이미지 로드 실패</div>'">`;
-  } else if (mime === 'application/pdf') {
-    content.innerHTML = `<iframe src="${NAS_API}/files/${id}/preview/"
-      style="width:100%;height:calc(100vh - 160px);border:none;"></iframe>`;
-  } else {
-    content.innerHTML = `<div class="text-center py-5 text-muted">
-      <i class="bi ${FILE_ICON(mime)} display-4 d-block mb-3"></i>
-      <div class="fw-semibold mb-1">${name}</div>
-      <small>미리보기를 지원하지 않는 파일 형식입니다.<br>다운로드 후 확인하세요.</small>
-    </div>`;
-  }
-
-  try {
-    const f = await apiGet(`${NAS_API}/files/${id}/`);
-    document.getElementById('preview-meta').innerHTML =
-      `${fmtSize(f.file_size)} · ${f.category||'-'} · ${formatDate(f.uploaded_at)}`;
-  } catch(e) {}
-
-  document.getElementById('btn-download-file').onclick = () => {
-    window.location.href = `${NAS_API}/files/${id}/download/`;
-  };
-  document.getElementById('btn-delete-file').onclick = () => deleteFile(id);
-
-  bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('previewCanvas')).show();
-}
-
-async function deleteFile(id) {
-  if (!confirm('파일을 삭제하시겠습니까?')) return;
-  try {
-    await fetch(`${NAS_API}/files/${id}/`, {
-      method: 'DELETE',
-      headers: { 'X-CSRFToken': getCsrfToken() }
-    });
-    bootstrap.Offcanvas.getInstance(document.getElementById('previewCanvas'))?.hide();
-    showToast('삭제 완료', 'success');
-    loadFiles();
-  } catch(e) { showToast('삭제 실패', 'danger'); }
 }
 
 // ─────────────────────────────────────────
