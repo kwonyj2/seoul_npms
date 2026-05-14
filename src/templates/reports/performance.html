@@ -75,11 +75,11 @@
           <option value="{{ w }}">{{ w }}주차</option>
           {% endfor %}
         </select>
-        <select id="sel-quarter" class="form-select form-select-sm d-none" style="width:80px;">
+        <select id="sel-quarter" class="form-select form-select-sm" style="width:80px; display:none;">
           <option value="1">1분기</option><option value="2">2분기</option>
           <option value="3">3분기</option><option value="4">4분기</option>
         </select>
-        <select id="sel-half" class="form-select form-select-sm d-none" style="width:80px;">
+        <select id="sel-half" class="form-select form-select-sm" style="width:80px; display:none;">
           <option value="1">상반기</option><option value="2">하반기</option>
         </select>
         <button class="btn btn-sm btn-primary" onclick="loadReport()">
