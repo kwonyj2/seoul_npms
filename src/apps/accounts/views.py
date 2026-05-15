@@ -448,12 +448,23 @@ class UserViewSet(viewsets.ModelViewSet):
                         Q(name=center_name) | Q(name__icontains=center_name)
                     ).first()
 
-                # 역할: 코드값이면 그대로, 표시명이면 변환
+                # 역할: 권한 컬럼(코드값) 우선, 없으면 역할 컬럼(표시명) 사용
+                role_code_val = col(row, '권한')
                 role_val = col(row, '역할')
-                if role_val in role_codes:
+                if role_code_val and role_code_val in role_codes:
+                    role = role_code_val
+                elif role_val in role_codes:
                     role = role_val
                 else:
-                    role = role_rev.get(role_val, 'worker')
+                    # 표시명 매칭 (부분 일치 허용: "상주자(중앙)" → "상주(중앙)")
+                    role = role_rev.get(role_val, '')
+                    if not role:
+                        for display, code in role_rev.items():
+                            if display in role_val or role_val in display:
+                                role = code
+                                break
+                        else:
+                            role = 'worker'
 
                 # 활성여부: 불리언 또는 문자열 모두 처리
                 active_raw = col_raw(row, '활성여부')
@@ -551,8 +562,22 @@ class UserViewSet(viewsets.ModelViewSet):
                     center = SupportCenter.objects.filter(
                         Q(name=center_name) | Q(name__icontains=center_name)
                     ).first()
+                # 역할: 권한 컬럼(코드값) 우선, 없으면 역할 컬럼(표시명) 사용
+                role_code_val = (row.get('권한') or '').strip()
                 role_val = (row.get('역할') or '').strip()
-                role = role_val if role_val in role_codes else role_rev.get(role_val, 'worker')
+                if role_code_val and role_code_val in role_codes:
+                    role = role_code_val
+                elif role_val in role_codes:
+                    role = role_val
+                else:
+                    role = role_rev.get(role_val, '')
+                    if not role:
+                        for display, code in role_rev.items():
+                            if display in role_val or role_val in display:
+                                role = code
+                                break
+                        else:
+                            role = 'worker'
                 is_active = (row.get('활성여부') or '활성').strip() != '비활성'
                 defaults = {
                     'name': (row.get('이름') or '').strip(),
@@ -567,8 +592,8 @@ class UserViewSet(viewsets.ModelViewSet):
                 }
                 user, is_new = User.objects.get_or_create(username=username, defaults=defaults)
                 if is_new:
-                    pwd = (row.get('비밀번호') or '').strip()
-                    user.set_password(pwd if pwd else User.objects.make_random_password())
+                    pwd = (row.get('비밀번호(신규등록용)') or row.get('비밀번호') or '').strip()
+                    user.set_password(pwd if pwd else 'Change1234!')
                     user.save()
                     created += 1
                 else:
