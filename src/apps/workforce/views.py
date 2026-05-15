@@ -738,7 +738,7 @@ def _find_photo_url(worker):
     """NAS 인력관리/증명사진 폴더에서 증명사진_{이름}.확장자 자동 검색"""
     import os
     from django.conf import settings
-    photo_dir = os.path.join(settings.MEDIA_ROOT, 'data', '인력관리', '증명사진')
+    photo_dir = os.path.join(settings.MEDIA_ROOT, '인력관리', '증명사진')
     if not os.path.isdir(photo_dir):
         return worker.profile_image.url if worker.profile_image else ''
     name = worker.name
@@ -746,7 +746,7 @@ def _find_photo_url(worker):
         name_part = os.path.splitext(fname)[0]
         ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
         if name in name_part and ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
-            return f"{settings.MEDIA_URL}data/인력관리/증명사진/{fname}"
+            return f"{settings.MEDIA_URL}인력관리/증명사진/{fname}"
     return worker.profile_image.url if worker.profile_image else ''
 
 
@@ -815,7 +815,7 @@ def worker_photo_api(request, worker_id):
     except User.DoesNotExist:
         return JsonResponse({'error': '인력을 찾을 수 없습니다.'}, status=404)
 
-    photo_dir = os.path.join(settings.MEDIA_ROOT, 'data', '인력관리', '증명사진')
+    photo_dir = os.path.join(settings.MEDIA_ROOT, '인력관리', '증명사진')
 
     if request.method == 'POST':
         photo = request.FILES.get('photo')
@@ -885,8 +885,8 @@ def worker_docs_api(request, worker_id):
     except User.DoesNotExist:
         return JsonResponse({'error': '인력을 찾을 수 없습니다.'}, status=404)
 
-    nas_root = os.path.join(settings.MEDIA_ROOT, 'data', '인력관리')
-    nas_url  = f"{settings.MEDIA_URL}data/인력관리/"
+    nas_root = os.path.join(settings.MEDIA_ROOT, '인력관리')
+    nas_url  = f"{settings.MEDIA_URL}인력관리/"
 
     if request.method == 'GET':
         name = worker.name
