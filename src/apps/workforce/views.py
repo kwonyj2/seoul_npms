@@ -641,7 +641,7 @@ def worker_only_tree(request):
         is_active=True,
     ).select_related('support_center')
 
-    for w in sorted(workers, key=lambda x: (ROLE_SORT.get(x.role, 9), x.name)):
+    for w in sorted(workers, key=lambda x: x.id):
         has_img = bool(w.profile_image)
         wdata = {
             'id':         w.id,
