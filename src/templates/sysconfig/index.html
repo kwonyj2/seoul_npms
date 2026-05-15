@@ -81,22 +81,22 @@
 
   <!-- 탭 네비게이션 -->
   <ul class="nav nav-tabs mb-3" id="sys-tabs">
-    <li class="nav-item"><a class="nav-link active" href="#" onclick="switchTab('db',this);return false;"><i class="bi bi-database me-1"></i>주요 DB 관리</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('users',this);return false;"><i class="bi bi-people me-1"></i>사용자 관리</a></li>
+    {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link active" href="#" onclick="switchTab('db',this);return false;"><i class="bi bi-database me-1"></i>주요 DB 관리</a></li>{% endif %}
+    <li class="nav-item"><a class="nav-link {% if request.user.role != 'superadmin' %}active{% endif %}" href="#" onclick="switchTab('users',this);return false;"><i class="bi bi-people me-1"></i>사용자 관리</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('roles',this);return false;"><i class="bi bi-shield-lock me-1"></i>역할별 모듈 권한</a></li>
     {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('export',this);return false;"><i class="bi bi-box-arrow-up me-1"></i>데이터 내보내기</a></li>{% endif %}
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('nas',this);return false;"><i class="bi bi-folder me-1"></i>NAS 권한 설정</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('celery',this);return false;"><i class="bi bi-gear-wide-connected me-1"></i>작업 모니터링</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('docs',this);return false;"><i class="bi bi-file-earmark-ruled me-1"></i>산출물 조회</a></li>
+    {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('docs',this);return false;"><i class="bi bi-file-earmark-ruled me-1"></i>산출물 조회</a></li>{% endif %}
     {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('dbadmin',this);return false;"><i class="bi bi-database-gear me-1"></i>DB 관리</a></li>{% endif %}
-    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('info',this);return false;"><i class="bi bi-info-circle me-1"></i>시스템 정보</a></li>
+    {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('info',this);return false;"><i class="bi bi-info-circle me-1"></i>시스템 정보</a></li>{% endif %}
   </ul>
 
 
   <!-- ══════════════════════════════════════════
        탭1: 주요 DB 관리
   ══════════════════════════════════════════ -->
-  <div id="tab-db" class="sys-tab-content active">
+  <div id="tab-db" class="sys-tab-content {% if request.user.role == 'superadmin' %}active{% endif %}">
     <div class="alert alert-info d-flex align-items-start py-2 mb-3 small">
       <i class="bi bi-info-circle-fill me-2 mt-1 flex-shrink-0"></i>
       CSV 파일은 <strong class="mx-1">UTF-8 (BOM 포함)</strong> 으로 저장 후 업로드하세요. 헤더 행이 반드시 포함되어야 하며,
@@ -125,7 +125,7 @@
   <!-- ══════════════════════════════════════════
        탭2: 사용자·권한 관리
   ══════════════════════════════════════════ -->
-  <div id="tab-users" class="sys-tab-content">
+  <div id="tab-users" class="sys-tab-content {% if request.user.role != 'superadmin' %}active{% endif %}">
     <!-- 요약 카드 -->
     <div class="row g-2 mb-3">
       <div class="col-6 col-md-3"><div class="sum-card bg-primary bg-opacity-10"><div class="num text-primary" id="cnt-total">—</div><div class="lbl">전체</div></div></div>
@@ -1696,5 +1696,9 @@ function loadSysInfo(){
   }).catch(()=>{ document.getElementById('si-cards').innerHTML='<div class="col-12 text-center text-danger py-3">로드 실패</div>'; });
 }
 window.addEventListener('resize', () => { if(window._uLoaded) adjustMatrixRows(); });
+{% if request.user.role != 'superadmin' %}
+// 비-superadmin: 사용자 관리 탭이 기본이므로 즉시 로드
+if (!window._uLoaded) { loadUsers(); window._uLoaded = true; }
+{% endif %}
 </script>
 {% endblock %}
