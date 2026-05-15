@@ -179,7 +179,15 @@ def nas_folders(request):
         access_level = body.get('access_level')
         if not folder_id or access_level not in ('public', 'resident_central', 'admin', 'superadmin'):
             return JsonResponse({'error': '잘못된 값'}, status=400)
-        updated = Folder.objects.filter(id=folder_id).update(access_level=access_level)
+        # 해당 폴더 + 모든 하위 폴더에 접근 수준 전파
+        from django.db.models import Q
+        folder = Folder.objects.filter(id=folder_id).first()
+        if not folder:
+            return JsonResponse({'error': '폴더 없음'}, status=404)
+        # 자신 포함 하위 전체 (full_path 기반)
+        updated = Folder.objects.filter(
+            Q(id=folder_id) | Q(full_path__startswith=folder.full_path + '/')
+        ).update(access_level=access_level)
         return JsonResponse({'updated': updated})
 
     return JsonResponse({'error': '허용되지 않는 메서드'}, status=405)
