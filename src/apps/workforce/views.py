@@ -685,7 +685,7 @@ def worker_profile_api(request, worker_id):
 
     try:
         worker = User.objects.select_related('support_center', 'worker_profile').get(
-            pk=worker_id, role='worker'
+            pk=worker_id, role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu']
         )
     except User.DoesNotExist:
         return JsonResponse({'error': '인력을 찾을 수 없습니다.'}, status=404)
@@ -745,7 +745,7 @@ def _worker_name_stem(worker):
     center_name = worker.support_center.name if worker.support_center else '미배정'
     peers = list(
         User.objects.filter(
-            role='worker',
+            role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'],
             support_center=worker.support_center,
             name=worker.name,
         ).prefetch_related('worker_profile')
@@ -793,7 +793,9 @@ def worker_photo_api(request, worker_id):
     from apps.accounts.models import User
 
     try:
-        worker = User.objects.select_related('support_center').get(pk=worker_id, role='worker')
+        worker = User.objects.select_related('support_center').get(
+            pk=worker_id, role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu']
+        )
     except User.DoesNotExist:
         return JsonResponse({'error': '인력을 찾을 수 없습니다.'}, status=404)
 
@@ -860,7 +862,9 @@ def worker_docs_api(request, worker_id):
     from apps.accounts.models import User
 
     try:
-        worker = User.objects.select_related('support_center').get(pk=worker_id, role='worker')
+        worker = User.objects.select_related('support_center').get(
+            pk=worker_id, role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu']
+        )
     except User.DoesNotExist:
         return JsonResponse({'error': '인력을 찾을 수 없습니다.'}, status=404)
 
