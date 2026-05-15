@@ -25,6 +25,18 @@ def _admin_required(view_func):
     return _wrapped
 
 
+def _superadmin_required(view_func):
+    from functools import wraps
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({'error': '로그인 필요'}, status=401)
+        if request.user.role != 'superadmin':
+            return JsonResponse({'error': '권한 없음 (슈퍼관리자 전용)'}, status=403)
+        return view_func(request, *args, **kwargs)
+    return _wrapped
+
+
 # ══════════════════════════════════════════════════════
 # 서류 유형 레지스트리 (자동 탐지 + 수동 등록 혼합)
 # ══════════════════════════════════════════════════════
@@ -745,7 +757,7 @@ def doc_data(request, doc_id):
 
 
 @login_required
-@_admin_required
+@_superadmin_required
 def doc_export(request, doc_id):
     """서류 데이터 Excel 다운로드 — 파일명은 서류명.xlsx"""
     import openpyxl

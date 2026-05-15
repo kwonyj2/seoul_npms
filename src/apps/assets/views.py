@@ -264,7 +264,7 @@ class AssetViewSet(NoPaginateMixin, viewsets.ModelViewSet):
         })
 
     # ── CSV 다운로드 (장비 목록) ─────────────
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdmin])
     def csv_download(self, request):
         response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
         response['Content-Disposition'] = 'attachment; filename="asset_list.csv"'

@@ -10,6 +10,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from core.permissions.roles import IsAdmin, IsSuperAdmin, superadmin_required, admin_required
 from django.utils import timezone
 import os
 
@@ -347,7 +348,7 @@ class ArtifactViewSet(viewsets.ModelViewSet):
         artifact.save()
         return Response(ArtifactSerializer(artifact).data)
 
-    @action(detail=True, methods=['post'], url_path='upload')
+    @action(detail=True, methods=['post'], url_path='upload', permission_classes=[IsAdmin])
     def upload_file(self, request, pk=None):
         """산출물 파일 업로드"""
         artifact = self.get_object()
@@ -545,7 +546,7 @@ class ArtifactFileViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(uploaded_by=self.request.user)
 
-    @action(detail=False, methods=['post'], url_path='upload')
+    @action(detail=False, methods=['post'], url_path='upload', permission_classes=[IsAdmin])
     def upload(self, request):
         """파일 업로드 — multipart: file, template(id), project(id), occurrence_date, location_note"""
         f          = request.FILES.get('file')
@@ -617,6 +618,7 @@ from openpyxl.utils import get_column_letter
 
 
 @login_required
+@superadmin_required
 def export_rtm_excel(request):
     """요구사항 추적 매트릭스(RTM) Excel 내보내기"""
     project_id = request.GET.get('project')
@@ -811,6 +813,7 @@ def export_rtm_excel(request):
 
 
 @login_required
+@superadmin_required
 def export_audit_data(request, data_type):
     """감리 데이터 Excel 내보내기 (산출물/체크리스트/시정조치)"""
     import openpyxl, urllib.parse
@@ -890,6 +893,7 @@ def export_audit_data(request, data_type):
 
 
 @login_required
+@admin_required
 def import_audit_data(request, data_type):
     """감리 데이터 Excel 업로드 — 요구사항/체크리스트 일괄 수정"""
     import openpyxl

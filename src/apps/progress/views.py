@@ -14,6 +14,7 @@ from .serializers import (
     HolidaySerializer, WorkerAreaSerializer, InspectionUploadLogSerializer,
 )
 from core.pagination import StandardPagination
+from core.permissions.roles import IsAdmin, IsSuperAdmin
 
 
 @login_required
@@ -205,7 +206,7 @@ class InspectionPlanViewSet(viewsets.ModelViewSet):
         result = reset_assignments(plan.id)
         return Response(result)
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=['get'], permission_classes=[IsSuperAdmin])
     def csv_download(self, request, pk=None):
         """현재 필터 조건으로 CSV 다운로드"""
         import urllib.parse
@@ -268,7 +269,7 @@ class InspectionPlanViewSet(viewsets.ModelViewSet):
         resp['Content-Disposition'] = f'attachment; filename="inspection_template_{plan_type}.xlsx"'
         return resp
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
     def upload_schools(self, request, pk=None):
         """Excel/CSV 업로드 → 학교 매칭 미리보기 (DB 변경 없음)"""
         plan = self.get_object()
@@ -281,7 +282,7 @@ class InspectionPlanViewSet(viewsets.ModelViewSet):
         result['plan_id'] = plan.id
         return Response(result)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
     def confirm_upload(self, request, pk=None):
         """업로드 미리보기 확인 → DB 저장"""
         plan = self.get_object()

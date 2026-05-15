@@ -84,7 +84,7 @@
     <li class="nav-item"><a class="nav-link active" href="#" onclick="switchTab('db',this);return false;"><i class="bi bi-database me-1"></i>주요 DB 관리</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('users',this);return false;"><i class="bi bi-people me-1"></i>사용자 관리</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('roles',this);return false;"><i class="bi bi-shield-lock me-1"></i>역할별 모듈 권한</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('export',this);return false;"><i class="bi bi-box-arrow-up me-1"></i>데이터 내보내기</a></li>
+    {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('export',this);return false;"><i class="bi bi-box-arrow-up me-1"></i>데이터 내보내기</a></li>{% endif %}
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('nas',this);return false;"><i class="bi bi-folder me-1"></i>NAS 권한 설정</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('celery',this);return false;"><i class="bi bi-gear-wide-connected me-1"></i>작업 모니터링</a></li>
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('docs',this);return false;"><i class="bi bi-file-earmark-ruled me-1"></i>산출물 조회</a></li>
@@ -160,7 +160,7 @@
                 <option value="">전체</option><option value="true">활성</option><option value="false">비활성</option>
               </select>
               <div class="ms-auto d-flex gap-2">
-                <button class="btn btn-sm btn-outline-success" onclick="excelDownloadUsers()"><i class="bi bi-file-earmark-excel me-1"></i>다운로드</button>
+                {% if request.user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success" onclick="excelDownloadUsers()"><i class="bi bi-file-earmark-excel me-1"></i>다운로드</button>{% endif %}
                 <button class="btn btn-sm btn-outline-warning" onclick="document.getElementById('u-excel-input').click()"><i class="bi bi-upload me-1"></i>일괄등록</button>
                 <input type="file" id="u-excel-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="bulkImportUsers(this)">
                 <button class="btn btn-sm btn-primary" onclick="openUserModal()"><i class="bi bi-person-plus me-1"></i>인력 등록</button>
@@ -1371,7 +1371,7 @@ function loadDocData() {
             <span class="input-group-text"><i class="bi bi-search"></i></span>
             <input type="text" id="doc-q-input" class="form-control" placeholder="검색" value="${escH(q)}" onkeydown="if(event.key==='Enter'){_docPage=1;loadDocData();}">
           </div>
-          <button class="btn btn-sm btn-outline-success" onclick="docExport()"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+          ${USER_ROLE==='superadmin'?'<button class="btn btn-sm btn-outline-success" onclick="docExport()"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>':''}
           <button class="btn btn-sm btn-outline-secondary" onclick="loadDocData()"><i class="bi bi-arrow-clockwise"></i></button>
         </div>
       </div>
@@ -1489,7 +1489,7 @@ function daLoadData() {
           <option value="pk" ${sort==='pk'?'selected':''}>오래된순</option>
         </select>
         <button class="btn btn-sm btn-success" onclick="daOpenEdit(null)"><i class="bi bi-plus me-1"></i>신규</button>
-        <button class="btn btn-sm btn-outline-success" onclick="daExport()"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+        ${USER_ROLE==='superadmin'?'<button class="btn btn-sm btn-outline-success" onclick="daExport()"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>':''}
         <button class="btn btn-sm btn-outline-secondary" onclick="daLoadData()"><i class="bi bi-arrow-clockwise"></i></button>
       </div>
     </div>`;

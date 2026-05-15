@@ -145,9 +145,9 @@
         <button class="btn btn-sm btn-outline-light" onclick="window.print()">
           <i class="bi bi-printer"></i>
         </button>
-        <button class="btn btn-sm btn-outline-light" id="btn-stat-excel" onclick="exportStatExcel()" disabled title="Excel 내보내기">
+        {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-light" id="btn-stat-excel" onclick="exportStatExcel()" disabled title="Excel 내보내기">
           <i class="bi bi-file-earmark-excel"></i>
-        </button>
+        </button>{% endif %}
       </div>
     </div>
   </div>

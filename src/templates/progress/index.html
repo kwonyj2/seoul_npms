@@ -67,7 +67,7 @@
           <button class="btn btn-xs btn-outline-success" onclick="activatePlan()" title="활성화"><i class="bi bi-play-circle"></i> 활성화</button>
           <button class="btn btn-xs btn-outline-primary" onclick="openAutoAssignModal()" title="자동배정"><i class="bi bi-calendar2-check"></i> 자동배정</button>
           <button class="btn btn-xs btn-outline-warning" onclick="openReplaceWorkerModal()" title="기사교체"><i class="bi bi-arrow-left-right"></i> 기사교체</button>
-          <button class="btn btn-xs btn-outline-info" onclick="openUploadModal()" title="업로드"><i class="bi bi-upload"></i> 업로드</button>
+          {% if user.role == 'superadmin' or user.role == 'admin' %}<button class="btn btn-xs btn-outline-info" onclick="openUploadModal()" title="업로드"><i class="bi bi-upload"></i> 업로드</button>{% endif %}
           <button class="btn btn-xs btn-outline-secondary" onclick="closeDetail()"><i class="bi bi-x-lg"></i></button>
         </div>
       </div>
@@ -119,7 +119,7 @@
             </select>
             <button class="btn btn-sm btn-primary py-1" onclick="siPage=1;loadTab('school')"><i class="bi bi-search"></i></button>
             <button class="btn btn-sm btn-outline-secondary py-1" onclick="openAddSchoolModal()" title="학교 추가"><i class="bi bi-plus"></i> 추가</button>
-            <button class="btn btn-sm btn-outline-success py-1 ms-auto" onclick="csvDownload('school')" title="CSV 다운로드"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
+            {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success py-1 ms-auto" onclick="csvDownload('school')" title="CSV 다운로드"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>{% endif %}
           </div>
           <div id="school-table-wrap"></div>
           <div id="school-pagination" class="border-top px-3 py-2 d-flex justify-content-between align-items-center"></div>
@@ -131,7 +131,7 @@
             <input type="date" id="df-date" class="form-control form-control-sm" style="width:150px;" placeholder="예정일">
             <button class="btn btn-sm btn-primary py-1" onclick="datePage=1;loadTab('date')"><i class="bi bi-search"></i> 검색</button>
             <button class="btn btn-sm btn-outline-secondary py-1" onclick="document.getElementById('df-date').value='';datePage=1;loadTab('date')">전체</button>
-            <button class="btn btn-sm btn-outline-success py-1 ms-auto" onclick="csvDownload('date')"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
+            {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success py-1 ms-auto" onclick="csvDownload('date')"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>{% endif %}
           </div>
           <div id="date-table-wrap"></div>
           <div id="date-pagination" class="border-top px-3 py-2 d-flex justify-content-between align-items-center"></div>
@@ -144,7 +144,7 @@
               <option value="">전체 기사</option>
             </select>
             <button class="btn btn-sm btn-primary py-1" onclick="workerPage=1;loadTab('worker')"><i class="bi bi-search"></i> 검색</button>
-            <button class="btn btn-sm btn-outline-success py-1 ms-auto" onclick="csvDownload('worker')"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
+            {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success py-1 ms-auto" onclick="csvDownload('worker')"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>{% endif %}
           </div>
           <div id="worker-table-wrap"></div>
           <div id="worker-pagination" class="border-top px-3 py-2 d-flex justify-content-between align-items-center"></div>
@@ -154,7 +154,7 @@
         <div id="tab-completed" style="display:none;">
           <div class="p-2 d-flex gap-2 border-bottom bg-light flex-wrap">
             <span class="small text-muted align-self-center">완료된 학교 목록</span>
-            <button class="btn btn-sm btn-outline-success py-1 ms-auto" onclick="csvDownload('completed')"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
+            {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success py-1 ms-auto" onclick="csvDownload('completed')"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>{% endif %}
           </div>
           <div id="completed-table-wrap"></div>
           <div id="completed-pagination" class="border-top px-3 py-2 d-flex justify-content-between align-items-center"></div>
@@ -164,7 +164,7 @@
         <div id="tab-incomplete" style="display:none;">
           <div class="p-2 d-flex gap-2 border-bottom bg-light flex-wrap">
             <span class="small text-muted align-self-center">미완료(미정+예정) 학교 목록</span>
-            <button class="btn btn-sm btn-outline-warning py-1 ms-auto" onclick="csvDownload('incomplete')"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>
+            {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-warning py-1 ms-auto" onclick="csvDownload('incomplete')"><i class="bi bi-file-earmark-spreadsheet"></i> CSV</button>{% endif %}
           </div>
           <div id="incomplete-table-wrap"></div>
           <div id="incomplete-pagination" class="border-top px-3 py-2 d-flex justify-content-between align-items-center"></div>

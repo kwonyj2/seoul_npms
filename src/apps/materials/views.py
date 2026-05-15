@@ -529,7 +529,7 @@ class MaterialOutboundViewSet(NoPaginateMixin, viewsets.ModelViewSet):
             writer.writerow(['', '', '', c.name, '', '', ''])
         return response
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
     def bulk_import(self, request):
         """출고 일괄 등록 CSV"""
         f = request.FILES.get('file')

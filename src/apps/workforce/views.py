@@ -9,6 +9,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
+from core.permissions.roles import IsSuperAdmin
 from .models import WorkScheduleType, WorkSchedule, AttendanceLog, AttendanceException, TaskAssignment
 from .serializers import WorkScheduleTypeSerializer, WorkScheduleSerializer, AttendanceLogSerializer
 
@@ -312,7 +313,7 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
             qs = qs.filter(status=att_status)
         return qs
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdmin])
     def csv_download(self, request):
         response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
         response['Content-Disposition'] = 'attachment; filename="attendance.csv"'

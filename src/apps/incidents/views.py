@@ -21,7 +21,7 @@ from .serializers import (
     IncidentCommentSerializer, IncidentPhotoSerializer, SLARuleSerializer
 )
 from .services import ai_assign_worker, create_assignment, get_available_workers, get_best_worker
-from core.permissions.roles import IsAdmin, IsWorker
+from core.permissions.roles import IsAdmin, IsSuperAdmin, IsWorker
 
 
 # ─────────────────────────────────────────
@@ -1169,7 +1169,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
         return response
 
     # ── CSV 다운로드 ──────────────────────
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdmin])
     def csv_download(self, request):
         response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
         response['Content-Disposition'] = 'attachment; filename="incidents.csv"'
@@ -1192,7 +1192,7 @@ class IncidentViewSet(viewsets.ModelViewSet):
         return response
 
     # ── Excel 다운로드 ─────────────────────
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdmin])
     def excel_download(self, request):
         """장애 목록 Excel 다운로드 (현재 필터 반영)"""
         try:
@@ -1325,11 +1325,9 @@ class IncidentViewSet(viewsets.ModelViewSet):
         return Response(WorkOrderSerializer(wo).data, status=status.HTTP_201_CREATED)
 
     # ── CSV 업로드 (기존 장애 일괄 등록) ──────
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[IsAdmin])
     def csv_upload(self, request):
         """기존 시스템 장애 데이터 CSV 일괄 업로드"""
-        if request.user.role not in ('superadmin', 'admin'):
-            return Response({'error': '권한이 없습니다.'}, status=status.HTTP_403_FORBIDDEN)
 
         file = request.FILES.get('file')
         if not file:

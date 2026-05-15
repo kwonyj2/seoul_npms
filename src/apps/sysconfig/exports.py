@@ -29,6 +29,18 @@ def _admin_required(view_func):
     return _wrapped
 
 
+def _superadmin_required(view_func):
+    from functools import wraps
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({'error': '로그인 필요'}, status=401)
+        if request.user.role != 'superadmin':
+            return JsonResponse({'error': '권한 없음 (슈퍼관리자 전용)'}, status=403)
+        return view_func(request, *args, **kwargs)
+    return _wrapped
+
+
 def _csv_response(filename):
     resp = HttpResponse(content_type='text/csv; charset=utf-8-sig')
     encoded = urllib.parse.quote(filename)
@@ -514,7 +526,7 @@ EXPORT_MAP = {
 
 
 @login_required
-@_admin_required
+@_superadmin_required
 def export_view(request, module):
     if module not in EXPORT_MAP:
         return JsonResponse({'error': f'알 수 없는 모듈: {module}'}, status=400)

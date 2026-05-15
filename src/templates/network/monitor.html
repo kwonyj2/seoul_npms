@@ -55,8 +55,8 @@
         <div class="col-auto d-flex gap-1">
           <button class="btn btn-sm btn-primary" onclick="nmsLoadSelected()"><i class="bi bi-search"></i></button>
           <button class="btn btn-sm btn-outline-secondary" onclick="nmsReset()"><i class="bi bi-x-lg"></i></button>
-          <button class="btn btn-sm btn-success d-none" id="nms-btn-excel" onclick="pmExcel()"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
-          <button class="btn btn-sm btn-danger d-none" id="nms-btn-pdf" onclick="nmsTabPdf()"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</button>
+          {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-success d-none" id="nms-btn-excel" onclick="pmExcel()"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+          <button class="btn btn-sm btn-danger d-none" id="nms-btn-pdf" onclick="nmsTabPdf()"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</button>{% endif %}
           <button class="btn btn-sm btn-success d-none" id="nms-btn-save" onclick="nmsTabSave()"><i class="bi bi-save me-1"></i>저장</button>
           <label class="btn btn-sm btn-outline-secondary d-none mb-0" id="nms-btn-plan"><i class="bi bi-upload me-1"></i>도면<input type="file" accept="image/*" onchange="apUploadPlan(this)" style="display:none;"></label>
           <span id="nms-school-badge" class="badge bg-info text-dark d-none align-self-center" style="font-size:.72rem;"></span>

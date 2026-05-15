@@ -23,6 +23,34 @@ class IsCustomer(BasePermission):
         return request.user.is_authenticated
 
 
+def superadmin_required(view_func):
+    """FBV용 superadmin 전용 데코레이터"""
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            from django.http import JsonResponse
+            return JsonResponse({'error': '로그인 필요'}, status=401)
+        if request.user.role != 'superadmin':
+            from django.http import JsonResponse
+            return JsonResponse({'error': '권한 없음'}, status=403)
+        return view_func(request, *args, **kwargs)
+    return _wrapped
+
+
+def admin_required(view_func):
+    """FBV용 admin 이상 데코레이터"""
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            from django.http import JsonResponse
+            return JsonResponse({'error': '로그인 필요'}, status=401)
+        if request.user.role not in ('superadmin', 'admin'):
+            from django.http import JsonResponse
+            return JsonResponse({'error': '권한 없음'}, status=403)
+        return view_func(request, *args, **kwargs)
+    return _wrapped
+
+
 def module_required(module_key):
     """모듈 접근 권한 데코레이터 — can_access() 기반"""
     def decorator(view_func):

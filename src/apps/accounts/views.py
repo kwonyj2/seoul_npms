@@ -314,7 +314,7 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response({'message': '비밀번호가 변경되었습니다.'})
 
-    @action(detail=False, methods=['get'], permission_classes=[IsAdmin])
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdmin])
     def excel_download(self, request):
         """인력 정보 엑셀 다운로드"""
         import openpyxl

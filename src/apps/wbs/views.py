@@ -12,6 +12,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from core.permissions.roles import IsAdmin, IsSuperAdmin
 
 from .models import WBSItem
 from .serializers import WBSItemSerializer, WBSSummarySerializer
@@ -550,7 +551,7 @@ class WBSItemViewSet(viewsets.ModelViewSet):
             })
         return Response(data)
 
-    @action(detail=False, methods=['get'], url_path='export')
+    @action(detail=False, methods=['get'], url_path='export', permission_classes=[IsSuperAdmin])
     def export_excel(self, request):
         """WBS 전체 Excel 내보내기"""
         import openpyxl
@@ -616,7 +617,7 @@ class WBSItemViewSet(viewsets.ModelViewSet):
         resp['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
         return resp
 
-    @action(detail=False, methods=['post'], url_path='import')
+    @action(detail=False, methods=['post'], url_path='import', permission_classes=[IsAdmin])
     def import_excel(self, request):
         """WBS Excel 일괄 업로드 — 코드 기준 매칭(업데이트), 없으면 신규 생성"""
         import openpyxl

@@ -86,9 +86,9 @@
           <i class="bi bi-search me-1"></i>조회
         </button>
         <div class="ms-auto d-flex gap-2">
-          <button class="btn btn-sm btn-success" id="btn-export" onclick="exportExcel()" disabled>
+          {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-success" id="btn-export" onclick="exportExcel()" disabled>
             <i class="bi bi-file-earmark-excel me-1"></i>Excel
-          </button>
+          </button>{% endif %}
           <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">
             <i class="bi bi-printer me-1"></i>인쇄
           </button>

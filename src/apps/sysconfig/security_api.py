@@ -35,6 +35,18 @@ def _admin_required(view_func):
     return _wrapped
 
 
+def _superadmin_required(view_func):
+    from functools import wraps
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({'error': '로그인 필요'}, status=401)
+        if request.user.role != 'superadmin':
+            return JsonResponse({'error': '권한 없음 (슈퍼관리자 전용)'}, status=403)
+        return view_func(request, *args, **kwargs)
+    return _wrapped
+
+
 # ═══════════════════════════════════════════════════════
 # 패널1: 위협 현황 대시보드
 # ═══════════════════════════════════════════════════════
@@ -1008,7 +1020,7 @@ def sec_report(request):
 # Excel 다운로드 통합 API
 # ═══════════════════════════════════════════════════════
 
-@_admin_required
+@_superadmin_required
 def sec_export(request):
     """
     보안관제 리스트 Excel 다운로드

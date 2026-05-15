@@ -33,7 +33,7 @@ from .serializers import (
     NetworkPortSerializer, NetworkTopologySerializer,
     NetworkEventSerializer, SnmpMetricSerializer, NetworkCommandSerializer
 )
-from core.permissions.roles import IsAdmin
+from core.permissions.roles import IsAdmin, IsSuperAdmin
 from core.pagination import StandardPagination
 
 
@@ -249,7 +249,7 @@ class NetworkTopologyViewSet(viewsets.ReadOnlyModelViewSet):
             'created_links':   created_links,
         })
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdmin])
     def export_csv(self, request):
         """학교 장비 목록 CSV 다운로드"""
         import csv
@@ -1728,7 +1728,7 @@ body {{ font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 8pt
         response['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(filename)}"
         return response
 
-    @action(detail=False, methods=['get'], url_path='portmap_excel')
+    @action(detail=False, methods=['get'], url_path='portmap_excel', permission_classes=[IsSuperAdmin])
     def portmap_excel(self, request):
         """선번장 엑셀 다운로드"""
         import io

@@ -130,9 +130,9 @@
     <div class="card border-0 shadow-sm">
       <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
         <span class="fw-semibold"><i class="bi bi-table me-1"></i>자재 보유 현황 통계</span>
-        <button class="btn btn-sm btn-success text-white" onclick="downloadAllExcel()" title="모든 탭 데이터를 시트별로 다운로드">
+        {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-success text-white" onclick="downloadAllExcel()" title="모든 탭 데이터를 시트별로 다운로드">
           <i class="bi bi-file-earmark-excel me-1"></i>전체 Excel 다운로드
-        </button>
+        </button>{% endif %}
       </div>
       <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
         <input type="text" id="stats-search" class="form-control form-control-sm" style="max-width:200px;" placeholder="품목명/코드 검색..." oninput="filterStatsTable()">
@@ -153,15 +153,15 @@
       <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
         <span class="fw-semibold"><i class="bi bi-list-ul me-1"></i>자재 품목 목록</span>
         <div class="d-flex gap-2 flex-wrap">
-          <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('items')">
+          {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success" onclick="downloadExcel('items')">
             <i class="bi bi-file-earmark-excel me-1"></i>Excel
-          </button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="downloadCsvTemplate()">
+          </button>{% endif %}
+          {% if user.role == 'superadmin' or user.role == 'admin' %}<button class="btn btn-sm btn-outline-secondary" onclick="downloadCsvTemplate()">
             <i class="bi bi-download me-1"></i>CSV 양식
           </button>
           <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#bulkImportModal">
             <i class="bi bi-upload me-1"></i>일괄 등록
-          </button>
+          </button>{% endif %}
           <button class="btn btn-sm btn-primary" onclick="openItemModal(null)">
             <i class="bi bi-plus-lg me-1"></i>품목 등록
           </button>
@@ -206,9 +206,9 @@
       <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
         <span class="fw-semibold"><i class="bi bi-building me-1"></i>창고 재고 현황</span>
         <div class="d-flex gap-2">
-          <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('warehouse')">
+          {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success" onclick="downloadExcel('warehouse')">
             <i class="bi bi-file-earmark-excel me-1"></i>Excel
-          </button>
+          </button>{% endif %}
           <button class="btn btn-sm btn-primary" onclick="openInboundModal()">
             <i class="bi bi-plus-lg me-1"></i>입고 등록
           </button>
@@ -253,12 +253,12 @@
       <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
         <span class="fw-semibold"><i class="bi bi-box-arrow-in-down text-success me-1"></i>창고 입고 이력</span>
         <div class="d-flex gap-2 flex-wrap">
-          <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('inbound')">
+          {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success" onclick="downloadExcel('inbound')">
             <i class="bi bi-file-earmark-excel me-1"></i>Excel
-          </button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="downloadInboundTemplate()">
+          </button>{% endif %}
+          {% if user.role == 'superadmin' or user.role == 'admin' %}<button class="btn btn-sm btn-outline-secondary" onclick="downloadInboundTemplate()">
             <i class="bi bi-download me-1"></i>CSV 양식
-          </button>
+          </button>{% endif %}
           <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#bulkInboundModal">
             <i class="bi bi-upload me-1"></i>일괄 입고
           </button>
@@ -318,15 +318,15 @@
           <button class="btn btn-sm btn-outline-primary" id="btn-bulk-outbound-sign" onclick="openBulkOutboundSign()" style="display:none;">
             <i class="bi bi-pen me-1"></i>선택 서명 (<span id="bulk-outbound-sign-count">0</span>건)
           </button>
-          <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('outbound')">
+          {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success" onclick="downloadExcel('outbound')">
             <i class="bi bi-file-earmark-excel me-1"></i>Excel
-          </button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="downloadOutboundTemplate()">
+          </button>{% endif %}
+          {% if user.role == 'superadmin' or user.role == 'admin' %}<button class="btn btn-sm btn-outline-secondary" onclick="downloadOutboundTemplate()">
             <i class="bi bi-download me-1"></i>CSV 양식
           </button>
           <button class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#bulkOutboundModal">
             <i class="bi bi-upload me-1"></i>일괄 출고
-          </button>
+          </button>{% endif %}
           <button class="btn btn-sm btn-warning text-white" onclick="loadMaterials(); loadCenterSelect(); openOutboundModal()">
             <i class="bi bi-plus-lg me-1"></i>출고 등록
           </button>
@@ -382,9 +382,9 @@
           <i class="bi bi-diagram-3 me-1"></i>
           {% if user.role == 'resident' %}내 센터 재고{% else %}센터별 재고 현황{% endif %}
         </span>
-        <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('center')">
+        {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success" onclick="downloadExcel('center')">
           <i class="bi bi-file-earmark-excel me-1"></i>Excel
-        </button>
+        </button>{% endif %}
       </div>
       {% if user.role == 'superadmin' or user.role == 'admin' %}
       <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
@@ -429,9 +429,9 @@
     <div class="card border-0 shadow-sm">
       <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
         <span class="fw-semibold"><i class="bi bi-exclamation-triangle text-danger me-1"></i>재고 부족 품목</span>
-        <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('low')">
+        {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success" onclick="downloadExcel('low')">
           <i class="bi bi-file-earmark-excel me-1"></i>Excel
-        </button>
+        </button>{% endif %}
       </div>
       <div class="table-responsive">
         <table class="table table-sm table-hover mb-0">
@@ -462,9 +462,9 @@
     <div class="card border-0 shadow-sm">
       <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
         <span class="fw-semibold"><i class="bi bi-diagram-3 text-success me-1"></i>센터별 입고이력 (창고 → 센터)</span>
-        <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('admin-cinbound')">
+        {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success" onclick="downloadExcel('admin-cinbound')">
           <i class="bi bi-file-earmark-excel me-1"></i>Excel
-        </button>
+        </button>{% endif %}
       </div>
       <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
         <select id="acib-center-filter" class="form-select form-select-sm" style="max-width:180px;" onchange="_pg['admin-cinbound']=1;loadAdminCenterInbound()">
@@ -510,9 +510,9 @@
     <div class="card border-0 shadow-sm">
       <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
         <span class="fw-semibold"><i class="bi bi-arrow-return-left text-warning me-1"></i>센터별 반납 입고이력 (현장 → 센터)</span>
-        <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('admin-creturn')">
+        {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success" onclick="downloadExcel('admin-creturn')">
           <i class="bi bi-file-earmark-excel me-1"></i>Excel
-        </button>
+        </button>{% endif %}
       </div>
       <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
         <select id="acrt-center-filter" class="form-select form-select-sm" style="max-width:180px;" onchange="_pg['admin-creturn']=1;loadAdminCenterReturn()">
@@ -559,9 +559,9 @@
     <div class="card border-0 shadow-sm">
       <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2">
         <span class="fw-semibold"><i class="bi bi-diagram-3 text-danger me-1"></i>센터별 출고이력 (센터 → 현장)</span>
-        <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('admin-coutbound')">
+        {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success" onclick="downloadExcel('admin-coutbound')">
           <i class="bi bi-file-earmark-excel me-1"></i>Excel
-        </button>
+        </button>{% endif %}
       </div>
       <div class="px-3 pt-2 pb-1 d-flex gap-2 flex-wrap">
         <select id="acob-center-filter" class="form-select form-select-sm" style="max-width:180px;" onchange="_pg['admin-coutbound']=1;loadAdminCenterOutbound()">
@@ -609,9 +609,9 @@
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
         <span class="fw-semibold"><i class="bi bi-box-arrow-in-down text-success me-1"></i>창고 → {% if user.support_center %}{{ user.support_center.name }}{% else %}우리 센터{% endif %} 입고 이력</span>
-        <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('my-inbound')">
+        {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success" onclick="downloadExcel('my-inbound')">
           <i class="bi bi-file-earmark-excel me-1"></i>Excel
-        </button>
+        </button>{% endif %}
       </div>
       <div class="table-responsive">
         <table class="table table-sm table-hover mb-0">
@@ -642,9 +642,9 @@
       <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
         <span class="fw-semibold"><i class="bi bi-box-arrow-in-right text-warning me-1"></i>현장 반납 입고 이력</span>
         <div class="d-flex gap-2">
-          <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('center-return')">
+          {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success" onclick="downloadExcel('center-return')">
             <i class="bi bi-file-earmark-excel me-1"></i>Excel
-          </button>
+          </button>{% endif %}
           <button class="btn btn-sm btn-warning text-white" onclick="openCenterReturnModal(null)">
             <i class="bi bi-plus-lg me-1"></i>반납 입고 등록
           </button>
@@ -683,9 +683,9 @@
       <div class="card-header py-2 bg-white border-bottom d-flex align-items-center justify-content-between">
         <span class="fw-semibold"><i class="bi bi-box-arrow-right text-danger me-1"></i>센터 → 현장/기사 출고</span>
         <div class="d-flex gap-2">
-          <button class="btn btn-sm btn-outline-success" onclick="downloadExcel('center-out')">
+          {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-outline-success" onclick="downloadExcel('center-out')">
             <i class="bi bi-file-earmark-excel me-1"></i>Excel
-          </button>
+          </button>{% endif %}
           <button class="btn btn-sm btn-danger text-white"
             onclick="openCenterOutModal()">
             <i class="bi bi-plus-lg me-1"></i>출고 등록

@@ -15,7 +15,7 @@ from .serializers import (
     SchoolListSerializer, SchoolDetailSerializer, SchoolGISSerializer,
     SchoolBuildingSerializer, SchoolContactSerializer
 )
-from core.permissions.roles import IsAdmin
+from core.permissions.roles import IsAdmin, IsSuperAdmin
 
 
 @login_required
@@ -737,7 +737,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
             })
         return Response(result)
 
-    @action(detail=False, methods=['get'], url_path='labeling_excel_all')
+    @action(detail=False, methods=['get'], url_path='labeling_excel_all', permission_classes=[IsSuperAdmin])
     def labeling_excel_all(self, request):
         """전체 학교 라벨링 결과 엑셀 다운로드 (변경후 + 변경전 + 변경내역 시트)"""
         import io
@@ -1211,7 +1211,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
         buildings = school.buildings.order_by('order')
         return Response([{'id': b.id, 'name': b.name} for b in buildings])
 
-    @action(detail=True, methods=['get'], url_path='equipment_excel')
+    @action(detail=True, methods=['get'], url_path='equipment_excel', permission_classes=[IsSuperAdmin])
     def equipment_excel(self, request, pk=None):
         """장비 라벨링 현황 엑셀 다운로드"""
         import io
@@ -1461,7 +1461,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
             ])
         return response
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdmin])
     def csv_download(self, request):
         """학교 목록 CSV 다운로드"""
         response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
@@ -1486,7 +1486,7 @@ class SchoolBuildingViewSet(viewsets.ModelViewSet):
             qs = qs.filter(school_id=school_id)
         return qs
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdmin])
     def csv_download(self, request):
         """건물명 CSV 다운로드"""
         response = HttpResponse(content_type='text/csv; charset=utf-8-sig')

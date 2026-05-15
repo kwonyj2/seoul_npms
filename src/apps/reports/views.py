@@ -7,6 +7,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from core.permissions.roles import IsSuperAdmin, superadmin_required
 from django.utils import timezone
 from django.http import FileResponse, Http404
 from django.db.models import Q
@@ -327,6 +328,7 @@ def performance_report_data_api(request):
 
 
 @login_required
+@superadmin_required
 def export_performance_excel(request):
     """성과보고서 Excel 내보내기"""
     import io, calendar
@@ -1148,7 +1150,7 @@ class ReportViewSet(viewsets.ModelViewSet):
 
 
     # ── 보고서 데이터 Excel/CSV 내보내기 ──────────────────────────────
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdmin])
     def export(self, request):
         """서류 종류별 보고서 데이터 내보내기 (Excel / CSV)"""
         import io, csv as _csv

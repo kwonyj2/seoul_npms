@@ -124,7 +124,7 @@
   <div class="card border-0 shadow-sm">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
       <span class="fw-bold small">총 <span id="total-count" class="text-primary">-</span>개 학교</span>
-      <button class="btn btn-sm btn-success" onclick="downloadAllExcel()"><i class="bi bi-file-earmark-excel me-1"></i>전체 엑셀 다운로드</button>
+      {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-success" onclick="downloadAllExcel()"><i class="bi bi-file-earmark-excel me-1"></i>전체 엑셀 다운로드</button>{% endif %}
     </div>
     <div class="table-responsive" style="max-height:calc(100vh - 260px);overflow-y:auto;">
       <table class="table table-sm table-hover mb-0">
@@ -152,7 +152,7 @@
       <h6 class="fw-bold mb-0" id="equip-school-name"></h6>
       <div>
         <button class="btn btn-sm btn-outline-primary me-1" onclick="showAddEquip()"><i class="bi bi-plus-lg me-1"></i>장비 추가</button>
-        <button class="btn btn-sm btn-success me-1" onclick="exportLabeling()"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+        {% if user.role == 'superadmin' %}<button class="btn btn-sm btn-success me-1" onclick="exportLabeling()"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>{% endif %}
         <button class="btn btn-sm btn-primary" onclick="completeLabeling()" id="btn-complete"><i class="bi bi-check-circle me-1"></i>완료</button>
       </div>
     </div>
@@ -612,7 +612,7 @@ function _deltaHtml(v) {
 function renderTypeDetail(centerName, typeName, rows) {
   let html = `<div class="d-flex justify-content-between align-items-center mb-2">
     <h6 class="fw-bold mb-0"><i class="bi bi-building me-1"></i>${centerName} — ${typeName} (${rows.length}개교)</h6>
-    <button class="btn btn-sm btn-outline-success" onclick="downloadTypeExcel()"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+    ${USER_ROLE==='superadmin'?'<button class="btn btn-sm btn-outline-success" onclick="downloadTypeExcel()"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>':''}
   </div>`;
   html += '<div class="table-responsive"><table class="table table-sm table-bordered text-center" style="font-size:.82rem;"><thead class="table-light"><tr>';
   html += '<th>#</th><th>학교명</th><th>원장</th><th class="text-primary">추가</th><th class="text-danger">없음</th><th>증감</th><th>현재</th><th>부착</th><th>미부착</th><th>진행률</th><th>S/N</th><th>상태</th>';
@@ -647,7 +647,7 @@ function renderSchoolDetail(d) {
   let html = `<div class="d-flex justify-content-between align-items-center mb-2">
     <h6 class="fw-bold mb-0"><i class="bi bi-building me-1"></i>${d.center_name} — ${d.school_name}
       ${d.completed?'<span class="badge bg-success ms-2">완료</span>':'<span class="badge bg-secondary ms-2">진행중</span>'}</h6>
-    <button class="btn btn-sm btn-outline-success" onclick="downloadSchoolExcel()" id="btn-dl-school"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>
+    ${USER_ROLE==='superadmin'?'<button class="btn btn-sm btn-outline-success" onclick="downloadSchoolExcel()" id="btn-dl-school"><i class="bi bi-file-earmark-excel me-1"></i>엑셀</button>':''}
   </div>`;
   // 요약 카드
   html += '<div class="row g-2 mb-3">';
