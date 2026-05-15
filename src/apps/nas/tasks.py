@@ -219,7 +219,17 @@ def sync_nas_filesystem():
             if any(fname.lower().endswith(s) for s in SKIP_EXTENSIONS):
                 continue
             fpath = os.path.join(dirpath, fname)
-            if File.objects.filter(file_path=fpath).exists():
+            existing = File.objects.filter(file_path=fpath).first()
+            if existing:
+                if existing.is_deleted:
+                    # 소프트 삭제된 레코드 → 복원 (같은 경로에 새 파일 업로드됨)
+                    existing.is_deleted = False
+                    existing.deleted_at = None
+                    existing.deleted_by = None
+                    existing.original_path = ''
+                    existing.file_size = os.path.getsize(fpath)
+                    existing.save(update_fields=['is_deleted', 'deleted_at', 'deleted_by', 'original_path', 'file_size'])
+                    p_created += 1
                 continue
             try:
                 File.objects.create(
