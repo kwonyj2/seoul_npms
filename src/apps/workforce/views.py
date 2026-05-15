@@ -649,6 +649,7 @@ def worker_only_tree(request):
             'phone':      w.phone,
             'role':       w.role,
             'role_label': w.get_role_display(),
+            'job_duty':   w.job_duty or '',
             'is_active':  w.is_active,
             'has_photo':  has_img,
             'photo_url':  w.profile_image.url if has_img else '',
