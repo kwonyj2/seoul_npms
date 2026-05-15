@@ -211,6 +211,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.nas.tasks.purge_old_trash',
         'schedule': crontab(hour=4, minute=30),
     },
+    # 경력프로필 PPTX → JPG 자동 변환 (매일 새벽 4시 45분)
+    'convert-career-pptx': {
+        'task': 'apps.workforce.tasks.convert_career_pptx',
+        'schedule': crontab(hour=4, minute=45),
+    },
     # WBS 진척 스냅샷 (매주 월요일 새벽 1시)
     'wbs-progress-snapshot': {
         'task': 'apps.wbs.tasks.snapshot_wbs_progress',
