@@ -594,21 +594,14 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
             if h:
                 w_hours[lg.worker_id].append(h)
 
-        def center_order_key(w):
-            cname = w.support_center.name if w.support_center else ''
-            try:
-                return (CENTER_ORDER.index(cname), w.name)
-            except ValueError:
-                return (len(CENTER_ORDER), w.name)
-
         result = []
-        for w in sorted(workers_qs, key=center_order_key):
+        for w in sorted(workers_qs, key=lambda x: x.id):
             counts = dict(w_counts.get(w.id, {}))
             hrs    = w_hours.get(w.id, [])
             result.append({
                 'worker_id':   w.id,
                 'worker_name': w.name,
-                'center_name': w.support_center.name,
+                'center_name': w.support_center.name if w.support_center else '서울시교육청',
                 'center_id':   w.support_center_id,
                 'counts':      counts,
                 'total_days':  sum(counts.values()),
