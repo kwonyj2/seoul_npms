@@ -159,20 +159,6 @@
 }
 .info-table td { padding:7px 12px; border-bottom:1px solid #f0f0f0; color:#1e293b; }
 
-/* 경력 편집 폼 */
-.profile-field-label { font-size:.78rem; font-weight:600; color:#64748b; margin-bottom:4px; }
-.profile-textarea {
-  width:100%; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px;
-  font-size:.82rem; resize:vertical; outline:none; font-family:inherit;
-  transition:border-color .15s;
-}
-.profile-textarea:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
-.profile-input {
-  border:1px solid #e2e8f0; border-radius:8px; padding:7px 12px;
-  font-size:.82rem; outline:none; font-family:inherit; transition:border-color .15s;
-}
-.profile-input:focus { border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
-
 /* 서류관리 — 2분할 레이아웃 */
 #tab-docs {
   display:flex; gap:0; overflow:hidden; flex:1;
@@ -312,7 +298,6 @@
       <!-- 탭 -->
       <div class="profile-tabs">
         <div class="profile-tab active" onclick="switchTab('info',this)"><i class="bi bi-person-vcard me-1"></i>신상정보</div>
-        <div class="profile-tab" onclick="switchTab('career',this)"><i class="bi bi-briefcase me-1"></i>경력프로필</div>
         <div class="profile-tab" onclick="switchTab('docs',this)"><i class="bi bi-folder2-open me-1"></i>서류관리</div>
       </div>
 
@@ -333,33 +318,6 @@
             <tr><th>상태</th><td id="info-status">-</td></tr>
           </tbody>
         </table>
-      </div>
-
-      <!-- 경력프로필 탭 -->
-      <div class="tab-pane" id="tab-career">
-        <div class="row g-3">
-          <div class="col-sm-6">
-            <div class="profile-field-label">생년월일</div>
-            <input type="date" class="profile-input" id="ed-birth" style="width:100%;" readonly>
-          </div>
-          <div class="col-sm-6">
-            <div class="profile-field-label">입사일</div>
-            <input type="date" class="profile-input" id="ed-join" style="width:100%;" readonly>
-          </div>
-          <div class="col-12">
-            <div class="profile-field-label">소개 / 특이사항</div>
-            <textarea class="profile-textarea" id="ed-bio" rows="3" readonly></textarea>
-          </div>
-          <div class="col-12">
-            <div class="profile-field-label">경력 요약</div>
-            <textarea class="profile-textarea" id="ed-career" rows="5" readonly></textarea>
-          </div>
-          <div class="col-12">
-            <div class="profile-field-label">비고</div>
-            <textarea class="profile-textarea" id="ed-notes" rows="2" readonly></textarea>
-          </div>
-          <!-- 경력프로필 저장 버튼 제거됨 — NAS에서 관리 -->
-        </div>
       </div>
 
       <!-- 서류관리 탭 -->
@@ -530,12 +488,6 @@ async function loadProfile(id) {
     document.getElementById('info-status').innerHTML     =
       data.is_active ? '<span class="badge bg-success">재직중</span>' : '<span class="badge bg-secondary">비활성</span>';
 
-    // 경력 탭
-    document.getElementById('ed-birth').value  = data.birth_date  || '';
-    document.getElementById('ed-join').value   = data.join_date   || '';
-    document.getElementById('ed-bio').value    = data.bio         || '';
-    document.getElementById('ed-career').value = data.career_summary || '';
-    document.getElementById('ed-notes').value  = data.notes       || '';
   } catch(e) {
     console.error('loadProfile error', e);
   }
@@ -591,34 +543,6 @@ async function uploadPhotoFile(file) {
       alert(data.error || '업로드 실패');
     }
   } catch(e) { alert('업로드 오류'); }
-}
-
-// ── 경력 저장 ──────────────────────────────────────────────────────
-async function saveCareer() {
-  if (!_selectedWorker) return;
-  const body = {
-    birth_date:     document.getElementById('ed-birth').value  || '',
-    join_date:      document.getElementById('ed-join').value   || '',
-    bio:            document.getElementById('ed-bio').value,
-    career_summary: document.getElementById('ed-career').value,
-    notes:          document.getElementById('ed-notes').value,
-  };
-  try {
-    const res  = await fetch(`${WM_BASE}/workers/${_selectedWorker}/profile/`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF_TOKEN},
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      showToast('저장되었습니다.', 'success');
-      // 신상정보 탭 동기화
-      document.getElementById('info-birth').textContent = body.birth_date || '-';
-      document.getElementById('info-join').textContent  = body.join_date  || '-';
-    } else {
-      alert(data.error || '저장 실패');
-    }
-  } catch(e) { alert('저장 오류'); }
 }
 
 // ── 서류 로드 ──────────────────────────────────────────────────────
@@ -765,7 +689,7 @@ function getCookie(name) {
 // ── 초기화 ────────────────────────────────────────────────────────
 // 탭에 data-tab 속성 설정
 (function() {
-  var names = ['info','career','docs'];
+  var names = ['info','docs'];
   document.querySelectorAll('.profile-tab').forEach(function(t,i){
     t.dataset.tab = names[i] || 'info';
   });
