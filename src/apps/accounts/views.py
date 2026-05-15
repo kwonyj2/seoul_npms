@@ -495,10 +495,17 @@ class UserViewSet(viewsets.ModelViewSet):
                     'is_active':      is_active,
                     'service_expiry': expiry,
                 }
-                lat = col(row, '자택위도')
-                lng = col(row, '자택경도')
-                if lat: defaults['home_lat'] = lat
-                if lng: defaults['home_lng'] = lng
+                def to_decimal(v):
+                    if not v or v in ('해당없음', '없음', '-', 'N/A', 'null'):
+                        return None
+                    try:
+                        return float(v)
+                    except (ValueError, TypeError):
+                        return None
+                lat = to_decimal(col(row, '자택위도'))
+                lng = to_decimal(col(row, '자택경도'))
+                if lat is not None: defaults['home_lat'] = lat
+                if lng is not None: defaults['home_lng'] = lng
 
                 user, is_new = User.objects.get_or_create(username=username, defaults=defaults)
                 if is_new:
