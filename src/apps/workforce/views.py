@@ -487,7 +487,7 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
         user = request.user
         workers_qs = User.objects.filter(
             role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'],
-            support_center__isnull=False, is_active=True
+            is_active=True
         ).select_related('support_center')
         # 역할별 필터링
         if user.role in ('superadmin', 'admin'):
@@ -509,14 +509,17 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
         for log in logs:
             log_map.setdefault(log.worker_id, {})[log.work_date.day] = log
 
-        # 정렬: 지원청 순서 → 테크매니저 우선 → 이름
+        # 정렬: 서울시교육청(센터없음) 맨 앞 → 지원청 순서 → 테크매니저 우선 → 이름
         ROLE_SORT = {'resident_tech': 0, 'resident_central': 1, 'resident_edu': 2, 'worker': 3}
         def center_order_key(w):
             cname = w.support_center.name if w.support_center else ''
-            try:
-                cidx = CENTER_ORDER.index(cname)
-            except ValueError:
-                cidx = len(CENTER_ORDER)
+            if not cname:
+                cidx = -1  # 서울시교육청 맨 앞
+            else:
+                try:
+                    cidx = CENTER_ORDER.index(cname)
+                except ValueError:
+                    cidx = len(CENTER_ORDER)
             return (cidx, ROLE_SORT.get(w.role, 9), w.name)
 
         result = []
@@ -540,7 +543,7 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
                 'worker_name': w.name,
                 'role':        w.role,
                 'role_label':  w.get_role_display(),
-                'center_name': w.support_center.name,
+                'center_name': w.support_center.name if w.support_center else '서울시교육청',
                 'center_id':   w.support_center_id,
                 'daily':       daily,
             })
@@ -576,7 +579,7 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
         user = request.user
         workers_qs = User.objects.filter(
             role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'],
-            support_center__isnull=False, is_active=True
+            is_active=True
         ).select_related('support_center')
         if user.role in ('superadmin', 'admin'):
             pass
@@ -638,32 +641,49 @@ def worker_list_view(request):
 
 @login_required
 def worker_only_tree(request):
-    """현장기사(role=worker)만 포함한 지원청-인력 트리"""
+    """전체 현장 인력(worker + 상주 3종) 지원청-인력 트리"""
     from apps.schools.models import SupportCenter
     from apps.accounts.models import User
 
+    ROLE_SORT = {'resident_tech': 0, 'resident_central': 1, 'resident_edu': 2, 'worker': 3}
+
     centers_qs = SupportCenter.objects.all()
     center_map = {c.name: {'id': c.id, 'name': c.name, 'workers': []} for c in centers_qs}
+    # 서울시교육청 그룹 (support_center 없는 상주 중앙/교육청)
+    edu_group = {'id': 0, 'name': '서울시교육청', 'workers': []}
 
     workers = User.objects.filter(
-        role='worker',
-        support_center__isnull=False,
-    ).select_related('support_center').order_by('name')
+        role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'],
+        is_active=True,
+    ).select_related('support_center')
 
-    for w in workers:
-        cname = w.support_center.name
-        if cname in center_map:
-            has_img = bool(w.profile_image)
-            center_map[cname]['workers'].append({
-                'id':         w.id,
-                'name':       w.name,
-                'phone':      w.phone,
-                'is_active':  w.is_active,
-                'has_photo':  has_img,
-                'photo_url':  w.profile_image.url if has_img else '',
-            })
+    for w in sorted(workers, key=lambda x: (ROLE_SORT.get(x.role, 9), x.name)):
+        has_img = bool(w.profile_image)
+        wdata = {
+            'id':         w.id,
+            'name':       w.name,
+            'phone':      w.phone,
+            'role':       w.role,
+            'role_label': w.get_role_display(),
+            'is_active':  w.is_active,
+            'has_photo':  has_img,
+            'photo_url':  w.profile_image.url if has_img else '',
+        }
+        if w.support_center:
+            cname = w.support_center.name
+            if cname in center_map:
+                center_map[cname]['workers'].append(wdata)
+        else:
+            # support_center 없는 상주(중앙)/상주(교육청) → 서울시교육청
+            edu_group['workers'].append(wdata)
 
-    ordered = [center_map[c] for c in CENTER_ORDER if c in center_map]
+    ordered = []
+    # 서울시교육청을 맨 앞에
+    if edu_group['workers']:
+        ordered.append(edu_group)
+    for c in CENTER_ORDER:
+        if c in center_map:
+            ordered.append(center_map[c])
     for c in center_map:
         if c not in CENTER_ORDER:
             ordered.append(center_map[c])

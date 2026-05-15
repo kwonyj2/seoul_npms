@@ -186,17 +186,18 @@
   left: 0;
   background: #f8fafc;
   z-index: 5;
-  font-size: .75rem;
+  font-size: .72rem;
   font-weight: 700;
   color: #334155;
-  padding: 4px 10px;
+  padding: 4px 6px;
   border-right: 1px solid #e2e8f0;
-  min-width: 72px;
-  max-width: 72px;
+  min-width: 120px;
+  max-width: 120px;
+  white-space: nowrap;
 }
 .grid-table .col-worker {
   position: sticky;
-  left: 72px;
+  left: 120px;
   background: #fff;
   z-index: 5;
   font-size: .78rem;
@@ -1143,8 +1144,8 @@ function renderGrid(data) {
 
   // thead
   thead.innerHTML =
-    `<th class="col-center" style="position:sticky;top:0;left:0;z-index:20;background:#f8fafc;">지원청</th>
-     <th class="col-worker" style="position:sticky;top:0;left:72px;z-index:20;background:#f8fafc;">인력</th>` +
+    `<th class="col-center" style="position:sticky;top:0;left:0;z-index:20;background:#f8fafc;">담당지역</th>
+     <th class="col-worker" style="position:sticky;top:0;left:120px;z-index:20;background:#f8fafc;">인력</th>` +
     Array.from({length:days},(_,i)=>{
       const d = i+1;
       const dow = new Date(year, month-1, d).getDay();
