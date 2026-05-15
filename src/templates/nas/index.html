@@ -357,7 +357,10 @@ function renderSideNodes(nodes, container, depth) {
     wrap.innerHTML = `
       <div class="d-flex align-items-center py-1 side-folder-row ${currentFolderId === f.id ? 'active' : ''}"
            style="padding-left:${pad}px;padding-right:8px;cursor:pointer;"
-           onclick="navigateTo(${f.id}, '${f.name.replace(/'/g,"\\'")}')">
+           onclick="navigateTo(${f.id}, '${f.name.replace(/'/g,"\\'")}');"
+           ondragover="onDragOverFolder(event)"
+           ondragleave="onDragLeaveFolder(event)"
+           ondrop="onDropFolder(event,${f.id})">
         ${f.has_children
           ? `<button class="btn btn-xs btn-link p-0 me-1 text-muted tree-toggle" style="font-size:.6rem;line-height:1;min-width:10px;"
                      onclick="toggleSideNode(event, ${f.id}, this, ${depth + 1})">
@@ -546,7 +549,12 @@ function renderList(folders, files) {
       : f.access_level === 'admin'
         ? '<span class="badge bg-warning text-dark ms-1" style="font-size:.6rem;">관리자</span>'
         : '';
-    rows += `<tr style="cursor:pointer;"
+    rows += `<tr style="cursor:pointer;" draggable="true"
+                ondragstart="onDragStartRow(event,'folder',${f.id},'${f.name.replace(/'/g,"\\'")}')"
+                ondragend="onDragEndRow(event)"
+                ondragover="onDragOverFolder(event)"
+                ondragleave="onDragLeaveFolder(event)"
+                ondrop="onDropFolder(event,${f.id})"
                 ondblclick="navigateTo(${f.id},'${f.name.replace(/'/g,"\\'")}');"
                 oncontextmenu="showCtxMenuById(event,'f${f.id}')">
       <td class="text-center" onclick="event.stopPropagation()"><input type="checkbox" class="bulk-chk" data-type="folder" data-id="${f.id}" data-name="${f.name.replace(/"/g,'&quot;')}" onchange="updateBulkBar()"></td>
@@ -569,7 +577,10 @@ function renderList(folders, files) {
     const icon = mimeIcon(f.mime_type);
     const displayName = (f.original_name || f.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
     _ctxRowData['fi' + f.id] = { type: 'file', id: f.id, name: f.original_name || f.name, fileObj: f };
-    rows += `<tr style="cursor:pointer;" onclick="openPreview(${f.id})"
+    rows += `<tr style="cursor:pointer;" draggable="true"
+                ondragstart="onDragStartRow(event,'file',${f.id},'${(f.original_name||f.name||'').replace(/'/g,"\\'")}')"
+                ondragend="onDragEndRow(event)"
+                onclick="openPreview(${f.id})"
                 oncontextmenu="showCtxMenuById(event,'fi${f.id}')">
       <td class="text-center" onclick="event.stopPropagation()"><input type="checkbox" class="bulk-chk" data-type="file" data-id="${f.id}" data-name="${(f.original_name||f.name||'').replace(/"/g,'&quot;')}" onchange="updateBulkBar()"></td>
       <td class="text-center"><i class="bi ${icon.cls}" style="color:${icon.color};"></i></td>
@@ -613,7 +624,13 @@ function renderGrid(folders, files) {
 
   folders.forEach(f => {
     cards += `<div class="col-6 col-sm-4 col-md-3 col-lg-2">
-      <div class="card border shadow-sm h-100 text-center p-2" style="cursor:pointer;"
+      <div class="card border shadow-sm h-100 text-center p-2 grid-card" style="cursor:pointer;"
+           draggable="true"
+           ondragstart="onDragStartCard(event,'folder',${f.id},'${f.name.replace(/'/g,"\\'")}');"
+           ondragend="onDragEndCard(event)"
+           ondragover="onDragOverFolder(event)"
+           ondragleave="onDragLeaveFolder(event)"
+           ondrop="onDropFolder(event,${f.id})"
            ondblclick="navigateTo(${f.id},'${f.name.replace(/'/g,"\\'")}')">
         <i class="bi bi-folder-fill text-warning" style="font-size:2.2rem;"></i>
         <div class="small fw-semibold text-truncate mt-1" title="${f.name}">${f.name}</div>
@@ -628,7 +645,10 @@ function renderGrid(folders, files) {
       ? `<img src="${API}/nas/files/${f.id}/preview/" class="w-100 h-100 object-fit-cover" style="max-height:80px;" onerror="this.parentNode.innerHTML='<i class=\\'bi ${icon.cls}\\' style=\\'color:${icon.color};font-size:2rem;\\'></i>'">`
       : `<i class="bi ${icon.cls}" style="color:${icon.color};font-size:2rem;"></i>`;
     cards += `<div class="col-6 col-sm-4 col-md-3 col-lg-2">
-      <div class="card border shadow-sm h-100" style="cursor:pointer;" onclick="openPreview(${f.id})">
+      <div class="card border shadow-sm h-100 grid-card" style="cursor:pointer;" draggable="true"
+           ondragstart="onDragStartCard(event,'file',${f.id},'${(f.original_name||f.name||'').replace(/'/g,"\\'")}');"
+           ondragend="onDragEndCard(event)"
+           onclick="openPreview(${f.id})">
         <div class="d-flex align-items-center justify-content-center bg-light" style="height:80px;overflow:hidden;">${thumb}</div>
         <div class="p-1 text-center">
           <div class="small text-truncate" title="${f.original_name||f.name}" style="font-size:.72rem;">${f.original_name||f.name}</div>
@@ -1394,6 +1414,67 @@ async function doRename() {
   } catch(err) { showToast('이름 변경 실패', 'error'); }
 }
 
+// ── 드래그앤드롭 파일/폴더 이동 ─────────────────────────────────
+let _dragData = null;
+
+function onDragStartRow(e, type, id, name) {
+  _dragData = { type, id, name };
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', name);
+  e.target.closest('tr').style.opacity = '0.4';
+}
+function onDragEndRow(e) {
+  e.target.closest('tr').style.opacity = '1';
+  document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  _dragData = null;
+}
+function onDragOverFolder(e) {
+  if (!_dragData) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('drag-over');
+}
+function onDragLeaveFolder(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+async function onDropFolder(e, destFolderId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (!_dragData || !destFolderId) return;
+  if (_dragData.type === 'folder' && _dragData.id === destFolderId) return;
+  try {
+    const endpoint = _dragData.type === 'folder'
+      ? `${API}/nas/folders/${_dragData.id}/move/`
+      : `${API}/nas/files/${_dragData.id}/move/`;
+    const body = _dragData.type === 'folder'
+      ? { parent: destFolderId }
+      : { folder: destFolderId };
+    const res = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) { const err = await res.json().catch(()=>({})); throw new Error(err.error || res.status); }
+    showToast(`'${_dragData.name}' → 이동 완료`, 'success');
+    await loadSideTree(null);
+    loadContents();
+  } catch(err) { showToast('이동 실패: ' + err.message, 'danger'); }
+  _dragData = null;
+}
+
+// 그리드뷰 드래그앤드롭
+function onDragStartCard(e, type, id, name) {
+  _dragData = { type, id, name };
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', name);
+  e.currentTarget.style.opacity = '0.4';
+}
+function onDragEndCard(e) {
+  e.currentTarget.style.opacity = '1';
+  document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+  _dragData = null;
+}
+
 init();
 </script>
 
@@ -1401,5 +1482,10 @@ init();
 .side-folder-row { border-radius: 4px; color: inherit; }
 .side-folder-row:hover { background: #f0f4ff; }
 .side-folder-row.active { background: #e8f0fe; color: #0d6efd; font-weight: 600; }
+.drag-over { background: #d4edda !important; outline: 2px dashed #28a745; outline-offset: -2px; }
+tr[draggable="true"] { cursor: grab; }
+tr[draggable="true"]:active { cursor: grabbing; }
+.grid-card[draggable="true"] { cursor: grab; }
+.grid-card[draggable="true"]:active { cursor: grabbing; }
 </style>
 {% endblock %}
