@@ -542,7 +542,7 @@ function renderList(folders, files) {
   folders.forEach((f, fi) => {
     _ctxRowData['f' + f.id] = { type: 'folder', id: f.id, name: f.name, access_level: f.access_level };
     const accessBadge = f.access_level === 'superadmin'
-      ? '<span class="badge bg-danger ms-1" style="font-size:.6rem;">슈퍼어드민</span>'
+      ? (USER_ROLE === 'superadmin' ? '<span class="badge bg-danger ms-1" style="font-size:.6rem;">비공개</span>' : '')
       : f.access_level === 'admin'
         ? '<span class="badge bg-warning text-dark ms-1" style="font-size:.6rem;">관리자</span>'
         : '';
