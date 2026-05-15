@@ -28,7 +28,7 @@ def security_view(request):
 def guide_view(request):
     """사용 안내 페이지 — MODULE_REGISTRY 기반 자동 생성"""
     from core.guide import get_guide_modules
-    modules = get_guide_modules()
+    modules = get_guide_modules(role=request.user.role)
     return render(request, 'guide/index.html', {'modules': modules})
 
 

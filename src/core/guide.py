@@ -1038,14 +1038,16 @@ GUIDE_CONTENT = {
 }
 
 
-def get_guide_modules():
+def get_guide_modules(role=None):
     """
     MODULE_REGISTRY를 기반으로 가이드 모듈 목록을 생성합니다.
-    새 모듈이 MODULE_REGISTRY에 추가되면 자동으로 목록에 포함됩니다.
-    GUIDE_CONTENT에 없는 모듈은 기본 설명으로 표시됩니다.
+    role이 주어지면 해당 역할이 접근 가능한 모듈만 반환합니다.
     """
+    from core.modules import can_access
     modules = []
     for key, mod in MODULE_REGISTRY.items():
+        if role and not can_access(role, key):
+            continue
         content = GUIDE_CONTENT.get(key, {})
         has_content = key in GUIDE_CONTENT
         modules.append({
