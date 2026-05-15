@@ -16,7 +16,7 @@
     <span id="inc-status-badge"></span>
     <span id="inc-priority-badge"></span>
     <div class="ms-auto d-flex gap-2 flex-wrap">
-      {% if user.role in 'superadmin,admin' %}
+      {% if user.role in 'superadmin,admin,resident_central' %}
       <button class="btn btn-sm btn-warning" id="btn-edit" onclick="openEditModal()">
         <i class="bi bi-pencil-square me-1"></i>수정
       </button>
@@ -27,7 +27,7 @@
         <i class="bi bi-cpu me-1"></i>AI 배정
       </button>
       {% endif %}
-      {% if user.role in 'superadmin,admin,worker' %}
+      {% if user.role in 'superadmin,admin,worker,resident_central,resident_tech,resident_edu' %}
       <button class="btn btn-sm btn-success" id="btn-complete" onclick="openCompleteModal()" style="display:none;">
         <i class="bi bi-check-circle me-1"></i>완료 등록
       </button>
@@ -58,7 +58,7 @@
       </div>
 
       <!-- 상태 변경 -->
-      {% if user.role in 'superadmin,admin,worker' %}
+      {% if user.role in 'superadmin,admin,worker,resident_central,resident_tech,resident_edu' %}
       <div class="card border-0 shadow-sm mb-2">
         <div class="card-header py-2 bg-white border-bottom fw-semibold">
           <i class="bi bi-arrow-repeat me-1 text-warning"></i>상태 변경
@@ -88,7 +88,7 @@
         <div class="card-header py-2 bg-white border-bottom fw-semibold d-flex align-items-center">
           <span><i class="bi bi-shield-check me-1 text-success"></i>SLA 현황</span>
           <span id="sla-adjusted-badge" class="ms-2"></span>
-          {% if user.role in 'superadmin,admin' %}
+          {% if user.role in 'superadmin,admin,resident_central' %}
           <button class="btn btn-sm btn-outline-warning ms-auto" id="btn-appointment" onclick="openAppointmentModal()">
             <i class="bi bi-telephone-forward me-1"></i>고객협의
           </button>
