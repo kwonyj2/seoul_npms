@@ -746,6 +746,12 @@ def _find_photo_url(worker):
         name_part = os.path.splitext(fname)[0]
         ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
         if name in name_part and ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
+            # NAS File DB에서 id 조회 → 다운로드 API 사용
+            from apps.nas.models import File as NasFile
+            nf = NasFile.objects.filter(name=fname, folder__full_path='/인력관리/증명사진').first()
+            if nf:
+                return f"/npms/api/nas/files/{nf.id}/preview/"
+            # DB에 없으면 직접 서빙 시도
             return f"{settings.MEDIA_URL}인력관리/증명사진/{fname}"
     return worker.profile_image.url if worker.profile_image else ''
 
@@ -905,9 +911,17 @@ def worker_docs_api(request, worker_id):
                         continue
                     ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
                     if ext in WORKER_DOC_ALLOWED_EXTS:
+                        # NAS File DB에서 id 조회 → preview/download API 사용
+                        from apps.nas.models import File as NasFile
+                        cat_full_path = f'/인력관리/{cat["key"]}'
+                        nf = NasFile.objects.filter(name=fname, folder__full_path=cat_full_path).first()
+                        if nf:
+                            file_url = f'/npms/api/nas/files/{nf.id}/preview/'
+                        else:
+                            file_url = cat_url + fname
                         files.append({
                             'name':     fname,
-                            'url':      cat_url + fname,
+                            'url':      file_url,
                             'is_image': ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'),
                             'is_pdf':   ext == 'pdf',
                         })
