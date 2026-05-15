@@ -802,10 +802,6 @@ class IncidentViewSet(viewsets.ModelViewSet):
                 Q(requester_name__icontains=q) |
                 Q(description__icontains=q)
             )
-        # 현장기사는 자신에게 배정된 건만
-        user = self.request.user
-        if user.role == 'worker':
-            qs = qs.filter(assignments__worker=user)
         return qs
 
     def get_serializer_class(self):
