@@ -708,7 +708,7 @@ def worker_profile_api(request, worker_id):
             'home_address':   worker.home_address,
             'is_active':      worker.is_active,
             'created_at':     timezone.localtime(worker.created_at).strftime('%Y-%m-%d'),
-            'photo_url':      worker.profile_image.url if worker.profile_image else '',
+            'photo_url':      _find_photo_url(worker),
             'birth_date':     str(prof.birth_date) if prof and prof.birth_date else '',
             'join_date':      str(prof.join_date)  if prof and prof.join_date  else '',
             'career_summary': prof.career_summary  if prof else '',
@@ -732,6 +732,22 @@ def worker_profile_api(request, worker_id):
         return JsonResponse({'ok': True})
 
     return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
+def _find_photo_url(worker):
+    """NAS 인력관리/증명사진 폴더에서 증명사진_{이름}.확장자 자동 검색"""
+    import os
+    from django.conf import settings
+    photo_dir = os.path.join(settings.MEDIA_ROOT, 'data', '인력관리', '증명사진')
+    if not os.path.isdir(photo_dir):
+        return worker.profile_image.url if worker.profile_image else ''
+    name = worker.name
+    for fname in os.listdir(photo_dir):
+        name_part = os.path.splitext(fname)[0]
+        ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
+        if name in name_part and ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
+            return f"{settings.MEDIA_URL}data/인력관리/증명사진/{fname}"
+    return worker.profile_image.url if worker.profile_image else ''
 
 
 def _worker_name_stem(worker):
@@ -843,11 +859,12 @@ def worker_photo_api(request, worker_id):
 
 # NAS 인력관리 서류 카테고리
 WORKER_DOC_CATEGORIES = [
-    {'key': '성범죄경력조회',          'label': '성범죄 경력조회 및 행정정보공동이용 동의서'},
+    {'key': '성범죄 경력조회 및 행정정보공동이용 동의서', 'label': '성범죄 경력조회 및 행정정보공동이용 동의서'},
     {'key': '보안서약서',              'label': '보안서약서'},
+    {'key': '재직증명서',              'label': '재직증명서'},
     {'key': '경력증명서',              'label': '경력증명서'},
     {'key': '자격증',                  'label': '자격증'},
-    {'key': '기타',                    'label': '기타 서류'},
+    {'key': '기타서류',                'label': '기타서류'},
 ]
 WORKER_DOC_ALLOWED_EXTS = ('jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf')
 
@@ -872,16 +889,19 @@ def worker_docs_api(request, worker_id):
     nas_url  = f"{settings.MEDIA_URL}data/인력관리/"
 
     if request.method == 'GET':
-        stem   = _worker_name_stem(worker)
+        name = worker.name
         result = []
         for cat in WORKER_DOC_CATEGORIES:
             cat_dir = os.path.join(nas_root, cat['key'])
             cat_url = nas_url + cat['key'] + '/'
             files   = []
             if os.path.isdir(cat_dir):
-                prefix = stem + '_'
+                # 매칭 패턴: {카테고리라벨}_{이름}.확장자 또는 이름이 포함된 파일
                 for fname in sorted(os.listdir(cat_dir)):
-                    if not fname.startswith(prefix):
+                    fname_lower = fname.lower()
+                    name_part = os.path.splitext(fname)[0]  # 확장자 제외
+                    # {라벨}_{이름} 또는 {이름} 포함 매칭
+                    if name not in name_part:
                         continue
                     ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
                     if ext in WORKER_DOC_ALLOWED_EXTS:
