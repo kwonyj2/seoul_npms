@@ -635,6 +635,11 @@ async function loadDocs(id) {
 }
 
 function renderDocs(categories) {
+  if (!categories.length) {
+    document.getElementById('docs-wrap').innerHTML =
+      '<div class="text-muted small py-4 text-center">등록된 서류가 없습니다.</div>';
+    return;
+  }
   let html = '';
   categories.forEach(cat => {
     html += `
@@ -644,10 +649,7 @@ function renderDocs(categories) {
         <span class="badge bg-light text-secondary">${cat.files.length}개</span>
       </div>
       <div class="doc-files-wrap" id="docwrap-${cat.key}">
-        ${cat.files.length === 0
-          ? '<span class="doc-empty">등록된 서류가 없습니다.</span>'
-          : cat.files.map(f => renderDocFile(f, cat.key)).join('')
-        }
+        ${cat.files.map(f => renderDocFile(f, cat.key)).join('')}
       </div>
     </div>`;
   });

@@ -865,6 +865,7 @@ def worker_photo_api(request, worker_id):
 
 # NAS 인력관리 서류 카테고리
 WORKER_DOC_CATEGORIES = [
+    {'key': '경력프로필',              'label': '경력프로필'},
     {'key': '성범죄 경력조회 및 행정정보공동이용 동의서', 'label': '성범죄 경력조회 및 행정정보공동이용 동의서'},
     {'key': '보안서약서',              'label': '보안서약서'},
     {'key': '재직증명서',              'label': '재직증명서'},
@@ -872,7 +873,52 @@ WORKER_DOC_CATEGORIES = [
     {'key': '자격증',                  'label': '자격증'},
     {'key': '기타서류',                'label': '기타서류'},
 ]
-WORKER_DOC_ALLOWED_EXTS = ('jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf')
+WORKER_DOC_ALLOWED_EXTS = ('jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'pptx')
+
+
+def _convert_pptx_to_jpg(pptx_path):
+    """LibreOffice로 PPTX 첫 슬라이드를 JPG로 변환.
+    경력프로필_홍길동.pptx → 같은 폴더에 경력프로필_홍길동.jpg 생성.
+    이미 jpg가 존재하고 pptx보다 최신이면 변환 생략.
+    """
+    import os
+    import subprocess
+    import tempfile
+
+    jpg_path = os.path.splitext(pptx_path)[0] + '.jpg'
+
+    # 이미 변환된 jpg가 있고, pptx보다 최신이면 스킵
+    if os.path.isfile(jpg_path):
+        if os.path.getmtime(jpg_path) >= os.path.getmtime(pptx_path):
+            return jpg_path
+
+    pptx_dir = os.path.dirname(pptx_path)
+    base_name = os.path.splitext(os.path.basename(pptx_path))[0]
+
+    # LibreOffice로 PDF 변환 후 poppler로 jpg 추출 (1페이지만)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        try:
+            # PPTX → PDF
+            subprocess.run([
+                'libreoffice', '--headless', '--convert-to', 'pdf',
+                '--outdir', tmpdir, pptx_path
+            ], timeout=60, capture_output=True)
+            pdf_path = os.path.join(tmpdir, base_name + '.pdf')
+            if not os.path.isfile(pdf_path):
+                return None
+            # PDF → JPG (첫 페이지만)
+            subprocess.run([
+                'pdftoppm', '-jpeg', '-r', '200', '-f', '1', '-l', '1',
+                '-singlefile', pdf_path, os.path.join(tmpdir, 'out')
+            ], timeout=30, capture_output=True)
+            tmp_jpg = os.path.join(tmpdir, 'out.jpg')
+            if os.path.isfile(tmp_jpg):
+                import shutil
+                shutil.move(tmp_jpg, jpg_path)
+                return jpg_path
+        except Exception:
+            pass
+    return None
 
 
 @login_required
@@ -902,30 +948,40 @@ def worker_docs_api(request, worker_id):
             cat_url = nas_url + cat['key'] + '/'
             files   = []
             if os.path.isdir(cat_dir):
-                # 매칭 패턴: {카테고리라벨}_{이름}.확장자 또는 이름이 포함된 파일
+                # 경력프로필: pptx → jpg 자동 변환
+                if cat['key'] == '경력프로필':
+                    for fname in os.listdir(cat_dir):
+                        if fname.lower().endswith('.pptx') and name in os.path.splitext(fname)[0]:
+                            _convert_pptx_to_jpg(os.path.join(cat_dir, fname))
+
+                # 매칭 패턴: {라벨}_{이름} 또는 {이름} 포함 매칭
                 for fname in sorted(os.listdir(cat_dir)):
-                    fname_lower = fname.lower()
-                    name_part = os.path.splitext(fname)[0]  # 확장자 제외
-                    # {라벨}_{이름} 또는 {이름} 포함 매칭
+                    name_part = os.path.splitext(fname)[0]
                     if name not in name_part:
                         continue
                     ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
-                    if ext in WORKER_DOC_ALLOWED_EXTS:
-                        # NAS File DB에서 id 조회 → preview/download API 사용
-                        from apps.nas.models import File as NasFile
-                        cat_full_path = f'/인력관리/{cat["key"]}'
-                        nf = NasFile.objects.filter(name=fname, folder__full_path=cat_full_path).first()
-                        if nf:
-                            file_url = f'/npms/api/nas/files/{nf.id}/preview/'
-                        else:
-                            file_url = cat_url + fname
-                        files.append({
-                            'name':     fname,
-                            'url':      file_url,
-                            'is_image': ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'),
-                            'is_pdf':   ext == 'pdf',
-                        })
-            result.append({'key': cat['key'], 'label': cat['label'], 'files': files})
+                    # pptx 원본은 목록에 표시하지 않음 (변환된 jpg만 표시)
+                    if ext == 'pptx':
+                        continue
+                    if ext not in ('jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'):
+                        continue
+                    # NAS File DB에서 id 조회 → preview/download API 사용
+                    from apps.nas.models import File as NasFile
+                    cat_full_path = f'/인력관리/{cat["key"]}'
+                    nf = NasFile.objects.filter(name=fname, folder__full_path=cat_full_path).first()
+                    if nf:
+                        file_url = f'/npms/api/nas/files/{nf.id}/preview/'
+                    else:
+                        file_url = cat_url + fname
+                    files.append({
+                        'name':     fname,
+                        'url':      file_url,
+                        'is_image': ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'),
+                        'is_pdf':   ext == 'pdf',
+                    })
+            # 파일이 있는 카테고리만 포함
+            if files:
+                result.append({'key': cat['key'], 'label': cat['label'], 'files': files})
         return JsonResponse({'categories': result})
 
     if request.method == 'POST':
