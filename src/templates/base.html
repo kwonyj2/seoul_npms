@@ -364,8 +364,8 @@
         </li>
       </ul>
     </div>
-    <!-- 출근/퇴근 토글 버튼 (worker/resident 전용) -->
-    {% if user.role == 'worker' or user.role == 'resident' %}
+    <!-- 출근/퇴근 토글 버튼 (현장인력 전용) -->
+    {% if user.role in 'worker,resident,resident_central,resident_tech,resident_edu' %}
     <button id="hdr-attendance-btn" class="btn btn-sm btn-success ms-2"
             onclick="hdrAttendanceAction()" title="출근/퇴근">
       <i class="bi bi-box-arrow-in-right"></i>
@@ -479,7 +479,7 @@ setInterval(updateCurrentPage, 30000);
 updateCurrentPage();
 {% endif %}
 
-{% if user.role == 'worker' or user.role == 'resident' %}
+{% if user.role in 'worker,resident,resident_central,resident_tech,resident_edu' %}
 // ── 출근/퇴근 토글 버튼 ────────────────────────────────────────────────
 function updateAttendanceBtn(status) {
   const btn = document.getElementById('hdr-attendance-btn');
