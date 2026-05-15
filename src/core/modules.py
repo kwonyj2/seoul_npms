@@ -160,7 +160,7 @@ MODULE_REGISTRY = {
         'label':    '성과보고서',
         'icon':     'bi-file-earmark-bar-graph',
         'url':      '/npms/performance/',
-        'min_role': 'admin',
+        'min_role': 'customer',
         'color':    'warning',
     },
     'reports': {
