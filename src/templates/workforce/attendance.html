@@ -1165,7 +1165,7 @@ function renderGrid(data) {
       </tr>`;
     }
     html += `<tr>
-      <td class="col-center">${w.center_name}</td>
+      <td class="col-center"><small class="text-muted" style="font-size:.6rem;">${w.role_label||''}</small> ${w.center_name}</td>
       <td class="col-worker" title="${w.worker_name}">${w.worker_name}</td>
       ${Array.from({length:days},(_,i)=>{
         const d = i+1;

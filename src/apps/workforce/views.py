@@ -41,10 +41,25 @@ def center_worker_tree(request):
     centers_qs = SupportCenter.objects.all()
     center_map = {c.name: {'id': c.id, 'name': c.name, 'workers': []} for c in centers_qs}
 
+    ROLE_SORT = {'resident_tech': 0, 'resident_central': 1, 'resident_edu': 2, 'worker': 3}
+    user = request.user
     workers = User.objects.filter(
         role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'],
-        support_center__isnull=False,
-    ).select_related('support_center').order_by('name')
+        support_center__isnull=False, is_active=True,
+    ).select_related('support_center')
+    # 역할별 필터링
+    if user.role in ('superadmin', 'admin'):
+        pass  # 전체
+    elif user.role == 'resident_tech':
+        if user.support_center:
+            workers = workers.filter(support_center=user.support_center)
+        else:
+            workers = workers.filter(id=user.id)
+    elif user.role in ('worker', 'resident_central', 'resident_edu'):
+        workers = workers.filter(id=user.id)
+    else:
+        workers = workers.none()
+    workers = sorted(workers, key=lambda w: (ROLE_SORT.get(w.role, 9), w.name))
 
     for w in workers:
         cname = w.support_center.name
@@ -172,9 +187,18 @@ class WorkScheduleViewSet(viewsets.ModelViewSet):
             qs = qs.filter(start_dt__date__lte=date_to)
         if stype:
             qs = qs.filter(schedule_type__code=stype)
-        # 현장기사/재직자는 자신 일정만, superadmin/admin은 전체
-        if self.request.user.role not in ('superadmin', 'admin'):
-            qs = qs.filter(worker=self.request.user)
+        # 역할별 필터링
+        user = self.request.user
+        if user.role in ('superadmin', 'admin'):
+            pass  # 전체
+        elif user.role == 'resident_tech':
+            # 테크매니저: 본인 소속 지원청 인력
+            if user.support_center:
+                qs = qs.filter(worker__support_center=user.support_center)
+            else:
+                qs = qs.filter(worker=user)
+        else:
+            qs = qs.filter(worker=user)
         return qs
 
     @action(detail=False, methods=['post'])
@@ -300,10 +324,21 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
         date_to   = params.get('date_to')
         att_status= params.get('status')
 
-        if self.request.user.role in ('worker', 'resident_central', 'resident_tech', 'resident_edu'):
-            qs = qs.filter(worker=self.request.user)
-        elif worker:
-            qs = qs.filter(worker_id=worker)
+        user = self.request.user
+        if user.role in ('superadmin', 'admin'):
+            # 전체 조회 (superadmin/admin 본인 제외)
+            qs = qs.exclude(worker__role__in=['superadmin', 'admin'])
+            if worker:
+                qs = qs.filter(worker_id=worker)
+        elif user.role == 'resident_tech':
+            # 테크매니저: 본인 소속 지원청 인력
+            if user.support_center:
+                qs = qs.filter(worker__support_center=user.support_center)
+            else:
+                qs = qs.filter(worker=user)
+        else:
+            # worker, resident_central, resident_edu: 본인만
+            qs = qs.filter(worker=user)
 
         if date_from:
             qs = qs.filter(work_date__gte=date_from)
@@ -438,7 +473,7 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def monthly_grid(self, request):
-        """월별 그리드 (관리자: 인력×일별 근태 매트릭스)"""
+        """월별 그리드 (인력×일별 근태 매트릭스)"""
         import calendar
         from datetime import date
         from apps.accounts.models import User
@@ -449,9 +484,21 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
         date_from = date(year, month, 1)
         date_to   = date(year, month, days_in_month)
 
+        user = request.user
         workers_qs = User.objects.filter(
-            role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'], support_center__isnull=False
-        ).select_related('support_center').order_by('name')
+            role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'],
+            support_center__isnull=False, is_active=True
+        ).select_related('support_center')
+        # 역할별 필터링
+        if user.role in ('superadmin', 'admin'):
+            pass  # 전체
+        elif user.role == 'resident_tech':
+            if user.support_center:
+                workers_qs = workers_qs.filter(support_center=user.support_center)
+            else:
+                workers_qs = workers_qs.filter(id=user.id)
+        else:
+            workers_qs = workers_qs.filter(id=user.id)
         if center_id:
             workers_qs = workers_qs.filter(support_center_id=center_id)
 
@@ -462,12 +509,15 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
         for log in logs:
             log_map.setdefault(log.worker_id, {})[log.work_date.day] = log
 
+        # 정렬: 지원청 순서 → 테크매니저 우선 → 이름
+        ROLE_SORT = {'resident_tech': 0, 'resident_central': 1, 'resident_edu': 2, 'worker': 3}
         def center_order_key(w):
             cname = w.support_center.name if w.support_center else ''
             try:
-                return (CENTER_ORDER.index(cname), w.name)
+                cidx = CENTER_ORDER.index(cname)
             except ValueError:
-                return (len(CENTER_ORDER), w.name)
+                cidx = len(CENTER_ORDER)
+            return (cidx, ROLE_SORT.get(w.role, 9), w.name)
 
         result = []
         for w in sorted(workers_qs, key=center_order_key):
@@ -488,6 +538,8 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
             result.append({
                 'worker_id':   w.id,
                 'worker_name': w.name,
+                'role':        w.role,
+                'role_label':  w.get_role_display(),
                 'center_name': w.support_center.name,
                 'center_id':   w.support_center_id,
                 'daily':       daily,
@@ -521,9 +573,20 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
             date_from = date(year, 1, 1)
             date_to   = date(year, 12, 31)
 
+        user = request.user
         workers_qs = User.objects.filter(
-            role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'], support_center__isnull=False
-        ).select_related('support_center').order_by('name')
+            role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'],
+            support_center__isnull=False, is_active=True
+        ).select_related('support_center')
+        if user.role in ('superadmin', 'admin'):
+            pass
+        elif user.role == 'resident_tech':
+            if user.support_center:
+                workers_qs = workers_qs.filter(support_center=user.support_center)
+            else:
+                workers_qs = workers_qs.filter(id=user.id)
+        else:
+            workers_qs = workers_qs.filter(id=user.id)
         if center_id:
             workers_qs = workers_qs.filter(support_center_id=center_id)
 
