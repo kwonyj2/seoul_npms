@@ -287,8 +287,21 @@ class FileViewSet(viewsets.ModelViewSet):
     pagination_class = LargePagination  # 폴더 내 전체 파일 표시 (page_size=5000)
     parser_classes = [MultiPartParser, FormParser]
 
+    def _file_access_filter(self, qs):
+        """파일이 속한 폴더의 access_level 기준으로 필터링"""
+        role = self.request.user.role
+        if role == 'superadmin':
+            return qs
+        if role == 'admin':
+            return qs.exclude(folder__access_level='superadmin')
+        if role == 'resident_central':
+            return qs.filter(folder__access_level__in=['public', 'resident_central'])
+        return qs.filter(folder__access_level='public')
+
     def get_queryset(self):
         qs = File.objects.select_related('folder', 'school', 'uploaded_by').filter(is_deleted=False)
+        # 폴더 접근 수준 필터링
+        qs = self._file_access_filter(qs)
         folder_id = self.request.query_params.get('folder_id')
         if folder_id:
             qs = qs.filter(folder_id=folder_id)
@@ -561,6 +574,23 @@ class FileViewSet(viewsets.ModelViewSet):
         extract_ocr_text.delay(file_obj.id)
         return Response({'message': 'OCR 재추출 요청됨'})
 
+    def _check_folder_access(self, folder, role):
+        """폴더 접근 수준 체크"""
+        if not folder:
+            return True
+        lvl = folder.access_level
+        if role == 'superadmin':
+            return True
+        if lvl == 'superadmin':
+            return False
+        if role == 'admin':
+            return True
+        if lvl == 'admin':
+            return False
+        if role == 'resident_central':
+            return lvl in ('public', 'resident_central')
+        return lvl == 'public'
+
     @action(detail=True, methods=['get'])
     def download(self, request, pk=None):
         """파일 다운로드"""
@@ -569,6 +599,8 @@ class FileViewSet(viewsets.ModelViewSet):
         if not NasRoleConfig.can_do(request.user.role, 'download'):
             raise PermissionDenied('파일 다운로드 권한이 없습니다.')
         file_obj = self.get_object()
+        if not self._check_folder_access(file_obj.folder, request.user.role):
+            raise PermissionDenied('이 폴더에 접근할 권한이 없습니다.')
         if not os.path.exists(file_obj.file_path):
             return Response({'error': '파일이 존재하지 않습니다.'}, status=status.HTTP_404_NOT_FOUND)
         FileDownloadLog.objects.create(

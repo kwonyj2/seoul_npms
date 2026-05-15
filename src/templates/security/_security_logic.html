@@ -1,6 +1,6 @@
 // ═══ Excel 다운로드 공통 ═══════════════════
 function secExport(kindWithParams) {
-  if (USER_ROLE !== 'superadmin') { showToast('슈퍼관리자만 다운로드할 수 있습니다.','warning'); return; }
+  if (USER_ROLE !== 'superadmin') { showToast('권한이 없습니다.','warning'); return; }
   // kindWithParams 예: 'top_ips' 또는 'abnormal&days=14'
   window.location.href = SEC_API + '/export/?kind=' + kindWithParams;
 }

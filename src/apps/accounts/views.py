@@ -242,7 +242,10 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
-        # superadmin이 아니면 같은 지원청만
+        # 비superadmin에게 superadmin 계정 숨김 (스텔스)
+        if user.role != 'superadmin':
+            qs = qs.exclude(role='superadmin')
+        # superadmin/admin이 아니면 자기 자신만
         if user.role not in ('superadmin', 'admin'):
             qs = qs.filter(id=user.id)
         q = self.request.query_params.get('q')

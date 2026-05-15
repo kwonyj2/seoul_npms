@@ -202,7 +202,7 @@ def user_role_update(request, user_id):
         return JsonResponse({'error': '유효하지 않은 역할'}, status=400)
     # superadmin 보호: 자기 자신 또는 다른 superadmin 역할 변경 불가 (superadmin만 가능)
     if request.user.role != 'superadmin' and new_role == 'superadmin':
-        return JsonResponse({'error': '슈퍼관리자 역할은 슈퍼관리자만 부여 가능'}, status=403)
+        return JsonResponse({'error': '권한이 없습니다.'}, status=403)
     rows = User.objects.filter(id=user_id).update(role=new_role)
     if not rows:
         return JsonResponse({'error': '사용자 없음'}, status=404)
@@ -814,7 +814,7 @@ def system_expiry_api(request):
 
     # POST — superadmin만
     if getattr(request.user, 'role', '') != 'superadmin':
-        return JsonResponse({'error': '슈퍼관리자만 설정 가능합니다.'}, status=403)
+        return JsonResponse({'error': '권한이 없습니다.'}, status=403)
 
     data = json.loads(request.body)
     expiry_date = data.get('expiry_date')
