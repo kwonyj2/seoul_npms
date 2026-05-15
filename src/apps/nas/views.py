@@ -256,12 +256,23 @@ class FolderViewSet(viewsets.ModelViewSet):
             if not os.path.isdir(child_fs):
                 continue
             child_full_path = f'/{fs_rel}/{name}' if fs_rel else f'/{name}'
-            # DB 레코드 없으면 자동 생성
+            # DB 레코드 없으면 자동 생성 (부모의 접근 수준 상속)
+            inherit_level = parent_folder.access_level if parent_folder else 'public'
             child_folder, _ = Folder.objects.get_or_create(
                 full_path=child_full_path,
                 defaults={'name': name, 'parent': parent_folder,
-                          'created_by': request.user, 'access_level': 'public'}
+                          'created_by': request.user, 'access_level': inherit_level}
             )
+            # 접근 수준 체크 — 권한 없으면 건너뜀
+            role = request.user.role
+            lvl = child_folder.access_level
+            if role != 'superadmin':
+                if lvl == 'superadmin':
+                    continue
+                if role != 'admin' and lvl == 'admin':
+                    continue
+                if role not in ('admin', 'resident_central') and lvl == 'resident_central':
+                    continue
             has_children = False
             try:
                 has_children = any(
