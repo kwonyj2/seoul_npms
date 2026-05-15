@@ -959,10 +959,21 @@ async function bulkImportUsers(input){
   const fd=new FormData(); fd.append('file',input.files[0]);
   const ext=input.files[0].name.split('.').pop().toLowerCase();
   const url=ext==='csv'?`${API_BASE}/accounts/api/users/csv_import/`:`${API_BASE}/accounts/api/users/excel_import/`;
-  const r=await fetch(url,{method:'POST',headers:{'X-CSRFToken':CSRF_TOKEN},body:fd});
-  const d=await r.json();
-  alert(`생성: ${d.created||0}, 수정: ${d.updated||0}, 오류: ${(d.errors||[]).length}`);
-  input.value=''; loadUsers();
+  try {
+    const r=await fetch(url,{method:'POST',headers:{'X-CSRFToken':CSRF_TOKEN},body:fd});
+    const d=await r.json();
+    if (!r.ok) { showToast(d.error || `업로드 실패 (${r.status})`, 'danger'); input.value=''; return; }
+    let msg = `생성: ${d.created||0}건, 수정: ${d.updated||0}건`;
+    const errs = d.errors || [];
+    if (errs.length) {
+      msg += `\n\n오류 ${errs.length}건:\n`;
+      errs.slice(0, 20).forEach(e => { msg += `  행 ${e.row}: ${e.error}\n`; });
+      if (errs.length > 20) msg += `  ... 외 ${errs.length - 20}건`;
+    }
+    alert(msg);
+    if (d.created || d.updated) loadUsers();
+  } catch(e) { showToast('업로드 처리 실패: ' + e.message, 'danger'); }
+  input.value='';
 }
 function loadMatrix(){
   fetch(SYSCONF_API+'/modules/').then(r=>r.json()).then(d=>{
