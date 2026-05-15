@@ -86,7 +86,7 @@
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('roles',this);return false;"><i class="bi bi-shield-lock me-1"></i>역할별 모듈 권한</a></li>
     {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('export',this);return false;"><i class="bi bi-box-arrow-up me-1"></i>데이터 내보내기</a></li>{% endif %}
     <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('nas',this);return false;"><i class="bi bi-folder me-1"></i>NAS 권한 설정</a></li>
-    <li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('celery',this);return false;"><i class="bi bi-gear-wide-connected me-1"></i>작업 모니터링</a></li>
+    {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('celery',this);return false;"><i class="bi bi-gear-wide-connected me-1"></i>작업 모니터링</a></li>{% endif %}
     {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('docs',this);return false;"><i class="bi bi-file-earmark-ruled me-1"></i>산출물 조회</a></li>{% endif %}
     {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('dbadmin',this);return false;"><i class="bi bi-database-gear me-1"></i>DB 관리</a></li>{% endif %}
     {% if request.user.role == 'superadmin' %}<li class="nav-item"><a class="nav-link" href="#" onclick="switchTab('info',this);return false;"><i class="bi bi-info-circle me-1"></i>시스템 정보</a></li>{% endif %}
