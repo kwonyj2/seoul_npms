@@ -191,13 +191,26 @@
   color: #334155;
   padding: 4px 6px;
   border-right: 1px solid #e2e8f0;
-  min-width: 120px;
-  max-width: 120px;
+  min-width: 80px;
+  max-width: 80px;
+  white-space: nowrap;
+}
+.grid-table .col-role {
+  position: sticky;
+  left: 80px;
+  background: #f8fafc;
+  z-index: 5;
+  font-size: .65rem;
+  color: #64748b;
+  padding: 4px 4px;
+  border-right: 1px solid #e2e8f0;
+  min-width: 80px;
+  max-width: 80px;
   white-space: nowrap;
 }
 .grid-table .col-worker {
   position: sticky;
-  left: 120px;
+  left: 160px;
   background: #fff;
   z-index: 5;
   font-size: .78rem;
@@ -211,8 +224,10 @@
   text-overflow: ellipsis;
 }
 .grid-table thead .col-center,
+.grid-table thead .col-role,
 .grid-table thead .col-worker { z-index: 15; }
 .grid-table tbody tr:hover .col-worker,
+.grid-table tbody tr:hover .col-role,
 .grid-table tbody tr:hover .col-center { background: #f0f9ff; }
 
 /* center group header */
@@ -1144,8 +1159,9 @@ function renderGrid(data) {
 
   // thead
   thead.innerHTML =
-    `<th class="col-center" style="position:sticky;top:0;left:0;z-index:20;background:#f8fafc;">담당지역</th>
-     <th class="col-worker" style="position:sticky;top:0;left:120px;z-index:20;background:#f8fafc;">인력</th>` +
+    `<th class="col-center" style="position:sticky;top:0;left:0;z-index:20;background:#f8fafc;">지원청</th>
+     <th class="col-role" style="position:sticky;top:0;left:80px;z-index:20;background:#f8fafc;">역할</th>
+     <th class="col-worker" style="position:sticky;top:0;left:160px;z-index:20;background:#f8fafc;">인력</th>` +
     Array.from({length:days},(_,i)=>{
       const d = i+1;
       const dow = new Date(year, month-1, d).getDay();
@@ -1155,18 +1171,10 @@ function renderGrid(data) {
 
   // tbody
   let html = '';
-  let lastCenter = null;
   (data.workers||[]).forEach(w => {
-    if (w.center_name !== lastCenter) {
-      lastCenter = w.center_name;
-      html += `<tr class="center-group-row">
-        <td colspan="${days+2}" style="position:sticky;left:0;">
-          <i class="bi bi-building me-1"></i>${w.center_name}
-        </td>
-      </tr>`;
-    }
     html += `<tr>
-      <td class="col-center"><small class="text-muted" style="font-size:.6rem;">${w.role_label||''}</small> ${w.center_name}</td>
+      <td class="col-center">${w.center_name}</td>
+      <td class="col-role"><small>${w.role_label||''}</small></td>
       <td class="col-worker" title="${w.worker_name}">${w.worker_name}</td>
       ${Array.from({length:days},(_,i)=>{
         const d = i+1;

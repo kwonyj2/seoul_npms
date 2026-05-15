@@ -59,7 +59,7 @@ def center_worker_tree(request):
         workers = workers.filter(id=user.id)
     else:
         workers = workers.none()
-    workers = sorted(workers, key=lambda w: (ROLE_SORT.get(w.role, 9), w.name))
+    workers = sorted(workers, key=lambda w: w.id)
 
     for w in workers:
         cname = w.support_center.name
@@ -509,18 +509,9 @@ class AttendanceLogViewSet(viewsets.ModelViewSet):
         for log in logs:
             log_map.setdefault(log.worker_id, {})[log.work_date.day] = log
 
-        # 정렬: 서울시교육청(센터없음) 맨 앞 → 지원청 순서 → 테크매니저 우선 → 이름
-        ROLE_SORT = {'resident_tech': 0, 'resident_central': 1, 'resident_edu': 2, 'worker': 3}
+        # 정렬: 등록 순서(id) — CSV 일괄등록 순서 유지
         def center_order_key(w):
-            cname = w.support_center.name if w.support_center else ''
-            if not cname:
-                cidx = -1  # 서울시교육청 맨 앞
-            else:
-                try:
-                    cidx = CENTER_ORDER.index(cname)
-                except ValueError:
-                    cidx = len(CENTER_ORDER)
-            return (cidx, ROLE_SORT.get(w.role, 9), w.name)
+            return w.id
 
         result = []
         for w in sorted(workers_qs, key=center_order_key):
