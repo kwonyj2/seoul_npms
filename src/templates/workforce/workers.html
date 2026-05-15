@@ -293,12 +293,7 @@
              ondrop="handlePhotoDrop(event)">
           <div class="photo-placeholder" id="hero-photo-placeholder"><i class="bi bi-person-fill"></i></div>
           <img id="hero-photo-img" src="" alt="증명사진" style="display:none;">
-          <div class="photo-hover-overlay">
-            <i class="bi bi-camera-fill"></i>
-            <span>사진 변경</span>
-          </div>
-          <!-- opacity:0 으로 사진 영역 전체를 덮음 — 직접 클릭되므로 JS .click() 불필요 -->
-          <input type="file" id="photo-file-input" accept="image/*" onchange="uploadPhoto(this)">
+          <!-- 사진 업로드 제거됨 — NAS에서 관리 -->
         </div>
         <div class="profile-hero-info">
           <div class="hero-name" id="hero-name">-</div>
@@ -347,28 +342,25 @@
         <div class="row g-3">
           <div class="col-sm-6">
             <div class="profile-field-label">생년월일</div>
-            <input type="date" class="profile-input" id="ed-birth" style="width:100%;">
+            <input type="date" class="profile-input" id="ed-birth" style="width:100%;" readonly>
           </div>
           <div class="col-sm-6">
             <div class="profile-field-label">입사일</div>
-            <input type="date" class="profile-input" id="ed-join" style="width:100%;">
+            <input type="date" class="profile-input" id="ed-join" style="width:100%;" readonly>
           </div>
           <div class="col-12">
             <div class="profile-field-label">소개 / 특이사항</div>
-            <textarea class="profile-textarea" id="ed-bio" rows="3" placeholder="인력 소개 또는 특이사항을 입력하세요..."></textarea>
+            <textarea class="profile-textarea" id="ed-bio" rows="3" readonly></textarea>
           </div>
           <div class="col-12">
             <div class="profile-field-label">경력 요약</div>
-            <textarea class="profile-textarea" id="ed-career" rows="5" placeholder="경력 및 자격사항을 입력하세요...&#10;예) 2020~2023 ㈜네트웍코리아 네트워크 엔지니어&#10;     CCNA 자격증 보유"></textarea>
+            <textarea class="profile-textarea" id="ed-career" rows="5" readonly></textarea>
           </div>
           <div class="col-12">
             <div class="profile-field-label">비고</div>
-            <textarea class="profile-textarea" id="ed-notes" rows="2" placeholder="추가 비고..."></textarea>
+            <textarea class="profile-textarea" id="ed-notes" rows="2" readonly></textarea>
           </div>
-          <div class="col-12 d-flex justify-content-end gap-2">
-            <button class="btn btn-sm btn-outline-secondary" onclick="loadProfile(_selectedWorker)">초기화</button>
-            <button class="btn btn-sm btn-primary" onclick="saveCareer()"><i class="bi bi-check2 me-1"></i>저장</button>
-          </div>
+          <!-- 경력프로필 저장 버튼 제거됨 — NAS에서 관리 -->
         </div>
       </div>
 
@@ -377,17 +369,7 @@
         <!-- 좌측: 파일 목록 -->
         <div class="doc-list-col">
           <div class="doc-toolbar">
-            <select class="form-select form-select-sm" id="upload-cat" style="width:auto;flex-shrink:0;">
-              <option value="성범죄경력조회">성범죄 경력조회</option>
-              <option value="보안서약서">보안서약서</option>
-              <option value="경력증명서">경력증명서</option>
-              <option value="자격증">자격증</option>
-              <option value="기타">기타 서류</option>
-            </select>
-            <label class="btn btn-sm btn-outline-primary mb-0 ms-auto">
-              <i class="bi bi-upload me-1"></i>업로드
-              <input type="file" id="doc-file-input" accept="image/*,.pdf" multiple style="display:none" onchange="uploadDocs(this)">
-            </label>
+            <span class="small text-muted"><i class="bi bi-folder2 me-1"></i>NAS 파일에서 관리</span>
           </div>
           <div id="docs-wrap">
             <div class="text-center text-muted py-4 small">인력을 선택하면 서류가 표시됩니다.</div>
