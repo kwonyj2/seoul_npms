@@ -47,7 +47,7 @@ class PostDetailSerializer(serializers.ModelSerializer):
 class PostCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Post
-        fields = ['category', 'title', 'content', 'is_pinned']
+        fields = ['id', 'category', 'title', 'content', 'is_pinned']
 
     def create(self, validated_data):
         request = self.context.get('request')
