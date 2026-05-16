@@ -15,6 +15,8 @@ class Post(models.Model):
     CATEGORY_CHOICES = [
         ('notice',    '업무공지'),
         ('data_room', '자료실'),
+        ('system',    '시스템'),
+        ('etc',       '기타'),
     ]
     category    = models.CharField('분류', max_length=20, choices=CATEGORY_CHOICES, default='notice')
     title       = models.CharField('제목', max_length=200)

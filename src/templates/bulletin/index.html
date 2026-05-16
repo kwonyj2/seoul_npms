@@ -29,6 +29,16 @@
               <i class="bi bi-folder2 me-1"></i>자료실
             </button>
           </li>
+          <li class="nav-item">
+            <button class="nav-link py-1" onclick="setCategory('system')" id="tab-system">
+              <i class="bi bi-gear me-1"></i>시스템
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link py-1" onclick="setCategory('etc')" id="tab-etc">
+              <i class="bi bi-three-dots me-1"></i>기타
+            </button>
+          </li>
         </ul>
         <!-- 검색 + 글쓰기 -->
         <div class="d-flex gap-2 align-items-center">
@@ -112,6 +122,8 @@
             <select id="write-category" class="form-select form-select-sm">
               <option value="notice">업무공지</option>
               <option value="data_room">자료실</option>
+              <option value="system">시스템</option>
+              <option value="etc">기타</option>
             </select>
           </div>
           <div class="col-8">
@@ -160,6 +172,8 @@ const API = API_BASE + '/bulletin/posts';
 const CAT_BADGE = {
   notice:    '<span class="badge bg-danger">업무공지</span>',
   data_room: '<span class="badge bg-primary">자료실</span>',
+  system:    '<span class="badge bg-secondary">시스템</span>',
+  etc:       '<span class="badge bg-info">기타</span>',
 };
 const FILE_ICON = ext => {
   const m = { pdf:'bi-file-pdf text-danger', doc:'bi-file-word text-primary',
@@ -227,10 +241,11 @@ function changePage(d) { currentPage = Math.max(1, Math.min(totalPages, currentP
 function setCategory(cat) {
   currentCategory = cat;
   currentPage = 1;
-  ['all','notice','data'].forEach(t => {
+  ['all','notice','data','system','etc'].forEach(t => {
     const tab = document.getElementById(`tab-${t}`);
     if (tab) tab.classList.toggle('active',
-      (t==='all'&&cat==='') || (t==='notice'&&cat==='notice') || (t==='data'&&cat==='data_room'));
+      (t==='all'&&cat==='') || (t==='notice'&&cat==='notice') || (t==='data'&&cat==='data_room')
+      || (t==='system'&&cat==='system') || (t==='etc'&&cat==='etc'));
   });
   loadPosts();
 }
