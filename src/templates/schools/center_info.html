@@ -126,22 +126,33 @@
 .role-admin { background:#fce7f3; color:#be185d; }
 .role-resident { background:#d1fae5; color:#059669; }
 
-/* 센터 사진 그리드 */
+/* 기본정보 2컬럼 레이아웃 */
+.info-layout {
+  display:grid; grid-template-columns:1fr 1fr; gap:20px;
+}
+@media(max-width:960px){ .info-layout{ grid-template-columns:1fr; } }
+.info-left { min-width:0; }
+.info-right { min-width:0; }
+.info-right-title {
+  font-size:.8rem; font-weight:700; color:#1e293b; margin-bottom:8px;
+}
+
+/* 센터 사진 그리드 (기본정보 우측) */
 .photo-grid {
-  display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));
-  gap:12px; margin-top:8px;
+  display:grid; grid-template-columns:repeat(2, 1fr);
+  gap:10px;
 }
 .photo-card {
   border-radius:10px; overflow:hidden; border:1px solid #e2e8f0;
   background:#f8fafc;
 }
 .photo-card img {
-  width:100%; height:180px; object-fit:cover; cursor:pointer;
+  width:100%; height:140px; object-fit:cover; cursor:pointer;
   transition:transform .2s;
 }
 .photo-card img:hover { transform:scale(1.02); }
 .photo-card .photo-label {
-  padding:6px 10px; font-size:.72rem; color:#475569; font-weight:600;
+  padding:5px 8px; font-size:.7rem; color:#475569; font-weight:600;
   text-align:center; background:#fff;
 }
 
@@ -198,7 +209,6 @@
 
     <div class="ci-tabs" id="tabBar" style="display:none;">
       <div class="ci-tab active" onclick="switchTab('info',this)"><i class="bi bi-info-circle me-1"></i>기본정보</div>
-      <div class="ci-tab" onclick="switchTab('photos',this)"><i class="bi bi-camera me-1"></i>센터사진</div>
       <div class="ci-tab" onclick="switchTab('map',this)"><i class="bi bi-map me-1"></i>찾아가는길</div>
     </div>
 
@@ -209,32 +219,34 @@
         <span style="font-size:.85rem;">좌측에서 센터를 선택하세요</span>
       </div>
       <div id="infoContent" style="display:none;">
-        <table class="info-table" id="infoTable">
-          <tr><th>지원청명</th><td id="infoCenterName">-</td></tr>
-          <tr><th>주소</th><td id="infoAddress">-</td></tr>
-          <tr><th>센터장</th><td id="infoChief">-</td></tr>
-          <tr><th>연락처</th><td id="infoPhone">-</td></tr>
-          <tr><th>관할 학교</th><td id="infoSchoolCount">-</td></tr>
-          <tr><th>인원</th><td id="infoMemberCount">-</td></tr>
-        </table>
-
-        <!-- 소속인원 (기본정보 내) -->
-        <div style="margin-top:18px;">
-          <div style="font-size:.8rem; font-weight:700; color:#1e293b; margin-bottom:4px;">
-            <i class="bi bi-people me-1"></i>소속 인원
+        <div class="info-layout">
+          <!-- 좌측: 정보 + 소속인원 -->
+          <div class="info-left">
+            <table class="info-table" id="infoTable">
+              <tr><th>지원청명</th><td id="infoCenterName">-</td></tr>
+              <tr><th>주소</th><td id="infoAddress">-</td></tr>
+              <tr><th>센터장</th><td id="infoChief">-</td></tr>
+              <tr><th>연락처</th><td id="infoPhone">-</td></tr>
+              <tr><th>관할 학교</th><td id="infoSchoolCount">-</td></tr>
+              <tr><th>인원</th><td id="infoMemberCount">-</td></tr>
+            </table>
+            <div style="margin-top:18px;">
+              <div style="font-size:.8rem; font-weight:700; color:#1e293b; margin-bottom:4px;">
+                <i class="bi bi-people me-1"></i>소속 인원
+              </div>
+              <div id="memberGrid" class="member-grid"></div>
+            </div>
           </div>
-          <div id="memberGrid" class="member-grid"></div>
+          <!-- 우측: 센터 사진 -->
+          <div class="info-right">
+            <div class="info-right-title"><i class="bi bi-camera me-1"></i>센터 사진</div>
+            <div id="photoGrid" class="photo-grid"></div>
+            <div id="photoEmpty" style="display:none; text-align:center; color:#94a3b8; padding:30px 0; font-size:.78rem;">
+              <i class="bi bi-camera" style="font-size:1.8rem; display:block; margin-bottom:6px;"></i>
+              등록된 센터 사진이 없습니다.
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
-
-    <!-- 센터사진 탭 -->
-    <div class="tab-pane" id="tab-photos">
-      <div id="photoGrid" class="photo-grid"></div>
-      <div id="photoEmpty" style="display:none; text-align:center; color:#94a3b8; padding:40px; font-size:.82rem;">
-        <i class="bi bi-camera" style="font-size:2rem; display:block; margin-bottom:8px;"></i>
-        등록된 센터 사진이 없습니다.<br>
-        <span style="font-size:.72rem;">NAS &gt; 센터 정보 폴더에 사진을 배치하세요.</span>
       </div>
     </div>
 
