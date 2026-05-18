@@ -230,7 +230,7 @@
 
 <!-- 사진 업로드 모달 -->
 <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel">
-  <div class="modal-dialog modal-lg">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header py-2">
         <h6 class="modal-title" id="uploadModalLabel"><i class="bi bi-camera me-2"></i>현장 사진 업로드</h6>
@@ -374,6 +374,18 @@
   #preview-img-wrap {
     height:250px !important;
   }
+  /* 업로드 모달 모바일 최적화 */
+  #uploadModal .modal-dialog {
+    margin:0.5rem; max-width:calc(100vw - 1rem);
+  }
+  #uploadModal .modal-body {
+    padding:0.5rem !important;
+  }
+  #drop-zone {
+    min-height:70px !important; padding:12px !important;
+  }
+  #drop-zone .fs-3 { font-size:1.2rem !important; }
+  #preview-grid { max-height:120px !important; }
 }
 </style>
 {% block extra_js %}
@@ -822,14 +834,18 @@ function resolveLocationIds() {
 
 async function loadWorkTypes() {
   const sel = document.getElementById('up-worktype');
-  sel.innerHTML = '<option value="">선택하세요</option>';   // 매번 초기화
+  sel.innerHTML = '<option value="">선택하세요</option>';
   try {
     const data = await apiGet(`${API_BASE}/photos/work-types/`);
-    (data.results || data).forEach(w => {
+    const list = data.results || data;
+    list.forEach(w => {
       sel.insertAdjacentHTML('beforeend', `<option value="${w.id}">${w.name}</option>`);
     });
     sel.insertAdjacentHTML('beforeend', '<option value="etc">기타(직접입력)</option>');
-  } catch(e) {}
+  } catch(e) {
+    console.error('작업명 로드 실패:', e);
+    sel.insertAdjacentHTML('beforeend', '<option value="etc">기타(직접입력)</option>');
+  }
 }
 
 function toggleWorkTypeEtc() {
