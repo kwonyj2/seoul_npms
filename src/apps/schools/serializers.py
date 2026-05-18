@@ -1,5 +1,7 @@
+import os
+from django.conf import settings
 from rest_framework import serializers
-from .models import SupportCenter, SchoolType, School, SchoolBuilding, SchoolFloor, SchoolRoom, SchoolContact, SchoolNetwork, CenterPhoto
+from .models import SupportCenter, SchoolType, School, SchoolBuilding, SchoolFloor, SchoolRoom, SchoolContact, SchoolNetwork
 
 
 class SupportCenterSerializer(serializers.ModelSerializer):
@@ -7,44 +9,86 @@ class SupportCenterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SupportCenter
-        fields = ['id', 'code', 'name', 'address', 'phone', 'lat', 'lng', 'url', 'is_active', 'school_count']
+        fields = ['id', 'code', 'name', 'address', 'phone', 'lat', 'lng',
+                  'url', 'chief_name', 'is_active', 'school_count']
 
     def get_school_count(self, obj):
         return obj.schools.filter(is_active=True).count()
 
 
-class CenterPhotoSerializer(serializers.ModelSerializer):
-    photo_type_display = serializers.CharField(source='get_photo_type_display', read_only=True)
-
-    class Meta:
-        model = CenterPhoto
-        fields = ['id', 'center', 'photo_type', 'photo_type_display',
-                  'image', 'caption', 'order', 'created_at']
-        read_only_fields = ['created_at']
-
-
 class CenterDetailSerializer(serializers.ModelSerializer):
-    """센터 상세 정보 (소속인원 + 사진 포함)"""
+    """센터 상세 정보 (소속인원 + NAS 사진 포함)"""
     school_count = serializers.SerializerMethodField()
-    photos = CenterPhotoSerializer(many=True, read_only=True)
+    photos = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
 
     class Meta:
         model = SupportCenter
         fields = ['id', 'code', 'name', 'address', 'phone', 'lat', 'lng',
-                  'url', 'is_active', 'school_count', 'photos', 'members']
+                  'url', 'chief_name', 'is_active', 'school_count', 'photos', 'members']
 
     def get_school_count(self, obj):
         return obj.schools.filter(is_active=True).count()
 
+    def get_photos(self, obj):
+        """NAS 센터 정보 폴더에서 사진 자동 로드"""
+        PHOTO_TYPES = [
+            ('간판이미지',       '간판',       '간판'),
+            ('건물이미지',       '건물',       '건물'),
+            ('사무실입구이미지', '사무실입구', '사무실입구'),
+            ('사무실내부이미지', '사무실내부', '사무실내부'),
+        ]
+        center_name = obj.name.replace('교육지원청', '').strip()
+        result = []
+        base_dir = os.path.join(settings.MEDIA_ROOT, '센터 정보')
+        media_url = settings.MEDIA_URL
+
+        for folder, prefix, label in PHOTO_TYPES:
+            folder_path = os.path.join(base_dir, folder)
+            if not os.path.isdir(folder_path):
+                continue
+            for fname in os.listdir(folder_path):
+                name_part = os.path.splitext(fname)[0]
+                ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
+                if center_name in name_part and ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
+                    # NAS File DB에서 preview URL 조회
+                    from apps.nas.models import File as NasFile
+                    nf = NasFile.objects.filter(
+                        name=fname, folder__full_path=f'/센터 정보/{folder}'
+                    ).first()
+                    url = f"/npms/api/nas/files/{nf.id}/preview/" if nf else f"{media_url}센터 정보/{folder}/{fname}"
+                    result.append({'label': label, 'url': url, 'filename': fname})
+                    break
+        return result
+
     def get_members(self, obj):
+        """소속인원 + NAS 증명사진 URL"""
         from apps.accounts.models import User
         workers = User.objects.filter(
             support_center=obj, is_active=True
-        ).order_by('role', 'name').values(
-            'id', 'username', 'name', 'role', 'phone', 'email'
-        )
-        return list(workers)
+        ).order_by('role', 'name')
+
+        result = []
+        photo_dir = os.path.join(settings.MEDIA_ROOT, '인력관리', '증명사진')
+        for w in workers:
+            photo_url = ''
+            if os.path.isdir(photo_dir):
+                for fname in os.listdir(photo_dir):
+                    ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
+                    if w.name in fname and ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
+                        from apps.nas.models import File as NasFile
+                        nf = NasFile.objects.filter(
+                            name=fname, folder__full_path='/인력관리/증명사진'
+                        ).first()
+                        photo_url = f"/npms/api/nas/files/{nf.id}/preview/" if nf else \
+                            f"{settings.MEDIA_URL}인력관리/증명사진/{fname}"
+                        break
+            result.append({
+                'id': w.id, 'name': w.name, 'role': w.role,
+                'phone': w.phone, 'email': w.email,
+                'photo_url': photo_url,
+            })
+        return result
 
 
 class SchoolTypeSerializer(serializers.ModelSerializer):

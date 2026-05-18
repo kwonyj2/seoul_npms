@@ -6,7 +6,6 @@ app_name = 'schools'
 
 router = DefaultRouter()
 router.register(r'centers',       views.SupportCenterViewSet, basename='center')
-router.register(r'center-photos', views.CenterPhotoViewSet,   basename='center-photo')
 router.register(r'types',         views.SchoolTypeViewSet,     basename='schooltype')
 router.register(r'schools',       views.SchoolViewSet,         basename='school')
 router.register(r'buildings',     views.SchoolBuildingViewSet, basename='building')

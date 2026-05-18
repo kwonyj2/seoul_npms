@@ -27,6 +27,7 @@ class SupportCenter(models.Model):
     lat        = models.DecimalField('위도', max_digits=10, decimal_places=7, null=True, blank=True)
     lng        = models.DecimalField('경도', max_digits=10, decimal_places=7, null=True, blank=True)
     url        = models.URLField('홈페이지', blank=True)
+    chief_name = models.CharField('센터장', max_length=50, blank=True)
     is_active  = models.BooleanField('활성', default=True)
 
     class Meta:
@@ -38,33 +39,6 @@ class SupportCenter(models.Model):
     def __str__(self):
         return self.name
 
-
-class CenterPhoto(models.Model):
-    """교육지원청(센터) 사진"""
-    PHOTO_TYPE_CHOICES = [
-        ('exterior',  '외부건물'),
-        ('interior',  '내부'),
-        ('entrance',  '정문'),
-        ('signboard', '간판'),
-    ]
-    center     = models.ForeignKey(SupportCenter, on_delete=models.CASCADE,
-                                   verbose_name='지원청', related_name='photos')
-    photo_type = models.CharField('사진유형', max_length=20, choices=PHOTO_TYPE_CHOICES)
-    image      = models.ImageField('사진', upload_to='centers/photos/')
-    caption    = models.CharField('설명', max_length=200, blank=True)
-    order      = models.PositiveSmallIntegerField('정렬순서', default=0)
-    uploaded_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL,
-                                    null=True, blank=True, verbose_name='업로드자')
-    created_at = models.DateTimeField('등록일시', auto_now_add=True)
-
-    class Meta:
-        db_table = 'center_photos'
-        verbose_name = '센터 사진'
-        verbose_name_plural = '센터 사진 목록'
-        ordering = ['center', 'order', 'photo_type']
-
-    def __str__(self):
-        return f'{self.center.name} - {self.get_photo_type_display()}'
 
 
 class SchoolType(models.Model):

@@ -9,7 +9,7 @@
 <style>
 /* ════════ 레이아웃 ════════ */
 .ci-body {
-  display:grid; grid-template-columns:240px 1fr; gap:12px;
+  display:grid; grid-template-columns:220px 1fr; gap:12px;
   padding:12px 16px 20px;
 }
 @media(max-width:820px){ .ci-body{ grid-template-columns:1fr; } }
@@ -86,27 +86,43 @@
 .info-table td { padding:7px 12px; border-bottom:1px solid #f0f0f0; color:#1e293b; }
 
 /* 소속인원 */
-.member-list { margin-top:14px; }
+.member-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));
+  gap:12px; margin-top:12px;
+}
 .member-card {
-  display:inline-flex; align-items:center; gap:6px;
-  padding:5px 12px; margin:3px 4px; border-radius:8px;
-  background:#f8fafc; border:1px solid #e2e8f0; font-size:.76rem;
+  display:flex; flex-direction:column; align-items:center;
+  padding:14px 10px; border-radius:10px;
+  background:#f8fafc; border:1px solid #e2e8f0; text-align:center;
 }
-.member-card .role-badge {
-  font-size:.6rem; padding:1px 6px; border-radius:10px; font-weight:600;
+.member-photo {
+  width:72px; height:90px; border-radius:6px; object-fit:cover;
+  border:1px solid #e2e8f0; background:#fff; margin-bottom:8px;
 }
+.member-photo-empty {
+  width:72px; height:90px; border-radius:6px;
+  border:1px solid #e2e8f0; background:#f1f5f9;
+  display:flex; align-items:center; justify-content:center;
+  color:#cbd5e1; font-size:1.5rem; margin-bottom:8px;
+}
+.member-name { font-size:.82rem; font-weight:700; color:#1e293b; }
+.member-role {
+  font-size:.62rem; padding:1px 8px; border-radius:10px; font-weight:600;
+  margin-top:4px; display:inline-block;
+}
+.member-phone { font-size:.7rem; color:#94a3b8; margin-top:4px; }
 .role-worker { background:#dbeafe; color:#1d4ed8; }
 .role-admin { background:#fce7f3; color:#be185d; }
 .role-resident { background:#d1fae5; color:#059669; }
 
-/* 사진 그리드 */
+/* 센터 사진 그리드 */
 .photo-grid {
-  display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));
   gap:12px; margin-top:8px;
 }
 .photo-card {
   border-radius:10px; overflow:hidden; border:1px solid #e2e8f0;
-  background:#f8fafc; position:relative;
+  background:#f8fafc;
 }
 .photo-card img {
   width:100%; height:180px; object-fit:cover; cursor:pointer;
@@ -116,31 +132,6 @@
 .photo-card .photo-label {
   padding:6px 10px; font-size:.72rem; color:#475569; font-weight:600;
   text-align:center; background:#fff;
-}
-.photo-card .photo-delete {
-  position:absolute; top:6px; right:6px;
-  background:rgba(0,0,0,.5); color:#fff; border:none; border-radius:50%;
-  width:24px; height:24px; font-size:.7rem; cursor:pointer;
-  display:none; align-items:center; justify-content:center;
-}
-.photo-card:hover .photo-delete { display:flex; }
-
-/* 사진 업로드 */
-.photo-upload-zone {
-  border:2px dashed #cbd5e1; border-radius:10px; padding:24px;
-  text-align:center; color:#94a3b8; cursor:pointer; margin-top:12px;
-  transition:border-color .2s, background .2s;
-}
-.photo-upload-zone:hover { border-color:#2563eb; background:#f0f7ff; }
-.photo-upload-zone i { font-size:1.5rem; display:block; margin-bottom:6px; }
-
-/* 기본정보 내 썸네일 */
-.info-thumbs {
-  display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;
-}
-.info-thumb {
-  width:100px; height:75px; border-radius:8px; object-fit:cover;
-  border:1px solid #e2e8f0; cursor:pointer;
 }
 
 /* 지도 */
@@ -181,7 +172,8 @@
 
     <div class="ci-tabs" id="tabBar" style="display:none;">
       <div class="ci-tab active" onclick="switchTab('info',this)"><i class="bi bi-info-circle me-1"></i>기본정보</div>
-      <div class="ci-tab" onclick="switchTab('photos',this)"><i class="bi bi-camera me-1"></i>사진</div>
+      <div class="ci-tab" onclick="switchTab('members',this)"><i class="bi bi-people me-1"></i>소속인원</div>
+      <div class="ci-tab" onclick="switchTab('photos',this)"><i class="bi bi-camera me-1"></i>센터사진</div>
       <div class="ci-tab" onclick="switchTab('map',this)"><i class="bi bi-map me-1"></i>찾아가는길</div>
     </div>
 
@@ -193,48 +185,30 @@
       </div>
       <div id="infoContent" style="display:none;">
         <table class="info-table">
+          <tr><th>지원청명</th><td id="infoCenterName">-</td></tr>
           <tr><th>주소</th><td id="infoAddress">-</td></tr>
+          <tr><th>센터장</th><td id="infoChief">-</td></tr>
           <tr><th>연락처</th><td id="infoPhone">-</td></tr>
           <tr><th>홈페이지</th><td id="infoUrl">-</td></tr>
           <tr><th>관할 학교</th><td id="infoSchoolCount">-</td></tr>
+          <tr><th>인원</th><td id="infoMemberCount">-</td></tr>
         </table>
-
-        <div style="margin-top:16px;">
-          <div style="font-size:.8rem; font-weight:700; color:#1e293b; margin-bottom:6px;">
-            <i class="bi bi-camera me-1"></i>센터 사진
-          </div>
-          <div class="info-thumbs" id="infoThumbs">
-            <span style="font-size:.75rem; color:#94a3b8;">등록된 사진이 없습니다</span>
-          </div>
-        </div>
-
-        <div class="member-list">
-          <div style="font-size:.8rem; font-weight:700; color:#1e293b; margin-bottom:6px;">
-            <i class="bi bi-people me-1"></i>소속 인원
-          </div>
-          <div id="memberCards">
-            <span style="font-size:.75rem; color:#94a3b8;">소속 인원이 없습니다</span>
-          </div>
-        </div>
       </div>
     </div>
 
-    <!-- 사진 탭 -->
+    <!-- 소속인원 탭 -->
+    <div class="tab-pane" id="tab-members">
+      <div id="memberGrid" class="member-grid"></div>
+    </div>
+
+    <!-- 센터사진 탭 -->
     <div class="tab-pane" id="tab-photos">
       <div id="photoGrid" class="photo-grid"></div>
-      <div class="photo-upload-zone" id="uploadZone" onclick="document.getElementById('photoInput').click()">
-        <i class="bi bi-cloud-arrow-up"></i>
-        <div style="font-size:.78rem;">사진 업로드 (클릭 또는 드래그)</div>
-        <div style="font-size:.68rem; margin-top:2px;">외부건물 / 내부 / 정문 / 간판</div>
+      <div id="photoEmpty" style="display:none; text-align:center; color:#94a3b8; padding:40px; font-size:.82rem;">
+        <i class="bi bi-camera" style="font-size:2rem; display:block; margin-bottom:8px;"></i>
+        등록된 센터 사진이 없습니다.<br>
+        <span style="font-size:.72rem;">NAS &gt; 센터 정보 폴더에 사진을 배치하세요.</span>
       </div>
-      <input type="file" id="photoInput" accept="image/*" multiple style="display:none;"
-             onchange="uploadPhotos(this.files)">
-      <select id="photoTypeSelect" style="display:none;">
-        <option value="exterior">외부건물</option>
-        <option value="interior">내부</option>
-        <option value="entrance">정문</option>
-        <option value="signboard">간판</option>
-      </select>
     </div>
 
     <!-- 찾아가는길 탭 -->
@@ -248,35 +222,12 @@
 <div class="img-modal" id="imgModal" onclick="this.classList.remove('show')">
   <img id="imgModalSrc" src="" alt="">
 </div>
-
-<!-- 사진유형 선택 모달 -->
-<div class="modal fade" id="photoTypeModal" tabindex="-1">
-  <div class="modal-dialog modal-sm modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header py-2">
-        <h6 class="modal-title" style="font-size:.85rem;">사진 유형 선택</h6>
-        <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <select class="form-select form-select-sm" id="modalPhotoType">
-          <option value="exterior">외부건물</option>
-          <option value="interior">내부</option>
-          <option value="entrance">정문</option>
-          <option value="signboard">간판</option>
-        </select>
-      </div>
-      <div class="modal-footer py-2">
-        <button class="btn btn-sm btn-primary" id="confirmUploadBtn">업로드</button>
-      </div>
-    </div>
-  </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/ol@7.5.2/dist/ol.js"></script>
 <script>
-const API = '/npms/schools';
+const API = '/npms/api/schools';
 const CSRF = document.querySelector('[name=csrfmiddlewaretoken]')?.value
            || '{{ csrf_token }}';
 
@@ -294,7 +245,6 @@ const ROLE_CSS = {
 let centers = [];
 let currentCenter = null;
 let centerMap = null;
-let pendingFiles = null;
 
 // ── 초기화 ──
 document.addEventListener('DOMContentLoaded', loadCenters);
@@ -313,11 +263,9 @@ async function loadCenters() {
 }
 
 async function selectCenter(id) {
-  // 좌측 활성화
   document.querySelectorAll('.center-item').forEach(el => el.classList.remove('active'));
   document.querySelector(`.center-item[data-id="${id}"]`)?.classList.add('active');
 
-  // 상세 로드
   const res = await fetch(`${API}/centers/${id}/`, {headers:{'Accept':'application/json'}});
   currentCenter = await res.json();
 
@@ -326,18 +274,22 @@ async function selectCenter(id) {
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('infoContent').style.display = '';
 
+  centerMap = null;
   renderInfo();
+  renderMembers();
   renderPhotos();
-  // 탭 초기화
   switchTab('info', document.querySelector('.ci-tab'));
 }
 
 // ── 기본정보 탭 ──
 function renderInfo() {
   const c = currentCenter;
+  document.getElementById('infoCenterName').textContent = c.name;
   document.getElementById('infoAddress').textContent = c.address || '-';
+  document.getElementById('infoChief').textContent = c.chief_name || '-';
   document.getElementById('infoPhone').textContent = c.phone || '-';
   document.getElementById('infoSchoolCount').textContent = `${c.school_count}개교`;
+  document.getElementById('infoMemberCount').textContent = `${(c.members || []).length}명`;
 
   const urlEl = document.getElementById('infoUrl');
   if (c.url) {
@@ -345,110 +297,48 @@ function renderInfo() {
   } else {
     urlEl.textContent = '-';
   }
-
-  // 썸네일
-  const thumbs = document.getElementById('infoThumbs');
-  if (c.photos && c.photos.length > 0) {
-    thumbs.innerHTML = c.photos.map(p =>
-      `<img class="info-thumb" src="${p.image}" alt="${p.photo_type_display}"
-            title="${p.photo_type_display}" onclick="showImg('${p.image}')">`
-    ).join('');
-  } else {
-    thumbs.innerHTML = '<span style="font-size:.75rem; color:#94a3b8;">등록된 사진이 없습니다</span>';
-  }
-
-  // 소속인원
-  const mc = document.getElementById('memberCards');
-  if (c.members && c.members.length > 0) {
-    mc.innerHTML = c.members.map(m => {
-      const rl = ROLE_LABELS[m.role] || m.role;
-      const rc = ROLE_CSS[m.role] || '';
-      return `<div class="member-card">
-        <span class="role-badge ${rc}">${rl}</span>
-        <strong>${m.name}</strong>
-        ${m.phone ? `<span style="color:#94a3b8;">${m.phone}</span>` : ''}
-      </div>`;
-    }).join('');
-  } else {
-    mc.innerHTML = '<span style="font-size:.75rem; color:#94a3b8;">소속 인원이 없습니다</span>';
-  }
 }
 
-// ── 사진 탭 ──
-function renderPhotos() {
-  const grid = document.getElementById('photoGrid');
-  const photos = currentCenter.photos || [];
-  if (photos.length === 0) {
-    grid.innerHTML = '<div style="font-size:.8rem; color:#94a3b8; padding:20px;">등록된 사진이 없습니다. 아래에서 업로드하세요.</div>';
+// ── 소속인원 탭 ──
+function renderMembers() {
+  const members = currentCenter.members || [];
+  const grid = document.getElementById('memberGrid');
+  if (members.length === 0) {
+    grid.innerHTML = '<div style="font-size:.8rem; color:#94a3b8; padding:20px;">소속 인원이 없습니다.</div>';
     return;
   }
+  grid.innerHTML = members.map(m => {
+    const rl = ROLE_LABELS[m.role] || m.role;
+    const rc = ROLE_CSS[m.role] || '';
+    const photo = m.photo_url
+      ? `<img class="member-photo" src="${m.photo_url}" alt="${m.name}" onclick="showImg('${m.photo_url}')">`
+      : `<div class="member-photo-empty"><i class="bi bi-person"></i></div>`;
+    return `<div class="member-card">
+      ${photo}
+      <div class="member-name">${m.name}</div>
+      <span class="member-role ${rc}">${rl}</span>
+      ${m.phone ? `<div class="member-phone"><i class="bi bi-telephone me-1"></i>${m.phone}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── 센터사진 탭 ──
+function renderPhotos() {
+  const photos = currentCenter.photos || [];
+  const grid = document.getElementById('photoGrid');
+  const empty = document.getElementById('photoEmpty');
+  if (photos.length === 0) {
+    grid.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
   grid.innerHTML = photos.map(p => `
     <div class="photo-card">
-      <img src="${p.image}" alt="${p.photo_type_display}" onclick="showImg('${p.image}')">
-      <button class="photo-delete" onclick="deletePhoto(${p.id}, event)" title="삭제">
-        <i class="bi bi-x"></i>
-      </button>
-      <div class="photo-label">${p.photo_type_display}${p.caption ? ' - ' + p.caption : ''}</div>
+      <img src="${p.url}" alt="${p.label}" onclick="showImg('${p.url}')">
+      <div class="photo-label">${p.label}</div>
     </div>
   `).join('');
-}
-
-function uploadPhotos(files) {
-  if (!currentCenter) return showToast('센터를 먼저 선택하세요.', 'warning');
-  if (!files || files.length === 0) return;
-  pendingFiles = files;
-  const modal = new bootstrap.Modal(document.getElementById('photoTypeModal'));
-  modal.show();
-}
-
-document.getElementById('confirmUploadBtn')?.addEventListener('click', async () => {
-  if (!pendingFiles || !currentCenter) return;
-  const photoType = document.getElementById('modalPhotoType').value;
-  const modal = bootstrap.Modal.getInstance(document.getElementById('photoTypeModal'));
-  modal.hide();
-
-  for (const file of pendingFiles) {
-    const fd = new FormData();
-    fd.append('center', currentCenter.id);
-    fd.append('photo_type', photoType);
-    fd.append('image', file);
-    await fetch(`${API}/center-photos/`, {
-      method: 'POST',
-      headers: {'X-CSRFToken': CSRF},
-      body: fd,
-    });
-  }
-  pendingFiles = null;
-  document.getElementById('photoInput').value = '';
-  showToast('사진이 업로드되었습니다.', 'success');
-  await selectCenter(currentCenter.id);
-  switchTab('photos', document.querySelectorAll('.ci-tab')[1]);
-});
-
-async function deletePhoto(photoId, e) {
-  e.stopPropagation();
-  if (!confirm('이 사진을 삭제하시겠습니까?')) return;
-  await fetch(`${API}/center-photos/${photoId}/`, {
-    method: 'DELETE',
-    headers: {'X-CSRFToken': CSRF},
-  });
-  showToast('사진이 삭제되었습니다.', 'success');
-  await selectCenter(currentCenter.id);
-  switchTab('photos', document.querySelectorAll('.ci-tab')[1]);
-}
-
-// ── 드래그 앤 드롭 ──
-const uploadZone = document.getElementById('uploadZone');
-if (uploadZone) {
-  ['dragover','dragenter'].forEach(ev =>
-    uploadZone.addEventListener(ev, e => { e.preventDefault(); uploadZone.style.borderColor='#2563eb'; })
-  );
-  ['dragleave','drop'].forEach(ev =>
-    uploadZone.addEventListener(ev, e => { e.preventDefault(); uploadZone.style.borderColor=''; })
-  );
-  uploadZone.addEventListener('drop', e => {
-    uploadPhotos(e.dataTransfer.files);
-  });
 }
 
 // ── 찾아가는길 탭 (VWorld) ──
@@ -479,7 +369,6 @@ function initMap() {
     }),
   });
 
-  // 마커
   const feature = new ol.Feature({
     geometry: new ol.geom.Point(ol.proj.fromLonLat([lng, lat])),
   });
@@ -498,7 +387,6 @@ function initMap() {
     }),
   }));
   markerSource.addFeature(feature);
-
   setTimeout(() => centerMap.updateSize(), 100);
 }
 
@@ -510,12 +398,7 @@ function switchTab(name, el) {
   document.getElementById('tab-' + name).classList.add('active');
 
   if (name === 'map') {
-    setTimeout(() => {
-      if (!centerMap) initMap();
-      else {
-        initMap();
-      }
-    }, 50);
+    setTimeout(() => initMap(), 50);
   }
 }
 
@@ -525,7 +408,6 @@ function showImg(src) {
   document.getElementById('imgModal').classList.add('show');
 }
 
-// ESC 닫기
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.getElementById('imgModal')?.classList.remove('show');
 });
