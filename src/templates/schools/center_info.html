@@ -24,6 +24,7 @@
 .tree-header {
   padding:12px 14px 10px; border-bottom:1px solid #f0f0f0; flex-shrink:0;
   font-size:.78rem; font-weight:700; color:#1e293b;
+  display:flex; align-items:center; justify-content:space-between;
 }
 .tree-body { flex:1; overflow-y:auto; padding:4px 0; }
 .tree-body::-webkit-scrollbar { width:4px; }
@@ -59,7 +60,6 @@
   font-size:.95rem; font-weight:700; color:#1e293b; flex-shrink:0;
   display:flex; align-items:center; gap:8px;
 }
-.detail-header .badge { font-size:.65rem; }
 
 /* 탭 */
 .ci-tabs {
@@ -85,32 +85,40 @@
 }
 .info-table td { padding:7px 12px; border-bottom:1px solid #f0f0f0; color:#1e293b; }
 
-/* 소속인원 */
+/* 수정 모드 input */
+.info-table td input {
+  border:1px solid #cbd5e1; border-radius:4px; padding:2px 6px;
+  font-size:.82rem; width:100%;
+}
+
+/* 소속인원 (기본정보 내) */
 .member-grid {
-  display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));
-  gap:12px; margin-top:12px;
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));
+  gap:10px; margin-top:10px;
 }
 .member-card {
   display:flex; flex-direction:column; align-items:center;
-  padding:14px 10px; border-radius:10px;
+  padding:12px 8px; border-radius:10px;
   background:#f8fafc; border:1px solid #e2e8f0; text-align:center;
+  cursor:pointer; transition:border-color .15s, box-shadow .15s;
 }
+.member-card:hover { border-color:#93c5fd; box-shadow:0 2px 8px rgba(37,99,235,.1); }
 .member-photo {
-  width:72px; height:90px; border-radius:6px; object-fit:cover;
-  border:1px solid #e2e8f0; background:#fff; margin-bottom:8px;
+  width:64px; height:80px; border-radius:6px; object-fit:cover;
+  border:1px solid #e2e8f0; background:#fff; margin-bottom:6px;
 }
 .member-photo-empty {
-  width:72px; height:90px; border-radius:6px;
+  width:64px; height:80px; border-radius:6px;
   border:1px solid #e2e8f0; background:#f1f5f9;
   display:flex; align-items:center; justify-content:center;
-  color:#cbd5e1; font-size:1.5rem; margin-bottom:8px;
+  color:#cbd5e1; font-size:1.3rem; margin-bottom:6px;
 }
-.member-name { font-size:.82rem; font-weight:700; color:#1e293b; }
+.member-name { font-size:.78rem; font-weight:700; color:#1e293b; }
 .member-role {
-  font-size:.62rem; padding:1px 8px; border-radius:10px; font-weight:600;
-  margin-top:4px; display:inline-block;
+  font-size:.6rem; padding:1px 7px; border-radius:10px; font-weight:600;
+  margin-top:3px; display:inline-block;
 }
-.member-phone { font-size:.7rem; color:#94a3b8; margin-top:4px; }
+.member-phone { font-size:.68rem; color:#94a3b8; margin-top:3px; }
 .role-worker { background:#dbeafe; color:#1d4ed8; }
 .role-admin { background:#fce7f3; color:#be185d; }
 .role-resident { background:#d1fae5; color:#059669; }
@@ -152,6 +160,9 @@
 }
 .img-modal.show { display:flex; }
 .img-modal img { max-width:90vw; max-height:90vh; border-radius:8px; }
+
+/* 버튼 */
+.btn-ci { font-size:.72rem; padding:3px 10px; border-radius:6px; }
 </style>
 {% endblock %}
 
@@ -159,7 +170,10 @@
 <div class="ci-body">
   <!-- 좌측: 센터 목록 -->
   <div class="tree-panel">
-    <div class="tree-header"><i class="bi bi-building me-2"></i>교육지원청</div>
+    <div class="tree-header">
+      <span><i class="bi bi-building me-2"></i>교육지원청</span>
+      <span id="uploadBtnArea"></span>
+    </div>
     <div class="tree-body" id="centerList"></div>
   </div>
 
@@ -168,11 +182,11 @@
     <div class="detail-header" id="detailHeader">
       <i class="bi bi-building"></i>
       <span id="centerName">센터를 선택하세요</span>
+      <span id="editBtnArea" style="margin-left:auto;"></span>
     </div>
 
     <div class="ci-tabs" id="tabBar" style="display:none;">
       <div class="ci-tab active" onclick="switchTab('info',this)"><i class="bi bi-info-circle me-1"></i>기본정보</div>
-      <div class="ci-tab" onclick="switchTab('members',this)"><i class="bi bi-people me-1"></i>소속인원</div>
       <div class="ci-tab" onclick="switchTab('photos',this)"><i class="bi bi-camera me-1"></i>센터사진</div>
       <div class="ci-tab" onclick="switchTab('map',this)"><i class="bi bi-map me-1"></i>찾아가는길</div>
     </div>
@@ -184,21 +198,23 @@
         <span style="font-size:.85rem;">좌측에서 센터를 선택하세요</span>
       </div>
       <div id="infoContent" style="display:none;">
-        <table class="info-table">
+        <table class="info-table" id="infoTable">
           <tr><th>지원청명</th><td id="infoCenterName">-</td></tr>
           <tr><th>주소</th><td id="infoAddress">-</td></tr>
           <tr><th>센터장</th><td id="infoChief">-</td></tr>
           <tr><th>연락처</th><td id="infoPhone">-</td></tr>
-          <tr><th>홈페이지</th><td id="infoUrl">-</td></tr>
           <tr><th>관할 학교</th><td id="infoSchoolCount">-</td></tr>
           <tr><th>인원</th><td id="infoMemberCount">-</td></tr>
         </table>
-      </div>
-    </div>
 
-    <!-- 소속인원 탭 -->
-    <div class="tab-pane" id="tab-members">
-      <div id="memberGrid" class="member-grid"></div>
+        <!-- 소속인원 (기본정보 내) -->
+        <div style="margin-top:18px;">
+          <div style="font-size:.8rem; font-weight:700; color:#1e293b; margin-bottom:4px;">
+            <i class="bi bi-people me-1"></i>소속 인원
+          </div>
+          <div id="memberGrid" class="member-grid"></div>
+        </div>
+      </div>
     </div>
 
     <!-- 센터사진 탭 -->
@@ -222,6 +238,28 @@
 <div class="img-modal" id="imgModal" onclick="this.classList.remove('show')">
   <img id="imgModalSrc" src="" alt="">
 </div>
+
+<!-- 엑셀 업로드 모달 -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" style="font-size:.85rem;"><i class="bi bi-file-earmark-excel me-1"></i>센터 정보 엑셀 업로드</h6>
+        <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:.72rem; color:#64748b; margin-bottom:10px;">
+          엑셀 컬럼 순서: <strong>지원청명, 주소, 센터장, 연락처</strong><br>
+          1행은 헤더로 무시됩니다. 지원청명으로 기존 데이터를 매칭하여 업데이트합니다.
+        </div>
+        <input type="file" class="form-control form-control-sm" id="excelFileInput" accept=".xlsx,.xls">
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-primary" id="excelUploadBtn" onclick="doExcelUpload()">업로드</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -230,14 +268,15 @@
 const API = '/npms/api/schools';
 const CSRF = document.querySelector('[name=csrfmiddlewaretoken]')?.value
            || '{{ csrf_token }}';
+const IS_SUPERADMIN = (typeof USER_ROLE !== 'undefined') && USER_ROLE === 'superadmin';
 
 const ROLE_LABELS = {
-  superadmin:'슈퍼관리자', admin:'관리자', customer:'학교담당자',
+  superadmin:'슈퍼관리자', admin:'관리자',
   worker:'기사', resident_central:'상주(센터)', resident_tech:'상주(기술)',
   resident_edu:'상주(교육)', etc:'기타'
 };
 const ROLE_CSS = {
-  superadmin:'role-admin', admin:'role-admin', customer:'',
+  superadmin:'role-admin', admin:'role-admin',
   worker:'role-worker', resident_central:'role-resident',
   resident_tech:'role-resident', resident_edu:'role-resident', etc:''
 };
@@ -245,9 +284,19 @@ const ROLE_CSS = {
 let centers = [];
 let currentCenter = null;
 let centerMap = null;
+let editMode = false;
 
 // ── 초기화 ──
-document.addEventListener('DOMContentLoaded', loadCenters);
+document.addEventListener('DOMContentLoaded', () => {
+  loadCenters();
+  // superadmin: 엑셀 업로드 버튼
+  if (IS_SUPERADMIN) {
+    document.getElementById('uploadBtnArea').innerHTML =
+      `<button class="btn btn-sm btn-outline-primary btn-ci" onclick="document.getElementById('excelFileInput').value=''; new bootstrap.Modal(document.getElementById('uploadModal')).show()">
+        <i class="bi bi-upload me-1"></i>엑셀
+      </button>`;
+  }
+});
 
 async function loadCenters() {
   const res = await fetch(`${API}/centers/`, {headers:{'Accept':'application/json'}});
@@ -274,52 +323,105 @@ async function selectCenter(id) {
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('infoContent').style.display = '';
 
+  editMode = false;
   centerMap = null;
+  renderEditBtn();
   renderInfo();
   renderMembers();
   renderPhotos();
   switchTab('info', document.querySelector('.ci-tab'));
 }
 
-// ── 기본정보 탭 ──
-function renderInfo() {
-  const c = currentCenter;
-  document.getElementById('infoCenterName').textContent = c.name;
-  document.getElementById('infoAddress').textContent = c.address || '-';
-  document.getElementById('infoChief').textContent = c.chief_name || '-';
-  document.getElementById('infoPhone').textContent = c.phone || '-';
-  document.getElementById('infoSchoolCount').textContent = `${c.school_count}개교`;
-  document.getElementById('infoMemberCount').textContent = `${(c.members || []).length}명`;
+// ── 수정 버튼 (superadmin) ──
+function renderEditBtn() {
+  const area = document.getElementById('editBtnArea');
+  if (!IS_SUPERADMIN || !currentCenter) { area.innerHTML = ''; return; }
+  area.innerHTML = `<button class="btn btn-sm btn-outline-secondary btn-ci" onclick="toggleEdit()">
+    <i class="bi bi-pencil me-1"></i>수정
+  </button>`;
+}
 
-  const urlEl = document.getElementById('infoUrl');
-  if (c.url) {
-    urlEl.innerHTML = `<a href="${c.url}" target="_blank" style="color:#2563eb;">${c.url}</a>`;
+function toggleEdit() {
+  editMode = !editMode;
+  renderInfo();
+  const btn = document.querySelector('#editBtnArea button');
+  if (editMode) {
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>저장';
+    btn.className = 'btn btn-sm btn-primary btn-ci';
+    btn.onclick = saveCenter;
   } else {
-    urlEl.textContent = '-';
+    renderEditBtn();
   }
 }
 
-// ── 소속인원 탭 ──
+async function saveCenter() {
+  const data = {
+    address:    document.getElementById('editAddress').value.trim(),
+    chief_name: document.getElementById('editChief').value.trim(),
+    phone:      document.getElementById('editPhone').value.trim(),
+  };
+  const res = await fetch(`${API}/centers/${currentCenter.id}/`, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify(data),
+  });
+  if (res.ok) {
+    showToast('센터 정보가 수정되었습니다.', 'success');
+    await selectCenter(currentCenter.id);
+    loadCenters();
+  } else {
+    showToast('수정 실패', 'danger');
+  }
+}
+
+// ── 기본정보 탭 ──
+function renderInfo() {
+  const c = currentCenter;
+  if (editMode) {
+    document.getElementById('infoCenterName').textContent = c.name;
+    document.getElementById('infoAddress').innerHTML =
+      `<input id="editAddress" value="${c.address || ''}">`;
+    document.getElementById('infoChief').innerHTML =
+      `<input id="editChief" value="${c.chief_name || ''}">`;
+    document.getElementById('infoPhone').innerHTML =
+      `<input id="editPhone" value="${c.phone || ''}">`;
+    document.getElementById('infoSchoolCount').textContent = `${c.school_count}개교`;
+    document.getElementById('infoMemberCount').textContent = `${(c.members || []).length}명`;
+  } else {
+    document.getElementById('infoCenterName').textContent = c.name;
+    document.getElementById('infoAddress').textContent = c.address || '-';
+    document.getElementById('infoChief').textContent = c.chief_name || '-';
+    document.getElementById('infoPhone').textContent = c.phone || '-';
+    document.getElementById('infoSchoolCount').textContent = `${c.school_count}개교`;
+    document.getElementById('infoMemberCount').textContent = `${(c.members || []).length}명`;
+  }
+}
+
+// ── 소속인원 (기본정보 내) ──
 function renderMembers() {
   const members = currentCenter.members || [];
   const grid = document.getElementById('memberGrid');
   if (members.length === 0) {
-    grid.innerHTML = '<div style="font-size:.8rem; color:#94a3b8; padding:20px;">소속 인원이 없습니다.</div>';
+    grid.innerHTML = '<div style="font-size:.78rem; color:#94a3b8; padding:10px;">소속 인원이 없습니다.</div>';
     return;
   }
   grid.innerHTML = members.map(m => {
     const rl = ROLE_LABELS[m.role] || m.role;
     const rc = ROLE_CSS[m.role] || '';
     const photo = m.photo_url
-      ? `<img class="member-photo" src="${m.photo_url}" alt="${m.name}" onclick="showImg('${m.photo_url}')">`
+      ? `<img class="member-photo" src="${m.photo_url}" alt="${m.name}" onclick="event.stopPropagation(); showImg('${m.photo_url}')">`
       : `<div class="member-photo-empty"><i class="bi bi-person"></i></div>`;
-    return `<div class="member-card">
+    return `<div class="member-card" onclick="goWorker(${m.id})" title="${m.name} — 인력관리로 이동">
       ${photo}
       <div class="member-name">${m.name}</div>
       <span class="member-role ${rc}">${rl}</span>
       ${m.phone ? `<div class="member-phone"><i class="bi bi-telephone me-1"></i>${m.phone}</div>` : ''}
     </div>`;
   }).join('');
+}
+
+function goWorker(id) {
+  window.location.href = `/npms/workforce/workers/?worker_id=${id}`;
 }
 
 // ── 센터사진 탭 ──
@@ -348,8 +450,7 @@ function initMap() {
   const lng = parseFloat(currentCenter.lng);
   const key = typeof VWORLD_API_KEY !== 'undefined' ? VWORLD_API_KEY : '';
 
-  const container = document.getElementById('center-map');
-  container.innerHTML = '';
+  document.getElementById('center-map').innerHTML = '';
 
   const markerSource = new ol.source.Vector();
   centerMap = new ol.Map({
@@ -388,6 +489,31 @@ function initMap() {
   }));
   markerSource.addFeature(feature);
   setTimeout(() => centerMap.updateSize(), 100);
+}
+
+// ── 엑셀 업로드 ──
+async function doExcelUpload() {
+  const fileInput = document.getElementById('excelFileInput');
+  if (!fileInput.files.length) return showToast('파일을 선택하세요.', 'warning');
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+
+  const res = await fetch(`${API}/centers/upload-excel/`, {
+    method: 'POST',
+    headers: {'X-CSRFToken': CSRF},
+    body: fd,
+  });
+  const data = await res.json();
+  if (res.ok) {
+    let msg = `${data.updated}건 업데이트 완료`;
+    if (data.errors && data.errors.length) msg += `\n오류: ${data.errors.join(', ')}`;
+    showToast(msg, data.errors?.length ? 'warning' : 'success');
+    bootstrap.Modal.getInstance(document.getElementById('uploadModal'))?.hide();
+    loadCenters();
+    if (currentCenter) selectCenter(currentCenter.id);
+  } else {
+    showToast(data.error || '업로드 실패', 'danger');
+  }
 }
 
 // ── 탭 전환 ──

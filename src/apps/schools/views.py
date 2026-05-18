@@ -215,16 +215,57 @@ def network_docs_api(request, pk):
     return JsonResponse({'error': 'Method not allowed'}, status=405)
 
 
-class SupportCenterViewSet(viewsets.ReadOnlyModelViewSet):
+class SupportCenterViewSet(viewsets.ModelViewSet):
     queryset = SupportCenter.objects.filter(is_active=True).order_by('id')
     serializer_class = SupportCenterSerializer
-    permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
+
+    def get_permissions(self):
+        if self.action in ('update', 'partial_update', 'upload_excel'):
+            return [permissions.IsAuthenticated(), IsSuperAdmin()]
+        return [permissions.IsAuthenticated()]
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
             return CenterDetailSerializer
         return SupportCenterSerializer
+
+    @action(detail=False, methods=['post'], url_path='upload-excel')
+    def upload_excel(self, request):
+        """센터 정보 엑셀 업로드 (superadmin 전용)
+        엑셀 컬럼: 지원청명, 주소, 센터장, 연락처
+        """
+        import openpyxl
+        f = request.FILES.get('file')
+        if not f:
+            return Response({'error': '파일을 선택하세요.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            wb = openpyxl.load_workbook(f, read_only=True)
+            ws = wb.active
+            rows = list(ws.iter_rows(min_row=2, values_only=True))
+        except Exception as e:
+            return Response({'error': f'엑셀 파일 읽기 실패: {e}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        updated = 0
+        errors = []
+        for i, row in enumerate(rows, start=2):
+            if not row or not row[0]:
+                continue
+            name = str(row[0]).strip()
+            center = SupportCenter.objects.filter(name__contains=name).first()
+            if not center:
+                errors.append(f'{i}행: "{name}" 지원청을 찾을 수 없습니다.')
+                continue
+            if len(row) > 1 and row[1]:
+                center.address = str(row[1]).strip()
+            if len(row) > 2 and row[2]:
+                center.chief_name = str(row[2]).strip()
+            if len(row) > 3 and row[3]:
+                center.phone = str(row[3]).strip()
+            center.save()
+            updated += 1
+
+        return Response({'updated': updated, 'errors': errors})
 
 
 class SchoolTypeViewSet(viewsets.ReadOnlyModelViewSet):

@@ -700,6 +700,9 @@ function getCookie(name) {
     if (inp) inp.setAttribute('capture', 'user');
   }
 })();
-loadTree();
+loadTree().then(() => {
+  const wid = new URLSearchParams(location.search).get('worker_id');
+  if (wid) setTimeout(() => selectWorker(parseInt(wid)), 300);
+});
 </script>
 {% endblock %}

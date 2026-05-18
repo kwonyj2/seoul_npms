@@ -62,11 +62,11 @@ class CenterDetailSerializer(serializers.ModelSerializer):
         return result
 
     def get_members(self, obj):
-        """소속인원 + NAS 증명사진 URL"""
+        """소속인원 + NAS 증명사진 URL (학교담당자 제외)"""
         from apps.accounts.models import User
         workers = User.objects.filter(
             support_center=obj, is_active=True
-        ).order_by('role', 'name')
+        ).exclude(role='customer').order_by('role', 'name')
 
         result = []
         photo_dir = os.path.join(settings.MEDIA_ROOT, '인력관리', '증명사진')
