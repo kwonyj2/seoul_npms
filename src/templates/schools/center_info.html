@@ -75,7 +75,10 @@
 
 .tab-pane { display:none !important; padding:18px 20px; overflow-y:auto; flex:1; }
 .tab-pane.active { display:block !important; }
-#tab-map.active { display:block !important; padding:0; }
+#tab-map.active { display:flex !important; padding:0; flex:1; flex-direction:column; }
+
+/* 지도 */
+#center-map { width:100%; flex:1; min-height:450px; }
 
 /* 정보 테이블 */
 .info-table { width:100%; font-size:.82rem; }
@@ -141,9 +144,6 @@
   padding:6px 10px; font-size:.72rem; color:#475569; font-weight:600;
   text-align:center; background:#fff;
 }
-
-/* 지도 */
-#center-map { width:100%; height:100%; min-height:400px; }
 
 /* 빈 상태 */
 .empty-state {
@@ -289,11 +289,14 @@ let editMode = false;
 // ── 초기화 ──
 document.addEventListener('DOMContentLoaded', () => {
   loadCenters();
-  // superadmin: 엑셀 업로드 버튼
+  // superadmin: 엑셀 업로드 + 좌표변환 버튼
   if (IS_SUPERADMIN) {
     document.getElementById('uploadBtnArea').innerHTML =
       `<button class="btn btn-sm btn-outline-primary btn-ci" onclick="document.getElementById('excelFileInput').value=''; new bootstrap.Modal(document.getElementById('uploadModal')).show()">
         <i class="bi bi-upload me-1"></i>엑셀
+      </button>
+      <button class="btn btn-sm btn-outline-success btn-ci ms-1" onclick="geocodeAll()" title="주소→좌표 일괄 변환">
+        <i class="bi bi-geo-alt me-1"></i>좌표
       </button>`;
   }
 });
@@ -449,6 +452,21 @@ function initMap() {
   const lat = parseFloat(currentCenter.lat);
   const lng = parseFloat(currentCenter.lng);
   const key = typeof VWORLD_API_KEY !== 'undefined' ? VWORLD_API_KEY : '';
+  const coord = ol.proj.fromLonLat([lng, lat]);
+
+  // 이미 지도가 있으면 중심/마커만 갱신
+  if (centerMap) {
+    centerMap.getView().setCenter(coord);
+    const vl = centerMap.getLayers().getArray().find(l => l instanceof ol.layer.Vector);
+    if (vl) {
+      const src = vl.getSource();
+      src.clear();
+      const f = _makeMarker(coord, currentCenter.name);
+      src.addFeature(f);
+    }
+    setTimeout(() => centerMap.updateSize(), 50);
+    return;
+  }
 
   document.getElementById('center-map').innerHTML = '';
 
@@ -465,14 +483,19 @@ function initMap() {
       new ol.layer.Vector({ source: markerSource }),
     ],
     view: new ol.View({
-      center: ol.proj.fromLonLat([lng, lat]),
+      center: coord,
       zoom: 17,
     }),
   });
 
-  const feature = new ol.Feature({
-    geometry: new ol.geom.Point(ol.proj.fromLonLat([lng, lat])),
-  });
+  markerSource.addFeature(_makeMarker(coord, currentCenter.name));
+  // 탭 전환 후 렌더링 보장
+  setTimeout(() => centerMap.updateSize(), 150);
+  setTimeout(() => centerMap.updateSize(), 400);
+}
+
+function _makeMarker(coord, name) {
+  const feature = new ol.Feature({ geometry: new ol.geom.Point(coord) });
   feature.setStyle(new ol.style.Style({
     image: new ol.style.Icon({
       anchor: [0.5, 1],
@@ -480,15 +503,14 @@ function initMap() {
       scale: 0.06,
     }),
     text: new ol.style.Text({
-      text: currentCenter.name,
+      text: name,
       offsetY: -35,
       font: 'bold 13px sans-serif',
       fill: new ol.style.Fill({ color: '#1e293b' }),
       stroke: new ol.style.Stroke({ color: '#fff', width: 3 }),
     }),
   }));
-  markerSource.addFeature(feature);
-  setTimeout(() => centerMap.updateSize(), 100);
+  return feature;
 }
 
 // ── 엑셀 업로드 ──
@@ -532,6 +554,24 @@ function switchTab(name, el) {
 function showImg(src) {
   document.getElementById('imgModalSrc').src = src;
   document.getElementById('imgModal').classList.add('show');
+}
+
+// ── 일괄 지오코딩 ──
+async function geocodeAll() {
+  if (!confirm('주소가 등록되었으나 좌표가 없는 센터를 일괄 변환합니다.\n계속하시겠습니까?')) return;
+  const res = await fetch(`${API}/centers/geocode-all/`, {
+    method: 'POST',
+    headers: {'X-CSRFToken': CSRF},
+  });
+  const data = await res.json();
+  if (res.ok) {
+    let msg = `${data.success}건 좌표 변환 완료`;
+    if (data.failed?.length) msg += `\n실패: ${data.failed.join(', ')}`;
+    showToast(msg, data.failed?.length ? 'warning' : 'success');
+    if (currentCenter) selectCenter(currentCenter.id);
+  } else {
+    showToast('좌표 변환 실패', 'danger');
+  }
 }
 
 document.addEventListener('keydown', e => {

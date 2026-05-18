@@ -1,4 +1,5 @@
-import csv, io
+import csv, io, logging, requests
+from django.conf import settings
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
@@ -17,6 +18,35 @@ from .serializers import (
     CenterDetailSerializer
 )
 from core.permissions.roles import IsAdmin, IsSuperAdmin
+
+logger = logging.getLogger(__name__)
+
+
+def geocode_address(address):
+    """VWorld Geocoding API로 주소 → (lat, lng) 변환. 실패 시 (None, None) 반환."""
+    api_key = getattr(settings, 'VWORLD_API_KEY', '')
+    if not api_key or not address:
+        return None, None
+    try:
+        resp = requests.get('https://api.vworld.kr/req/address', params={
+            'service': 'address',
+            'request': 'getcoord',
+            'version': '2.0',
+            'crs': 'epsg:4326',
+            'address': address,
+            'refine': 'true',
+            'simple': 'false',
+            'format': 'json',
+            'type': 'road',
+            'key': api_key,
+        }, timeout=5)
+        data = resp.json()
+        if data.get('response', {}).get('status') == 'OK':
+            point = data['response']['result']['point']
+            return float(point['y']), float(point['x'])
+    except Exception as e:
+        logger.warning(f'VWorld geocoding failed for "{address}": {e}')
+    return None, None
 
 
 @login_required
@@ -221,7 +251,7 @@ class SupportCenterViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_permissions(self):
-        if self.action in ('update', 'partial_update', 'upload_excel'):
+        if self.action in ('update', 'partial_update', 'upload_excel', 'geocode_all'):
             return [permissions.IsAuthenticated(), IsSuperAdmin()]
         return [permissions.IsAuthenticated()]
 
@@ -229,6 +259,36 @@ class SupportCenterViewSet(viewsets.ModelViewSet):
         if self.action == 'retrieve':
             return CenterDetailSerializer
         return SupportCenterSerializer
+
+    def perform_update(self, serializer):
+        """주소 변경 시 자동 지오코딩"""
+        instance = serializer.save()
+        new_address = serializer.validated_data.get('address')
+        if new_address:
+            lat, lng = geocode_address(new_address)
+            if lat and lng:
+                instance.lat = lat
+                instance.lng = lng
+                instance.save(update_fields=['lat', 'lng'])
+
+    @action(detail=False, methods=['post'], url_path='geocode-all')
+    def geocode_all(self, request):
+        """주소가 있지만 좌표가 없는 센터 일괄 지오코딩"""
+        centers = SupportCenter.objects.filter(
+            is_active=True
+        ).exclude(address='').filter(Q(lat__isnull=True) | Q(lng__isnull=True))
+        success = 0
+        failed = []
+        for c in centers:
+            lat, lng = geocode_address(c.address)
+            if lat and lng:
+                c.lat = lat
+                c.lng = lng
+                c.save(update_fields=['lat', 'lng'])
+                success += 1
+            else:
+                failed.append(c.name)
+        return Response({'success': success, 'failed': failed})
 
     @action(detail=False, methods=['post'], url_path='upload-excel')
     def upload_excel(self, request):
@@ -256,12 +316,21 @@ class SupportCenterViewSet(viewsets.ModelViewSet):
             if not center:
                 errors.append(f'{i}행: "{name}" 지원청을 찾을 수 없습니다.')
                 continue
+            address_changed = False
             if len(row) > 1 and row[1]:
-                center.address = str(row[1]).strip()
+                new_addr = str(row[1]).strip()
+                if new_addr != center.address:
+                    center.address = new_addr
+                    address_changed = True
             if len(row) > 2 and row[2]:
                 center.chief_name = str(row[2]).strip()
             if len(row) > 3 and row[3]:
                 center.phone = str(row[3]).strip()
+            if address_changed:
+                lat, lng = geocode_address(center.address)
+                if lat and lng:
+                    center.lat = lat
+                    center.lng = lng
             center.save()
             updated += 1
 
