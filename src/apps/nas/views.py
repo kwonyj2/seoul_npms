@@ -310,9 +310,12 @@ class FileViewSet(viewsets.ModelViewSet):
         return qs.filter(folder__access_level='public')
 
     def get_queryset(self):
+        from core.utils.center_filter import filter_by_center
         qs = File.objects.select_related('folder', 'school', 'uploaded_by').filter(is_deleted=False)
         # 폴더 접근 수준 필터링
         qs = self._file_access_filter(qs)
+        # 소속 센터 필터링
+        qs = filter_by_center(qs, self.request.user, 'school__support_center')
         folder_id = self.request.query_params.get('folder_id')
         if folder_id:
             qs = qs.filter(folder_id=folder_id)
