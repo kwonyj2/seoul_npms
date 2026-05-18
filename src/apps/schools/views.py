@@ -450,8 +450,15 @@ class SchoolViewSet(viewsets.ModelViewSet):
     def tree(self, request):
         """교육청 → 학제 → 학교 3단계 트리 데이터"""
         from collections import defaultdict
-        centers = list(SupportCenter.objects.filter(is_active=True).order_by('id').values('id', 'code', 'name'))
-        schools = School.objects.filter(is_active=True).order_by('name').values(
+        from core.utils.center_filter import needs_center_filter
+        centers_qs = SupportCenter.objects.filter(is_active=True).order_by('id')
+        if needs_center_filter(request.user):
+            centers_qs = centers_qs.filter(id=request.user.support_center_id)
+        centers = list(centers_qs.values('id', 'code', 'name'))
+        schools_qs = School.objects.filter(is_active=True)
+        if needs_center_filter(request.user):
+            schools_qs = schools_qs.filter(support_center_id=request.user.support_center_id)
+        schools = schools_qs.order_by('name').values(
             'id', 'name', 'support_center_id',
             'school_type__id', 'school_type__name', 'school_type__order'
         )
