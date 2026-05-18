@@ -250,6 +250,13 @@ class SupportCenterViewSet(viewsets.ModelViewSet):
     serializer_class = SupportCenterSerializer
     pagination_class = None
 
+    def get_queryset(self):
+        from core.utils.center_filter import needs_center_filter
+        qs = super().get_queryset()
+        if needs_center_filter(self.request.user):
+            qs = qs.filter(id=self.request.user.support_center_id)
+        return qs
+
     def get_permissions(self):
         if self.action in ('update', 'partial_update', 'upload_excel', 'geocode_all'):
             return [permissions.IsAuthenticated(), IsSuperAdmin()]
