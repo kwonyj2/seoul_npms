@@ -96,7 +96,7 @@ def get_dashboard_data():
             ('resident_edu','상주(교육청)'),('etc','기타(영업/사업)'),
             ('resident','상주(구)'),
         ]).get(u['user__role'], u['user__role'])
-    active_workers  = User.objects.filter(is_active=True).exclude(role__in=['superadmin', 'customer']).count()
+    active_workers  = User.objects.filter(is_active=True).exclude(role__in=['superadmin', 'admin', 'customer', 'etc']).count()
     svc_q = Q(service_start_date__isnull=True) | Q(service_start_date__lte=today)
     school_count    = School.objects.filter(is_active=True).filter(svc_q).count()
 
