@@ -314,8 +314,14 @@ class FileViewSet(viewsets.ModelViewSet):
         qs = File.objects.select_related('folder', 'school', 'uploaded_by').filter(is_deleted=False)
         # 폴더 접근 수준 필터링
         qs = self._file_access_filter(qs)
-        # 소속 센터 필터링
-        qs = filter_by_center(qs, self.request.user, 'school__support_center')
+        # 소속 센터 필터링 (school FK가 있는 파일만 필터, null은 통과)
+        from core.utils.center_filter import needs_center_filter, get_center_id
+        center_id = get_center_id(self.request.user)
+        if center_id:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(school__isnull=True) | Q(school__support_center_id=center_id)
+            )
         folder_id = self.request.query_params.get('folder_id')
         if folder_id:
             qs = qs.filter(folder_id=folder_id)
