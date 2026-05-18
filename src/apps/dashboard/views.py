@@ -216,7 +216,7 @@ def dashboard_summary(request):
         })
 
     # 활성 인력 수
-    active_workers = User.objects.filter(is_active=True).exclude(role__in=['superadmin', 'customer']).count()
+    active_workers = User.objects.filter(is_active=True).exclude(role__in=['superadmin', 'admin', 'customer', 'etc']).count()
 
     # 학교 수 (서비스 시작일 기준 필터)
     from apps.schools.models import School
