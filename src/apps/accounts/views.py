@@ -51,7 +51,7 @@ class LoginView(View):
         from django.core.cache import cache
         LOCK_KEY   = f'login_lock:{username}'
         FAIL_KEY   = f'login_fail:{username}'
-        MAX_FAILS  = 5
+        MAX_FAILS  = 10
         LOCK_SEC   = 30 * 60   # 잠금 30분
         WINDOW_SEC = 10 * 60   # 실패 카운트 창 10분
 
@@ -148,7 +148,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         username = request.data.get('username', '')
         LOCK_KEY   = f'jwt_lock:{username}'
         FAIL_KEY   = f'jwt_fail:{username}'
-        MAX_FAILS  = 5
+        MAX_FAILS  = 10
         LOCK_SEC   = 30 * 60
         WINDOW_SEC = 10 * 60
 
