@@ -636,10 +636,12 @@ def worker_only_tree(request):
     # 서울시교육청 그룹 (support_center 없는 상주 중앙/교육청)
     edu_group = {'id': 0, 'name': '서울시교육청', 'workers': []}
 
+    from core.utils.center_filter import filter_by_center
     workers = User.objects.filter(
         role__in=['worker', 'resident_central', 'resident_tech', 'resident_edu'],
         is_active=True,
     ).select_related('support_center')
+    workers = filter_by_center(workers, request.user, 'support_center')
 
     for w in sorted(workers, key=lambda x: x.id):
         has_img = bool(w.profile_image)
@@ -746,12 +748,6 @@ def _find_photo_url(worker):
         name_part = os.path.splitext(fname)[0]
         ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
         if name in name_part and ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
-            # NAS File DB에서 id 조회 → 다운로드 API 사용
-            from apps.nas.models import File as NasFile
-            nf = NasFile.objects.filter(name=fname, folder__full_path='/인력관리/증명사진').first()
-            if nf:
-                return f"/npms/api/nas/files/{nf.id}/preview/"
-            # DB에 없으면 직접 서빙 시도
             return f"{settings.MEDIA_URL}인력관리/증명사진/{fname}"
     return worker.profile_image.url if worker.profile_image else ''
 

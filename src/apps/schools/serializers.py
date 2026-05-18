@@ -76,12 +76,7 @@ class CenterDetailSerializer(serializers.ModelSerializer):
                 for fname in os.listdir(photo_dir):
                     ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
                     if w.name in fname and ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
-                        from apps.nas.models import File as NasFile
-                        nf = NasFile.objects.filter(
-                            name=fname, folder__full_path='/인력관리/증명사진'
-                        ).first()
-                        photo_url = f"/npms/api/nas/files/{nf.id}/preview/" if nf else \
-                            f"{settings.MEDIA_URL}인력관리/증명사진/{fname}"
+                        photo_url = f"{settings.MEDIA_URL}인력관리/증명사진/{fname}"
                         break
             result.append({
                 'id': w.id, 'name': w.name, 'role': w.role,
