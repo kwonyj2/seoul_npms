@@ -330,7 +330,16 @@ class ArtifactViewSet(viewsets.ModelViewSet):
         return ArtifactSerializer
 
     def get_queryset(self):
+        from core.utils.center_filter import needs_center_filter
         qs = super().get_queryset()
+        if needs_center_filter(self.request.user):
+            center_name = self.request.user.support_center.name if self.request.user.support_center else ''
+            if center_name:
+                from django.db.models import Q
+                qs = qs.filter(
+                    Q(location_note='') | Q(location_note='전체') |
+                    Q(location_note__icontains=center_name)
+                )
         project_id = self.request.query_params.get('project')
         phase      = self.request.query_params.get('phase')
         status_    = self.request.query_params.get('status')
@@ -532,7 +541,16 @@ class ArtifactFileViewSet(viewsets.ModelViewSet):
     pagination_class   = _NO_PAGINATION
 
     def get_queryset(self):
+        from core.utils.center_filter import needs_center_filter
         qs         = super().get_queryset()
+        if needs_center_filter(self.request.user):
+            center_name = self.request.user.support_center.name if self.request.user.support_center else ''
+            if center_name:
+                from django.db.models import Q
+                qs = qs.filter(
+                    Q(location_note='') | Q(location_note='전체') |
+                    Q(location_note__icontains=center_name)
+                )
         project_id = self.request.query_params.get('project')
         tmpl_id    = self.request.query_params.get('template')
         phase      = self.request.query_params.get('phase')
