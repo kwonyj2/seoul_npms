@@ -1036,6 +1036,9 @@ class ReportViewSet(viewsets.ModelViewSet):
         # 스위치/AP 설치 확인서 → 학교 선생님 정보 자동 등록
         if report.template.report_type == 'switch_install':
             _auto_register_school_contact(report)
+        # 케이블설치 / 스위치설치 → 업무 일정 자동 등록
+        if report.template.report_type in ('cable', 'switch_install'):
+            _create_report_work_schedule(report)
         # 근태기록부에 업무 자동 기록
         _record_attendance_work(report)
         return Response(ReportDetailSerializer(report).data)
@@ -1512,6 +1515,61 @@ def _sync_school_equipment(report):
                 )
             else:
                 SchoolEquipment.objects.create(school=report.school, **defaults)
+
+
+def _create_report_work_schedule(report):
+    """케이블설치/스위치설치 보고서 완료 시 작성자의 업무 일정에 자동 등록"""
+    from apps.workforce.models import WorkSchedule, WorkScheduleType
+
+    rtype = report.template.report_type
+    data = report.data or {}
+
+    # 업무유형 매핑
+    type_map = {
+        'cable': ('cable', '케이블설치'),
+        'switch_install': ('switch_install', '스위치설치'),
+    }
+    type_code, type_label = type_map.get(rtype, ('other', '기타'))
+
+    try:
+        schedule_type = WorkScheduleType.objects.get(code=type_code)
+    except WorkScheduleType.DoesNotExist:
+        logger.warning(f'WorkScheduleType "{type_code}" 미등록 — 업무일정 생성 생략')
+        return
+
+    # 작업일 결정: switch_install → install_date, cable → work_date
+    date_str = data.get('install_date') or data.get('work_date') or ''
+    if date_str:
+        try:
+            from datetime import date as _date
+            work_date = _date.fromisoformat(date_str)
+        except (ValueError, TypeError):
+            work_date = timezone.localdate()
+    else:
+        work_date = timezone.localdate()
+
+    school_name = report.school.name if report.school else ''
+    title = f'[{type_label}] {school_name}'
+
+    start_dt = timezone.make_aware(
+        timezone.datetime.combine(work_date, timezone.datetime.strptime('09:00', '%H:%M').time())
+    )
+    end_dt = timezone.make_aware(
+        timezone.datetime.combine(work_date, timezone.datetime.strptime('18:00', '%H:%M').time())
+    )
+
+    WorkSchedule.objects.create(
+        worker=report.created_by,
+        schedule_type=schedule_type,
+        school=report.school,
+        title=title,
+        description=f'보고서: {report.title}\n학교: {school_name}\n작업일: {work_date}',
+        start_dt=start_dt,
+        end_dt=end_dt,
+        status='completed',
+        created_by=report.created_by,
+    )
+    logger.info(f'업무일정 자동등록: {report.created_by.name} / {title} / {work_date}')
 
 
 def _record_attendance_work(report):
