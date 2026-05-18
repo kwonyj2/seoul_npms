@@ -51,12 +51,8 @@ class CenterDetailSerializer(serializers.ModelSerializer):
                 name_part = os.path.splitext(fname)[0]
                 ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
                 if center_name in name_part and ext in ('jpg', 'jpeg', 'png', 'gif', 'webp'):
-                    # NAS File DB에서 preview URL 조회
-                    from apps.nas.models import File as NasFile
-                    nf = NasFile.objects.filter(
-                        name=fname, folder__full_path=f'/센터 정보/{folder}'
-                    ).first()
-                    url = f"/npms/api/nas/files/{nf.id}/preview/" if nf else f"{media_url}센터 정보/{folder}/{fname}"
+                    from urllib.parse import quote
+                    url = f"{media_url}{quote(f'센터 정보/{folder}/{fname}', safe='/')}"
                     result.append({'label': label, 'url': url, 'filename': fname})
                     break
         return result
