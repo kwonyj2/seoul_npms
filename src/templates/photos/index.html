@@ -47,8 +47,8 @@
     </div>
   </div>
 
-  <!-- 목록 + 미리보기 2분할 (화면 하단까지 고정) -->
-  <div class="d-flex gap-2" style="height:calc(100vh - 210px); min-height:300px;">
+  <!-- 목록 + 미리보기 2분할 -->
+  <div class="photo-main-wrap d-flex gap-2">
 
     <!-- ── 좌: 사진 목록 ── -->
     <div class="flex-grow-1 d-flex flex-column" style="min-width:0;">
@@ -136,8 +136,8 @@
       </div>
     </div>
 
-    <!-- ── 우: 미리보기 패널 ── -->
-    <div id="preview-panel" class="d-flex flex-column" style="width:300px; min-width:260px; flex-shrink:0;">
+    <!-- ── 우(PC) / 하단(모바일): 미리보기 패널 ── -->
+    <div id="preview-panel" class="preview-panel d-flex flex-column">
       <div class="card border-0 shadow-sm d-flex flex-column" style="flex:1; min-height:0;">
         <div class="card-header py-2 bg-white border-bottom d-flex justify-content-between align-items-center flex-shrink-0">
           <span class="fw-semibold small"><i class="bi bi-image me-1"></i>미리보기</span>
@@ -337,6 +337,44 @@
 .photo-thumb.checked  { outline: 3px solid #f59e0b; background:#fef9c3 !important; }
 .photo-thumb.checked img { opacity: .8; }
 #preview-img-wrap img { transition: opacity .2s; }
+
+/* PC: 좌우 2분할 고정 높이 */
+.photo-main-wrap {
+  height:calc(100vh - 210px); min-height:300px;
+}
+.preview-panel {
+  width:300px; min-width:260px; flex-shrink:0;
+}
+
+/* 모바일: 세로 배치 + 스크롤 */
+@media(max-width:768px) {
+  .photo-main-wrap {
+    flex-direction:column !important;
+    height:auto !important; min-height:auto !important;
+  }
+  .photo-main-wrap > .flex-grow-1 {
+    flex:none !important;
+  }
+  .photo-main-wrap > .flex-grow-1 > .card {
+    flex:none !important; height:auto !important;
+  }
+  .photo-main-wrap > .flex-grow-1 > .card > .card-body {
+    overflow-y:visible !important; max-height:none !important; min-height:auto !important;
+  }
+  #photo-grid {
+    grid-template-columns:repeat(auto-fill, minmax(100px, 1fr)) !important;
+  }
+  .preview-panel {
+    width:100% !important; min-width:auto !important;
+    flex-shrink:1 !important;
+  }
+  .preview-panel > .card {
+    flex:none !important;
+  }
+  #preview-img-wrap {
+    height:250px !important;
+  }
+}
 </style>
 {% block extra_js %}
 <script>
