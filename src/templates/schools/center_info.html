@@ -155,11 +155,22 @@
 /* 이미지 모달 */
 .img-modal {
   position:fixed; top:0; left:0; right:0; bottom:0;
-  background:rgba(0,0,0,.85); z-index:9999;
-  display:none; align-items:center; justify-content:center; cursor:pointer;
+  background:rgba(0,0,0,.75); z-index:9999;
+  display:none; align-items:center; justify-content:center;
 }
 .img-modal.show { display:flex; }
-.img-modal img { max-width:90vw; max-height:90vh; border-radius:8px; }
+.img-modal img {
+  max-width:80vw; max-height:80vh; border-radius:8px;
+  box-shadow:0 4px 30px rgba(0,0,0,.5); cursor:default;
+}
+.img-modal-close {
+  position:absolute; top:18px; right:24px;
+  color:#fff; font-size:2rem; cursor:pointer;
+  background:rgba(0,0,0,.5); border:none; border-radius:50%;
+  width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+  transition:background .15s;
+}
+.img-modal-close:hover { background:rgba(255,255,255,.25); }
 
 /* 버튼 */
 .btn-ci { font-size:.72rem; padding:3px 10px; border-radius:6px; }
@@ -235,8 +246,9 @@
 </div>
 
 <!-- 이미지 확대 모달 -->
-<div class="img-modal" id="imgModal" onclick="this.classList.remove('show')">
-  <img id="imgModalSrc" src="" alt="">
+<div class="img-modal" id="imgModal" onclick="closeImgModal(event)">
+  <button class="img-modal-close" onclick="closeImgModal(event)" title="닫기">&times;</button>
+  <img id="imgModalSrc" src="" alt="" onclick="event.stopPropagation()">
 </div>
 
 <!-- 엑셀 업로드 모달 -->
@@ -554,6 +566,10 @@ function switchTab(name, el) {
 function showImg(src) {
   document.getElementById('imgModalSrc').src = src;
   document.getElementById('imgModal').classList.add('show');
+}
+function closeImgModal(e) {
+  // 이미지 자체 클릭은 무시 (stopPropagation), 배경 또는 X 버튼만 닫기
+  document.getElementById('imgModal').classList.remove('show');
 }
 
 // ── 일괄 지오코딩 ──
