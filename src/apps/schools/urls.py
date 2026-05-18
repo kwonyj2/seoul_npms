@@ -14,7 +14,6 @@ router.register(r'contacts',      views.SchoolContactViewSet,  basename='contact
 
 urlpatterns = [
     # 템플릿 뷰
-    path('center-info/', views.center_info_view, name='center-info'),
     path('list/',        views.school_list_view,   name='list'),
     path('map/',         views.school_map_view,    name='map'),
     path('<int:pk>/',    views.school_detail_view, name='detail'),

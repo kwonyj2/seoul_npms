@@ -20,7 +20,7 @@ def health_check(request):
 from apps.accounts.views import LoginView, LogoutView, data_management_view
 from apps.dashboard.views import index as dashboard_index, vworld_sdk_proxy
 from apps.incidents.views import incident_list_view, incident_detail_view, incident_create_view, sla_view, work_orders_view
-from apps.schools.views import school_list_view, school_detail_view, school_map_view
+from apps.schools.views import school_list_view, school_detail_view, school_map_view, center_info_view
 from apps.workforce.views import schedule_view, attendance_view, worker_list_view
 from apps.materials.views import materials_view
 from apps.bulletin.views import bulletin_view
@@ -62,6 +62,7 @@ incident_list_view      = module_required('incidents')(incident_list_view)
 incident_create_view    = module_required('incidents')(incident_create_view)
 incident_detail_view    = module_required('incidents')(incident_detail_view)
 sla_view                = module_required('sla')(sla_view)
+center_info_view        = module_required('center_info')(center_info_view)
 school_list_view        = module_required('schools')(school_list_view)
 school_detail_view      = module_required('schools')(school_detail_view)
 school_map_view         = module_required('school_map')(school_map_view)
@@ -145,6 +146,7 @@ urlpatterns = [
     path('incidents/work-orders/', work_orders_view,               name='incident-work-orders'),
 
     # 학교
+    path('schools/center-info/',  center_info_view,                name='center-info'),
     path('schools/list/',         school_list_view,                name='school-list'),
     path('schools/map/',          school_map_view,                 name='school-map'),
     path('schools/<int:pk>/',     school_detail_view,              name='school-detail'),
