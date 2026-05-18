@@ -1016,9 +1016,13 @@ async function deleteWorkType(id, name) {
 document.getElementById('worktypeModal')?.addEventListener('show.bs.modal', loadWorkTypeList);
 
 // ── 초기화 ──────────────────────────────────────────────────────────────
-initFilterSelects();   // 검색 필터용
-loadWorkTypes();       // 업로드 모달용
-loadPhotos();
+(async () => {
+  await Promise.all([
+    initFilterSelects(),
+    loadWorkTypes(),
+  ]);
+  loadPhotos();
+})();
 
 // ── 휴지통 ──────────────────────────────────────────────────────────
 let _trashMode = false;
