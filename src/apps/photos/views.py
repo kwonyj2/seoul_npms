@@ -171,21 +171,36 @@ class PhotoViewSet(viewsets.ModelViewSet):
         return Response(list(qs))
 
     def perform_destroy(self, instance):
-        """삭제 → 휴지통 (소프트 삭제)"""
-        instance.is_deleted = True
-        instance.deleted_at = timezone.now()
-        instance.save(update_fields=['is_deleted', 'deleted_at'])
+        """삭제 → 파일 + DB 즉시 삭제"""
+        import os
+        if instance.nas_path and os.path.exists(instance.nas_path):
+            os.remove(instance.nas_path)
+        if instance.thumbnail and os.path.exists(instance.thumbnail.path):
+            os.remove(instance.thumbnail.path)
+        if instance.image and os.path.exists(instance.image.path):
+            os.remove(instance.image.path)
+        instance.delete()
 
     @action(detail=False, methods=['post'])
     def bulk_delete(self, request):
-        """선택 사진 일괄 휴지통 이동"""
+        """선택 사진 일괄 즉시 삭제 (파일 + DB)"""
+        import os
         ids = request.data.get('ids', [])
         if not ids:
             return Response({'error': '삭제할 사진 ID를 전달하세요.'}, status=status.HTTP_400_BAD_REQUEST)
-        qs = Photo.objects.filter(id__in=ids, is_deleted=False)
+        qs = Photo.objects.filter(id__in=ids)
         if request.user.role not in ('admin', 'manager', 'superadmin'):
             qs = qs.filter(taken_by=request.user)
-        cnt = qs.update(is_deleted=True, deleted_at=timezone.now())
+        cnt = 0
+        for p in qs:
+            if p.nas_path and os.path.exists(p.nas_path):
+                os.remove(p.nas_path)
+            if p.thumbnail and os.path.exists(p.thumbnail.path):
+                os.remove(p.thumbnail.path)
+            if p.image and os.path.exists(p.image.path):
+                os.remove(p.image.path)
+            p.delete()
+            cnt += 1
         return Response({'deleted': cnt})
 
     @action(detail=False, methods=['get'])
