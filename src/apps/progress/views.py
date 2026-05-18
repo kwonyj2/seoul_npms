@@ -312,10 +312,12 @@ class SchoolInspectionViewSet(viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
+        from core.utils.center_filter import filter_by_center
         qs = SchoolInspection.objects.select_related(
             'plan', 'school', 'school__support_center', 'school__school_type',
             'assigned_worker', 'report', 'replaced_from', 'work_schedule'
         )
+        qs = filter_by_center(qs, self.request.user, 'school__support_center')
         plan_id     = self.request.query_params.get('plan_id')
         st          = self.request.query_params.get('status')
         worker      = self.request.query_params.get('worker')

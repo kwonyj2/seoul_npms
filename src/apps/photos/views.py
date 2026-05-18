@@ -99,11 +99,13 @@ class PhotoViewSet(viewsets.ModelViewSet):
         return PhotoListSerializer
 
     def get_queryset(self):
+        from core.utils.center_filter import filter_by_center
         user = self.request.user
         qs = Photo.objects.select_related(
             'school__support_center', 'school__school_type',
             'building', 'floor', 'room', 'work_type', 'taken_by', 'incident'
         ).filter(is_deleted=False)
+        qs = filter_by_center(qs, user, 'school__support_center')
         if user.role == 'worker':
             qs = qs.filter(taken_by=user)
 

@@ -361,7 +361,9 @@ class SchoolViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
     def get_queryset(self):
+        from core.utils.center_filter import filter_by_center
         qs = super().get_queryset()
+        qs = filter_by_center(qs, self.request.user, 'support_center')
         params  = self.request.query_params
         center  = params.get('center')
         stype   = params.get('type')

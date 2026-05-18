@@ -70,9 +70,11 @@ class WorkerLocationViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         from core.modules import FIELD_WORKER_ROLES
+        from core.utils.center_filter import filter_by_center
         qs = WorkerLocation.objects.select_related('worker').filter(
             worker__role__in=FIELD_WORKER_ROLES, worker__is_active=True
         )
+        qs = filter_by_center(qs, self.request.user, 'worker__support_center')
         # 최근 30분 이내 갱신된 인력만
         cutoff = timezone.now() - timedelta(minutes=30)
         qs = qs.filter(updated_at__gte=cutoff)

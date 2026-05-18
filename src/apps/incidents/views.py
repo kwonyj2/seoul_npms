@@ -763,10 +763,13 @@ class IncidentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        from core.utils.center_filter import filter_by_center
         qs = Incident.objects.select_related(
             'school', 'school__support_center', 'school__school_type',
             'category', 'subcategory', 'received_by', 'sla'
         ).prefetch_related('assignments__worker').order_by('-received_at')
+
+        qs = filter_by_center(qs, self.request.user, 'school__support_center')
 
         params = self.request.query_params
         center      = params.get('center')
@@ -1656,9 +1659,11 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         from .models import WorkOrder
+        from core.utils.center_filter import filter_by_center
         qs = WorkOrder.objects.select_related(
             'incident', 'school', 'assigned_to', 'created_by', 'confirmed_by'
         )
+        qs = filter_by_center(qs, self.request.user, 'school__support_center')
         incident_id = self.request.query_params.get('incident')
         status_     = self.request.query_params.get('status')
         school_id   = self.request.query_params.get('school')

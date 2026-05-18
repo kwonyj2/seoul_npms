@@ -96,7 +96,9 @@ class StatisticsMonthlyViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = StandardPagination
 
     def get_queryset(self):
+        from core.utils.center_filter import filter_by_center
         qs = StatisticsMonthly.objects.select_related('support_center')
+        qs = filter_by_center(qs, self.request.user, 'support_center')
         year = self.request.query_params.get('year')
         if year:
             qs = qs.filter(year=year)

@@ -48,7 +48,9 @@ class NetworkDeviceViewSet(viewsets.ModelViewSet):
         return NetworkDeviceListSerializer
 
     def get_queryset(self):
+        from core.utils.center_filter import filter_by_center
         qs = NetworkDevice.objects.select_related('school', 'asset').order_by('school', 'name')
+        qs = filter_by_center(qs, self.request.user, 'school__support_center')
         school_id = self.request.query_params.get('school_id')
         if school_id:
             qs = qs.filter(school_id=school_id)
