@@ -171,36 +171,21 @@ class PhotoViewSet(viewsets.ModelViewSet):
         return Response(list(qs))
 
     def perform_destroy(self, instance):
-        """삭제 → 파일 + DB 즉시 삭제"""
-        import os
-        if instance.nas_path and os.path.exists(instance.nas_path):
-            os.remove(instance.nas_path)
-        if instance.thumbnail and os.path.exists(instance.thumbnail.path):
-            os.remove(instance.thumbnail.path)
-        if instance.image and os.path.exists(instance.image.path):
-            os.remove(instance.image.path)
-        instance.delete()
+        """삭제 → 휴지통 이동 (소프트 삭제)"""
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.save(update_fields=['is_deleted', 'deleted_at'])
 
     @action(detail=False, methods=['post'])
     def bulk_delete(self, request):
-        """선택 사진 일괄 즉시 삭제 (파일 + DB)"""
-        import os
+        """선택 사진 일괄 휴지통 이동"""
         ids = request.data.get('ids', [])
         if not ids:
             return Response({'error': '삭제할 사진 ID를 전달하세요.'}, status=status.HTTP_400_BAD_REQUEST)
-        qs = Photo.objects.filter(id__in=ids)
+        qs = Photo.objects.filter(id__in=ids, is_deleted=False)
         if request.user.role not in ('admin', 'manager', 'superadmin'):
             qs = qs.filter(taken_by=request.user)
-        cnt = 0
-        for p in qs:
-            if p.nas_path and os.path.exists(p.nas_path):
-                os.remove(p.nas_path)
-            if p.thumbnail and os.path.exists(p.thumbnail.path):
-                os.remove(p.thumbnail.path)
-            if p.image and os.path.exists(p.image.path):
-                os.remove(p.image.path)
-            p.delete()
-            cnt += 1
+        cnt = qs.update(is_deleted=True, deleted_at=timezone.now())
         return Response({'deleted': cnt})
 
     @action(detail=False, methods=['get'])
@@ -237,10 +222,15 @@ class PhotoViewSet(viewsets.ModelViewSet):
         import os
         qs = Photo.objects.filter(id__in=ids, is_deleted=True)
         for p in qs:
-            if p.nas_path and os.path.exists(p.nas_path):
-                os.remove(p.nas_path)
-            if p.image and os.path.exists(p.image.path):
-                os.remove(p.image.path)
+            try:
+                if p.nas_path and os.path.exists(p.nas_path):
+                    os.remove(p.nas_path)
+                if p.thumbnail and p.thumbnail.name and os.path.exists(p.thumbnail.path):
+                    os.remove(p.thumbnail.path)
+                if p.image and p.image.name and os.path.exists(p.image.path):
+                    os.remove(p.image.path)
+            except Exception:
+                pass
         cnt, _ = qs.delete()
         return Response({'deleted': cnt})
 

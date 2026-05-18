@@ -61,11 +61,59 @@ class PhotoUploadSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        import os, re, shutil
+        from django.conf import settings
+
         request = self.context.get('request')
         if request:
             validated_data['taken_by'] = request.user
         photo = super().create(validated_data)
-        # 파일명 자동 생성 및 NAS 동기화 (비동기)
+
+        # ── 규칙 파일명 즉시 적용 ──
+        try:
+            school = photo.school
+            work_label = photo.work_type.name if photo.work_type else (photo.work_type_etc or '기타')
+            stage_label = photo.get_photo_stage_display()
+
+            location_parts = [school.name]
+            if photo.building_name:
+                location_parts.append(photo.building_name)
+            if photo.floor_name:
+                location_parts.append(f'{photo.floor_name}')
+            if photo.room_name:
+                location_parts.append(photo.room_name)
+            location = ' '.join(location_parts)
+
+            seq = Photo.objects.filter(
+                school=school,
+                taken_at__date=(photo.taken_at or timezone.now()).date(),
+                work_type=photo.work_type,
+                photo_stage=photo.photo_stage,
+                id__lte=photo.id,
+            ).count()
+
+            ext = os.path.splitext(photo.image.name)[1].lower() if photo.image else '.jpg'
+            if ext not in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
+                ext = '.jpg'
+
+            new_name = f"2026년 테크센터-{work_label}_{location}_{stage_label}_{seq:02d}{ext}"
+            new_name = re.sub(r'[\\/:*?"<>|]', '', new_name)
+
+            # 파일 이동
+            old_path = photo.image.path
+            new_rel = f'photos/{new_name}'
+            new_path = os.path.join(settings.MEDIA_ROOT, new_rel)
+            os.makedirs(os.path.dirname(new_path), exist_ok=True)
+            if os.path.exists(old_path):
+                shutil.move(old_path, new_path)
+                photo.image.name = new_rel
+                photo.file_name = new_name
+                photo.file_size = os.path.getsize(new_path)
+                photo.save(update_fields=['image', 'file_name', 'file_size'])
+        except Exception:
+            pass
+
+        # NAS 동기화 (비동기)
         from .tasks import sync_photo_to_nas
         sync_photo_to_nas.delay(photo.id)
         return photo
