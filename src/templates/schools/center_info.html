@@ -1,0 +1,533 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}센터 정보{% endblock %}
+{% block page_title %}<i class="bi bi-building me-2"></i>센터 정보{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@7.5.2/ol.css">
+<style>
+/* ════════ 레이아웃 ════════ */
+.ci-body {
+  display:grid; grid-template-columns:240px 1fr; gap:12px;
+  padding:12px 16px 20px;
+}
+@media(max-width:820px){ .ci-body{ grid-template-columns:1fr; } }
+
+/* ════════ 좌측 트리 패널 ════════ */
+.tree-panel {
+  background:#fff; border-radius:12px;
+  box-shadow:0 1px 4px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04);
+  display:flex; flex-direction:column; overflow:hidden;
+  max-height:calc(100vh - 170px);
+}
+.tree-header {
+  padding:12px 14px 10px; border-bottom:1px solid #f0f0f0; flex-shrink:0;
+  font-size:.78rem; font-weight:700; color:#1e293b;
+}
+.tree-body { flex:1; overflow-y:auto; padding:4px 0; }
+.tree-body::-webkit-scrollbar { width:4px; }
+.tree-body::-webkit-scrollbar-thumb { background:#e2e8f0; border-radius:4px; }
+
+.center-item {
+  padding:10px 14px; cursor:pointer; user-select:none;
+  display:flex; align-items:center; gap:8px;
+  transition:background .1s; border-left:3px solid transparent;
+  font-size:.8rem; color:#475569;
+}
+.center-item:hover { background:#f0f7ff; }
+.center-item.active {
+  background:#eff6ff; color:#1d4ed8; font-weight:700;
+  border-left-color:#2563eb;
+}
+.center-item .c-icon { font-size:1rem; color:#64748b; flex-shrink:0; }
+.center-item.active .c-icon { color:#2563eb; }
+.center-item .c-badge {
+  font-size:.62rem; background:#e2e8f0; color:#64748b;
+  border-radius:20px; padding:1px 8px; margin-left:auto; font-weight:600;
+}
+
+/* ════════ 우측 상세 패널 ════════ */
+.detail-panel {
+  background:#fff; border-radius:12px;
+  box-shadow:0 1px 4px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04);
+  display:flex; flex-direction:column; overflow:hidden;
+  max-height:calc(100vh - 170px);
+}
+.detail-header {
+  padding:14px 18px 10px; border-bottom:1px solid #f0f0f0;
+  font-size:.95rem; font-weight:700; color:#1e293b; flex-shrink:0;
+  display:flex; align-items:center; gap:8px;
+}
+.detail-header .badge { font-size:.65rem; }
+
+/* 탭 */
+.ci-tabs {
+  display:flex; border-bottom:1px solid #f0f0f0; padding:0 16px; flex-shrink:0;
+}
+.ci-tab {
+  padding:9px 16px; cursor:pointer; font-size:.78rem; font-weight:600;
+  color:#94a3b8; border-bottom:2px solid transparent;
+  transition:color .15s, border-color .15s;
+}
+.ci-tab.active { color:#2563eb; border-bottom-color:#2563eb; }
+.ci-tab:hover:not(.active) { color:#374151; background:#f8fafc; }
+
+.tab-pane { display:none !important; padding:18px 20px; overflow-y:auto; flex:1; }
+.tab-pane.active { display:block !important; }
+#tab-map.active { display:block !important; padding:0; }
+
+/* 정보 테이블 */
+.info-table { width:100%; font-size:.82rem; }
+.info-table th {
+  padding:7px 12px; color:#64748b; font-weight:600; width:100px;
+  border-bottom:1px solid #f0f0f0; white-space:nowrap; vertical-align:top;
+}
+.info-table td { padding:7px 12px; border-bottom:1px solid #f0f0f0; color:#1e293b; }
+
+/* 소속인원 */
+.member-list { margin-top:14px; }
+.member-card {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:5px 12px; margin:3px 4px; border-radius:8px;
+  background:#f8fafc; border:1px solid #e2e8f0; font-size:.76rem;
+}
+.member-card .role-badge {
+  font-size:.6rem; padding:1px 6px; border-radius:10px; font-weight:600;
+}
+.role-worker { background:#dbeafe; color:#1d4ed8; }
+.role-admin { background:#fce7f3; color:#be185d; }
+.role-resident { background:#d1fae5; color:#059669; }
+
+/* 사진 그리드 */
+.photo-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));
+  gap:12px; margin-top:8px;
+}
+.photo-card {
+  border-radius:10px; overflow:hidden; border:1px solid #e2e8f0;
+  background:#f8fafc; position:relative;
+}
+.photo-card img {
+  width:100%; height:180px; object-fit:cover; cursor:pointer;
+  transition:transform .2s;
+}
+.photo-card img:hover { transform:scale(1.02); }
+.photo-card .photo-label {
+  padding:6px 10px; font-size:.72rem; color:#475569; font-weight:600;
+  text-align:center; background:#fff;
+}
+.photo-card .photo-delete {
+  position:absolute; top:6px; right:6px;
+  background:rgba(0,0,0,.5); color:#fff; border:none; border-radius:50%;
+  width:24px; height:24px; font-size:.7rem; cursor:pointer;
+  display:none; align-items:center; justify-content:center;
+}
+.photo-card:hover .photo-delete { display:flex; }
+
+/* 사진 업로드 */
+.photo-upload-zone {
+  border:2px dashed #cbd5e1; border-radius:10px; padding:24px;
+  text-align:center; color:#94a3b8; cursor:pointer; margin-top:12px;
+  transition:border-color .2s, background .2s;
+}
+.photo-upload-zone:hover { border-color:#2563eb; background:#f0f7ff; }
+.photo-upload-zone i { font-size:1.5rem; display:block; margin-bottom:6px; }
+
+/* 기본정보 내 썸네일 */
+.info-thumbs {
+  display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;
+}
+.info-thumb {
+  width:100px; height:75px; border-radius:8px; object-fit:cover;
+  border:1px solid #e2e8f0; cursor:pointer;
+}
+
+/* 지도 */
+#center-map { width:100%; height:100%; min-height:400px; }
+
+/* 빈 상태 */
+.empty-state {
+  display:flex; flex-direction:column; align-items:center;
+  justify-content:center; height:300px; color:#94a3b8; gap:8px;
+}
+.empty-state i { font-size:2.5rem; }
+
+/* 이미지 모달 */
+.img-modal {
+  position:fixed; top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,.85); z-index:9999;
+  display:none; align-items:center; justify-content:center; cursor:pointer;
+}
+.img-modal.show { display:flex; }
+.img-modal img { max-width:90vw; max-height:90vh; border-radius:8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ci-body">
+  <!-- 좌측: 센터 목록 -->
+  <div class="tree-panel">
+    <div class="tree-header"><i class="bi bi-building me-2"></i>교육지원청</div>
+    <div class="tree-body" id="centerList"></div>
+  </div>
+
+  <!-- 우측: 상세 정보 -->
+  <div class="detail-panel">
+    <div class="detail-header" id="detailHeader">
+      <i class="bi bi-building"></i>
+      <span id="centerName">센터를 선택하세요</span>
+    </div>
+
+    <div class="ci-tabs" id="tabBar" style="display:none;">
+      <div class="ci-tab active" onclick="switchTab('info',this)"><i class="bi bi-info-circle me-1"></i>기본정보</div>
+      <div class="ci-tab" onclick="switchTab('photos',this)"><i class="bi bi-camera me-1"></i>사진</div>
+      <div class="ci-tab" onclick="switchTab('map',this)"><i class="bi bi-map me-1"></i>찾아가는길</div>
+    </div>
+
+    <!-- 기본정보 탭 -->
+    <div class="tab-pane active" id="tab-info">
+      <div class="empty-state" id="emptyState">
+        <i class="bi bi-building"></i>
+        <span style="font-size:.85rem;">좌측에서 센터를 선택하세요</span>
+      </div>
+      <div id="infoContent" style="display:none;">
+        <table class="info-table">
+          <tr><th>주소</th><td id="infoAddress">-</td></tr>
+          <tr><th>연락처</th><td id="infoPhone">-</td></tr>
+          <tr><th>홈페이지</th><td id="infoUrl">-</td></tr>
+          <tr><th>관할 학교</th><td id="infoSchoolCount">-</td></tr>
+        </table>
+
+        <div style="margin-top:16px;">
+          <div style="font-size:.8rem; font-weight:700; color:#1e293b; margin-bottom:6px;">
+            <i class="bi bi-camera me-1"></i>센터 사진
+          </div>
+          <div class="info-thumbs" id="infoThumbs">
+            <span style="font-size:.75rem; color:#94a3b8;">등록된 사진이 없습니다</span>
+          </div>
+        </div>
+
+        <div class="member-list">
+          <div style="font-size:.8rem; font-weight:700; color:#1e293b; margin-bottom:6px;">
+            <i class="bi bi-people me-1"></i>소속 인원
+          </div>
+          <div id="memberCards">
+            <span style="font-size:.75rem; color:#94a3b8;">소속 인원이 없습니다</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 사진 탭 -->
+    <div class="tab-pane" id="tab-photos">
+      <div id="photoGrid" class="photo-grid"></div>
+      <div class="photo-upload-zone" id="uploadZone" onclick="document.getElementById('photoInput').click()">
+        <i class="bi bi-cloud-arrow-up"></i>
+        <div style="font-size:.78rem;">사진 업로드 (클릭 또는 드래그)</div>
+        <div style="font-size:.68rem; margin-top:2px;">외부건물 / 내부 / 정문 / 간판</div>
+      </div>
+      <input type="file" id="photoInput" accept="image/*" multiple style="display:none;"
+             onchange="uploadPhotos(this.files)">
+      <select id="photoTypeSelect" style="display:none;">
+        <option value="exterior">외부건물</option>
+        <option value="interior">내부</option>
+        <option value="entrance">정문</option>
+        <option value="signboard">간판</option>
+      </select>
+    </div>
+
+    <!-- 찾아가는길 탭 -->
+    <div class="tab-pane" id="tab-map">
+      <div id="center-map"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 이미지 확대 모달 -->
+<div class="img-modal" id="imgModal" onclick="this.classList.remove('show')">
+  <img id="imgModalSrc" src="" alt="">
+</div>
+
+<!-- 사진유형 선택 모달 -->
+<div class="modal fade" id="photoTypeModal" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" style="font-size:.85rem;">사진 유형 선택</h6>
+        <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <select class="form-select form-select-sm" id="modalPhotoType">
+          <option value="exterior">외부건물</option>
+          <option value="interior">내부</option>
+          <option value="entrance">정문</option>
+          <option value="signboard">간판</option>
+        </select>
+      </div>
+      <div class="modal-footer py-2">
+        <button class="btn btn-sm btn-primary" id="confirmUploadBtn">업로드</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/ol@7.5.2/dist/ol.js"></script>
+<script>
+const API = '/npms/schools';
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+           || '{{ csrf_token }}';
+
+const ROLE_LABELS = {
+  superadmin:'슈퍼관리자', admin:'관리자', customer:'학교담당자',
+  worker:'기사', resident_central:'상주(센터)', resident_tech:'상주(기술)',
+  resident_edu:'상주(교육)', etc:'기타'
+};
+const ROLE_CSS = {
+  superadmin:'role-admin', admin:'role-admin', customer:'',
+  worker:'role-worker', resident_central:'role-resident',
+  resident_tech:'role-resident', resident_edu:'role-resident', etc:''
+};
+
+let centers = [];
+let currentCenter = null;
+let centerMap = null;
+let pendingFiles = null;
+
+// ── 초기화 ──
+document.addEventListener('DOMContentLoaded', loadCenters);
+
+async function loadCenters() {
+  const res = await fetch(`${API}/centers/`, {headers:{'Accept':'application/json'}});
+  centers = await res.json();
+  const list = document.getElementById('centerList');
+  list.innerHTML = centers.map(c => `
+    <div class="center-item" data-id="${c.id}" onclick="selectCenter(${c.id})">
+      <i class="bi bi-building c-icon"></i>
+      <span>${c.name}</span>
+      <span class="c-badge">${c.school_count}교</span>
+    </div>
+  `).join('');
+}
+
+async function selectCenter(id) {
+  // 좌측 활성화
+  document.querySelectorAll('.center-item').forEach(el => el.classList.remove('active'));
+  document.querySelector(`.center-item[data-id="${id}"]`)?.classList.add('active');
+
+  // 상세 로드
+  const res = await fetch(`${API}/centers/${id}/`, {headers:{'Accept':'application/json'}});
+  currentCenter = await res.json();
+
+  document.getElementById('centerName').textContent = currentCenter.name;
+  document.getElementById('tabBar').style.display = '';
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('infoContent').style.display = '';
+
+  renderInfo();
+  renderPhotos();
+  // 탭 초기화
+  switchTab('info', document.querySelector('.ci-tab'));
+}
+
+// ── 기본정보 탭 ──
+function renderInfo() {
+  const c = currentCenter;
+  document.getElementById('infoAddress').textContent = c.address || '-';
+  document.getElementById('infoPhone').textContent = c.phone || '-';
+  document.getElementById('infoSchoolCount').textContent = `${c.school_count}개교`;
+
+  const urlEl = document.getElementById('infoUrl');
+  if (c.url) {
+    urlEl.innerHTML = `<a href="${c.url}" target="_blank" style="color:#2563eb;">${c.url}</a>`;
+  } else {
+    urlEl.textContent = '-';
+  }
+
+  // 썸네일
+  const thumbs = document.getElementById('infoThumbs');
+  if (c.photos && c.photos.length > 0) {
+    thumbs.innerHTML = c.photos.map(p =>
+      `<img class="info-thumb" src="${p.image}" alt="${p.photo_type_display}"
+            title="${p.photo_type_display}" onclick="showImg('${p.image}')">`
+    ).join('');
+  } else {
+    thumbs.innerHTML = '<span style="font-size:.75rem; color:#94a3b8;">등록된 사진이 없습니다</span>';
+  }
+
+  // 소속인원
+  const mc = document.getElementById('memberCards');
+  if (c.members && c.members.length > 0) {
+    mc.innerHTML = c.members.map(m => {
+      const rl = ROLE_LABELS[m.role] || m.role;
+      const rc = ROLE_CSS[m.role] || '';
+      return `<div class="member-card">
+        <span class="role-badge ${rc}">${rl}</span>
+        <strong>${m.name}</strong>
+        ${m.phone ? `<span style="color:#94a3b8;">${m.phone}</span>` : ''}
+      </div>`;
+    }).join('');
+  } else {
+    mc.innerHTML = '<span style="font-size:.75rem; color:#94a3b8;">소속 인원이 없습니다</span>';
+  }
+}
+
+// ── 사진 탭 ──
+function renderPhotos() {
+  const grid = document.getElementById('photoGrid');
+  const photos = currentCenter.photos || [];
+  if (photos.length === 0) {
+    grid.innerHTML = '<div style="font-size:.8rem; color:#94a3b8; padding:20px;">등록된 사진이 없습니다. 아래에서 업로드하세요.</div>';
+    return;
+  }
+  grid.innerHTML = photos.map(p => `
+    <div class="photo-card">
+      <img src="${p.image}" alt="${p.photo_type_display}" onclick="showImg('${p.image}')">
+      <button class="photo-delete" onclick="deletePhoto(${p.id}, event)" title="삭제">
+        <i class="bi bi-x"></i>
+      </button>
+      <div class="photo-label">${p.photo_type_display}${p.caption ? ' - ' + p.caption : ''}</div>
+    </div>
+  `).join('');
+}
+
+function uploadPhotos(files) {
+  if (!currentCenter) return showToast('센터를 먼저 선택하세요.', 'warning');
+  if (!files || files.length === 0) return;
+  pendingFiles = files;
+  const modal = new bootstrap.Modal(document.getElementById('photoTypeModal'));
+  modal.show();
+}
+
+document.getElementById('confirmUploadBtn')?.addEventListener('click', async () => {
+  if (!pendingFiles || !currentCenter) return;
+  const photoType = document.getElementById('modalPhotoType').value;
+  const modal = bootstrap.Modal.getInstance(document.getElementById('photoTypeModal'));
+  modal.hide();
+
+  for (const file of pendingFiles) {
+    const fd = new FormData();
+    fd.append('center', currentCenter.id);
+    fd.append('photo_type', photoType);
+    fd.append('image', file);
+    await fetch(`${API}/center-photos/`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': CSRF},
+      body: fd,
+    });
+  }
+  pendingFiles = null;
+  document.getElementById('photoInput').value = '';
+  showToast('사진이 업로드되었습니다.', 'success');
+  await selectCenter(currentCenter.id);
+  switchTab('photos', document.querySelectorAll('.ci-tab')[1]);
+});
+
+async function deletePhoto(photoId, e) {
+  e.stopPropagation();
+  if (!confirm('이 사진을 삭제하시겠습니까?')) return;
+  await fetch(`${API}/center-photos/${photoId}/`, {
+    method: 'DELETE',
+    headers: {'X-CSRFToken': CSRF},
+  });
+  showToast('사진이 삭제되었습니다.', 'success');
+  await selectCenter(currentCenter.id);
+  switchTab('photos', document.querySelectorAll('.ci-tab')[1]);
+}
+
+// ── 드래그 앤 드롭 ──
+const uploadZone = document.getElementById('uploadZone');
+if (uploadZone) {
+  ['dragover','dragenter'].forEach(ev =>
+    uploadZone.addEventListener(ev, e => { e.preventDefault(); uploadZone.style.borderColor='#2563eb'; })
+  );
+  ['dragleave','drop'].forEach(ev =>
+    uploadZone.addEventListener(ev, e => { e.preventDefault(); uploadZone.style.borderColor=''; })
+  );
+  uploadZone.addEventListener('drop', e => {
+    uploadPhotos(e.dataTransfer.files);
+  });
+}
+
+// ── 찾아가는길 탭 (VWorld) ──
+function initMap() {
+  if (!currentCenter || !currentCenter.lat || !currentCenter.lng) return;
+  const lat = parseFloat(currentCenter.lat);
+  const lng = parseFloat(currentCenter.lng);
+  const key = typeof VWORLD_API_KEY !== 'undefined' ? VWORLD_API_KEY : '';
+
+  const container = document.getElementById('center-map');
+  container.innerHTML = '';
+
+  const markerSource = new ol.source.Vector();
+  centerMap = new ol.Map({
+    target: 'center-map',
+    layers: [
+      new ol.layer.Tile({
+        source: new ol.source.XYZ({
+          url: `https://api.vworld.kr/req/wmts/1.0.0/${key}/Base/{z}/{y}/{x}.png`,
+          crossOrigin: 'anonymous',
+        }),
+      }),
+      new ol.layer.Vector({ source: markerSource }),
+    ],
+    view: new ol.View({
+      center: ol.proj.fromLonLat([lng, lat]),
+      zoom: 17,
+    }),
+  });
+
+  // 마커
+  const feature = new ol.Feature({
+    geometry: new ol.geom.Point(ol.proj.fromLonLat([lng, lat])),
+  });
+  feature.setStyle(new ol.style.Style({
+    image: new ol.style.Icon({
+      anchor: [0.5, 1],
+      src: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+      scale: 0.06,
+    }),
+    text: new ol.style.Text({
+      text: currentCenter.name,
+      offsetY: -35,
+      font: 'bold 13px sans-serif',
+      fill: new ol.style.Fill({ color: '#1e293b' }),
+      stroke: new ol.style.Stroke({ color: '#fff', width: 3 }),
+    }),
+  }));
+  markerSource.addFeature(feature);
+
+  setTimeout(() => centerMap.updateSize(), 100);
+}
+
+// ── 탭 전환 ──
+function switchTab(name, el) {
+  document.querySelectorAll('.ci-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+
+  if (name === 'map') {
+    setTimeout(() => {
+      if (!centerMap) initMap();
+      else {
+        initMap();
+      }
+    }, 50);
+  }
+}
+
+// ── 이미지 확대 ──
+function showImg(src) {
+  document.getElementById('imgModalSrc').src = src;
+  document.getElementById('imgModal').classList.add('show');
+}
+
+// ESC 닫기
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.getElementById('imgModal')?.classList.remove('show');
+});
+</script>
+{% endblock %}

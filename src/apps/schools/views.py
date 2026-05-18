@@ -9,13 +9,19 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Q, Count
 from .models import (SupportCenter, SchoolType, School, SchoolBuilding,
-                     SchoolFloor, SchoolRoom, SchoolContact, VsdxImportLog)
+                     SchoolFloor, SchoolRoom, SchoolContact, VsdxImportLog, CenterPhoto)
 from .serializers import (
     SupportCenterSerializer, SchoolTypeSerializer,
     SchoolListSerializer, SchoolDetailSerializer, SchoolGISSerializer,
-    SchoolBuildingSerializer, SchoolContactSerializer
+    SchoolBuildingSerializer, SchoolContactSerializer,
+    CenterDetailSerializer, CenterPhotoSerializer
 )
 from core.permissions.roles import IsAdmin, IsSuperAdmin
+
+
+@login_required
+def center_info_view(request):
+    return render(request, 'schools/center_info.html')
 
 
 @login_required
@@ -214,6 +220,34 @@ class SupportCenterViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SupportCenterSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = None
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return CenterDetailSerializer
+        return SupportCenterSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.action == 'retrieve':
+            qs = qs.prefetch_related('photos')
+        return qs
+
+
+class CenterPhotoViewSet(viewsets.ModelViewSet):
+    """센터 사진 CRUD API"""
+    serializer_class = CenterPhotoSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdmin]
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = CenterPhoto.objects.select_related('center')
+        center_id = self.request.query_params.get('center_id')
+        if center_id:
+            qs = qs.filter(center_id=center_id)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(uploaded_by=self.request.user)
 
 
 class SchoolTypeViewSet(viewsets.ReadOnlyModelViewSet):

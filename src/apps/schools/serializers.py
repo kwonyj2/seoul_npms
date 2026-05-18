@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import SupportCenter, SchoolType, School, SchoolBuilding, SchoolFloor, SchoolRoom, SchoolContact, SchoolNetwork
+from .models import SupportCenter, SchoolType, School, SchoolBuilding, SchoolFloor, SchoolRoom, SchoolContact, SchoolNetwork, CenterPhoto
 
 
 class SupportCenterSerializer(serializers.ModelSerializer):
@@ -11,6 +11,40 @@ class SupportCenterSerializer(serializers.ModelSerializer):
 
     def get_school_count(self, obj):
         return obj.schools.filter(is_active=True).count()
+
+
+class CenterPhotoSerializer(serializers.ModelSerializer):
+    photo_type_display = serializers.CharField(source='get_photo_type_display', read_only=True)
+
+    class Meta:
+        model = CenterPhoto
+        fields = ['id', 'center', 'photo_type', 'photo_type_display',
+                  'image', 'caption', 'order', 'created_at']
+        read_only_fields = ['created_at']
+
+
+class CenterDetailSerializer(serializers.ModelSerializer):
+    """센터 상세 정보 (소속인원 + 사진 포함)"""
+    school_count = serializers.SerializerMethodField()
+    photos = CenterPhotoSerializer(many=True, read_only=True)
+    members = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SupportCenter
+        fields = ['id', 'code', 'name', 'address', 'phone', 'lat', 'lng',
+                  'url', 'is_active', 'school_count', 'photos', 'members']
+
+    def get_school_count(self, obj):
+        return obj.schools.filter(is_active=True).count()
+
+    def get_members(self, obj):
+        from apps.accounts.models import User
+        workers = User.objects.filter(
+            support_center=obj, is_active=True
+        ).order_by('role', 'name').values(
+            'id', 'username', 'name', 'role', 'phone', 'email'
+        )
+        return list(workers)
 
 
 class SchoolTypeSerializer(serializers.ModelSerializer):

@@ -45,6 +45,13 @@ MODULE_REGISTRY = {
         'color':    'danger',
     },
     # ── 인력 ──────────────────────────────────
+    'center_info': {
+        'label':    '센터 정보',
+        'icon':     'bi-building',
+        'url':      '/npms/schools/center-info/',
+        'min_role': 'admin',
+        'color':    'info',
+    },
     'worker_list': {
         'label':    '인력 관리',
         'icon':     'bi-person-badge',

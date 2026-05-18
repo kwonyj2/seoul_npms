@@ -26,7 +26,9 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 # CSRF 신뢰 도메인
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
     'http://localhost:8081',
+    'https://localhost:8081',
     'http://127.0.0.1:8081',
+    'https://127.0.0.1:8081',
     'http://112.187.158.4',
     'http://112.187.158.4:8081',
     'https://112.187.158.4',
