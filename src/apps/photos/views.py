@@ -170,21 +170,37 @@ class PhotoViewSet(viewsets.ModelViewSet):
         ).order_by('-cnt')[:20]
         return Response(list(qs))
 
+    def _delete_files(self, photo):
+        """사진의 NAS/원본/썸네일 파일 삭제"""
+        import os
+        try:
+            if photo.nas_path and os.path.exists(photo.nas_path):
+                os.remove(photo.nas_path)
+            if photo.thumbnail and photo.thumbnail.name and os.path.exists(photo.thumbnail.path):
+                os.remove(photo.thumbnail.path)
+            if photo.image and photo.image.name and os.path.exists(photo.image.path):
+                os.remove(photo.image.path)
+        except Exception:
+            pass
+
     def perform_destroy(self, instance):
-        """삭제 → 휴지통 이동 (소프트 삭제)"""
+        """삭제 → 휴지통 이동 + NAS 파일 즉시 삭제"""
+        self._delete_files(instance)
         instance.is_deleted = True
         instance.deleted_at = timezone.now()
         instance.save(update_fields=['is_deleted', 'deleted_at'])
 
     @action(detail=False, methods=['post'])
     def bulk_delete(self, request):
-        """선택 사진 일괄 휴지통 이동"""
+        """선택 사진 일괄 휴지통 이동 + NAS 파일 즉시 삭제"""
         ids = request.data.get('ids', [])
         if not ids:
             return Response({'error': '삭제할 사진 ID를 전달하세요.'}, status=status.HTTP_400_BAD_REQUEST)
         qs = Photo.objects.filter(id__in=ids, is_deleted=False)
         if request.user.role not in ('admin', 'manager', 'superadmin'):
             qs = qs.filter(taken_by=request.user)
+        for p in qs:
+            self._delete_files(p)
         cnt = qs.update(is_deleted=True, deleted_at=timezone.now())
         return Response({'deleted': cnt})
 
@@ -222,15 +238,7 @@ class PhotoViewSet(viewsets.ModelViewSet):
         import os
         qs = Photo.objects.filter(id__in=ids, is_deleted=True)
         for p in qs:
-            try:
-                if p.nas_path and os.path.exists(p.nas_path):
-                    os.remove(p.nas_path)
-                if p.thumbnail and p.thumbnail.name and os.path.exists(p.thumbnail.path):
-                    os.remove(p.thumbnail.path)
-                if p.image and p.image.name and os.path.exists(p.image.path):
-                    os.remove(p.image.path)
-            except Exception:
-                pass
+            self._delete_files(p)
         cnt, _ = qs.delete()
         return Response({'deleted': cnt})
 
